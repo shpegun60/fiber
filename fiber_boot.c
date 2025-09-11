@@ -332,7 +332,7 @@ void fiber_boot(void *psp_top, void (*next)(void*), void *arg, void *psp_base)
 	/* Program PSPLIM on Armv8-M Mainline (e.g. Cortex-M33). */
 #if FIBER_HAS_PSPLIM
 	__set_PSPLIM((uint32_t)redzone8);
-	__ISB(); /* ensure PSPLIM is live before using PSP */
+	{ __DSB(); __ISB(); } /* ensure PSPLIM is live before using PSP */
 	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)redzone8, 'L'); /* read-back verify */
 #else
 	(void)redzone8;
