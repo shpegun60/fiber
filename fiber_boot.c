@@ -198,7 +198,7 @@ static inline void fiber_platform_bootstrap(void)
 	const uint32_t CPACR_CP10_CP11_FULL = 0x00F00000u;  /* CP11[23:22]=11, CP10[21:20]=11 => full access */
 
 	/* Secure CPACR (current world): enable only if not already enabled */
-	uint32_t cpacr = SCB->CPACR;
+	volatile uint32_t cpacr = SCB->CPACR;
 	if ((cpacr & CPACR_CP10_CP11_FULL) != CPACR_CP10_CP11_FULL) {
 		cpacr = (cpacr & ~CPACR_CP10_CP11_FULL) | CPACR_CP10_CP11_FULL;
 		SCB->CPACR = cpacr;               	/* enable CP10/CP11 full access in Secure */
@@ -210,7 +210,7 @@ static inline void fiber_platform_bootstrap(void)
 #   ifdef SCB_NSACR
 	/* 1) Allow FP in Non-secure world via NSACR (R/W, NOT W1C). Do RMW to avoid touching other bits. */
 	const uint32_t NSACR_CP10_CP11_FULL = (3u << 10);   /* NSACR.CP10=11b, CP11=11b */
-	uint32_t nsacr = SCB->NSACR;
+	volatile uint32_t nsacr = SCB->NSACR;
 	if ((nsacr & NSACR_CP10_CP11_FULL) != NSACR_CP10_CP11_FULL) {
 		nsacr |= NSACR_CP10_CP11_FULL;  /* set only the FP permission bits */
 		SCB->NSACR = nsacr;
@@ -219,7 +219,7 @@ static inline void fiber_platform_bootstrap(void)
 #   endif
 #   ifdef SCB_NS
 	/* 2) Non-secure CPACR via Secure alias. Again, RMW only if needed. */
-	uint32_t nscpacr = SCB_NS->CPACR;
+	volatile uint32_t nscpacr = SCB_NS->CPACR;
 	if ((nscpacr & CPACR_CP10_CP11_FULL) != CPACR_CP10_CP11_FULL) {
 		nscpacr = (nscpacr & ~CPACR_CP10_CP11_FULL) | CPACR_CP10_CP11_FULL;
 		SCB_NS->CPACR = nscpacr;        	/* enable CP10/CP11 full access in Non-secure */
