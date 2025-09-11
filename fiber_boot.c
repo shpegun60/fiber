@@ -112,12 +112,12 @@ void fiber_boot_trampoline(void *psp_top, void (*next)(void*), void *arg, void *
 
 			/* Fatal path: make a UsageFault and park */
 			"9:                        \n"
-			"udf   #0                  \n"  /* architecturally-defined undefined instruction -> UsageFault/HardFault */
+			"bkpt  0                   \n"  /* breakpoint; outside the debugger usually HardFault */
 			"b     9b                  \n"  /* spin forever in the fault path (won't return) */
 
 			:
 			:
-			: "r0","r1","r2","r3","r4", "r5","r12","lr","cc","memory"
+			: "r0","r1","r2","r3","r4","r5","r12","lr","cc","memory"
 	);
 }
 
@@ -393,6 +393,6 @@ void fiber_boot(void *psp_top, void (*next)(void*), void *arg, void *psp_base)
 #endif
 
 	/* Getting here means the world is broken. Force a loud fault and park forever. */
-	__ASM volatile ("udf #0" ::: "memory"); /* Guaranteed Usage/HardFault path */
-	for (;;) { __WFE(); } /* never returns */
+	__BKPT(0);			/* breakpoint; outside the debugger usually HardFault */
+	for (;;) { __WFE(); /* never returns */ }
 }
