@@ -103,7 +103,7 @@ void app_main(void)
 }
 ```
 
-## PendSV_Handler
+## PendSV_Handler in `stm32xxx_it.c`
 ```c++
 #include "fiber/fiber_core.h"
 
