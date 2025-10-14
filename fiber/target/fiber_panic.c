@@ -9,9 +9,10 @@
 /* Weak fallback (overridden by any strong definition in the app) */
 FIBER_WEAK FIBER_NORETURN
 FIBER_ATTR_SENSITIVE
-void fiber_panic(const char)
+void fiber_panic(char code)
 {
 	Error_Handler();
 	while(1) { __WFE(); /* never returns */ };
+	(void)code;
 }
 

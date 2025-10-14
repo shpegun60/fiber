@@ -1,12 +1,12 @@
 /*
- * fiber_dependency.h
+ * mcu_core.h
  *
- *  Created on: Sep 6, 2025
+ *  Created on: Sep 15, 2025
  *      Author: admin
  */
-
-#ifndef FIBER_TARGET_FIBER_DEPENDENCY_H_
-#define FIBER_TARGET_FIBER_DEPENDENCY_H_
+#pragma once
+#ifndef STM32_TOOLS_MCU_CORE_H_
+#define STM32_TOOLS_MCU_CORE_H_
 
 /* 0) HAL umbrella: often pulls in the device header and CMSIS-Core
    Note: some CubeMX projects don’t make main.h include device headers early enough.
@@ -15,101 +15,98 @@
 #include "basic_types.h"
 
 /* 1) __has_include polyfill so we don't break on older IAR/ARMCC5 */
-#ifndef FIBER_HAS_INCLUDE
+#ifndef MCU_HAS_INCLUDE
 # if defined(__has_include)
-#  define FIBER_HAS_INCLUDE(x) __has_include(x)
+#  define MCU_HAS_INCLUDE(x) __has_include(x)
 # else
-#  define FIBER_HAS_INCLUDE(x) 0
+#  define MCU_HAS_INCLUDE(x) 0
 # endif
-#endif
+#endif /* MCU_HAS_INCLUDE */
 
-/* 2) CMSIS compiler helpers (preferred), with fallbacks for older packs */
-# include "cmsis_compiler.h"
+/* 2) If main.h did not bring the device header, try to find it ourselves */
+#if !defined(__CORTEX_M) || !defined(__FPU_PRESENT) || !defined(__FPU_USED)
 
-/* 3) If main.h did not bring the device header, try to find it ourselves */
-#if !defined(__CORTEX_M) || !defined(__FPU_PRESENT)
-
-/* 3a) Device headers first (these usually define __CORTEX_M and map core headers) */
-# if   FIBER_HAS_INCLUDE("stm32c0xx.h")
+/* 2a) Device headers first (these usually define __CORTEX_M and map core headers) */
+# if   MCU_HAS_INCLUDE("stm32c0xx.h")
 #  include "stm32c0xx.h"
-# elif FIBER_HAS_INCLUDE("stm32g0xx.h")
+# elif MCU_HAS_INCLUDE("stm32g0xx.h")
 #  include "stm32g0xx.h"
-# elif FIBER_HAS_INCLUDE("stm32g4xx.h")
+# elif MCU_HAS_INCLUDE("stm32g4xx.h")
 #  include "stm32g4xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f0xx.h")
+# elif MCU_HAS_INCLUDE("stm32f0xx.h")
 #  include "stm32f0xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f1xx.h")
+# elif MCU_HAS_INCLUDE("stm32f1xx.h")
 #  include "stm32f1xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f2xx.h")
+# elif MCU_HAS_INCLUDE("stm32f2xx.h")
 #  include "stm32f2xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f3xx.h")
+# elif MCU_HAS_INCLUDE("stm32f3xx.h")
 #  include "stm32f3xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f4xx.h")
+# elif MCU_HAS_INCLUDE("stm32f4xx.h")
 #  include "stm32f4xx.h"
-# elif FIBER_HAS_INCLUDE("stm32f7xx.h")
+# elif MCU_HAS_INCLUDE("stm32f7xx.h")
 #  include "stm32f7xx.h"
-# elif FIBER_HAS_INCLUDE("stm32h5xx.h")
+# elif MCU_HAS_INCLUDE("stm32h5xx.h")
 #  include "stm32h5xx.h"
-# elif FIBER_HAS_INCLUDE("stm32h7xx.h")
+# elif MCU_HAS_INCLUDE("stm32h7xx.h")
 #  include "stm32h7xx.h"
-# elif FIBER_HAS_INCLUDE("stm32h7rsxx.h")
+# elif MCU_HAS_INCLUDE("stm32h7rsxx.h")
 #  include "stm32h7rsxx.h"
-# elif FIBER_HAS_INCLUDE("stm32l0xx.h")
+# elif MCU_HAS_INCLUDE("stm32l0xx.h")
 #  include "stm32l0xx.h"
-# elif FIBER_HAS_INCLUDE("stm32l1xx.h")
+# elif MCU_HAS_INCLUDE("stm32l1xx.h")
 #  include "stm32l1xx.h"
-# elif FIBER_HAS_INCLUDE("stm32l4xx.h")   /* L4/L4+ */
+# elif MCU_HAS_INCLUDE("stm32l4xx.h")   /* L4/L4+ */
 #  include "stm32l4xx.h"
-# elif FIBER_HAS_INCLUDE("stm32l5xx.h")
+# elif MCU_HAS_INCLUDE("stm32l5xx.h")
 #  include "stm32l5xx.h"
-# elif FIBER_HAS_INCLUDE("stm32u0xx.h")   /* U0 (M0+) */
+# elif MCU_HAS_INCLUDE("stm32u0xx.h")   /* U0 (M0+) */
 #  include "stm32u0xx.h"
-# elif FIBER_HAS_INCLUDE("stm32u5xx.h")
+# elif MCU_HAS_INCLUDE("stm32u5xx.h")
 #  include "stm32u5xx.h"
-# elif FIBER_HAS_INCLUDE("stm32wb0x.h")   /* WB0x (M0+) */
+# elif MCU_HAS_INCLUDE("stm32wb0x.h")   /* WB0x (M0+) */
 #  include "stm32wb0x.h"
-# elif FIBER_HAS_INCLUDE("stm32wbxx.h")
+# elif MCU_HAS_INCLUDE("stm32wbxx.h")
 #  include "stm32wbxx.h"
-# elif FIBER_HAS_INCLUDE("stm32wbaxx.h")  /* WBA (M33) */
+# elif MCU_HAS_INCLUDE("stm32wbaxx.h")  /* WBA (M33) */
 #  include "stm32wbaxx.h"
-# elif FIBER_HAS_INCLUDE("stm32wlxx.h")
+# elif MCU_HAS_INCLUDE("stm32wlxx.h")
 #  include "stm32wlxx.h"
 
-/* 3b) HAL umbrellas only if family macro is already selected (avoid #error inside HAL) */
-# elif FIBER_HAS_INCLUDE("stm32f4xx_hal.h")  && defined(STM32F4xx)
+/* 2b) HAL umbrellas only if family macro is already selected (avoid #error inside HAL) */
+# elif MCU_HAS_INCLUDE("stm32f4xx_hal.h")  && defined(STM32F4xx)
 #  include "stm32f4xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32f7xx_hal.h")  && defined(STM32F7xx)
+# elif MCU_HAS_INCLUDE("stm32f7xx_hal.h")  && defined(STM32F7xx)
 #  include "stm32f7xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32g4xx_hal.h")  && defined(STM32G4xx)
+# elif MCU_HAS_INCLUDE("stm32g4xx_hal.h")  && defined(STM32G4xx)
 #  include "stm32g4xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32g0xx_hal.h")  && defined(STM32G0xx)
+# elif MCU_HAS_INCLUDE("stm32g0xx_hal.h")  && defined(STM32G0xx)
 #  include "stm32g0xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32h7xx_hal.h")  && defined(STM32H7xx)
+# elif MCU_HAS_INCLUDE("stm32h7xx_hal.h")  && defined(STM32H7xx)
 #  include "stm32h7xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32h7rsxx_hal.h")&& defined(STM32H7RSxx)
+# elif MCU_HAS_INCLUDE("stm32h7rsxx_hal.h")&& defined(STM32H7RSxx)
 #  include "stm32h7rsxx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32h5xx_hal.h")  && defined(STM32H5xx)
+# elif MCU_HAS_INCLUDE("stm32h5xx_hal.h")  && defined(STM32H5xx)
 #  include "stm32h5xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32l4xx_hal.h")  && defined(STM32L4xx)
+# elif MCU_HAS_INCLUDE("stm32l4xx_hal.h")  && defined(STM32L4xx)
 #  include "stm32l4xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32l5xx_hal.h")  && defined(STM32L5xx)
+# elif MCU_HAS_INCLUDE("stm32l5xx_hal.h")  && defined(STM32L5xx)
 #  include "stm32l5xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32l0xx_hal.h")  && defined(STM32L0xx)
+# elif MCU_HAS_INCLUDE("stm32l0xx_hal.h")  && defined(STM32L0xx)
 #  include "stm32l0xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32l1xx_hal.h")  && defined(STM32L1xx)
+# elif MCU_HAS_INCLUDE("stm32l1xx_hal.h")  && defined(STM32L1xx)
 #  include "stm32l1xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32u5xx_hal.h")  && defined(STM32U5xx)
+# elif MCU_HAS_INCLUDE("stm32u5xx_hal.h")  && defined(STM32U5xx)
 #  include "stm32u5xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32u0xx_hal.h")  && defined(STM32U0xx)
+# elif MCU_HAS_INCLUDE("stm32u0xx_hal.h")  && defined(STM32U0xx)
 #  include "stm32u0xx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32wbxx_hal.h")  && defined(STM32WBxx)
+# elif MCU_HAS_INCLUDE("stm32wbxx_hal.h")  && defined(STM32WBxx)
 #  include "stm32wbxx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32wbaxx_hal.h") && defined(STM32WBAxx)
+# elif MCU_HAS_INCLUDE("stm32wbaxx_hal.h") && defined(STM32WBAxx)
 #  include "stm32wbaxx_hal.h"
-# elif FIBER_HAS_INCLUDE("stm32wlxx_hal.h")  && defined(STM32WLxx)
+# elif MCU_HAS_INCLUDE("stm32wlxx_hal.h")  && defined(STM32WLxx)
 #  include "stm32wlxx_hal.h"
 
-/* 3c) Projects without __has_include: select by family/device macros */
+/* 2c) Projects without __has_include: select by family/device macros */
 # else
 #  if   defined(STM32C0xx) || defined(STM32C011xx) || defined(STM32C031xx)
 #   include "stm32c0xx.h"
@@ -156,49 +153,35 @@
 #  elif defined(STM32WLxx) || defined(STM32WLE5xx) || defined(STM32WL55xx)
 #   include "stm32wlxx.h"
 #  else
-#   error "[fiber]: CMSIS device header not found. Add Device/Core include paths or define an STM32*xx macro."
+#   error "[mcu]: CMSIS device header not found. Add Device/Core include paths or define an STM32*xx macro."
 #  endif
 # endif /* plan C */
-#endif /* need __CORTEX_M/__FPU_PRESENT */
+#endif /* need __CORTEX_M/__FPU_PRESENT/__FPU_USED */
 
-/* 3d) Backfill if still missing (compiler-level inference; safe defaults) */
-#ifndef __CORTEX_M
-# if   defined(__ARM_ARCH_6M__)
-#  define __CORTEX_M 0
-# elif defined(__ARM_ARCH_7M__)
-#  define __CORTEX_M 3
-# elif defined(__ARM_ARCH_7EM__)
-#  define __CORTEX_M 4
-# elif defined(__ARM_ARCH_8M_BASE__)
-#  define __CORTEX_M 23
-# elif defined(__ARM_ARCH_8M_MAIN__)
-#  define __CORTEX_M 33
-# endif
+/* 3) CMSIS compiler helpers: require CMSIS 5+, ff some core_cm*.h already pulled it in — fine */
+#if !defined(__STATIC_INLINE) || !defined(__ASM)
+#  include "cmsis_compiler.h"
 #endif
 
-#ifndef __FPU_PRESENT
-# if defined(__ARM_FP)
-#  define __FPU_PRESENT 1
-# else
-#  define __FPU_PRESENT 0
-# endif
+/* Make sure that the compiler macros really arrived */
+#if !defined(__STATIC_INLINE) || !defined(__ASM)
+#  error "[mcu]: cmsis_compiler.h missing or too old. Add Drivers/CMSIS/Core/Include from a CMSIS 5+ pack."
 #endif
 
 /* 4) Final sanity: CMSIS-Core presence */
 #ifndef __CORTEX_M
-# error "[fiber]: CMSIS-Core not visible. Add Drivers/CMSIS/Core/Include and the device header (e.g., stm32xxxx.h)."
+#  error "[mcu]: CMSIS-Core not visible. Add Drivers/CMSIS/Core/Include and the device header (e.g., stm32xxxx.h)."
 #endif
 
 /* --------- Architecture sanity --------- */
 #if !(defined(__thumb__) || defined(__thumb2__))
-# error "[fiber]: Thumb mode required (-mthumb)."
+#  error "[mcu]: Thumb mode required (-mthumb)."
 #endif
 
 /* Final target sanity */
 #if defined(__SIZEOF_POINTER__) && (__SIZEOF_POINTER__ != 4)
-# error "[fiber]: Unsupported pointer size (expected 32-bit)."
+#  error "[mcu]: Unsupported pointer size (expected 32-bit)."
 #endif
 
 
-
-#endif /* FIBER_TARGET_FIBER_DEPENDENCY_H_ */
+#endif /* STM32_TOOLS_MCU_CORE_H_ */

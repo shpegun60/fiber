@@ -8,7 +8,7 @@
 #ifndef FIBER_FIBER_PANIC_H_
 #define FIBER_FIBER_PANIC_H_
 
-#include "target/fiber_compiler.h"
+#include "fiber_compiler.h"
 
 /* --------------------------------------------------------------------------
  * Panic/require: if the app didn't provide a global one, ship a weak fallback.
@@ -18,6 +18,6 @@
 #endif
 
 FIBER_WEAK FIBER_NORETURN
-void fiber_panic(const char);
+void fiber_panic(char code);
 
 #endif /* FIBER_FIBER_PANIC_H_ */
