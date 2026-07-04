@@ -521,6 +521,9 @@ void fiber_boot_check(const FiberBoot* const ctx)
 	}
 }
 
+/* -------------------------------------------------------------------------- 	*/
+/* Simple Context Validator (no paranoia)                                		*/
+/* -------------------------------------------------------------------------- 	*/
 void fiber_boot_simple_check(const FiberBoot* const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');

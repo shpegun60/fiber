@@ -32,10 +32,10 @@
 /* Fallback for spotty toolchains: infer from CMSIS __CORTEX_M IDs */
 # if (FIBER_HAS_PSPLIM == 0) && defined(__CORTEX_M)
 #  if  (__CORTEX_M == 33)  /* Cortex-M33 (v8-M Mainline) 	*/      \
-    || (__CORTEX_M == 35)  /* Cortex-M35P (v8-M Mainline) 	*/		\
-    || (__CORTEX_M == 52)  /* Cortex-M52  (v8.1-M Mainline) */   	\
-    || (__CORTEX_M == 55)  /* Cortex-M55  (v8.1-M Mainline) */   	\
-    || (__CORTEX_M == 85)  /* Cortex-M85  (v8.1-M Mainline) */
+		|| (__CORTEX_M == 35)  /* Cortex-M35P (v8-M Mainline) 	*/		\
+		|| (__CORTEX_M == 52)  /* Cortex-M52  (v8.1-M Mainline) */   	\
+		|| (__CORTEX_M == 55)  /* Cortex-M55  (v8.1-M Mainline) */   	\
+		|| (__CORTEX_M == 85)  /* Cortex-M85  (v8.1-M Mainline) */
 #   undef  FIBER_HAS_PSPLIM
 #   define FIBER_HAS_PSPLIM 1
 #  endif
@@ -52,46 +52,44 @@
 #if FIBER_HAS_PSPLIM
 
 /* Read PSPLIM (current Security state). */
-static inline uint32_t fiber_get_psplim(void)
+__STATIC_FORCEINLINE uint32_t fiber_get_psplim(void)
 {
-  /* Prefer CMSIS intrinsic if present (core_cm33.h / core_cm85.h etc.) */
-  #if defined(__ASM)
-    return __get_PSPLIM();
-  #else
-    uint32_t v;
-    __asm volatile ("mrs %0, psplim" : "=r"(v));
-    return v;
-  #endif
+	/* Prefer CMSIS intrinsic if present (core_cm33.h / core_cm85.h etc.) */
+#  if defined(__ASM)
+	return __get_PSPLIM();
+#  else
+	uint32_t v;
+	__asm volatile ("mrs %0, psplim" : "=r"(v));
+	return v;
+#  endif
 }
 
 /* Write PSPLIM (current Security state). Call in privileged Thread mode. */
-static inline void fiber_set_psplim(uint32_t limit)
+__STATIC_FORCEINLINE void fiber_set_psplim(uint32_t limit)
 {
-  #if defined(__ASM)
-    __set_PSPLIM(limit);
-  #else
-    __asm volatile ("msr psplim, %0" :: "r"(limit) : "memory");
-  #endif
-  /* Serialize so the new limit is effective before subsequent stacking. */
-  { __DSB(); __ISB(); }
+#  if defined(__ASM)
+	__set_PSPLIM(limit);
+#  else
+	__asm volatile ("msr psplim, %0" :: "r"(limit) : "memory");
+#  endif
+	/* Serialize so the new limit is effective before subsequent stacking. */
+	{ __DSB(); __ISB(); }
 }
 
 /* Convenience: configure PSPLIM for a downward-growing stack.
  * Pass the lowest valid address of the PSP stack region.
  */
-static inline void fiber_psplim_config(uint32_t stack_low_addr)
+__STATIC_FORCEINLINE void fiber_psplim_config(uint32_t stack_low_addr)
 {
-  /* RMW-like semantics: write only if different, then barrier. */
-  uint32_t cur = fiber_get_psplim();
-  if (cur != stack_low_addr) {
-    fiber_set_psplim(stack_low_addr);
-    /* Read-back to calm down nervous toolchains and humans alike. */
-    volatile uint32_t rb = fiber_get_psplim(); (void)rb;
-  }
+	/* RMW-like semantics: write only if different, then barrier. */
+	uint32_t cur = fiber_get_psplim();
+	if (cur != stack_low_addr) {
+		fiber_set_psplim(stack_low_addr);
+		/* Read-back to calm down nervous toolchains and humans alike. */
+		volatile uint32_t rb = fiber_get_psplim(); (void)rb;
+	}
 }
 #endif /* FIBER_HAS_PSPLIM */
-
-
 
 /* ---------- PSPLIM symbol alias for TrustZone (optional) ---------- */
 /* Define FIBER_TZ_NS=1 for non-secure builds to target psplim_ns */

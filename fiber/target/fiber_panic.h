@@ -18,6 +18,7 @@
 #endif
 
 FIBER_WEAK FIBER_NORETURN
+FIBER_ATTR_SENSITIVE
 void fiber_panic(char code);
 
 #endif /* FIBER_FIBER_PANIC_H_ */

@@ -5,35 +5,54 @@
  * types for both C and C++ in a consistent and portable way. Use them to write
  * clear, architecture-agnostic code.
  *
- * ────────────────────────────────────────────────────────────────────────────────────
+ * ────────────────────────────────────────────────────────────────────────────────
  *  Category      │ Purpose                         │ Example types
- * ───────────────┼─────────────────────────────────┼───────────────────────────────────
- *  Exact-width   │ Fixed bit size                  │ u8,  i32,  u64
+ * ───────────────┼─────────────────────────────────┼───────────────────────────────
+ *  Exact-width   │ Fixed bit size                  │ u8,  i32,  s32,  u64
  *  Least-width   │ Smallest type ≥ N bits          │ u8l, i16l, u32l
  *  Fast          │ Fastest type ≥ N bits           │ u8f, i32f, u64f
  *  Native        │ Pointer-sized (register proxy)  │ reg, sreg
  *  Floating      │ Standard float/double/long dbl  │ f32, f64, f128
  *  Size-friendly │ API ergonomics for sizes        │ usize (size_t), isize (ptrdiff_t)
- *  Char family   │ Char + explicit signedness      │ c8, sc8, uc8 (+ BASIC_TYPES_CHAR_IS_SIGNED)
+ *  Char family   │ Char + explicit signedness      │ c8, sc8, uc8
  *  Misc          │ Other types                     │ b (bool/_Bool), uni (void)
  *  Volatile      │ MMIO-safe mirrors               │ vu32, vi16, vreg, vf32
- * ───────────────────────────────────────────────────────────────────────────────────
+ * ────────────────────────────────────────────────────────────────────────────────
  *
  * Type naming convention:
- *     - Prefixes:  u = unsigned, i = signed, vu = volatile unsigned, vi = volatile signed
- *     - Width:     8, 16, 32, 64
- *     - Suffixes:  none = common type, l = least, f = fast
+ *     - Prefixes:
+ *         u  = unsigned integer
+ *         i  = signed integer
+ *         s  = synonym for signed integer (alias of iN, e.g. s32 == i32)
+ *         vu = volatile unsigned integer
+ *         vi = volatile signed integer
+ *
+ *     - Width:
+ *         8, 16, 32, 64  → bit width
+ *
+ *     - Suffixes:
+ *         (none) = exact-width
+ *         l      = least-width (smallest type with at least N bits)
+ *         f      = fast-width  (fastest type with at least N bits)
  *
  * Examples:
  *     - u16   → exactly 16-bit unsigned integer
- *     - i32l  → at least 32-bit signed integer (smallest that fits)
- *     - u8f   → fastest unsigned type ≥8 bits
- *     - reg   → pointer-sized unsigned integer (native address width)
+ *     - i32   → exactly 32-bit signed integer
+ *     - s32   → alias for i32 (signed 32-bit integer)
+ *     - u32l  → at least 32-bit unsigned integer (smallest that fits)
+ *     - u8f   → fastest unsigned type ≥ 8 bits
+ *     - reg   → pointer-sized unsigned integer (native word size)
  *     - usize → alias for size_t, convenient in APIs
  *     - c8/sc8/uc8 → char with implementation-defined vs explicit signedness
- *     - vu32   → exactly 32-bit volatile unsigned integer
+ *     - vu32  → exactly 32-bit volatile unsigned integer
  *
- * This file also provides size checks to ensure consistent behavior across platforms.
+ * Platform assumptions:
+ *     - 8-bit bytes.
+ *     - Standard 32/64-bit integer layout.
+ *     - 32-bit float and 64-bit double. These are enforced via static asserts
+ *       so that unsupported targets fail at compile time.
+ *
+ * This file also provides size checks to fail early on incompatible platforms.
  */
 
 #ifndef BASIC_TYPES_H_
@@ -59,7 +78,8 @@
 #else
 # define BT_CAT_(a,b) a##b
 # define BT_CAT(a,b)  BT_CAT_(a,b)
-# define BT_STATIC_ASSERT(cond, msg) typedef char BT_CAT(static_assert_failed_at_line_,__LINE__)[(cond)?1:-1]
+# define BT_STATIC_ASSERT(cond, msg) \
+    typedef char BT_CAT(static_assert_failed_at_line_,__LINE__)[(cond)?1:-1]
 #endif /* BT_STATIC_ASSERT SELECTION */
 
 /* ------------------------------ Type aliases -------------------------------- */
@@ -67,10 +87,10 @@
 #ifdef __cplusplus /* ======================== C++ ========================= */
 
 /* Exact-width integer types (guaranteed size) */
-using u8  = std::uint8_t;   using i8  = std::int8_t;
-using u16 = std::uint16_t;  using i16 = std::int16_t;
-using u32 = std::uint32_t;  using i32 = std::int32_t;
-using u64 = std::uint64_t;  using i64 = std::int64_t;
+using u8  = std::uint8_t;   using i8  = std::int8_t;   using s8  = i8;
+using u16 = std::uint16_t;  using i16 = std::int16_t;  using s16 = i16;
+using u32 = std::uint32_t;  using i32 = std::int32_t;  using s32 = i32;
+using u64 = std::uint64_t;  using i64 = std::int64_t;  using s64 = i64;
 
 /* Least-width integer types (≥N bits, smallest possible) */
 using u8l  = std::uint_least8_t;   using i8l  = std::int_least8_t;
@@ -85,48 +105,56 @@ using u32f = std::uint_fast32_t;   using i32f = std::int_fast32_t;
 using u64f = std::uint_fast64_t;   using i64f = std::int_fast64_t;
 
 /* Native register-size types (match pointer size) */
-using reg  = std::uintptr_t;
-using sreg = std::intptr_t;
+using reg  = std::size_t;      /* unsigned native word (for indices/capacities) */
+using sreg = std::ptrdiff_t;   /* signed native word (for differences) */
+
+/* Pointer-sized integer aliases (for pointer → integer round-trip) */
+using reg_ptr  = std::uintptr_t;
+using sreg_ptr = std::intptr_t;
 
 /* Size-friendly aliases (API ergonomics) */
 using usize = std::size_t;
 using isize = std::ptrdiff_t;
 
 /* Floating-point types */
-using f32 = float;
-using f64 = double;
+using f32  = float;
+using f64  = double;
 using f128 = long double; /* platform-dependent */
 
 /* Misc / char family */
 using c8  = char;          /* implementation-defined signedness */
-using sc8 = signed char;
-using uc8 = unsigned char;
+using sc8 = signed char;   /* explicit signed 8-bit char */
+using uc8 = unsigned char; /* explicit unsigned 8-bit char */
 using b   = bool;
 using uni = void;
 
 #else /* ========================= C (C99/C11) ========================= */
 
-/* Exact-width */
-typedef uint8_t  u8;   typedef int8_t   i8;
-typedef uint16_t u16;  typedef int16_t  i16;
-typedef uint32_t u32;  typedef int32_t  i32;
-typedef uint64_t u64;  typedef int64_t  i64;
+/* Exact-width integer types (guaranteed size) */
+typedef uint8_t  u8;   typedef int8_t  i8;   typedef i8  s8;
+typedef uint16_t u16;  typedef int16_t i16;  typedef i16 s16;
+typedef uint32_t u32;  typedef int32_t i32;  typedef i32 s32;
+typedef uint64_t u64;  typedef int64_t i64;  typedef i64 s64;
 
-/* Least-width */
+/* Least-width integer types (≥N bits, smallest possible) */
 typedef uint_least8_t  u8l;   typedef int_least8_t  i8l;
 typedef uint_least16_t u16l;  typedef int_least16_t i16l;
 typedef uint_least32_t u32l;  typedef int_least32_t i32l;
 typedef uint_least64_t u64l;  typedef int_least64_t i64l;
 
-/* Fast-width */
+/* Fast integer types (≥N bits, fastest on platform) */
 typedef uint_fast8_t  u8f;    typedef int_fast8_t  i8f;
 typedef uint_fast16_t u16f;   typedef int_fast16_t i16f;
 typedef uint_fast32_t u32f;   typedef int_fast32_t i32f;
 typedef uint_fast64_t u64f;   typedef int_fast64_t i64f;
 
 /* Native register-size types (match pointer size) */
-typedef uintptr_t reg;
-typedef intptr_t  sreg;
+typedef size_t    reg;   /* unsigned native word (for indices/capacities) */
+typedef ptrdiff_t sreg;  /* signed native word (for differences) */
+
+/* Pointer-sized integer aliases (for pointer → integer round-trip) */
+typedef uintptr_t reg_ptr;
+typedef intptr_t  sreg_ptr;
 
 /* Size-friendly aliases (API ergonomics) */
 typedef size_t    usize;
@@ -138,11 +166,11 @@ typedef double      f64;
 typedef long double f128; /* platform-dependent */
 
 /* Misc / char family */
-typedef char  c8;           /* implementation-defined signedness */
-typedef signed   char sc8;  /* explicit signed 8-bit char */
-typedef unsigned char uc8;  /* explicit unsigned 8-bit char */
-typedef _Bool b;
-typedef void  uni;
+typedef char           c8;   /* implementation-defined signedness */
+typedef signed   char  sc8;  /* explicit signed 8-bit char */
+typedef unsigned char  uc8;  /* explicit unsigned 8-bit char */
+typedef _Bool          b;
+typedef void           uni;
 
 #endif /* __cplusplus */
 
@@ -168,12 +196,14 @@ using vu32f = volatile u32f; using vi32f = volatile i32f;
 using vu64f = volatile u64f; using vi64f = volatile i64f;
 
 /* Native/pointer-sized and size-friendly */
-using vreg   = volatile reg;    using vsreg  = volatile sreg;
-using vusize = volatile usize;  using visize = volatile isize;
+using vreg   = volatile reg;
+using vsreg  = volatile sreg;
+using vusize = volatile usize;
+using visize = volatile isize;
 
 /* Floating-point */
-using vf32 = volatile f32;
-using vf64 = volatile f64;
+using vf32  = volatile f32;
+using vf64  = volatile f64;
 using vf128 = volatile f128;
 
 /* Char family */
@@ -198,8 +228,10 @@ typedef volatile u32f vu32f; typedef volatile i32f vi32f;
 typedef volatile u64f vu64f; typedef volatile i64f vi64f;
 
 /* Native/pointer-sized and size-friendly */
-typedef volatile reg   vreg;    typedef volatile sreg  vsreg;
-typedef volatile usize vusize;  typedef volatile isize visize;
+typedef volatile reg   vreg;
+typedef volatile sreg  vsreg;
+typedef volatile usize vusize;
+typedef volatile isize visize;
 
 /* Floating-point */
 typedef volatile f32 vf32;
@@ -246,7 +278,7 @@ BT_STATIC_ASSERT(sizeof(i64f) >= 8, "i64f >= 8");
 BT_STATIC_ASSERT(sizeof(reg)  == sizeof(void*), "reg must match pointer size");
 BT_STATIC_ASSERT(sizeof(sreg) == sizeof(void*), "sreg must match pointer size");
 
-/* Floats: f32/f64 is almost universally 4/8 */
+/* Floats: f32/f64 are assumed to be 4/8 bytes on supported targets */
 BT_STATIC_ASSERT(sizeof(f32) == 4, "float must be 4 bytes");
 BT_STATIC_ASSERT(sizeof(f64) == 8, "double must be 8 bytes on this target");
 
