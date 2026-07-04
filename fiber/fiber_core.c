@@ -151,8 +151,8 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
  * -------------------------------------------------------------------------- */
 
 #ifndef FIBER_SWITCH_MASK_IRQS
-/* 0 = don't touch PRIMASK (default); 1 = mask IRQs during slot update */
-# define FIBER_SWITCH_MASK_IRQS 0
+/* 0 = do not touch PRIMASK; 1 = mask IRQs during slot update */
+# define FIBER_SWITCH_MASK_IRQS 1
 #endif
 
 #if FIBER_SWITCH_MASK_IRQS
@@ -173,11 +173,14 @@ static inline void fiber_primask_restore_local(uint32_t pm)
 {
 	{ __DSB(); __ISB(); }
 	__ASM volatile("msr primask, %0" :: "r"(pm) : "memory");
+	{ __DSB(); __ISB(); }
 }
 #endif
 
 void fiber_switch(FiberContext* const from, FiberContext* const to)
 {
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');  /* fiber_switch is a Thread-mode API */
+
 	/* Fast no-op: nothing to switch or self-switch requested */
 	if (!to || to == from) {
 		__COMPILER_BARRIER();

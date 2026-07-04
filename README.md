@@ -1,79 +1,67 @@
-## Fiber
-The library switches context cooperatively in the void PendSV_Handler(void);
+# Fiber
+
+Small cooperative fiber switcher for STM32/Cortex-M projects.
+
+The context switch is requested from Thread mode with `fiber_switch()` and is
+performed by PendSV. The application must wire `PendSV_Handler()` to
+`fiber_pendsv()`.
+
+## Project Setup
+
+Add the repository root to the include path, then include the public API:
 
 ```c
-/*
-* app_core.cpp
-*
-* Created on: Oct 9, 2025
-* Author: admin
-*/
+#include "fiber/fiber_core.h"
+```
 
+Before starting fibers, initialize PendSV priority:
+
+```c
+fiber_pendsv_init_lowest_priority();
+```
+
+## Basic Example
+
+```c
 #include "app_core.h"
 #include "main.h"
 
-#include "fiber/fiber_core.h" // FiberContext, fiber_init(...)
+#include "fiber/fiber_core.h"
 
-/* -------- Config -------- */
-enum { STACK_SZ = 1024 }; // for M0/M3/M4 usually 512–1024 is enough; for FPU 1024+ is better
+enum { STACK_SZ = 1024 };
 
-/* 8-byte stack alignment */
-__attribute__((aligned(8))) static uint8_t stack1[1024];
-__attribute__((aligned(8))) static uint8_t stack2[1024];
-__attribute__((aligned(8))) static uint8_t stack3[1024];
+__attribute__((aligned(8))) static uint8_t stack1[STACK_SZ];
+__attribute__((aligned(8))) static uint8_t stack2[STACK_SZ];
+__attribute__((aligned(8))) static uint8_t stack3[STACK_SZ];
 
-/* Two contexts */
 static FiberContext f1;
 static FiberContext f2;
 static FiberContext f3;
-static FiberContext _tmppp;
 
+static uint32_t counter1 = 0;
+static uint32_t counter2 = 0;
+static uint32_t counter3 = 0;
 
-
-
-/* -------- Fiber bodies -------- */
-u32 time1 = 0;
 void fiber1_entry(void*)
-{ 
-	volatile double aaa = 0.0; 
-	while(true) { 
-		if(HAL_GetTick() - time1 > 1000) { 
-			//HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin); 
-			fiber_switch(&f1, &f3); 
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin); 
-			time1 = HAL_GetTick(); 
-		} 
-		aaa += 1.0; 
-		fiber_switch(&f1, &f3); 
+{
+	for (;;) {
+		counter1++;
+		fiber_switch(&f1, &f3);
 	}
 }
 
 void fiber2_entry(void*)
-{ 
-	u32 time = 0; 
-	volatile double aaa = 0.0; 
-	for (;;) { 
-		if(HAL_GetTick() - time > 100) { 
-			HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin); 
-			fiber_switch(&f2, &f1); 
-			time = HAL_GetTick(); 
-		} 
-		fiber_switch(&f2, &f1); 
-		aaa += 2.0; 
+{
+	for (;;) {
+		counter2++;
+		fiber_switch(&f2, &f1);
 	}
 }
 
 void fiber3_entry(void*)
-{ 
-	u32 time = 0; 
-	volatile double aaa = 0.0; 
-	for (;;) { 
-		if(HAL_GetTick() - time > 200) { 
-			HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin); 
-			fiber_switch(&f3, &f2);
-			time = HAL_GetTick();
-			aaa += 3.0;
-		}
+{
+	for (;;) {
+		counter3++;
 		fiber_switch(&f3, &f2);
 	}
 }
@@ -81,42 +69,56 @@ void fiber3_entry(void*)
 void app_main(void)
 {
 	fiber_pendsv_init_lowest_priority();
-	
-	/* 1) Create 2 contexts.
-	IMPORTANT: in fiber_init pass [begin,end) exactly as the bottom/top of the buffer */
+
 	fiber_init(&f1, stack1, stack1 + sizeof(stack1), fiber1_entry, (void*)1);
 	fiber_init(&f2, stack2, stack2 + sizeof(stack2), fiber2_entry, (void*)2);
 	fiber_init(&f3, stack3, stack3 + sizeof(stack3), fiber3_entry, (void*)3);
-	
-	/* 2) Go to PSP and start the first fiber.
-	fiber_boot:
-	- check the environment (Thread/priv/MSP)
-	- prepare the platform (STKALIGN, fault enable, FPU access)
-	- (on v8-M) program PSPLIM = f1.boot.stack_base
-	- set PSP = f1.boot.stack_top
-	- tail-call in fiber1_entry(arg) — and never return
-	*/
-	fiber_boot(&f2.boot);
-	
-	/* We never get here */
-	for (;;);
+
+	fiber_boot(&f1.boot);
+
+	for (;;) {
+	}
 }
 ```
 
-## PendSV_Handler in `stm32xxx_it.c`
-```c++
+`fiber_boot()` checks the environment, prepares the platform, switches Thread
+mode to PSP, and tail-calls the selected fiber entry. It does not return.
+
+## FPU Stress Example
+
+Use floating-point work only when you explicitly want to test FPU save/restore
+and the build is configured with the expected FPU compiler flags.
+
+```c
+void fiber_fpu_stress_entry(void*)
+{
+	volatile double acc = 0.0;
+
+	for (;;) {
+		acc += 1.0;
+		fiber_switch(&f1, &f2);
+	}
+}
+```
+
+## PendSV Handler
+
+In `stm32xxx_it.c`:
+
+```c
 #include "fiber/fiber_core.h"
 
-/**
-  * @brief This function handles Pendable request for system service.
-  */
 void PendSV_Handler(void)
 {
-  /* USER CODE BEGIN PendSV_IRQn 0 */
 	fiber_pendsv();
-  /* USER CODE END PendSV_IRQn 0 */
-  /* USER CODE BEGIN PendSV_IRQn 1 */
-
-  /* USER CODE END PendSV_IRQn 1 */
 }
 ```
+
+## Safety Defaults
+
+- `FIBER_SWITCH_STRICT_BARRIERS = 1`
+- `FIBER_SWITCH_MASK_IRQS = 1`
+- `FIBER_FPU_LAZY = 0`
+
+`fiber_switch()` is a Thread-mode API. Calling it from an interrupt traps through
+`FIBER_REQUIRE`.
