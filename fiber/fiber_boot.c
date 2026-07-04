@@ -38,10 +38,10 @@ FIBER_WEAK uintptr_t fiber_fallback_initial_msp(void) {
 /* Never returns. M0-safe (Thumb-1 only where required).                      	*/
 /*                                                                            	*/
 /* Register contract on entry:                                                	*/
-/*   r0: psp_top  — target PSP top (8-byte aligned by caller)                 	*/
-/*   r1: entry    — entry function (Thumb, must not return)                   	*/
-/*   r2: arg      — argument passed to entry(arg)                              	*/
-/*   r3: msp_top  — optional new MSP top; if 0, MSP is left unchanged         	*/
+/*   r0: psp_top  - target PSP top (8-byte aligned by caller)                 	*/
+/*   r1: entry    - entry function (Thumb, must not return)                   	*/
+/*   r2: arg      - argument passed to entry(arg)                              	*/
+/*   r3: msp_top  - optional new MSP top; if 0, MSP is left unchanged         	*/
 /* -----------------------------------------------------------------------------*/
 static FIBER_NORETURN FIBER_ATTR_NAKED_ASM
 void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_top)
@@ -132,7 +132,7 @@ void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_to
 			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
 
 			/* ---------------------------------------------------------------------- 	*/
-			/* Tail-call entry(arg) — never returns                                    	*/
+			/* Tail-call entry(arg) - never returns                                    	*/
 			/* ---------------------------------------------------------------------- 	*/
 			"bx    r1                  \n"  /* branch to entry (Thumb), never returns  	*/
 
@@ -160,13 +160,13 @@ static inline void fiber_clear_sticky_faults(void)
 #if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
 	/* CFSR: Configurable Fault Status Register (W1C). */
 	const volatile uint32_t cfsr = SCB->CFSR;   /* read current sticky bits */
-	SCB->CFSR = cfsr;                  			/* write-back ‘1’s to clear them */
+	SCB->CFSR = cfsr;                  			/* write back one bits to clear them */
 
 	/* HFSR: Hard Fault Status Register (W1C). */
 	const volatile uint32_t hfsr = SCB->HFSR;
 	SCB->HFSR = hfsr;
 
-	/* DFSR: Debug Fault Status Register (W1C). Some CMSIS expose bit masks, some don’t. */
+	/* DFSR: Debug Fault Status Register (W1C). Some CMSIS expose bit masks, some do not. */
 # if defined(SCB_DFSR_EXTERNAL_Msk) || defined(SCB_DFSR_BKPT_Msk) || 		\
 		defined(SCB_DFSR_DWTTRAP_Msk)  || defined(SCB_DFSR_VCATCH_Msk) || 	\
 		defined(SCB_DFSR_HALTED_Msk)
@@ -325,7 +325,7 @@ static void fiber_plan_msp(FiberBoot* const ctx)
 	FIBER_REQUIRE(!(ctx->msp_top > ctx->stack_base && ctx->msp_top <= ctx->stack_top),
 			(ctx->msp_policy == FIBER_MSP_POLICY_REWIND) ? 'O' : 'o');
 
-	/* Minimum gap MSP↔PSP at least red-zone. */
+	/* Minimum gap MSP<->PSP at least red-zone. */
 	{
 		const size_t gap = (ctx->msp_top > ctx->stack_top)
 							 ? (size_t)(ctx->msp_top - ctx->stack_top)

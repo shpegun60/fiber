@@ -1,4 +1,4 @@
-/* pendvswitch.c — FreeRTOS-style cooperative PendSV with PSPLIM and robust FPU gates
+/* pendvswitch.c - FreeRTOS-style cooperative PendSV with PSPLIM and robust FPU gates
  *
  * This file implements a portable, FreeRTOS-like PendSV context switch for all STM32 series.
  * Design goals:
@@ -101,7 +101,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	/* -------------------- Software-saved area (callee-saved + EXC_RETURN) -------------------- */
 #if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__)
-	/* M0/M23 memory (low→high): [LR][r8..r11][r4..r7] */
+	/* M0/M23 memory (low to high): [LR][r8..r11][r4..r7] */
 	*(--sp) = 0;               /* r7 */
 	*(--sp) = 0;               /* r6 */
 	*(--sp) = 0;               /* r5 */
@@ -112,7 +112,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	*(--sp) = 0;               /* r8  */
 	*(--sp) = 0xFFFFFFFDu;     /* LR(EXC_RETURN): return to Thread via PSP, no FP frame */
 #else
-	/* M3/M4/M7/M33 memory (low→high): [r4..r11][LR] */
+	/* M3/M4/M7/M33 memory (low to high): [r4..r11][LR] */
 	*(--sp) = 0xFFFFFFFDu;     /* LR(EXC_RETURN): return to Thread via PSP, bit4=1 => no FP frame */
 	*(--sp) = 0;               /* r11 */
 	*(--sp) = 0;               /* r10 */

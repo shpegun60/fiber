@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * fiber_irq.c — make PendSV the lowest priority across all STM32
+ * fiber_irq.c - make PendSV the lowest priority across all STM32
  *
  * Knobs (optional):
  *   - FIBER_FORCE_PRIGROUP  : [-1..7]  -1 = don't touch grouping (default), otherwise set PRIGROUP
@@ -98,10 +98,10 @@ void fiber_pendsv_init_lowest_priority(void)
     /* Read-back verify. CMSIS returns right-justified priority; compare masked. */
     {
         const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
-        FIBER_REQUIRE((rd & lowest) == lowest, 'P');  /* 'P' — PendSV priority not at lowest */
+        FIBER_REQUIRE((rd & lowest) == lowest, 'P');  /* 'P' - PendSV priority not at lowest */
 #if FIBER_TUNE_SYSTICK
         const uint32_t rd_stk = NVIC_GetPriority(SysTick_IRQn);
-        FIBER_REQUIRE((rd_stk & lowest) == lowest, 'K'); /* 'K' — SysTick priority not at lowest */
+        FIBER_REQUIRE((rd_stk & lowest) == lowest, 'K'); /* 'K' - SysTick priority not at lowest */
 #endif
     }
 

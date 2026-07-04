@@ -11,13 +11,13 @@
 #include <stdint.h>
 
 typedef struct fiber_stack_region {
-    void   *base;   /* низ діапазону */
+    void   *base;   /* low address of the stack range */
     void   *top;    /* base + bytes */
-    size_t  bytes;  /* повний розмір діапазону */
-    void   *raw;    /* те, що повернув malloc (для free), або NULL для не-heap */
+    size_t  bytes;  /* full stack range size */
+    void   *raw;    /* malloc result for free(), or NULL for non-heap storage */
 } fiber_stack_region;
 
-/* Заповнити дескриптор зі звичайного буфера */
+/* Fill a descriptor from a regular stack buffer. */
 static inline void
 fiber_stack_region_from_buf(void *buf, size_t bytes, fiber_stack_region *out)
 {
@@ -27,12 +27,12 @@ fiber_stack_region_from_buf(void *buf, size_t bytes, fiber_stack_region *out)
     out->raw   = NULL;
 }
 
-/* Виділення в купі з правильним вирівнюванням до FIBER_STACK_ALIGN */
+/* Allocate heap storage aligned to FIBER_STACK_ALIGN. */
 static inline int
 fiber_stack_heap_alloc(size_t bytes, fiber_stack_region *out)
 {
     const size_t align = (size_t)FIBER_STACK_ALIGN;
-    const size_t total = bytes + (align - 1u);   /* запас на вирівнювання */
+    const size_t total = bytes + (align - 1u);   /* alignment headroom */
     uint8_t *raw = (uint8_t*)malloc(total);
     if (!raw) return 0;
 
@@ -43,22 +43,22 @@ fiber_stack_heap_alloc(size_t bytes, fiber_stack_region *out)
     out->top   = (void*)(aligned + bytes);
     out->bytes = bytes;
 
-    /* runtime-перевірка, раз ти вже любиш REQUIRE ;) */
+    /* Optional runtime alignment check. */
     //FIBER_REQUIRE( (((uintptr_t)out->base) & (align - 1u)) == 0u, 'A' );
 
     return 1;
 }
 
-/* Звільнення heap-стеку */
+/* Free a heap-allocated stack. */
 static inline void
 fiber_stack_heap_free(fiber_stack_region *s)
 {
     if (s && s->raw) { free(s->raw); s->raw = NULL; }
 }
 //
-///* Приклад:
+///* Example:
 //    fiber_stack_region stk;
-//    if (!fiber_stack_heap_alloc(2048, &stk)) { /* паніка або своя помилка * / }
+//    if (!fiber_stack_heap_alloc(2048, &stk)) { /* panic or custom error * / }
 //    fiber_start(stk.top, entry, arg, stk.base);
 //    // ...
 //    fiber_stack_heap_free(&stk);

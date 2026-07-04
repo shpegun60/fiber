@@ -9,7 +9,7 @@
 #define STM32_TOOLS_MCU_CORE_H_
 
 /* 0) HAL umbrella: often pulls in the device header and CMSIS-Core
-   Note: some CubeMX projects don’t make main.h include device headers early enough.
+   Note: some CubeMX projects do not make main.h include device headers early enough.
    Section (3) below tries to bring __CORTEX_M/__FPU_PRESENT if needed. */
 #include "main.h"
 #include "basic_types.h"
@@ -158,7 +158,7 @@
 # endif /* plan C */
 #endif /* need __CORTEX_M/__FPU_PRESENT/__FPU_USED */
 
-/* 3) CMSIS compiler helpers: require CMSIS 5+, ff some core_cm*.h already pulled it in — fine */
+/* 3) CMSIS compiler helpers: require CMSIS 5+. If some core_cm*.h already pulled it in, that is fine. */
 #if !defined(__STATIC_INLINE) || !defined(__ASM)
 #  include "cmsis_compiler.h"
 #endif

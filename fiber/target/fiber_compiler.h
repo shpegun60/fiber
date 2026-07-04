@@ -113,7 +113,7 @@
 
 /*
  * *****************************************************
- * FIBER_NOINLINE — "do not inline" on STM32 toolchains
+ * FIBER_NOINLINE - "do not inline" on STM32 toolchains
  * *****************************************************
  */
 #ifndef FIBER_NOINLINE
@@ -205,7 +205,7 @@
 
 /*
  * *********************************************************************************
- * FIBER_NOSAN — sanitizer-friendly attributes (harmlessly empty on bare-metal)
+ * FIBER_NOSAN - sanitizer-friendly attributes (harmlessly empty on bare-metal)
  * *********************************************************************************
  */
 #if FIBER_HAS_ATTR(no_sanitize)
@@ -237,7 +237,7 @@
 
 /*
  * *********************************************************************************
- * FIBER_NOPROF — disable profiling/coverage if supported
+ * FIBER_NOPROF - disable profiling/coverage if supported
  * *********************************************************************************
  */
 #if FIBER_HAS_ATTR(no_profile_instrument_function)
@@ -256,7 +256,7 @@
 
 /*
  * *********************************************************************************
- * FIBER_NOSSP — disable stack protector if available
+ * FIBER_NOSSP - disable stack protector if available
  * *********************************************************************************
  */
 /* Stack protector off when supported */

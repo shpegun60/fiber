@@ -189,7 +189,7 @@
 //	*(--sp) = 0; /* r11 */
 //	*(--sp) = 0; /* r10 */
 //	//*(--sp) = 0; /* r9  */
-//	*(--sp) = fiber_read_r9();  /* r9  — ВАЖЛИВО */
+//	*(--sp) = fiber_read_r9();  /* r9 - important */
 //	*(--sp) = 0; /* r8  */
 //	ctx->sp = sp;
 //
@@ -209,7 +209,7 @@
 //	*(--sp) = 0; /* r11 */
 //	*(--sp) = 0; /* r10 */
 //	//*(--sp) = 0; /* r9  */
-//	*(--sp) = fiber_read_r9();  /* r9  — ВАЖЛИВО */
+//	*(--sp) = fiber_read_r9();  /* r9 - important */
 //	*(--sp) = 0; /* r8  */
 //	*(--sp) = 0; /* r7  */
 //	*(--sp) = 0; /* r6  */
@@ -230,7 +230,7 @@
 //	*(--sp) = 0; /* r11 */
 //	*(--sp) = 0; /* r10 */
 //	//*(--sp) = 0; /* r9  */
-//	*(--sp) = fiber_read_r9();  /* r9  — ВАЖЛИВО */
+//	*(--sp) = fiber_read_r9();  /* r9 - important */
 //	*(--sp) = 0; /* r8  */
 //	*(--sp) = 0; /* r7  */
 //	*(--sp) = 0; /* r6  */
@@ -238,7 +238,7 @@
 //	*(--sp) = 0; /* r4  */
 //
 //	*(--sp) = 0u;                                            /* FPSCR    */
-//	/* s16..s31 (reserve and zero) — vpop reads them in ascending order */
+//	/* s16..s31 (reserve and zero) - vpop reads them in ascending order */
 //	for (int i = 0; i < 16; ++i) { *(--sp) = 0u; }
 //
 //# endif /* FIBER_HAS_FPU */
@@ -329,7 +329,7 @@
 //			"bx    r3                  \n"  /* branch to restored PC (does not return) */
 //#else
 //			/* ----------------------------------------------------------------------
-//			 * ARMv7/8-M Mainline path (M3/M4/M7/M33/…): may have BASEPRI/PSPLIM/FPU
+//			 * ARMv7/8-M Mainline path (M3/M4/M7/M33/etc.): may have BASEPRI/PSPLIM/FPU
 //			 * ---------------------------------------------------------------------- */
 //
 //			/* ===== prologue: snapshot PRIMASK/BASEPRI and hard-mask IRQs ===== */
@@ -461,7 +461,7 @@
 //
 //
 //
-///* Прототип низькорівневої ASM-функції свічу (є в fiber_core.c) */
+///* Prototype for the low-level ASM switch function in fiber_core.c. */
 //
 //
 //

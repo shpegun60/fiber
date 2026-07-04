@@ -43,7 +43,7 @@ BT_STATIC_ASSERT(sizeof(size_t)      	>= 4, 	"[fiber]: size_t must be at least 3
 /* Base frame: r0..r3, r12, lr, pc, xPSR = 8 words = 32 bytes
  * FP extension (when the FP context is stacked): S0..S15 + FPSCR + reserved
  * word = 18 words = 72 bytes.
- * On Cortex-M only the FIRST preemption from Thread→Handler can stack on PSP;
+ * On Cortex-M only the FIRST preemption from Thread->Handler can stack on PSP;
  * nested IRQs then run on MSP. So reserve exactly 1 level on PSP.
  */
 
