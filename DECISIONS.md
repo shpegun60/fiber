@@ -15,6 +15,15 @@ Validated baseline for STM32H7 / Cortex-M7:
 - Save and restore `s16-s31` only when `EXC_RETURN` reports an extended FP frame.
 - Use eager FP stacking by default with `FIBER_FPU_LAZY = 0`.
 
+Observed STM32H7 hardware validation:
+
+- A normal runtime run reached `validation_flags = 0x000001FF` with
+  `validation_failures = 0` and `last_panic_code = 0`.
+- A long run exceeded 8 million visits per fiber while FP accumulators kept the
+  expected 1x/2x/3x relationship.
+- Forced real switch while `PRIMASK != 0` trapped with panic code `'p'`.
+- Forced real switch while `BASEPRI != 0` trapped with panic code `'b'`.
+
 Hardening decisions:
 
 - The synthetic exception frame stores `PC` with bit 0 clear. Thumb state comes
@@ -29,6 +38,12 @@ Hardening decisions:
   `BASEPRI` is already set.
 - The direct boot trampoline clears `CONTROL.FPCA` before entering the first
   fiber when an FPU context exists.
+- The direct boot trampoline remains the default start path. A future optional
+  SVC-based first-fiber start path may be added to match the FreeRTOS first-task
+  model more closely, where the first context is entered by exception return
+  instead of a direct branch. It should be gated by a dedicated option and kept
+  separate from the validated STM32H7/M7 trampoline path until hardware tests
+  prove the SVC path.
 - The preferred runtime API is `fiber_start()` plus `fiber_yield_to()`.
   `fiber_start()` seeds the runtime-owned current context, and PendSV updates it
   to the target context during every real switch. This mirrors the FreeRTOS

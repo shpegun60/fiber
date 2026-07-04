@@ -48,6 +48,10 @@ Closed hardening items from the FreeRTOS comparison:
 - `CONTROL.FPCA` is cleared before the first direct fiber entry when needed;
 - real switches are rejected when `PRIMASK` would defer PendSV;
 - real switches are rejected when `BASEPRI` would defer PendSV;
+- STM32H7 hardware validation covered a normal long-running switch loop,
+  pre-boot FP use, current-fiber tracking, no-op switches under `PRIMASK` and
+  `BASEPRI`, and forced delayed-switch traps for `PRIMASK` (`'p'`) and
+  `BASEPRI` (`'b'`);
 - current-fiber ownership is implemented through `fiber_start()`,
   `fiber_current()`, and `fiber_yield_to()`;
 - startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
@@ -101,9 +105,9 @@ Closed hardening items from the FreeRTOS comparison:
    macros are defined before they are used. This is a compile sanity check only;
    it does not promote M23/M33/M55/MVE to validated runtime targets.
 
-2. Add a focused STM32H7 runtime stress test for delayed-switch hazards.
+2. Keep expanding the focused STM32H7 runtime stress tests.
 
-   Required cases:
+   Already covered manually on hardware:
 
    - normal `fiber_switch()`;
    - no-op `fiber_switch(from, NULL)`;
@@ -111,9 +115,16 @@ Closed hardening items from the FreeRTOS comparison:
    - real switch with `PRIMASK != 0` must trap;
    - real switch with `BASEPRI != 0` must trap on BASEPRI-capable cores.
 
-3. Add an FPU startup hygiene stress test.
+   Remaining useful cases:
 
-   Required case:
+   - `fiber_switch()` from Handler mode must trap;
+   - manual `fiber_switch(wrong_from, to)` must trap when current tracking is
+     active;
+   - package the manual checks into a repeatable board validation mode.
+
+3. Keep the FPU startup hygiene stress test active.
+
+   Already covered manually on hardware:
 
    - execute floating-point code before `fiber_boot()`;
    - enter the first fiber;
@@ -205,7 +216,20 @@ Closed hardening items from the FreeRTOS comparison:
    `fiber` should provide an optional check that `PendSV_Handler` reaches
    `fiber_pendsv()`, where the platform makes that observable.
 
-3. Consider moving PendSV assembly into a dedicated assembly source.
+3. Consider an optional SVC-based first-fiber start path.
+
+   FreeRTOS starts the first task through an SVC handler and enters the task by
+   exception return. The current `fiber` default uses a direct boot trampoline
+   that sets PSP, switches Thread mode to PSP, clears `CONTROL.FPCA` when
+   needed, verifies the state, and branches to the first entry.
+
+   The trampoline remains the default for the STM32H7/M7 validated path. An SVC
+   start path may be useful later for closer FreeRTOS CPU-port parity,
+   privilege/security experiments, or unified handler validation. It should be
+   implemented behind a dedicated option such as `FIBER_START_USE_SVC` and
+   validated separately before it can replace or sit beside the default path.
+
+4. Consider moving PendSV assembly into a dedicated assembly source.
 
    Rationale: naked C plus inline assembly works, but a dedicated assembly file
    can make architecture-specific variants clearer once M23/M33/M55 support is
