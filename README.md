@@ -121,4 +121,5 @@ void PendSV_Handler(void)
 - `FIBER_FPU_LAZY = 0`
 
 `fiber_switch()` is a Thread-mode API. Calling it from an interrupt traps through
-`FIBER_REQUIRE`.
+`FIBER_REQUIRE`. The `from` context must be non-NULL; `to == NULL` is treated as
+a no-op.

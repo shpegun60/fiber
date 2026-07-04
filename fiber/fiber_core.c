@@ -143,6 +143,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
  * fiber_switch: robust cooperative trigger
  *
  * Goals:
+ *  - Reject NULL 'from' in the public API
  *  - No-op when 'to' is NULL or 'to' == 'from'
  *  - Write ordering: g_from must be visible before g_to becomes visible
  *  - Pend PendSV only after both slots are published
@@ -180,6 +181,7 @@ static inline void fiber_primask_restore_local(uint32_t pm)
 void fiber_switch(FiberContext* const from, FiberContext* const to)
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');  /* fiber_switch is a Thread-mode API */
+	FIBER_REQUIRE(from != NULL, 'F');        /* public API requires a source context */
 
 	/* Fast no-op: nothing to switch or self-switch requested */
 	if (!to || to == from) {

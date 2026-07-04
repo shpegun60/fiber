@@ -26,6 +26,7 @@ void fiber_init(FiberContext* const ctx,
 			const entry_t entry,
 			void* const arg);
 
+/* from must be non-NULL; to may be NULL for a no-op. */
 void fiber_switch(FiberContext* const from, FiberContext* const to);
 
 FIBER_ATTR_NAKED_ASM
