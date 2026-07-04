@@ -1,10 +1,13 @@
 /* pendvswitch.c - FreeRTOS-style cooperative PendSV with PSPLIM and robust FPU gates
  *
- * This file implements a portable, FreeRTOS-like PendSV context switch for all STM32 series.
+ * This file implements a FreeRTOS-like PendSV context switch for STM32/Cortex-M
+ * targets, with STM32H7/Cortex-M7 as the primary validated path. See README.md
+ * and FREERTOS_SUPPORT_PLAN.md for the current support matrix.
  * Design goals:
- *   - Correct stack math across v6-M (M0/M0+), v7-M (M3/M4/M7) and v8-M Baseline/Mainline (M23/M33).
+ *   - Correct stack math for v6-M, v7-M, v7E-M and v8-M Mainline paths.
  *   - Optional FPU gates: save/restore S16..S31 only when an extended frame is present (LR bit4 == 0).
  *   - PSPLIM update on v8-M Mainline before programming PSP for the target task.
+ *   - v8-M Baseline/M23 PSPLIM and security variants are not validated yet.
  *   - Paranoid runtime checks in fiber_init() to catch configuration errors early.
  *
  * Code comments are intentionally exhaustive and in English.
@@ -29,8 +32,8 @@ FIBER_NORETURN FIBER_ATTR_SENSITIVE static void fiber_task_return(void) { fiber_
 /* ---------------- Paranoid seed builder ----------------
  * We build a full software area (callee-saved + EXC_RETURN) under a hardware frame.
  * Layouts:
- *   v6-M / v8-M Baseline (M0/M0+/M23):  [LR][r8..r11][r4..r7]  (low -> high)
- *   v7/v8 Mainline (M3/M4/M7/M33):      [r4..r11][LR]         (low -> high)
+ *   v6-M / v8-M Baseline frame:  [LR][r8..r11][r4..r7]  (low -> high)
+ *   v7/v8 Mainline frame:        [r4..r11][LR]           (low -> high)
  * The hardware frame is always the standard 8 registers (R0..R3, R12, LR, PC, xPSR).
  *
  * We also reserve *one* HW frame of headroom above current PSP to survive the first
@@ -191,6 +194,9 @@ void fiber_switch(FiberContext* const from, FiberContext* const to)
 	}
 
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p'); /* do not defer the switch out of a masked region */
+#if FIBER_HAS_BASEPRI
+	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b'); /* do not let priority masking defer PendSV */
+#endif
 
 #if FIBER_SWITCH_MASK_IRQS
 	const uint32_t pm = fiber_primask_save_disable_local();
@@ -233,7 +239,7 @@ FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
 {
 #if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__)
-	/* ------------------------ Cortex-M0/M0+/M23 (Baseline) ------------------------ */
+	/* ------------------------ Cortex-M0/M0+ / v8-M Baseline ------------------------ */
 	__ASM volatile(
 
 			/* ----------------------------------------------------------------------
@@ -305,8 +311,9 @@ void fiber_pendsv(void)
 			"ldmia r3!, {r4-r7}                     \n"
 
 			/* ----------------------------------------------------------------------
-			 * Program PSP for target HW frame and clean exchange slots
-			 * (Baseline cores have no PSPLIM)
+			 * Program PSP for target HW frame and clean exchange slots.
+			 * This generic baseline path does not program PSPLIM; M23
+			 * PSPLIM/security variants are not validated yet.
 			 * ---------------------------------------------------------------------- */
 			"str   r3, [r2]                         \n" /* to->sp = HW frame */
 			"msr   psp, r3                          \n" /* PSP := start of HW frame for 'to' */

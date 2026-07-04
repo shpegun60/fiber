@@ -40,7 +40,8 @@
  * Main SP
  * ---------------------------------------------------------------------------*/
 
-/* Optionally rewind MSP to the initial top-of-stack from the vector table. */
+/* Optionally rewind MSP to the initial top-of-stack from the vector table.
+ * On M0/M0+, set this to 0 unless the platform has a reliable initial MSP source. */
 #ifndef FIBER_REWIND_MSP
 # define FIBER_REWIND_MSP 1
 #endif

@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * fiber_irq.c - make PendSV the lowest priority across all STM32
+ * fiber_irq.c - configure PendSV priority for STM32/Cortex-M targets
  *
  * Knobs (optional):
  *   - FIBER_FORCE_PRIGROUP  : [-1..7]  -1 = don't touch grouping (default), otherwise set PRIGROUP

@@ -123,7 +123,8 @@ void PendSV_Handler(void)
 `fiber_switch()` is a Thread-mode API. Calling it from an interrupt traps through
 `FIBER_REQUIRE`. The `from` context must be non-NULL; `to == NULL` is treated as
 a no-op. A real switch also requires `PRIMASK == 0`, so the switch cannot be
-silently delayed out of a masked interrupt region.
+silently delayed out of a masked interrupt region. On cores with BASEPRI, a real
+switch also requires `BASEPRI == 0`.
 
 ## Portability Notes
 
@@ -143,4 +144,9 @@ Cortex-M23 and Cortex-M55/MVE are not yet validated targets. Keep
 `FIBER_FORCE_SAVE_FPU = 1` in mind for MVE experiments if the toolchain does not
 make the extended FP context visible through the usual FPU macros.
 
-See `DECISIONS.md` for the current context-switch decision log.
+On Cortex-M0/M0+, `FIBER_REWIND_MSP` may need to be disabled unless the platform
+provides a reliable initial MSP source.
+
+See `DECISIONS.md` for the current context-switch decision log and
+`FREERTOS_SUPPORT_PLAN.md` for the roadmap toward FreeRTOS-style Cortex-M
+CPU-port support.

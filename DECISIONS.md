@@ -25,6 +25,8 @@ Hardening decisions:
   `0xFFFFFFBCu`, or override `FIBER_INITIAL_EXC_RETURN` directly.
 - `fiber_switch()` rejects real switches when `PRIMASK` is already set, because
   a pending PendSV delayed past a critical section is unsafe for this API.
+- On cores with BASEPRI, `fiber_switch()` also rejects real switches when
+  `BASEPRI` is already set.
 - The direct boot trampoline clears `CONTROL.FPCA` before entering the first
   fiber when an FPU context exists.
 
