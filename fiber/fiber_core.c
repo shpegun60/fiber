@@ -241,6 +241,7 @@ void fiber_pendsv(void)
 #if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__)
 	/* ------------------------ Cortex-M0/M0+ / v8-M Baseline ------------------------ */
 	__ASM volatile(
+			".syntax unified                         \n"
 
 			/* ----------------------------------------------------------------------
 			 * Prologue: get PSP and sync pipeline
@@ -258,7 +259,8 @@ void fiber_pendsv(void)
 			 * ---------------------------------------------------------------------- */
 			"ldr   r2, =g_to                        \n" /* r2 = &g_to */
 			"ldr   r2, [r2]                         \n" /* r2 = g_to */
-			"cbz   r2, 5f                           \n" /* if no target, nothing to do: return */
+			"cmp   r2, #0                           \n" /* Thumb-1 safe null check */
+			"beq   5f                               \n" /* if no target, nothing to do: return */
 
 			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
 			"ldr   r1, [r1]                         \n" /* r1 = g_from */
@@ -268,16 +270,19 @@ void fiber_pendsv(void)
 			 * SW layout low->high: [LR][r8..r11][r4..r7]
 			 * ARMv6-M lacks STMDB, so do manual pre-decrement + STMIA.
 			 * ---------------------------------------------------------------------- */
-			"cbz   r1, 1f                           \n" /* if from == NULL skip saving */
+			"cmp   r1, #0                           \n" /* Thumb-1 safe null check */
+			"beq   1f                               \n" /* if from == NULL skip saving */
 
 			/* Reserve SW area (9 words = 36 bytes): [LR][r8..r11][r4..r7] */
-			"sub   r0, r0, #36                      \n" /* r0 = base of SW area */
+			"subs  r0, #36                          \n" /* r0 = base of SW area */
 
-			/* Save LR(EXC_RETURN) at [base+0] */
-			"str   lr, [r0]                         \n"
+			/* Save LR(EXC_RETURN) at [base+0]. Thumb-1 cannot STR LR directly. */
+			"mov   r3, lr                           \n"
+			"str   r3, [r0]                         \n"
 
 			/* Save r4..r7 at [base+20] */
-			"add   r3, r0, #20                      \n"
+			"mov   r3, r0                           \n"
+			"adds  r3, #20                          \n"
 			"stmia r3!, {r4-r7}                     \n" /* r0 untouched */
 
 			/* Stage and save r8..r11 at [base+4] */
@@ -285,7 +290,8 @@ void fiber_pendsv(void)
 			"mov   r5, r9                           \n"
 			"mov   r6, r10                          \n"
 			"mov   r7, r11                          \n"
-			"add   r3, r0, #4                       \n"
+			"mov   r3, r0                           \n"
+			"adds  r3, #4                           \n"
 			"stmia r3!, {r4-r7}                     \n" /* r3 now points to [base+20] */
 
 			/* from->sp = base (bottom of SW area) */
@@ -297,10 +303,12 @@ void fiber_pendsv(void)
 			 * Load target SW area: [LR][r8..r11][r4..r7]
 			 * ---------------------------------------------------------------------- */
 			"ldr   r0, [r2]                         \n" /* r0 = to->sp (base) */
-			"ldr   lr, [r0]                         \n" /* LR = saved EXC_RETURN */
+			"ldr   r3, [r0]                         \n" /* r3 = saved EXC_RETURN */
+			"mov   lr, r3                           \n" /* LR = saved EXC_RETURN */
 
 			/* r3 := base+4; load staged r8..r11 into r4..r7, then move back to r8..r11 */
-			"add   r3, r0, #4                       \n"
+			"mov   r3, r0                           \n"
+			"adds  r3, #4                           \n"
 			"ldmia r3!, {r4-r7}                     \n"
 			"mov   r8,  r4                          \n"
 			"mov   r9,  r5                          \n"
@@ -353,6 +361,7 @@ void fiber_pendsv(void)
 #else
 	/* ------------------------ Cortex-M3/M4/M7/M33 (Mainline) ---------------------- */
 	__ASM volatile(
+			".syntax unified                         \n"
 
 			/* ----------------------------------------------------------------------
 			 * Prologue: get PSP and sync pipeline
@@ -459,19 +468,6 @@ void fiber_pendsv(void)
 	);
 #endif
 
-	/* ----------------------------------------------------------------------
-	 * Clobber list for GCC/Clang: tell compiler which regs/memory are modified
-	 * (prevents incorrect assumptions around the asm block)
-	 * ---------------------------------------------------------------------- */
-#if defined(__GNUC__) || defined(__clang__)
-	__ASM volatile("" :::                       /* empty barrier to apply clobbers below */
-			"r0","r1","r2","r3","r4","r5","r6","r7",   /* core regs clobbered */
-			"r8","r9","r10","r11","r12","lr","cc","memory"
-#if FIBER_HAS_FPU
-			,"d8","d9","d10","d11","d12","d13","d14","d15"  /* s16..s31 aliasing */
-#endif
-	);
-#endif
 }
 
 #ifndef FIBER_PENDSV_WIRED

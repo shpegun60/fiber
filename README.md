@@ -147,6 +147,18 @@ make the extended FP context visible through the usual FPU macros.
 On Cortex-M0/M0+, `FIBER_REWIND_MSP` may need to be disabled unless the platform
 provides a reliable initial MSP source.
 
+## Validation
+
+Run the compile-only Cortex-M matrix after changing target gates or assembly:
+
+```powershell
+.\tools\compile_matrix.ps1
+```
+
+This checks representative M0/M0+/M3/M4/M4F/M7/M7F/M23/M33/M33F/M55/M55F/M55
+MVE-FP builds. It does not replace hardware tests and does not promote
+M23/M33/M55/MVE to validated targets.
+
 See `DECISIONS.md` for the current context-switch decision log and
 `FREERTOS_SUPPORT_PLAN.md` for the roadmap toward FreeRTOS-style Cortex-M
 CPU-port support.

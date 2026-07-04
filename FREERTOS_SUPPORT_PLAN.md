@@ -48,6 +48,10 @@ Closed hardening items from the FreeRTOS comparison:
 - `CONTROL.FPCA` is cleared before the first direct fiber entry when needed;
 - real switches are rejected when `PRIMASK` would defer PendSV;
 - real switches are rejected when `BASEPRI` would defer PendSV;
+- startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
+  not implement it;
+- obsolete archived `fiber/old` source was removed so audits and validation
+  only cover the active runtime implementation;
 - source comments no longer claim full "all STM32" validation;
 - M0/M0+ MSP rewind behavior is documented as platform-dependent;
 - M23 and M55/MVE are documented as not yet validated.
@@ -70,17 +74,30 @@ Closed hardening items from the FreeRTOS comparison:
 
 1. Add a compile-only matrix for representative Cortex-M targets.
 
-   Minimum set:
+   Tooling:
+
+   ```powershell
+   .\tools\compile_matrix.ps1
+   ```
+
+   Current compile-only set:
 
    - Cortex-M0 or M0+
    - Cortex-M3
+   - Cortex-M4 without FPU
    - Cortex-M4F
+   - Cortex-M7 without FPU
    - Cortex-M7F
    - Cortex-M23
-   - Cortex-M33
+   - Cortex-M33 without FPU
+   - Cortex-M33F
+   - Cortex-M55 without FPU
+   - Cortex-M55F
+   - Cortex-M55 MVE-FP
 
    Each target must prove that `FIBER_HAS_BASEPRI` and the PSPLIM/FPU feature
-   macros are defined before they are used.
+   macros are defined before they are used. This is a compile sanity check only;
+   it does not promote M23/M33/M55/MVE to validated runtime targets.
 
 2. Add a focused STM32H7 runtime stress test for delayed-switch hazards.
 
@@ -107,7 +124,18 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P1: FreeRTOS Port Parity Decisions
 
-1. Decide Cortex-M23 support.
+1. Keep Cortex-M7 r0p1 errata policy explicit.
+
+   FreeRTOS wraps `BASEPRI` writes in PendSV on Cortex-M7 r0p1 because of ARM
+   errata 837070. The current `fiber` PendSV implementation does not write
+   `BASEPRI`; it only rejects `BASEPRI != 0` before requesting a switch from
+   Thread mode. Therefore the workaround is not needed today.
+
+   If a future scheduler path, priority-aware yield path, or critical section
+   writes `BASEPRI` from PendSV, the FreeRTOS-style r0p1 workaround must be
+   implemented before claiming support for affected M7 revisions.
+
+2. Decide Cortex-M23 support.
 
    Options:
 
@@ -131,7 +159,7 @@ Closed hardening items from the FreeRTOS comparison:
    - M23 Secure-only behavior, which needs separate validation;
    - M33/M55 Mainline behavior, where PSPLIM register access is expected.
 
-2. Validate ARMv8-M Non-secure behavior.
+3. Validate ARMv8-M Non-secure behavior.
 
    Required checks:
 
@@ -140,7 +168,7 @@ Closed hardening items from the FreeRTOS comparison:
    - CPACR/NSACR behavior for FP access;
    - vector table and PendSV wiring in the current security domain.
 
-3. Add an explicit MVE policy for Cortex-M55 class targets.
+4. Add an explicit MVE policy for Cortex-M55 class targets.
 
    Required checks:
 
@@ -167,7 +195,9 @@ Closed hardening items from the FreeRTOS comparison:
    ```
 
    The advanced `fiber_switch(from, to)` API can remain, but normal users should
-   not need to pass `from`.
+   not need to pass `from`. This must be implemented as a dedicated runtime API
+   change because the existing `fiber_boot(&ctx->boot)` entry point does not
+   know which `FiberContext` owns the boot record.
 
 2. Add optional vector wiring verification.
 

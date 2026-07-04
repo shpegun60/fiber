@@ -29,6 +29,11 @@ Hardening decisions:
   `BASEPRI` is already set.
 - The direct boot trampoline clears `CONTROL.FPCA` before entering the first
   fiber when an FPU context exists.
+- The current PendSV path does not write `BASEPRI`. Therefore the FreeRTOS
+  Cortex-M7 r0p1 errata workaround around `BASEPRI` writes in PendSV is not
+  required by the current implementation. If a future scheduler or critical
+  section writes `BASEPRI` from PendSV, the FreeRTOS-style r0p1 workaround must
+  be added before claiming support for affected Cortex-M7 revisions.
 
 Known limits:
 
@@ -43,3 +48,6 @@ Known limits:
   force saving with `FIBER_FORCE_SAVE_FPU = 1`.
 - A future API should probably expose `fiber_current()` and `fiber_yield_to()`
   so normal users do not pass the source context manually.
+- `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
+  not replace hardware tests, but it must stay green before widening support
+  claims beyond STM32H7/Cortex-M7.

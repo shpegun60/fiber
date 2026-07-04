@@ -18,6 +18,15 @@
 
 #include "fiber_boot.h"
 
+#ifndef FIBER_HAS_FAULTMASK
+# if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
+		|| defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_8_1M_MAIN__)
+#  define FIBER_HAS_FAULTMASK 1
+# else
+#  define FIBER_HAS_FAULTMASK 0
+# endif
+#endif
+
 /* -------------------------------------------------------------------------- 	*/
 /* Weak defaults for platform hooks (app may override)                         	*/
 /* -------------------------------------------------------------------------- 	*/
@@ -60,6 +69,7 @@ static FIBER_NORETURN FIBER_ATTR_NAKED_ASM
 void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_top)
 {
 	__ASM volatile(
+			".syntax unified          \n"
 			/* ---------------------------------------------------------------------- 	*/
 			/* Save & mask IRQs                                                       	*/
 			/* ---------------------------------------------------------------------- 	*/
@@ -108,7 +118,7 @@ void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_to
 			"mrs   r3, control         \n"  /* r3 = CONTROL                             */
 			FIBER_BOOT_CLEAR_FPCA_ASM
 			"movs  r5, #2              \n"  /* mask for SPSEL                           */
-			"orrs  r3, r3, r5          \n"  /* set CONTROL.SPSEL (bit1) -> use PSP (Thumb-1 safe) */
+			"orrs  r3, r5              \n"  /* set CONTROL.SPSEL (bit1) -> use PSP (Thumb-1 safe) */
 			"msr   control, r3         \n"  /* write CONTROL with SPSEL=1               */
 			"isb                       \n"  /* make SPSEL change visible before verification (architecturally required) */
 			/* verify SPSEL==1 */
@@ -241,20 +251,16 @@ static inline void fiber_platform_bootstrap(void)
 	{ __DSB(); __ISB(); }
 #endif
 
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
+#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
+ || defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_8_1M_MAIN__)
     __set_BASEPRI(0);
     { __DSB(); __ISB(); }
 #endif /* BASEPRI */
 
-#if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_7M__) \
- || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
+#if FIBER_HAS_FAULTMASK
 	__set_FAULTMASK(0);
 	{ __DSB(); __ISB(); }
 #endif /* FAULTMASK */
-
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
-  __set_FAULTMASK(0);
-#endif
 
 	/* Optionally enable FPU access (CP10/CP11) if an FPU exists and the build may emit FP instructions.	 */
 	fiber_fpu_enable_early();

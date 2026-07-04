@@ -20,10 +20,14 @@
 /* -----------------------------------------------------------------------------
  * Toolchain FP capability probe
  *   Modern compilers define __ARM_FP != 0 when FP instructions may be emitted.
- *   Some older/alt toolchains define __VFP_FP__.
+ *   Some older/alt toolchains define __VFP_FP__. GCC may also define
+ *   __VFP_FP__ for pure software floating point, so ignore that legacy hint
+ *   when __SOFTFP__ is present.
  * ---------------------------------------------------------------------------*/
 #ifndef FIBER_TOOLCHAIN_HAS_FP
-# if (defined(__ARM_FP) && ((__ARM_FP + 0) != 0)) || defined(__VFP_FP__)
+# if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
+#  define FIBER_TOOLCHAIN_HAS_FP 1
+# elif defined(__VFP_FP__) && !defined(__SOFTFP__)
 #  define FIBER_TOOLCHAIN_HAS_FP 1
 # else
 #  define FIBER_TOOLCHAIN_HAS_FP 0
