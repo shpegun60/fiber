@@ -20,6 +20,7 @@ BT_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
 /* Global exchange slots for cooperative switch trigger */
 static FiberContext *volatile g_from = 0;
 static FiberContext *volatile g_to   = 0;
+static FiberContext *volatile g_current = 0;
 
 /* ---------------- Small helpers ---------------- */
 __STATIC_FORCEINLINE uint32_t fiber_read_r9(void) { uint32_t v; __ASM volatile("mov %0, r9":"=r"(v)); return v; }
@@ -143,6 +144,34 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 }
 
+FiberContext* fiber_current(void)
+{
+	__COMPILER_BARRIER();
+	return g_current;
+}
+
+FIBER_NORETURN
+void fiber_start(FiberContext* const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'C');
+	FIBER_REQUIRE(ctx->boot.sealed != 0u, 's');
+
+	__DMB();
+	g_current = ctx;
+	__DMB();
+
+	fiber_boot(&ctx->boot);
+	FIBER_UNREACHABLE();
+}
+
+void fiber_yield_to(FiberContext* const to)
+{
+	FiberContext* const from = fiber_current();
+
+	FIBER_REQUIRE(from != NULL, 'G');
+	fiber_switch(from, to);
+}
+
 /* --------------------------------------------------------------------------
  * fiber_switch: robust cooperative trigger
  *
@@ -196,6 +225,16 @@ void fiber_switch(FiberContext* const from, FiberContext* const to)
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p'); /* do not defer the switch out of a masked region */
 #if FIBER_HAS_BASEPRI
 	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b'); /* do not let priority masking defer PendSV */
+#endif
+
+#if FIBER_VALIDATE_CURRENT
+	{
+		FiberContext* const current = fiber_current();
+
+		if (current != NULL) {
+			FIBER_REQUIRE(current == from, 'G');
+		}
+	}
 #endif
 
 #if FIBER_SWITCH_MASK_IRQS
@@ -327,6 +366,10 @@ void fiber_pendsv(void)
 			"msr   psp, r3                          \n" /* PSP := start of HW frame for 'to' */
 			"isb                                    \n" /* sync before exception return */
 
+			/* Publish the runtime-owned current context, FreeRTOS pxCurrentTCB style. */
+			"ldr   r1, =g_current                   \n" /* r1 = &g_current */
+			"str   r2, [r1]                         \n" /* g_current = to */
+
 			/* Clear exchange slots for hygiene/diagnostics */
 			"movs  r3, #0                           \n" /* r3 = 0 */
 			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
@@ -434,6 +477,10 @@ void fiber_pendsv(void)
 			"str   r0, [r2]                         \n" /* to->sp = r0 (now points at HW frame) */
 			"msr   psp, r0                          \n" /* PSP := start of HW frame for 'to' */
 			"isb                                    \n" /* synchronize before exception return */
+
+			/* Publish the runtime-owned current context, FreeRTOS pxCurrentTCB style. */
+			"ldr   r1, =g_current                   \n" /* r1 = &g_current */
+			"str   r2, [r1]                         \n" /* g_current = to */
 
 			/* Clear exchange slots to avoid stale pointers */
 			"movs  r3, #0                           \n" /* r3 = 0 */

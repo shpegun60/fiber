@@ -29,6 +29,13 @@ Hardening decisions:
   `BASEPRI` is already set.
 - The direct boot trampoline clears `CONTROL.FPCA` before entering the first
   fiber when an FPU context exists.
+- The preferred runtime API is `fiber_start()` plus `fiber_yield_to()`.
+  `fiber_start()` seeds the runtime-owned current context, and PendSV updates it
+  to the target context during every real switch. This mirrors the FreeRTOS
+  `pxCurrentTCB` ownership model while keeping `fiber_switch(from, to)` as an
+  advanced/manual API.
+- `FIBER_VALIDATE_CURRENT = 1` rejects real switches whose `from` argument does
+  not match the runtime-owned current context once that context is known.
 - The current PendSV path does not write `BASEPRI`. Therefore the FreeRTOS
   Cortex-M7 r0p1 errata workaround around `BASEPRI` writes in PendSV is not
   required by the current implementation. If a future scheduler or critical
@@ -46,8 +53,9 @@ Known limits:
 - Cortex-M55 / MVE needs validation. If MVE code can use the extended FP
   register file, the build must ensure `FIBER_HAS_FPU` covers that context or
   force saving with `FIBER_FORCE_SAVE_FPU = 1`.
-- A future API should probably expose `fiber_current()` and `fiber_yield_to()`
-  so normal users do not pass the source context manually.
+- `fiber_boot(&ctx->boot)` remains available for advanced/manual integrations,
+  but it cannot seed current ownership before the first switch because a
+  `FiberBoot` record does not point back to its owning `FiberContext`.
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
   not replace hardware tests, but it must stay green before widening support
   claims beyond STM32H7/Cortex-M7.

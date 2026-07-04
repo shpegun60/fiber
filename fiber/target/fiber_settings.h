@@ -58,6 +58,11 @@
 # define FIBER_SWITCH_MASK_IRQS 1        /* mask IRQs while publishing switch slots */
 #endif
 
+/* Validate real switches against the runtime-owned current context when known. */
+#ifndef FIBER_VALIDATE_CURRENT
+# define FIBER_VALIDATE_CURRENT 1
+#endif
+
 /* Set to 1 for ARMv8-M Non-secure projects that need the Non-secure EXC_RETURN
  * encoding used by FreeRTOS ports. Leave 0 for M3/M4/M7 and secure-only builds. */
 #ifndef FIBER_RUN_NONSECURE

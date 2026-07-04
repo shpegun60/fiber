@@ -46,7 +46,7 @@ void fiber1_entry(void*)
 {
 	for (;;) {
 		counter1++;
-		fiber_switch(&f1, &f3);
+		fiber_yield_to(&f3);
 	}
 }
 
@@ -54,7 +54,7 @@ void fiber2_entry(void*)
 {
 	for (;;) {
 		counter2++;
-		fiber_switch(&f2, &f1);
+		fiber_yield_to(&f1);
 	}
 }
 
@@ -62,7 +62,7 @@ void fiber3_entry(void*)
 {
 	for (;;) {
 		counter3++;
-		fiber_switch(&f3, &f2);
+		fiber_yield_to(&f2);
 	}
 }
 
@@ -74,15 +74,21 @@ void app_main(void)
 	fiber_init(&f2, stack2, stack2 + sizeof(stack2), fiber2_entry, (void*)2);
 	fiber_init(&f3, stack3, stack3 + sizeof(stack3), fiber3_entry, (void*)3);
 
-	fiber_boot(&f1.boot);
+	fiber_start(&f1);
 
 	for (;;) {
 	}
 }
 ```
 
-`fiber_boot()` checks the environment, prepares the platform, switches Thread
-mode to PSP, and tail-calls the selected fiber entry. It does not return.
+`fiber_start()` seeds the runtime-owned current context, checks the environment,
+prepares the platform, switches Thread mode to PSP, and tail-calls the selected
+fiber entry. It does not return.
+
+`fiber_current()` returns the runtime-owned current fiber. `fiber_yield_to(to)`
+uses it as the source context. The lower-level `fiber_switch(from, to)` API is
+kept for advanced/manual integrations, but normal application code should prefer
+`fiber_yield_to()`.
 
 ## FPU Stress Example
 
@@ -96,7 +102,7 @@ void fiber_fpu_stress_entry(void*)
 
 	for (;;) {
 		acc += 1.0;
-		fiber_switch(&f1, &f2);
+		fiber_yield_to(&f2);
 	}
 }
 ```
@@ -124,7 +130,9 @@ void PendSV_Handler(void)
 `FIBER_REQUIRE`. The `from` context must be non-NULL; `to == NULL` is treated as
 a no-op. A real switch also requires `PRIMASK == 0`, so the switch cannot be
 silently delayed out of a masked interrupt region. On cores with BASEPRI, a real
-switch also requires `BASEPRI == 0`.
+switch also requires `BASEPRI == 0`. When current tracking is active,
+`FIBER_VALIDATE_CURRENT = 1` rejects real switches whose `from` argument is not
+the runtime-owned current context.
 
 ## Portability Notes
 

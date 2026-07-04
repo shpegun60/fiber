@@ -26,6 +26,13 @@ void fiber_init(FiberContext* const ctx,
 			const entry_t entry,
 			void* const arg);
 
+FiberContext* fiber_current(void);
+
+FIBER_NORETURN
+void fiber_start(FiberContext* const ctx);
+
+void fiber_yield_to(FiberContext* const to);
+
 /* from must be non-NULL; to may be NULL for a no-op. */
 void fiber_switch(FiberContext* const from, FiberContext* const to);
 

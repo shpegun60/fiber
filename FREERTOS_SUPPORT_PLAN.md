@@ -48,6 +48,8 @@ Closed hardening items from the FreeRTOS comparison:
 - `CONTROL.FPCA` is cleared before the first direct fiber entry when needed;
 - real switches are rejected when `PRIMASK` would defer PendSV;
 - real switches are rejected when `BASEPRI` would defer PendSV;
+- current-fiber ownership is implemented through `fiber_start()`,
+  `fiber_current()`, and `fiber_yield_to()`;
 - startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
   not implement it;
 - obsolete archived `fiber/old` source was removed so audits and validation
@@ -178,26 +180,24 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P2: API Safety
 
-1. Add current-fiber tracking.
+1. Keep current-fiber tracking on the preferred API path.
 
-   Problem: the public API currently trusts the caller to pass the real source
-   context:
-
-   ```c
-   fiber_switch(&from, &to);
-   ```
-
-   FreeRTOS avoids this by owning `pxCurrentTCB`. The fiber equivalent should be:
+   The preferred API now mirrors the FreeRTOS `pxCurrentTCB` ownership model:
 
    ```c
    FiberContext *fiber_current(void);
    void fiber_yield_to(FiberContext *to);
+   FIBER_NORETURN void fiber_start(FiberContext *ctx);
    ```
 
-   The advanced `fiber_switch(from, to)` API can remain, but normal users should
-   not need to pass `from`. This must be implemented as a dedicated runtime API
-   change because the existing `fiber_boot(&ctx->boot)` entry point does not
-   know which `FiberContext` owns the boot record.
+   `fiber_start()` seeds the first current context. PendSV updates the current
+   context to the target on every real switch. `FIBER_VALIDATE_CURRENT = 1`
+   rejects real switches whose manual `from` argument does not match the
+   runtime-owned current context once it is known.
+
+   The advanced `fiber_switch(from, to)` and `fiber_boot(&ctx->boot)` APIs remain
+   available for manual integrations, but normal users should not need to pass
+   `from`.
 
 2. Add optional vector wiring verification.
 
