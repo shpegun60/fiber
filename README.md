@@ -134,6 +134,20 @@ switch also requires `BASEPRI == 0`. When current tracking is active,
 `FIBER_VALIDATE_CURRENT = 1` rejects real switches whose `from` argument is not
 the runtime-owned current context.
 
+## H7 Performance Mode
+
+The STM32H7 / Cortex-M7 validation app also passed a long-running switch/FPU
+stress run with the faster settings below:
+
+```c
+#define FIBER_FPU_LAZY 1
+#define FIBER_SWITCH_MASK_IRQS 0
+#define FIBER_SWITCH_STRICT_BARRIERS 0
+```
+
+Use these as opt-in performance settings after target validation. The portable
+bring-up defaults remain the conservative safety settings above.
+
 ## Portability Notes
 
 The STM32H7 / Cortex-M7 path is the primary validated target. The core switch

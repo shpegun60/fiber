@@ -52,6 +52,9 @@ Closed hardening items from the FreeRTOS comparison:
   pre-boot FP use, current-fiber tracking, no-op switches under `PRIMASK` and
   `BASEPRI`, and forced delayed-switch traps for `PRIMASK` (`'p'`) and
   `BASEPRI` (`'b'`);
+- STM32H7 performance-mode validation also covered
+  `FIBER_FPU_LAZY = 1`, `FIBER_SWITCH_MASK_IRQS = 0`, and
+  `FIBER_SWITCH_STRICT_BARRIERS = 0` for a long-running switch loop;
 - current-fiber ownership is implemented through `fiber_start()`,
   `fiber_current()`, and `fiber_yield_to()`;
 - startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
@@ -132,7 +135,21 @@ Closed hardening items from the FreeRTOS comparison:
      leaking into the fiber runtime;
    - run the existing FP switch stress afterward.
 
-4. Keep source support claims aligned with README, DECISIONS.md, and this plan
+4. Keep performance-mode validation separate from portable defaults.
+
+   The H7 path has passed a long run with:
+
+   ```c
+   #define FIBER_FPU_LAZY 1
+   #define FIBER_SWITCH_MASK_IRQS 0
+   #define FIBER_SWITCH_STRICT_BARRIERS 0
+   ```
+
+   Treat these as validated H7 performance settings, not as proof that every
+   Cortex-M target should use them by default. New core families should first
+   pass conservative settings, then opt-in performance settings.
+
+5. Keep source support claims aligned with README, DECISIONS.md, and this plan
    before every release.
 
 ### P1: FreeRTOS Port Parity Decisions

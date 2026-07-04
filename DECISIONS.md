@@ -23,6 +23,11 @@ Observed STM32H7 hardware validation:
   expected 1x/2x/3x relationship.
 - Forced real switch while `PRIMASK != 0` trapped with panic code `'p'`.
 - Forced real switch while `BASEPRI != 0` trapped with panic code `'b'`.
+- A performance-mode H7 run with `FIBER_FPU_LAZY = 1`,
+  `FIBER_SWITCH_MASK_IRQS = 0`, and `FIBER_SWITCH_STRICT_BARRIERS = 0`
+  exceeded 18 million visits per fiber with `validation_flags = 0x000001FF`,
+  `validation_failures = 0`, `last_panic_code = 0`, and the expected FP
+  accumulator relationship.
 
 Hardening decisions:
 
@@ -56,6 +61,9 @@ Hardening decisions:
   required by the current implementation. If a future scheduler or critical
   section writes `BASEPRI` from PendSV, the FreeRTOS-style r0p1 workaround must
   be added before claiming support for affected Cortex-M7 revisions.
+- The validated H7 performance mode is an opt-in policy, not the portable safety
+  default. Keep conservative defaults for broad bring-up unless a target has
+  hardware validation for the faster settings.
 
 Known limits:
 
