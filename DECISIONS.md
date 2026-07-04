@@ -1,0 +1,43 @@
+# Fiber Decision Log
+
+## 2026-07-04: Context Switch Hardening
+
+The current implementation is treated as a FreeRTOS-style cooperative PendSV
+switcher for STM32 Cortex-M projects.
+
+Validated baseline for STM32H7 / Cortex-M7:
+
+- Save and restore `r4-r11`.
+- Preserve `LR` as the `EXC_RETURN` value.
+- Run tasks on PSP.
+- Request switching through PendSV.
+- Keep PendSV at the lowest interrupt priority.
+- Save and restore `s16-s31` only when `EXC_RETURN` reports an extended FP frame.
+- Use eager FP stacking by default with `FIBER_FPU_LAZY = 0`.
+
+Hardening decisions:
+
+- The synthetic exception frame stores `PC` with bit 0 clear. Thumb state comes
+  from `xPSR.T`, matching the FreeRTOS initial stack pattern.
+- The initial `EXC_RETURN` is configurable through `FIBER_INITIAL_EXC_RETURN`.
+  The default stays `0xFFFFFFFDu` for M3/M4/M7 and secure-only style builds.
+- ARMv8-M Non-secure projects can set `FIBER_RUN_NONSECURE = 1` to select
+  `0xFFFFFFBCu`, or override `FIBER_INITIAL_EXC_RETURN` directly.
+- `fiber_switch()` rejects real switches when `PRIMASK` is already set, because
+  a pending PendSV delayed past a critical section is unsafe for this API.
+- The direct boot trampoline clears `CONTROL.FPCA` before entering the first
+  fiber when an FPU context exists.
+
+Known limits:
+
+- STM32H7 / Cortex-M7 is the primary validated target.
+- ARMv8-M Non-secure needs explicit `FIBER_RUN_NONSECURE` or an explicit
+  `FIBER_INITIAL_EXC_RETURN`.
+- Cortex-M23 PSPLIM behavior is intentionally not enabled by the generic
+  baseline path. FreeRTOS has context slots for PSPLIM, but its Non-secure M23
+  port does not program a non-secure PSPLIM register.
+- Cortex-M55 / MVE needs validation. If MVE code can use the extended FP
+  register file, the build must ensure `FIBER_HAS_FPU` covers that context or
+  force saving with `FIBER_FORCE_SAVE_FPU = 1`.
+- A future API should probably expose `fiber_current()` and `fiber_yield_to()`
+  so normal users do not pass the source context manually.

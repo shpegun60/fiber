@@ -122,4 +122,25 @@ void PendSV_Handler(void)
 
 `fiber_switch()` is a Thread-mode API. Calling it from an interrupt traps through
 `FIBER_REQUIRE`. The `from` context must be non-NULL; `to == NULL` is treated as
-a no-op.
+a no-op. A real switch also requires `PRIMASK == 0`, so the switch cannot be
+silently delayed out of a masked interrupt region.
+
+## Portability Notes
+
+The STM32H7 / Cortex-M7 path is the primary validated target. The core switch
+matches the FreeRTOS PendSV pattern: save `r4-r11`, preserve `EXC_RETURN`, run
+on PSP, and conditionally save `s16-s31` when an extended FP frame is active.
+
+The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
+is carried by `xPSR.T`.
+
+`FIBER_INITIAL_EXC_RETURN` defaults to `0xFFFFFFFDu`, which is correct for
+M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define
+`FIBER_RUN_NONSECURE = 1` to select `0xFFFFFFBCu`, or override
+`FIBER_INITIAL_EXC_RETURN` directly.
+
+Cortex-M23 and Cortex-M55/MVE are not yet validated targets. Keep
+`FIBER_FORCE_SAVE_FPU = 1` in mind for MVE experiments if the toolchain does not
+make the extended FP context visible through the usual FPU macros.
+
+See `DECISIONS.md` for the current context-switch decision log.

@@ -21,6 +21,7 @@ static FiberContext *volatile g_to   = 0;
 /* ---------------- Small helpers ---------------- */
 __STATIC_FORCEINLINE uint32_t fiber_read_r9(void) { uint32_t v; __ASM volatile("mov %0, r9":"=r"(v)); return v; }
 __STATIC_FORCEINLINE uint32_t xpsr_T(void) { return 0x01000000u; }
+__STATIC_FORCEINLINE uint32_t fiber_stacked_pc(entry_t entry) { return ((uint32_t)(uintptr_t)entry) & ~1u; }
 
 /* Safety net if a task ever returns from its entry function */
 FIBER_NORETURN FIBER_ATTR_SENSITIVE static void fiber_task_return(void) { fiber_panic('R'); }
@@ -91,7 +92,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	/* -------------------- Hardware frame (8 words) -------------------- */
 	*(--sp) = xpsr_T();                                       /* xPSR: T-bit set */
-	*(--sp) = ((uint32_t)(uintptr_t)entry) | 1u;              /* PC: task entry (Thumb) */
+	*(--sp) = fiber_stacked_pc(entry);                        /* PC: task entry; xPSR.T selects Thumb */
 	*(--sp) = ((uint32_t)(uintptr_t)&fiber_task_return) | 1u; /* LR: if task returns, trap into WFI loop */
 	*(--sp) = 0; /* R12 */
 	*(--sp) = 0; /* R3  */
@@ -110,10 +111,10 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	*(--sp) = 0;               /* r10 */
 	*(--sp) = fiber_read_r9(); /* r9  (seed SB base) */
 	*(--sp) = 0;               /* r8  */
-	*(--sp) = 0xFFFFFFFDu;     /* LR(EXC_RETURN): return to Thread via PSP, no FP frame */
+	*(--sp) = FIBER_INITIAL_EXC_RETURN; /* LR(EXC_RETURN): Thread via PSP, no FP frame */
 #else
 	/* M3/M4/M7/M33 memory (low to high): [r4..r11][LR] */
-	*(--sp) = 0xFFFFFFFDu;     /* LR(EXC_RETURN): return to Thread via PSP, bit4=1 => no FP frame */
+	*(--sp) = FIBER_INITIAL_EXC_RETURN; /* LR(EXC_RETURN): Thread via PSP, no FP frame */
 	*(--sp) = 0;               /* r11 */
 	*(--sp) = 0;               /* r10 */
 	*(--sp) = fiber_read_r9(); /* r9  (seed SB base) */
@@ -188,6 +189,8 @@ void fiber_switch(FiberContext* const from, FiberContext* const to)
 		__COMPILER_BARRIER();
 		return;
 	}
+
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p'); /* do not defer the switch out of a masked region */
 
 #if FIBER_SWITCH_MASK_IRQS
 	const uint32_t pm = fiber_primask_save_disable_local();

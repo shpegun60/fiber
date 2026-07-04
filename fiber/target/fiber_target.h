@@ -38,6 +38,8 @@ BT_STATIC_ASSERT(sizeof(void*) 			== 4,	"[fiber]: 32-bit pointers expected");
 BT_STATIC_ASSERT(sizeof(uintptr_t) 		== 4, 	"[fiber]: Cortex-M expects 32-bit uintptr_t");
 BT_STATIC_ASSERT(sizeof(size_t)      	>= 4, 	"[fiber]: size_t must be at least 32-bit.");
 
+BT_STATIC_ASSERT((FIBER_INITIAL_EXC_RETURN & 0x0Cu) == 0x0Cu, "[fiber]: initial EXC_RETURN must use Thread mode with PSP");
+BT_STATIC_ASSERT((FIBER_INITIAL_EXC_RETURN & 0x10u) != 0u, "[fiber]: initial EXC_RETURN must use a basic frame");
 
 /* ---- Exception frame sizing ---------------------------------------------- */
 /* Base frame: r0..r3, r12, lr, pc, xPSR = 8 words = 32 bytes

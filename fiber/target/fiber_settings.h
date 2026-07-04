@@ -57,6 +57,25 @@
 # define FIBER_SWITCH_MASK_IRQS 1        /* mask IRQs while publishing switch slots */
 #endif
 
+/* Set to 1 for ARMv8-M Non-secure projects that need the Non-secure EXC_RETURN
+ * encoding used by FreeRTOS ports. Leave 0 for M3/M4/M7 and secure-only builds. */
+#ifndef FIBER_RUN_NONSECURE
+# define FIBER_RUN_NONSECURE 0
+#endif
+
+#ifndef FIBER_INITIAL_EXC_RETURN
+# if FIBER_RUN_NONSECURE
+#  define FIBER_INITIAL_EXC_RETURN 0xFFFFFFBCu
+# else
+#  define FIBER_INITIAL_EXC_RETURN 0xFFFFFFFDu
+# endif
+#endif
+
+/* Clear CONTROL.FPCA before the first direct fiber entry when FPU context exists. */
+#ifndef FIBER_BOOT_CLEAR_FPCA
+# define FIBER_BOOT_CLEAR_FPCA 1
+#endif
+
 /* -----------------------------------------------------------------------------
  * Stack
  * ---------------------------------------------------------------------------*/

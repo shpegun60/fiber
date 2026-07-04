@@ -33,6 +33,19 @@ FIBER_WEAK uintptr_t fiber_fallback_initial_msp(void) {
 	return (uintptr_t)0;              /* default: no usable fallback */
 }
 
+#if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
+# define FIBER_BOOT_CLEAR_FPCA_ASM \
+			"movs  r5, #4              \n"  /* mask for CONTROL.FPCA                  */ \
+			"bics  r3, r5              \n"  /* clear FPCA before first fiber entry    */
+# define FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM \
+			"movs  r5, #4              \n"  /* mask for CONTROL.FPCA                  */ \
+			"tst   r4, r5              \n"  /* FPCA must be clear after CONTROL write */ \
+			"bne   9f                  \n"
+#else
+# define FIBER_BOOT_CLEAR_FPCA_ASM
+# define FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
+#endif
+
 /* -----------------------------------------------------------------------------*/
 /* Naked trampoline: atomically switch Thread to PSP and branch to entry(arg).	*/
 /* Never returns. M0-safe (Thumb-1 only where required).                      	*/
@@ -93,12 +106,15 @@ void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_to
 			/* Select PSP for Thread mode                                             	*/
 			/* ---------------------------------------------------------------------- 	*/
 			"mrs   r3, control         \n"  /* r3 = CONTROL                             */
+			FIBER_BOOT_CLEAR_FPCA_ASM
 			"movs  r5, #2              \n"  /* mask for SPSEL                           */
 			"orrs  r3, r3, r5          \n"  /* set CONTROL.SPSEL (bit1) -> use PSP (Thumb-1 safe) */
 			"msr   control, r3         \n"  /* write CONTROL with SPSEL=1               */
 			"isb                       \n"  /* make SPSEL change visible before verification (architecturally required) */
 			/* verify SPSEL==1 */
 			"mrs   r4, control         \n"
+			FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
+			"movs  r5, #2              \n"
 			"tst   r4, r5              \n"
 			"beq   9f                  \n"  /* if SPSEL didn't latch, fail hard         */
 			/* ---------------------------------------------------------------------- 	*/
@@ -638,6 +654,8 @@ void fiber_boot(const FiberBoot* const ctx)
 
 #undef FIBER_CTX_MAGIC
 #undef FIBER_CTX_VERSION
+#undef FIBER_BOOT_CLEAR_FPCA_ASM
+#undef FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
 #undef FIBER_CTX_GUARD_LO
 #undef FIBER_CTX_GUARD_HI
 
