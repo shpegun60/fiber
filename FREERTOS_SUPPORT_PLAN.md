@@ -79,6 +79,9 @@ Closed hardening items from the FreeRTOS comparison:
    - Cortex-M23
    - Cortex-M33
 
+   Each target must prove that `FIBER_HAS_BASEPRI` and the PSPLIM/FPU feature
+   macros are defined before they are used.
+
 2. Add a focused STM32H7 runtime stress test for delayed-switch hazards.
 
    Required cases:
@@ -89,7 +92,17 @@ Closed hardening items from the FreeRTOS comparison:
    - real switch with `PRIMASK != 0` must trap;
    - real switch with `BASEPRI != 0` must trap on BASEPRI-capable cores.
 
-3. Keep source support claims aligned with README, DECISIONS.md, and this plan
+3. Add an FPU startup hygiene stress test.
+
+   Required case:
+
+   - execute floating-point code before `fiber_boot()`;
+   - enter the first fiber;
+   - verify that clearing `CONTROL.FPCA` prevents pre-fiber FP active state from
+     leaking into the fiber runtime;
+   - run the existing FP switch stress afterward.
+
+4. Keep source support claims aligned with README, DECISIONS.md, and this plan
    before every release.
 
 ### P1: FreeRTOS Port Parity Decisions
