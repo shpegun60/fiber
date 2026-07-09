@@ -33,6 +33,15 @@ stable STM32H7/Cortex-M7 validated branch.
 6. Prefer readable, auditable C plus small, isolated assembly blocks.
 7. Do not copy FreeRTOS source code silently. If code is copied or closely
    adapted, keep the required MIT license notice.
+8. Select exactly one active port at compile time. Ambiguous, missing, or
+   conflicting port selection must fail with a clear compile-time error.
+9. Normalize every architecture feature gate to `0` or `1` before use. No
+   `#if FIBER_HAS_*` expression may depend on an undefined macro.
+10. Separate mechanical file moves from behavior changes. A refactor commit that
+    only changes layout must keep the generated code path equivalent enough to
+    pass the same compile matrix and the same H7 runtime validation checklist.
+11. Never weaken `main` safety defaults as part of a portability refactor. Faster
+    settings must stay target-local, documented, and validated before promotion.
 
 ## Non-Goals
 
@@ -93,6 +102,24 @@ fiber/
 The current one-file implementation may be split gradually. Behavior should not
 change during a pure file-layout split.
 
+## Port Selection Contract
+
+Port selection must be deterministic and auditable.
+
+Required rules:
+
+- detect the ARM architecture profile from compiler-provided macros first;
+- allow an explicit project override for unusual toolchains;
+- produce exactly one internal `FIBER_PORT_*` selection macro;
+- fail the build if no supported port matches;
+- fail the build if more than one port matches;
+- keep STM32 family names out of the low-level switch logic;
+- keep all `FIBER_HAS_*`, `FIBER_USE_*`, and `FIBER_PORT_*` macros normalized to
+  `0` or `1` in one target feature header before any port source uses them.
+
+STM32 series mapping belongs in documentation and board integration examples.
+CPU context switching belongs to the ARM profile port.
+
 ## Core Profiles
 
 The port split is based on architectural behavior:
@@ -120,6 +147,15 @@ The common runtime owns:
 - validation hooks;
 - documentation-visible settings.
 
+The common runtime does not own:
+
+- physical exception frame layout;
+- assembly save/restore sequences;
+- security-domain register access;
+- PSPLIM/MSPLIM register access;
+- FPU/MVE lazy-stacking register policy;
+- SVC instruction encoding or SVC handler dispatch.
+
 The common API should keep this shape:
 
 ```c
@@ -142,6 +178,12 @@ Common switch preconditions:
 - real switches require `BASEPRI == 0` on cores that implement BASEPRI;
 - when current validation is active, manual `from` must match
   `fiber_current()`.
+
+No-op switches should not trap only because interrupt masks are set. A call that
+cannot cause a real PendSV switch may return after a compiler barrier.
+
+`fiber_yield_to()` is the normal public path. New examples should avoid
+`fiber_switch(from, to)` unless they are documenting advanced integration.
 
 ## Port ABI Contract
 
@@ -167,6 +209,34 @@ Exact names may change, but ownership should not:
 - port code owns optional SVC first-start mechanics;
 - port code owns feature gates that depend on architecture state.
 
+The port ABI must hide architecture-specific storage from users. If shared
+PendSV state such as `from`, `to`, or `current` needs to be visible to multiple
+port files, it should live in an internal port-state module rather than in a
+public header.
+
+Port entry points must document whether they are callable from Thread mode,
+Handler mode, or both. Undefined call mode is not acceptable for start/switch
+primitives.
+
+## Stack Frame Contract
+
+Every port must document and test its initial stack frame.
+
+Required invariants:
+
+- fiber stacks are at least 8-byte aligned at exception return;
+- the synthetic frame sets `xPSR.T`;
+- the synthetic stacked `PC` stores the entry address with bit 0 clear;
+- Thumb state comes from `xPSR.T`, not from stacked `PC` bit 0;
+- the initial `LR`/`EXC_RETURN` value is target-aware and configurable;
+- stack growth direction is explicit;
+- stack limit metadata is either implemented for the port or explicitly unused;
+- invalid stack bounds trap before the first switch;
+- no user entry runs on MSP unless a port explicitly documents that policy.
+
+The layout used by `fiber_port_init_stack()` is part of the port ABI. Changing it
+requires updating the port audit note and compile/runtime validation.
+
 ## PendSV Contract
 
 All ports that use PendSV must preserve the FreeRTOS-style invariants:
@@ -180,6 +250,31 @@ All ports that use PendSV must preserve the FreeRTOS-style invariants:
   them;
 - never allow a real cooperative switch to be silently delayed by interrupt
   masks.
+
+PendSV must not call user code directly. It may only restore the selected
+context and return through the architecture-defined exception-return path.
+
+If a port uses SVC and PendSV together, their shared state ownership must be
+documented. The first-start SVC path must not create a second current-context
+owner beside PendSV/common state.
+
+## Handler Wiring Contract
+
+Vector ownership must be explicit.
+
+Required rules:
+
+- the application must know whether it provides `PendSV_Handler` and
+  `SVC_Handler`, or whether the library provides weak/default handlers;
+- a build must not silently override an application handler;
+- if handler chaining is supported, the chaining rule must be documented;
+- vector-table relocation and security-domain vector selection must be explicit
+  for ARMv8-M targets;
+- an optional validation hook should prove that the expected PendSV/SVC handler
+  path is actually reached on hardware.
+
+If another RTOS, bootloader, monitor, or debug framework owns SVC or PendSV,
+`fiber` must require explicit integration instead of assuming ownership.
 
 ## First-Fiber Start Contract
 
@@ -203,6 +298,18 @@ The SVC path should:
 The SVC path is allowed to be more FreeRTOS-like, but it must stay cooperative.
 It must not introduce tick scheduling or priority scheduling by accident.
 
+The SVC path must also define:
+
+- the SVC number or dispatch mechanism;
+- whether it requires privileged Thread mode before start;
+- how it sets or preserves `CONTROL.SPSEL`, `CONTROL.nPRIV`, and
+  `CONTROL.FPCA`;
+- how it selects Secure or Non-secure handler state on ARMv8-M;
+- how it fails when SVC is already owned by another component.
+
+The direct trampoline and SVC start paths must have separate validation results.
+Passing one path does not validate the other.
+
 ## FPU and Extended Context Contract
 
 For FPU-capable ports:
@@ -215,6 +322,17 @@ For FPU-capable ports:
 - clear `CONTROL.FPCA` before starting the first fiber when an FP context exists;
 - keep MVE targets explicit, because MVE may need broader extended-context
   handling than classic scalar FP tests reveal.
+
+Each FPU/MVE port must state:
+
+- whether compiler flags use soft, softfp, or hard FP ABI;
+- whether the target exposes classic scalar FP, MVE, or both;
+- whether `FIBER_HAS_FPU` means only scalar FP or all extended context;
+- whether `FIBER_FORCE_SAVE_FPU` is required for the target;
+- how FPCCR lazy-stacking bits are configured or intentionally left untouched;
+- whether pre-start FP code is part of the validation case.
+
+Do not infer MVE safety from a scalar double-accumulator test alone.
 
 ## ARMv8-M Security and PSPLIM Contract
 
@@ -236,6 +354,15 @@ Required gates:
 - explicit PSPLIM register-access policy;
 - explicit vector-domain policy for SVC and PendSV;
 - explicit FP access policy for CPACR/NSACR when applicable.
+
+ARMv8-M support claims must name the exact domain:
+
+- Secure-only;
+- Secure firmware starting Non-secure fibers;
+- Non-secure application only;
+- mixed Secure/Non-secure integration.
+
+A port validated in one domain is not automatically validated in another.
 
 ## Cortex-M7 r0p1 Errata Policy
 
@@ -268,6 +395,28 @@ the required MIT notice in the relevant file or in `THIRD_PARTY_NOTICES.md`.
 Purely independent code that follows the same ARM architectural rules does not
 need to pretend it is copied code.
 
+Renaming FreeRTOS identifiers or changing formatting does not make copied code
+independent. When in doubt, treat close source-level adaptation as MIT-covered
+third-party code and document it.
+
+Do not copy FreeRTOS comments verbatim unless the relevant license notice is
+kept. Prefer fresh comments that explain the local `fiber` contract.
+
+## Regression Policy
+
+Before a port refactor can be treated as equivalent to the previous H7 path:
+
+- the compile matrix must pass;
+- `git diff --check` must pass;
+- source and docs must remain ASCII-only unless a file explicitly opts out;
+- the STM32H7 runtime validation checklist must still pass;
+- panic codes used by validation must remain documented;
+- performance-mode results must not be used to justify changing portable
+  defaults.
+
+Behavior-changing commits should be small enough that a failed board validation
+can be traced to one decision.
+
 ## Validation Levels
 
 Use these support labels consistently:
@@ -288,19 +437,35 @@ Use these support labels consistently:
 A release claim must not use a stronger label than the weakest required test for
 that feature profile.
 
+Minimum evidence for stronger labels:
+
+- `compile-only`: compile matrix entry, target flags, and warnings recorded;
+- `smoke-tested`: board name, core, clock/config summary, and basic switch proof
+  recorded;
+- `runtime-validated`: long run counters, current tracking, no-op switch checks,
+  PRIMASK/BASEPRI policy checks where applicable;
+- `fpu-validated`: all runtime checks plus pre-start FP use and FP accumulator
+  integrity;
+- `security-validated`: exact Secure/Non-secure ownership and vector-domain
+  setup recorded;
+- `performance-validated`: exact settings, target, runtime duration or counter
+  threshold, and failure state recorded.
+
 ## v2 Initial Milestones
 
 1. Create this contract on the `v2` branch.
-2. Move the current STM32H7/Cortex-M7 implementation into an ARMv7E-M port
+2. Add deterministic port-selection and feature-normalization headers.
+3. Move the current STM32H7/Cortex-M7 implementation into an ARMv7E-M port
    boundary without changing behavior.
-3. Add a common `fiber_port.h` boundary.
-4. Keep the existing compile matrix green.
-5. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
+4. Add a common `fiber_port.h` boundary.
+5. Keep the existing compile matrix green.
 6. Add vector wiring validation hooks for PendSV and SVC where possible.
-7. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
-8. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
-9. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
-10. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
+7. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
+8. Validate direct start and SVC start separately on STM32H7.
+9. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
+10. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
+11. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
+12. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
 
 ## Definition of Done
 
@@ -313,4 +478,9 @@ that feature profile.
 - ARMv8-M claims distinguish Secure, Non-secure, and secure-only behavior;
 - MVE/PAC/BTI claims are explicit for ARMv8.1-M targets;
 - docs, source comments, and compile gates describe the same support level;
+- exactly one port is selected for every supported compile target;
+- unsupported compile targets fail clearly instead of building a wrong port;
+- SVC/PendSV handler ownership is explicit;
+- direct-start and SVC-start paths have separate validation records if both are
+  enabled;
 - any copied or closely adapted FreeRTOS code carries the required MIT notice.
