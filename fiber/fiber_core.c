@@ -261,6 +261,7 @@ enum {
 
 BT_STATIC_ASSERT(OFF_TO_PSLIM < 4096, "OFF_TO_PSLIM must fit Thumb-2 LDR imm12");
 
+#if !FIBER_PORT_ARMV7EM
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
 {
@@ -389,7 +390,7 @@ void fiber_pendsv(void)
 			: "memory","cc"
 	);
 #else
-	/* ------------------------ Cortex-M3/M4/M7/M33 (Mainline) ---------------------- */
+	/* ------------------------ Non-ARMv7E-M Mainline fallback ---------------------- */
 	__ASM volatile(
 			".syntax unified                         \n"
 
@@ -503,6 +504,7 @@ void fiber_pendsv(void)
 #endif
 
 }
+#endif /* !FIBER_PORT_ARMV7EM */
 
 #ifndef FIBER_PENDSV_WIRED
 FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to call fiber_pendsv(); define FIBER_PENDSV_WIRED=1 after you do it");
