@@ -30,8 +30,9 @@ This means:
   mode execution, PendSV/SVC ownership, target-aware EXC_RETURN, FPU/MVE policy,
   PSPLIM/security-domain policy, and per-port validation evidence;
 - keep the runtime cooperative: the user decides when to yield;
-- keep the library much smaller than FreeRTOS by excluding scheduler policy,
-  priorities, queues, semaphores, timers, event groups, streams, and heaps;
+- keep the library much smaller than FreeRTOS by excluding FreeRTOS priority
+  scheduler policy, queues, semaphores, timers, event groups, streams, and
+  heaps;
 - keep safety defaults at least as conservative as v1 unless a target-specific
   validation record justifies faster settings;
 - add stronger paranoid checks where they improve failure mode quality without
@@ -258,13 +259,23 @@ The common API should keep this shape:
 
 ```c
 FiberContext *fiber_current(void);
+void fiber_yield(void);
+void fiber_sleep_until(uint32_t tick);
+void fiber_schedule(void);
 void fiber_yield_to(FiberContext *to);
 FIBER_NORETURN void fiber_start(FiberContext *ctx);
 void fiber_switch(FiberContext *from, FiberContext *to);
 ```
 
-Preferred user code should call `fiber_start()` and `fiber_yield_to()`.
-`fiber_switch(from, to)` remains the advanced/manual API.
+Current low-level user code can call `fiber_start()` and `fiber_yield_to()`.
+The long-term v2 user path should be `fiber_start()`, `fiber_yield()`,
+`fiber_sleep_until()`, and wait/wake APIs. `fiber_yield_to()` and
+`fiber_switch(from, to)` remain advanced/manual primitives.
+
+The low-level primitive that enters the scheduler-driven PendSV path should not
+own yield/sleep/wait policy. Its working name is `fiber_schedule()`; a name such
+as `fiber_jump_scheduler()` is also acceptable if it makes the boundary clearer.
+This primitive only requests entry into the scheduler/port path.
 
 Common switch preconditions:
 
@@ -280,24 +291,303 @@ Common switch preconditions:
 No-op switches should not trap only because interrupt masks are set. A call that
 cannot cause a real PendSV switch may return after a compiler barrier.
 
-`fiber_yield_to()` is the normal public path. New examples should avoid
-`fiber_switch(from, to)` unless they are documenting advanced integration.
+Once the scheduler layer exists, new examples should prefer `fiber_yield()` and
+sleep/wait APIs. Examples should avoid direct `fiber_switch(from, to)` unless
+they are documenting advanced integration or port validation.
+
+User-facing scheduling APIs must update scheduler state before requesting the
+core scheduler jump:
+
+```text
+fiber_yield()
+  mark current task READY
+  fiber_schedule()
+
+fiber_sleep_until(tick)
+  mark current task SLEEPING
+  record wake_tick
+  fiber_schedule()
+
+fiber_wait(object, timeout)
+  mark current task WAITING
+  record wait object and timeout
+  fiber_schedule()
+```
+
+The core scheduler jump does not know why scheduling was requested. It simply
+enters PendSV/SVC so the scheduler hook can choose the next context.
+
+## Scheduler Layering Contract
+
+The scheduler-driven design must keep three layers separate:
+
+```text
+port/asm core
+  save current CPU context
+  enter scheduler critical section
+  call the stable scheduler bridge
+  restore the returned context
+
+scheduler bridge
+  call the configured pick-next hook
+  validate the returned FiberContext
+  panic on NULL or invalid context
+  update runtime-owned current context
+
+user scheduler policy
+  own task states
+  own ready/sleep/wait lists
+  own ticks, deadlines, wait objects, events, and wake rules
+  decide which real FiberContext runs next
+```
+
+The port/asm core must stay policy-free. It must not know whether scheduling was
+requested because of `fiber_yield()`, `fiber_sleep_until()`, a wait timeout, an
+event wake, or an ISR-side wake request.
+
+The scheduler bridge is the only boundary between CPU context switching and
+application scheduling policy. This keeps the core small and allows the
+application to provide a C or C++ scheduler without rewriting architecture
+assembly.
+
+## Cooperative Round-Robin Scheduler Contract
+
+The scheduler goal is a deterministic cooperative round-robin core, not a
+FreeRTOS priority scheduler.
+
+Required behavior:
+
+- no priority scheduling;
+- no preemptive tick switching;
+- no tick time slicing;
+- no automatic switch only because a periodic tick fired;
+- switches occur only at explicit yield, block, wake/reschedule, start, or
+  validation-defined points;
+- scheduling order is stable task registration/list order;
+- `fiber_yield()` means "give the CPU to the next runnable task in list order",
+  not "give the CPU to the highest priority task";
+- the picker starts after the current task and scans forward through the list;
+- tasks that are not runnable are skipped;
+- if no user task is runnable, the scheduler must run a documented idle task or
+  return to the current task only if that is explicitly safe for the current
+  state.
+
+The minimum task states are:
+
+```text
+RUNNING
+READY
+SLEEPING
+WAITING
+SUSPENDED
+```
+
+State rules:
+
+- `RUNNING` is the current task.
+- `READY` is eligible for selection.
+- `SLEEPING` is skipped until its wake tick has expired or it is explicitly
+  woken.
+- `WAITING` is skipped until its wait object is signaled or its timeout expires.
+- `SUSPENDED` is skipped until an explicit resume/wake policy makes it ready.
+
+Sleep and wake rules:
+
+- `fiber_sleep_until(tick)` marks the current task `SLEEPING`, records
+  `wake_tick`, and requests a reschedule.
+- `fiber_sleep_for(delta)` is a convenience wrapper around
+  `fiber_sleep_until(now + delta)` and must use wrap-safe tick math.
+- When the picker reaches a sleeping task, it must compare the current tick with
+  `wake_tick` using wrap-safe arithmetic. If the wake time has not arrived, the
+  task stays sleeping and is skipped.
+- If the wake time has arrived, the task becomes `READY` and may be selected in
+  its normal list position.
+- `fiber_wake(task)` may make a sleeping or waiting task `READY` before its
+  timeout expires. Explicit wake wins over the recorded sleep timeout.
+- Waking an already `READY` or `RUNNING` task must be harmless and documented as
+  a no-op or diagnostic event.
+
+Wait rules:
+
+- A waiting task records the wait object and optional timeout.
+- A signaled wait object makes matching waiting tasks `READY` according to the
+  documented wake policy.
+- If a waiting task also has a timeout, timeout expiry makes it `READY` with a
+  timeout result.
+- The scheduler must not select a task whose wait condition is still false and
+  whose timeout has not expired.
+
+Tick rules:
+
+- The tick source is an input to the scheduler, not a preemption mechanism by
+  itself.
+- A tick update may move expired sleeping/waiting tasks to `READY`.
+- A tick ISR may request PendSV if it makes a task ready, but it must not create
+  preemptive time slicing by accident.
+- The tick counter width and wrap behavior must be documented before timeouts
+  are exposed as stable API.
+
+This scheduler still uses the same port discipline as FreeRTOS: the scheduler
+owns task state and ready/sleep/wait lists, while the port owns CPU context
+save/restore. If the final design calls scheduler selection from PendSV or SVC,
+that handler-side scheduler section must use the port's interrupt-priority
+critical-section policy, including the Cortex-M7 r0p1 `BASEPRI` workaround when
+that path writes `BASEPRI`.
+
+Yield policy, time-based sleep, wait objects, timeout expiry, and wake decisions
+belong to the scheduler layer. The port must not inspect ticks, sleep deadlines,
+wait objects, task states, or event state. The port only saves the current
+context, enters the scheduler critical section, asks the scheduler bridge for the
+next `FiberContext`, validates that result, and restores it.
+
+## Custom Scheduler Hook Contract
+
+`fiber` should allow the scheduling policy to be supplied by the application.
+This keeps the library focused on context switching while allowing a C or C++
+application to implement its own ready/sleep/wait model.
+
+The public shape should be similar to:
+
+```c
+typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current,
+                                                  void *user);
+
+void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
+                                   void *user);
+```
+
+The exact names may change, but the boundary should not:
+
+- architecture assembly saves the current CPU context;
+- architecture assembly calls one stable C bridge, not an arbitrary user
+  function pointer directly;
+- the C bridge calls the configured scheduler hook;
+- the hook returns the `FiberContext` to restore next;
+- architecture assembly restores only the returned context.
+
+In the final scheduler-driven path, `from/to` publication slots should not be
+the normal PendSV ABI. The port should not receive a preselected target from
+Thread mode. PendSV/SVC should derive the source from the runtime-owned current
+context, save it, call the scheduler bridge, and restore the returned context.
+
+The normal scheduler-driven port state should be reduced to:
+
+```c
+FiberContext *volatile current_context;
+FiberSchedulerPickNextFn pick_next;
+void *pick_next_user;
+```
+
+Optional request/debug flags may be added, but the normal path must have one
+source of truth for the next context: the scheduler hook result.
+
+The expected scheduler-driven PendSV flow is:
+
+```text
+current = current_context
+save current context
+enter port scheduler critical section
+next = fiber_internal_scheduler_pick_next_from_pendsv(current)
+panic if next == NULL
+current_context = next
+exit port scheduler critical section
+restore next context
+```
+
+After this migration, `fiber_port_state.h` should remain as the narrow internal
+scheduler/port runtime-state header. Its normal scheduler-driven contents should
+be the current context, the stable scheduler bridge declaration, the pick-next
+function pointer, and the user context pointer. Do not leave both `from/to`
+slots and a scheduler hook as competing normal switch mechanisms.
+
+If `fiber_yield_to(to)` or `fiber_switch(from, to)` remains as an advanced test
+primitive, it must be clearly separated from the normal scheduler-driven ABI and
+must not weaken the scheduler hook contract.
+
+The internal bridge should have a narrow shape, for example:
+
+```c
+FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
+```
+
+The bridge owns validation around the user hook:
+
+- the hook must be configured before the scheduler starts;
+- changing the hook while fibers are running is forbidden unless a future API
+  defines a sealed, synchronized replacement protocol;
+- the default hook pointer is `NULL`;
+- a scheduler-driven PendSV/SVC path must panic if no hook is configured;
+- the hook must return a non-NULL context for every real scheduler-driven
+  switch;
+- a `NULL` returned context must always panic;
+- idle must be represented by a real initialized `FiberContext`, selected by
+  the scheduler hook like any other runnable context;
+- the returned context must be initialized, sealed, and eligible for restore;
+- returning the current context is allowed only when the scheduler contract says
+  staying on the current task is safe.
+
+If the hook is called from PendSV or SVC, it is a Handler-mode scheduler hook,
+not a normal application callback. The port must call it only inside a
+port-defined scheduler critical section.
+
+Critical-section requirements:
+
+- on cores that implement `BASEPRI`, protect the scheduler bridge/hook with a
+  `BASEPRI` threshold suitable for scheduler-aware ISRs;
+- do not save `BASEPRI` as part of `FiberContext`;
+- restore the previous `BASEPRI` value after the scheduler bridge returns or
+  panics;
+- on Cortex-M7 r0p1, any handler-side `BASEPRI` write must use the documented
+  errata 837070 workaround before that path can be considered supported;
+- on cores without `BASEPRI`, define an explicit `PRIMASK` or unsupported-ISR
+  policy before exposing ISR-side wake/tick APIs;
+- ISRs above the configured scheduler priority threshold must not call
+  scheduler-aware fiber APIs directly.
+
+Hook restrictions:
+
+- bounded execution time;
+- no blocking;
+- no `fiber_yield()`, `fiber_sleep_*()`, or wait API calls from inside the hook;
+- no `malloc()`/`free()` or heap-dependent C++ allocation;
+- no locks that can wait for another fiber;
+- no `HAL_Delay()` or polling loops without a fixed short bound;
+- no user callbacks;
+- no throwing C++ exceptions across the C ABI boundary;
+- no floating-point use unless the port explicitly documents and validates that
+  Handler-mode FP use is safe for that profile;
+- no direct edits to port-owned switch slots or CPU context frames.
+
+The application may implement the scheduler in C++ by storing a pointer to a C++
+object in the `user` argument and using an `extern "C"` or static thunk:
+
+```c
+static FiberContext *pick_next_thunk(FiberContext *current, void *user)
+{
+    return ((MyScheduler *)user)->pick_next(current);
+}
+```
+
+The hook API must remain C-callable so that assembly and C ports do not depend
+on C++ ABI details.
 
 ## Port ABI Contract
 
 Each architecture port should provide a small ABI to the common layer:
 
 ```c
-extern FiberContext *volatile fiber_internal_port_switch_from_slot;
-extern FiberContext *volatile fiber_internal_port_switch_to_slot;
 extern FiberContext *volatile fiber_internal_port_current_context;
+extern FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next;
+extern void *volatile fiber_internal_port_scheduler_user;
 
 void fiber_port_init(void);
 void fiber_port_set_pendsv_lowest_priority(void);
 void fiber_port_pend_switch(void);
 FiberContext *fiber_port_load_current_context(void);
 void fiber_port_seed_current_context(FiberContext *ctx);
-void fiber_port_publish_switch_slots(FiberContext *from, FiberContext *to);
+void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
+                                        void *user);
+FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 FIBER_NORETURN void fiber_port_start_first(FiberContext *to);
 uint32_t *fiber_port_init_stack(FiberContext *ctx,
                                 void *stack_begin,
@@ -310,11 +600,11 @@ void fiber_pendsv(void);
 Exact names may change, but ownership should not:
 
 - common code decides whether a switch is allowed;
-- common code publishes `fiber_internal_port_switch_from_slot` and
-  `fiber_internal_port_switch_to_slot`;
+- common code seeds the current context and scheduler hook before a
+  scheduler-driven switch can run;
 - common code owns the current-context policy;
-- common code calls `fiber_port_pend_switch()` only after publication is
-  complete;
+- common code calls `fiber_port_pend_switch()` only after the scheduler-visible
+  request state is coherent;
 - port code performs CPU-specific save, restore, and exception return;
 - port code may update `fiber_internal_port_current_context` during the real
   restore path, but it must follow the common current-context policy;
@@ -323,16 +613,22 @@ Exact names may change, but ownership should not:
 - port code owns optional SVC first-start mechanics;
 - port code owns feature gates that depend on architecture state.
 
-The port ABI must hide architecture-specific storage from users. Shared PendSV
-state such as `from`, `to`, and `current` must live in an internal port-state
-module. It may be visible to port sources through an internal header, but it
-must not become user-facing API.
+`FiberContext.sp` follows the FreeRTOS `pxTopOfStack` invariant: it points to
+the last saved software frame for a context that is not currently running. While
+a fiber is running, the live stack pointer is CPU PSP. A port must update
+`ctx->sp` when saving that context as the source of a switch, and must not move
+the target `ctx->sp` forward after restore.
+
+The port ABI must hide architecture-specific storage from users.
+Scheduler-driven state such as current context, pick-next hook, and hook user
+data must live in an internal port-state module. It may be visible to port
+sources through an internal header, but it must not become user-facing API.
 
 Avoid a port-level function shaped like `fiber_port_request_switch(from, to)`
-unless it is only a thin mechanical wrapper. Passing `from` and `to` to the port
-as a semantic request makes it too easy for the port to start owning runtime
-policy. The preferred boundary is: common validates and publishes state, then
-the port only pends the architecture-specific switch mechanism.
+unless it is only a legacy/manual thin wrapper. Passing `from` and `to` to the
+port as the normal semantic request makes it too easy for the port to start
+owning runtime policy. The preferred boundary is: common updates scheduler
+state, then the port enters the architecture-specific scheduler switch path.
 
 Port entry points must document whether they are callable from Thread mode,
 Handler mode, or both. Undefined call mode is not acceptable for start/switch

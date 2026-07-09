@@ -14,7 +14,11 @@ extern "C" {
 
 #include "fiber_boot.h"
 
-/* -------- Context -------- */
+/* -------- Context --------
+ * sp points to the last saved software frame. While this context is running,
+ * the live stack pointer is PSP in the CPU. Ports update sp when saving the
+ * context as the switch source, not when restoring it as the target.
+ */
 typedef struct FiberContext {
     uint32_t *sp;
     FiberBoot  boot;

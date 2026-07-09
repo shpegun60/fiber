@@ -81,9 +81,10 @@ void fiber_pendsv(void)
 #endif /* FIBER_HAS_FPU */
 
 			/* ----------------------------------------------------------------------
-			 * Program PSP to target HW frame and clean exchange slots
+			 * Program PSP to target HW frame and clean exchange slots.
+			 * Keep to->sp pointing at the saved SW frame, FreeRTOS pxTopOfStack style.
+			 * It is updated only when that context is saved as the source.
 			 * ---------------------------------------------------------------------- */
-			"str   r0, [r2]                         \n" /* to->sp = r0 (now points at HW frame) */
 			"msr   psp, r0                          \n" /* PSP := start of HW frame for 'to' */
 			"isb                                    \n" /* synchronize before exception return */
 

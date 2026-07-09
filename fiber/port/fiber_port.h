@@ -31,6 +31,12 @@ __STATIC_FORCEINLINE void fiber_port_seed_current_context(FiberContext *ctx)
 	__DMB();
 }
 
+__STATIC_FORCEINLINE void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
+                                                            void *user)
+{
+	fiber_internal_port_scheduler_set_pick_next(pick_next, user);
+}
+
 __STATIC_FORCEINLINE void fiber_port_publish_switch_slots(FiberContext *from, FiberContext *to)
 {
 	/* PendSV reads the target slot first; publish source before target. */
