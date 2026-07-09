@@ -10,6 +10,7 @@
 #include "fiber_settings.h"
 
 #include "fiber_compiler.h"
+#include "../port/fiber_port_select.h"
 #include "fiber_fpu.h"
 #include "fiber_pslim.h"
 #include "fiber_vtor.h"

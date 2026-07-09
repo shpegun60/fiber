@@ -1,0 +1,187 @@
+/*
+ * fiber_port_select.h
+ *
+ * Deterministic Cortex-M port selection and architecture feature gates.
+ */
+
+#ifndef FIBER_PORT_FIBER_PORT_SELECT_H_
+#define FIBER_PORT_FIBER_PORT_SELECT_H_
+
+/*
+ * Explicit override knobs for unusual toolchains. Normal projects should let
+ * the compiler-provided __ARM_ARCH_* macros select the port.
+ */
+#ifndef FIBER_FORCE_PORT_ARMV6M
+# define FIBER_FORCE_PORT_ARMV6M 0
+#endif
+
+#ifndef FIBER_FORCE_PORT_ARMV7M
+# define FIBER_FORCE_PORT_ARMV7M 0
+#endif
+
+#ifndef FIBER_FORCE_PORT_ARMV7EM
+# define FIBER_FORCE_PORT_ARMV7EM 0
+#endif
+
+#ifndef FIBER_FORCE_PORT_ARMV8M_BASELINE
+# define FIBER_FORCE_PORT_ARMV8M_BASELINE 0
+#endif
+
+#ifndef FIBER_FORCE_PORT_ARMV8M_MAINLINE
+# define FIBER_FORCE_PORT_ARMV8M_MAINLINE 0
+#endif
+
+#ifndef FIBER_FORCE_PORT_ARMV81M_MAINLINE
+# define FIBER_FORCE_PORT_ARMV81M_MAINLINE 0
+#endif
+
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV6M == 0) || (FIBER_FORCE_PORT_ARMV6M == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV6M must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV7M == 0) || (FIBER_FORCE_PORT_ARMV7M == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV7M must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV7EM == 0) || (FIBER_FORCE_PORT_ARMV7EM == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV7EM must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV8M_BASELINE == 0) || (FIBER_FORCE_PORT_ARMV8M_BASELINE == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV8M_BASELINE must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV8M_MAINLINE == 0) || (FIBER_FORCE_PORT_ARMV8M_MAINLINE == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV8M_MAINLINE must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_FORCE_PORT_ARMV81M_MAINLINE == 0) || (FIBER_FORCE_PORT_ARMV81M_MAINLINE == 1),
+                 "[fiber]: FIBER_FORCE_PORT_ARMV81M_MAINLINE must be 0 or 1");
+
+#define FIBER_PORT_FORCE_COUNT \
+    (FIBER_FORCE_PORT_ARMV6M + \
+     FIBER_FORCE_PORT_ARMV7M + \
+     FIBER_FORCE_PORT_ARMV7EM + \
+     FIBER_FORCE_PORT_ARMV8M_BASELINE + \
+     FIBER_FORCE_PORT_ARMV8M_MAINLINE + \
+     FIBER_FORCE_PORT_ARMV81M_MAINLINE)
+
+BT_STATIC_ASSERT(FIBER_PORT_FORCE_COUNT <= 1,
+                 "[fiber]: at most one forced Cortex-M port may be selected");
+
+#ifndef FIBER_PORT_ARMV6M
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV6M FIBER_FORCE_PORT_ARMV6M
+# elif defined(__ARM_ARCH_6M__)
+#  define FIBER_PORT_ARMV6M 1
+# else
+#  define FIBER_PORT_ARMV6M 0
+# endif
+#endif
+
+#ifndef FIBER_PORT_ARMV7M
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV7M FIBER_FORCE_PORT_ARMV7M
+# elif defined(__ARM_ARCH_7M__)
+#  define FIBER_PORT_ARMV7M 1
+# else
+#  define FIBER_PORT_ARMV7M 0
+# endif
+#endif
+
+#ifndef FIBER_PORT_ARMV7EM
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV7EM FIBER_FORCE_PORT_ARMV7EM
+# elif defined(__ARM_ARCH_7EM__)
+#  define FIBER_PORT_ARMV7EM 1
+# else
+#  define FIBER_PORT_ARMV7EM 0
+# endif
+#endif
+
+#ifndef FIBER_PORT_ARMV8M_BASELINE
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV8M_BASELINE FIBER_FORCE_PORT_ARMV8M_BASELINE
+# elif defined(__ARM_ARCH_8M_BASE__)
+#  define FIBER_PORT_ARMV8M_BASELINE 1
+# else
+#  define FIBER_PORT_ARMV8M_BASELINE 0
+# endif
+#endif
+
+#ifndef FIBER_PORT_ARMV8M_MAINLINE
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV8M_MAINLINE FIBER_FORCE_PORT_ARMV8M_MAINLINE
+# elif defined(__ARM_ARCH_8M_MAIN__)
+#  define FIBER_PORT_ARMV8M_MAINLINE 1
+# else
+#  define FIBER_PORT_ARMV8M_MAINLINE 0
+# endif
+#endif
+
+#ifndef FIBER_PORT_ARMV81M_MAINLINE
+# if FIBER_PORT_FORCE_COUNT
+#  define FIBER_PORT_ARMV81M_MAINLINE FIBER_FORCE_PORT_ARMV81M_MAINLINE
+# elif defined(__ARM_ARCH_8_1M_MAIN__)
+#  define FIBER_PORT_ARMV81M_MAINLINE 1
+# else
+#  define FIBER_PORT_ARMV81M_MAINLINE 0
+# endif
+#endif
+
+BT_STATIC_ASSERT((FIBER_PORT_ARMV6M == 0) || (FIBER_PORT_ARMV6M == 1),
+                 "[fiber]: FIBER_PORT_ARMV6M must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_PORT_ARMV7M == 0) || (FIBER_PORT_ARMV7M == 1),
+                 "[fiber]: FIBER_PORT_ARMV7M must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_PORT_ARMV7EM == 0) || (FIBER_PORT_ARMV7EM == 1),
+                 "[fiber]: FIBER_PORT_ARMV7EM must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_PORT_ARMV8M_BASELINE == 0) || (FIBER_PORT_ARMV8M_BASELINE == 1),
+                 "[fiber]: FIBER_PORT_ARMV8M_BASELINE must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_PORT_ARMV8M_MAINLINE == 0) || (FIBER_PORT_ARMV8M_MAINLINE == 1),
+                 "[fiber]: FIBER_PORT_ARMV8M_MAINLINE must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_PORT_ARMV81M_MAINLINE == 0) || (FIBER_PORT_ARMV81M_MAINLINE == 1),
+                 "[fiber]: FIBER_PORT_ARMV81M_MAINLINE must be 0 or 1");
+
+#define FIBER_PORT_COUNT \
+    (FIBER_PORT_ARMV6M + \
+     FIBER_PORT_ARMV7M + \
+     FIBER_PORT_ARMV7EM + \
+     FIBER_PORT_ARMV8M_BASELINE + \
+     FIBER_PORT_ARMV8M_MAINLINE + \
+     FIBER_PORT_ARMV81M_MAINLINE)
+
+BT_STATIC_ASSERT(FIBER_PORT_COUNT == 1,
+                 "[fiber]: exactly one Cortex-M port must be selected");
+
+#ifndef FIBER_HAS_BASEPRI
+# if FIBER_PORT_ARMV7M || FIBER_PORT_ARMV7EM || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+#  define FIBER_HAS_BASEPRI 1
+# else
+#  define FIBER_HAS_BASEPRI 0
+# endif
+#endif
+
+#ifndef FIBER_HAS_FAULTMASK
+# if FIBER_PORT_ARMV7M || FIBER_PORT_ARMV7EM || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+#  define FIBER_HAS_FAULTMASK 1
+# else
+#  define FIBER_HAS_FAULTMASK 0
+# endif
+#endif
+
+#ifndef FIBER_HAS_PSPLIM
+# if FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+#  define FIBER_HAS_PSPLIM 1
+# else
+#  define FIBER_HAS_PSPLIM 0
+# endif
+#endif
+
+#ifndef FIBER_HAS_MVE
+# if defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0)
+#  define FIBER_HAS_MVE 1
+# else
+#  define FIBER_HAS_MVE 0
+# endif
+#endif
+
+BT_STATIC_ASSERT((FIBER_HAS_BASEPRI == 0) || (FIBER_HAS_BASEPRI == 1),
+                 "[fiber]: FIBER_HAS_BASEPRI must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_HAS_FAULTMASK == 0) || (FIBER_HAS_FAULTMASK == 1),
+                 "[fiber]: FIBER_HAS_FAULTMASK must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_HAS_PSPLIM == 0) || (FIBER_HAS_PSPLIM == 1),
+                 "[fiber]: FIBER_HAS_PSPLIM must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_HAS_MVE == 0) || (FIBER_HAS_MVE == 1),
+                 "[fiber]: FIBER_HAS_MVE must be 0 or 1");
+
+#endif /* FIBER_PORT_FIBER_PORT_SELECT_H_ */

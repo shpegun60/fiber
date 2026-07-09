@@ -85,6 +85,7 @@ fiber/
   port/
     fiber_port.h
     fiber_port_state.c
+    fiber_port_state.h
     armv6m/
       fiber_port_armv6m.c
     armv7m/
@@ -141,6 +142,7 @@ The common runtime owns:
 
 - public API;
 - current-fiber ownership;
+- switch publication state and ordering;
 - switch preconditions;
 - panic behavior;
 - diagnostics;
@@ -190,29 +192,47 @@ cannot cause a real PendSV switch may return after a compiler barrier.
 Each architecture port should provide a small ABI to the common layer:
 
 ```c
+extern FiberContext *volatile fiber_port_from;
+extern FiberContext *volatile fiber_port_to;
+extern FiberContext *volatile fiber_port_current;
+
 void fiber_port_init(void);
 void fiber_port_set_pendsv_lowest_priority(void);
-void fiber_port_request_switch(FiberContext *from, FiberContext *to);
+void fiber_port_pend_switch(void);
 FIBER_NORETURN void fiber_port_start_first(FiberContext *to);
 uint32_t *fiber_port_init_stack(FiberContext *ctx,
                                 void *stack_begin,
                                 void *stack_end,
                                 FiberEntry entry,
                                 void *arg);
+void fiber_pendsv(void);
 ```
 
 Exact names may change, but ownership should not:
 
 - common code decides whether a switch is allowed;
+- common code publishes `fiber_port_from` and `fiber_port_to`;
+- common code owns the current-context policy;
+- common code calls `fiber_port_pend_switch()` only after publication is
+  complete;
 - port code performs CPU-specific save, restore, and exception return;
+- port code may update `fiber_port_current` during the real restore path, but it
+  must follow the common current-context policy;
+- port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
 - port code owns optional SVC first-start mechanics;
 - port code owns feature gates that depend on architecture state.
 
-The port ABI must hide architecture-specific storage from users. If shared
-PendSV state such as `from`, `to`, or `current` needs to be visible to multiple
-port files, it should live in an internal port-state module rather than in a
-public header.
+The port ABI must hide architecture-specific storage from users. Shared PendSV
+state such as `from`, `to`, and `current` must live in an internal port-state
+module. It may be visible to port sources through an internal header, but it
+must not become user-facing API.
+
+Avoid a port-level function shaped like `fiber_port_request_switch(from, to)`
+unless it is only a thin mechanical wrapper. Passing `from` and `to` to the port
+as a semantic request makes it too easy for the port to start owning runtime
+policy. The preferred boundary is: common validates and publishes state, then
+the port only pends the architecture-specific switch mechanism.
 
 Port entry points must document whether they are callable from Thread mode,
 Handler mode, or both. Undefined call mode is not acceptable for start/switch
@@ -413,6 +433,11 @@ Before a port refactor can be treated as equivalent to the previous H7 path:
 - panic codes used by validation must remain documented;
 - performance-mode results must not be used to justify changing portable
   defaults.
+
+A file-layout-only split must pass the same validation level as the source path
+before support claims are preserved. If the source H7 path was
+`fpu-validated` or `performance-validated`, the moved H7 port must repeat that
+validation before carrying the same claim.
 
 Behavior-changing commits should be small enough that a failed board validation
 can be traced to one decision.
