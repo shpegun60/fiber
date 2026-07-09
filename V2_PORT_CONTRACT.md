@@ -18,6 +18,33 @@ the library small and explicit:
 This branch may change internal layout and port boundaries. `main` remains the
 stable STM32H7/Cortex-M7 validated branch.
 
+## Target Outcome
+
+The long-term target is a stable, auditable, FreeRTOS-style cooperative
+Cortex-M context-switch core for STM32 projects.
+
+This means:
+
+- use the same CPU-port discipline that makes FreeRTOS reliable on Cortex-M:
+  explicit port selection, exact exception-frame ownership, PSP-based Thread
+  mode execution, PendSV/SVC ownership, target-aware EXC_RETURN, FPU/MVE policy,
+  PSPLIM/security-domain policy, and per-port validation evidence;
+- keep the runtime cooperative: the user decides when to yield;
+- keep the library much smaller than FreeRTOS by excluding scheduler policy,
+  priorities, queues, semaphores, timers, event groups, streams, and heaps;
+- keep safety defaults at least as conservative as v1 unless a target-specific
+  validation record justifies faster settings;
+- add stronger paranoid checks where they improve failure mode quality without
+  hiding timing bugs, for example Thread-mode guards, current-context
+  validation, interrupt-mask guards, strict publication ordering, and explicit
+  unsupported-target failures;
+- treat FreeRTOS as the reference for CPU-port behavior, not as an API surface
+  to clone.
+
+The desired end state is not "it compiles for many cores". The desired end state
+is: every claimed STM32 Cortex-M profile has a selected port, documented CPU
+contract, known limitations, and validation level that matches the claim.
+
 ## Design Rules
 
 1. Split by ARM core and architectural feature profile, not by STM32 marketing
@@ -109,17 +136,53 @@ Port selection must be deterministic and auditable.
 
 Required rules:
 
-- detect the ARM architecture profile from compiler-provided macros first;
-- allow an explicit project override for unusual toolchains;
+- support automatic selection from compiler-provided architecture macros for
+  small-library convenience;
+- support explicit production selection through `FIBER_PORT_PROFILE`, similar
+  in purpose to FreeRTOS `FREERTOS_PORT`;
+- verify explicit `FIBER_PORT_PROFILE` against compiler `__ARM_ARCH_*` macros
+  when those macros are available;
+- allow explicit profile mismatch only behind a named opt-in escape hatch for
+  nonstandard toolchains;
+- reserve `FIBER_FORCE_PORT_*` for unusual toolchains and compatibility, and do
+  not allow it to be mixed with `FIBER_PORT_PROFILE`;
 - produce exactly one internal `FIBER_PORT_*` selection macro;
 - fail the build if no supported port matches;
 - fail the build if more than one port matches;
+- derive normalized aggregate gates such as `FIBER_PORT_IS_BASELINE`,
+  `FIBER_PORT_IS_MAINLINE`, and `FIBER_PORT_IS_V8M`;
+- prefer ARMv8.1-M Mainline over ARMv8-M Mainline if a future toolchain exposes
+  both architecture macros;
+- treat enabled MVE as ARMv8.1-M Mainline selection input when the toolchain
+  exposes MVE but still reports only `__ARM_ARCH_8M_MAIN__`;
 - keep STM32 family names out of the low-level switch logic;
+- expose a diagnostic `FIBER_PORT_NAME` for the selected internal port;
 - keep all `FIBER_HAS_*`, `FIBER_USE_*`, and `FIBER_PORT_*` macros normalized to
   `0` or `1` in one target feature header before any port source uses them.
 
 STM32 series mapping belongs in documentation and board integration examples.
 CPU context switching belongs to the ARM profile port.
+
+Explicit profile names currently cover architecture classes, not every exact
+FreeRTOS port directory:
+
+```c
+FIBER_PORT_PROFILE_AUTO
+FIBER_PORT_PROFILE_ARMV6M
+FIBER_PORT_PROFILE_ARMV7M
+FIBER_PORT_PROFILE_ARMV7EM
+FIBER_PORT_PROFILE_ARMV8M_BASELINE
+FIBER_PORT_PROFILE_ARMV8M_MAINLINE
+FIBER_PORT_PROFILE_ARMV81M_MAINLINE
+```
+
+Future splits may add more specific profiles, for example a Cortex-M7 r0p1
+profile or ARMv8-M Secure/Non-secure profiles, when the implementation needs a
+separate source path rather than only a policy gate.
+
+`FIBER_PORT_PROFILE_ALLOW_MISMATCH` exists only for unusual toolchains or
+bring-up experiments where compiler architecture macros are missing or known to
+be wrong. Normal production builds should leave it disabled.
 
 ## Core Profiles
 
@@ -135,6 +198,38 @@ The port split is based on architectural behavior:
 | ARMv8.1-M Mainline | STM32N6 class targets | MVE, PAC, BTI, PSPLIM, extended context policy |
 
 The table is a routing aid, not a validation claim.
+
+## FreeRTOS Parity Backlog
+
+The current v2 selection layer covers the main STM32 Cortex-M architecture
+classes. That does not mean every FreeRTOS Cortex-M port scenario is implemented
+or validated.
+
+Current boundary:
+
+```text
+Port selection for STM32 Cortex-M classes:
+  implemented for auto and explicit profile modes
+
+Full FreeRTOS-level port behavior for every STM32 Cortex-M scenario:
+  not complete yet
+```
+
+Backlog required before stronger parity claims:
+
+| Area | Current v2 status | Required future work |
+| --- | --- | --- |
+| Cortex-M7 r0p1 | Documented policy only. Current PendSV does not write `BASEPRI`, so the FreeRTOS r0p1 workaround is not required by the current code path. | Add a dedicated CM7/r0p1 policy or source split if any future PendSV, SVC, or handler-side section writes `BASEPRI`. Validate on real Cortex-M7 hardware before claiming parity with the FreeRTOS CM7 port. |
+| ARMv8-M Baseline / M23 | Selection and compile-only coverage exist. Full PSPLIM/security behavior is not FreeRTOS-level yet. | Define PSPLIM slot policy, PSPLIM register access gates, Secure/Non-secure ownership, and hardware validation for the claimed domain. |
+| ARMv8-M Mainline / M33 | Selection and compile-only coverage exist. TrustZone, Non-secure, NTZ, and TFM variants are not split like FreeRTOS yet. | Split or explicitly gate Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, and SVC/PendSV domain routing. |
+| ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile. Full MVE/PAC/BTI policy is not implemented. | Define MVE extended-context policy, PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
+| Source layout | Selection gates exist, but the main implementation is still being split from a shared source path. | Move CPU-specific save/restore/start logic into exactly one selected port source path per profile, matching the FreeRTOS discipline where the build includes one concrete port. |
+| Hardware evidence | H7/M7 is the strongest validated path. Other profiles are compile-only unless separately recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
+
+Do not describe a profile as FreeRTOS-level only because it passes the compile
+matrix. Compile-only proves that selection and syntax are coherent; it does not
+prove exception return, security-domain behavior, FPU/MVE context behavior, or
+real interrupt-mask timing on hardware.
 
 ## Common Runtime Contract
 
@@ -192,13 +287,16 @@ cannot cause a real PendSV switch may return after a compiler barrier.
 Each architecture port should provide a small ABI to the common layer:
 
 ```c
-extern FiberContext *volatile fiber_port_from;
-extern FiberContext *volatile fiber_port_to;
-extern FiberContext *volatile fiber_port_current;
+extern FiberContext *volatile fiber_internal_port_switch_from_slot;
+extern FiberContext *volatile fiber_internal_port_switch_to_slot;
+extern FiberContext *volatile fiber_internal_port_current_context;
 
 void fiber_port_init(void);
 void fiber_port_set_pendsv_lowest_priority(void);
 void fiber_port_pend_switch(void);
+FiberContext *fiber_port_load_current_context(void);
+void fiber_port_seed_current_context(FiberContext *ctx);
+void fiber_port_publish_switch_slots(FiberContext *from, FiberContext *to);
 FIBER_NORETURN void fiber_port_start_first(FiberContext *to);
 uint32_t *fiber_port_init_stack(FiberContext *ctx,
                                 void *stack_begin,
@@ -211,13 +309,14 @@ void fiber_pendsv(void);
 Exact names may change, but ownership should not:
 
 - common code decides whether a switch is allowed;
-- common code publishes `fiber_port_from` and `fiber_port_to`;
+- common code publishes `fiber_internal_port_switch_from_slot` and
+  `fiber_internal_port_switch_to_slot`;
 - common code owns the current-context policy;
 - common code calls `fiber_port_pend_switch()` only after publication is
   complete;
 - port code performs CPU-specific save, restore, and exception return;
-- port code may update `fiber_port_current` during the real restore path, but it
-  must follow the common current-context policy;
+- port code may update `fiber_internal_port_current_context` during the real
+  restore path, but it must follow the common current-context policy;
 - port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
 - port code owns optional SVC first-start mechanics;
@@ -389,6 +488,9 @@ A port validated in one domain is not automatically validated in another.
 FreeRTOS has a Cortex-M7 r0p1 workaround around `BASEPRI` writes in PendSV for
 ARM errata 837070.
 
+FreeRTOS routes `GCC_ARM_CM7` to a dedicated `portable/GCC/ARM_CM7/r0p1` port
+instead of treating Cortex-M7 as only a generic ARMv7E-M build.
+
 The current `fiber` PendSV path does not write `BASEPRI`; it rejects
 `BASEPRI != 0` before requesting a cooperative switch from Thread mode. Because
 of that, the workaround is not required by the current implementation.
@@ -396,6 +498,11 @@ of that, the workaround is not required by the current implementation.
 If any future port writes `BASEPRI` from PendSV, SVC, or a handler-side
 scheduler section, the affected Cortex-M7 r0p1 workaround must be implemented
 before claiming support for that path.
+
+If that happens, the ARMv7E-M profile must either split into a dedicated
+Cortex-M7/r0p1 source path or add an explicit r0p1 policy gate with compile and
+hardware validation. A generic ARMv7E-M claim is not enough once PendSV starts
+touching `BASEPRI`.
 
 ## FreeRTOS Sync Policy
 
@@ -491,6 +598,48 @@ Minimum evidence for stronger labels:
 10. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
 11. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
 12. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
+
+## Implementation Strategy
+
+Do not try to close every FreeRTOS parity gap in one step. The safe path is to
+port the known-good H7/M7 behavior into the v2 architecture first, then expand
+profile by profile.
+
+Priority order:
+
+```text
+P0: ARMv7E-M / STM32H7-M7
+  Move the current validated H7/M7 logic behind the port ABI.
+  Keep behavior equivalent during the move.
+  Re-run H7 runtime and FPU validation before claiming parity with v1/main.
+
+P1: ARMv7-M / Cortex-M3
+  Add or split a mainline non-FPU path.
+  Require compile matrix plus smoke validation on real hardware before
+  promoting beyond compile-only.
+
+P2: ARMv6-M / Cortex-M0/M0+
+  Isolate the Thumb-1 baseline save/restore path.
+  Validate no BASEPRI/FPU assumptions.
+  Record MSP rewind and VTOR caveats per target.
+
+P3: ARMv8-M Baseline / Cortex-M23
+  Define PSPLIM slot policy and register-access gates.
+  Define Secure/Non-secure ownership before claiming FreeRTOS-level behavior.
+
+P4: ARMv8-M Mainline / Cortex-M33
+  Split or explicitly gate Secure, Non-secure, NTZ, and TFM behavior.
+  Validate EXC_RETURN, vector ownership, PSPLIM, CONTROL, and FP access policy.
+
+P5: ARMv8.1-M / Cortex-M55 / MVE
+  Define MVE extended-context policy.
+  Define PAC/BTI policy where applicable.
+  Validate beyond scalar FP accumulator tests.
+```
+
+Each phase should leave the tree in a working state. Mechanical source moves,
+new feature policy, and behavior changes should be separate commits whenever
+possible.
 
 ## Definition of Done
 

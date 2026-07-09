@@ -90,6 +90,7 @@ $sources = @(
     "fiber\fiber_core.c",
     "fiber\fiber_boot.c",
     "fiber\fiber_stack.c",
+    "fiber\port\fiber_port_state.c",
     "fiber\target\fiber_fpu.c",
     "fiber\target\fiber_irq.c",
     "fiber\target\fiber_panic.c"
@@ -111,6 +112,22 @@ $configs = @(
     [pscustomobject]@{ Name = "cortex-m55-mve-fp"; CpuArgs = @("-march=armv8.1-m.main+mve.fp"); Core = "core_cm55.h";    VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfloat-abi=hard") }
 )
 
+$portProfiles = @{
+    "cortex-m0"         = "FIBER_PORT_PROFILE_ARMV6M"
+    "cortex-m0plus"     = "FIBER_PORT_PROFILE_ARMV6M"
+    "cortex-m3"         = "FIBER_PORT_PROFILE_ARMV7M"
+    "cortex-m4"         = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m4f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m7"         = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m7f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
+    "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
+    "cortex-m33f"       = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
+    "cortex-m55"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
+    "cortex-m55f"       = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
+    "cortex-m55-mve-fp" = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
+}
+
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $buildRoot | Out-Null
 
@@ -120,10 +137,21 @@ try {
     Write-Host "Build:    $buildRoot"
 
     foreach ($cfg in $configs) {
-        $cfgDir = Join-Path $buildRoot $cfg.Name
-        New-Item -ItemType Directory -Path $cfgDir | Out-Null
+        $profile = $portProfiles[$cfg.Name]
+        if ([string]::IsNullOrWhiteSpace($profile)) {
+            throw "No explicit FIBER_PORT_PROFILE mapping for $($cfg.Name)"
+        }
 
-        $mainHeader = @"
+        $selectionModes = @(
+            [pscustomobject]@{ Name = "auto";     Defines = @() },
+            [pscustomobject]@{ Name = "explicit"; Defines = @("-DFIBER_PORT_PROFILE=$profile") }
+        )
+
+        foreach ($mode in $selectionModes) {
+            $cfgDir = Join-Path (Join-Path $buildRoot $cfg.Name) $mode.Name
+            New-Item -ItemType Directory -Path $cfgDir | Out-Null
+
+            $mainHeader = @"
 #ifndef MAIN_H_
 #define MAIN_H_
 
@@ -158,42 +186,44 @@ void Error_Handler(void);
 
 #endif
 "@
-        Set-Content -Path (Join-Path $cfgDir "main.h") -Value $mainHeader -Encoding ASCII
+            Set-Content -Path (Join-Path $cfgDir "main.h") -Value $mainHeader -Encoding ASCII
 
-        Write-Host ""
-        Write-Host "== $($cfg.Name) =="
+            Write-Host ""
+            Write-Host "== $($cfg.Name) / $($mode.Name) =="
 
-        foreach ($source in $sources) {
-            $srcPath = Join-Path $RepoRoot $source
-            $objName = ($source -replace '[\\/]', '_') + ".o"
-            $objPath = Join-Path $cfgDir $objName
+            foreach ($source in $sources) {
+                $srcPath = Join-Path $RepoRoot $source
+                $objName = ($source -replace '[\\/]', '_') + ".o"
+                $objPath = Join-Path $cfgDir $objName
 
-            $args = $cfg.CpuArgs + @(
-                "-mthumb"
-            ) + $cfg.Extra + @(
-                "-std=gnu11",
-                "-ffreestanding",
-                "-fno-common",
-                "-Wall",
-                "-Wextra",
-                "-Wno-unused-parameter",
-                "-Werror=implicit-function-declaration",
-                "-Werror=return-type",
-                "-DFIBER_PENDSV_WIRED=1",
-                "-I$cfgDir",
-                "-I$RepoRoot",
-                "-I$(Join-Path $RepoRoot 'fiber')",
-                "-I$(Join-Path $RepoRoot 'fiber\target')",
-                "-I$cmsis",
-                "-c",
-                $srcPath,
-                "-o",
-                $objPath
-            )
+                $args = $cfg.CpuArgs + @(
+                    "-mthumb"
+                ) + $cfg.Extra + @(
+                    "-std=gnu11",
+                    "-ffreestanding",
+                    "-fno-common",
+                    "-Wall",
+                    "-Wextra",
+                    "-Wno-unused-parameter",
+                    "-Werror=implicit-function-declaration",
+                    "-Werror=return-type",
+                    "-DFIBER_PENDSV_WIRED=1"
+                ) + $mode.Defines + @(
+                    "-I$cfgDir",
+                    "-I$RepoRoot",
+                    "-I$(Join-Path $RepoRoot 'fiber')",
+                    "-I$(Join-Path $RepoRoot 'fiber\target')",
+                    "-I$cmsis",
+                    "-c",
+                    $srcPath,
+                    "-o",
+                    $objPath
+                )
 
-            & $gcc @args
-            if ($LASTEXITCODE -ne 0) {
-                throw "Compile failed for $($cfg.Name): $source"
+                & $gcc @args
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Compile failed for $($cfg.Name) / $($mode.Name): $source"
+                }
             }
         }
     }

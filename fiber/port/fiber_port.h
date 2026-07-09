@@ -1,0 +1,53 @@
+/*
+ * fiber_port.h
+ *
+ * Internal Cortex-M port boundary used by the common fiber runtime.
+ */
+
+#ifndef FIBER_PORT_FIBER_PORT_H_
+#define FIBER_PORT_FIBER_PORT_H_
+
+#include "fiber_port_state.h"
+#include "../target/fiber_target.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * Common runtime owns when these helpers are called. The port layer owns the
+ * exact CPU-visible state slots and the PendSV trigger mechanism.
+ */
+__STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)
+{
+	__COMPILER_BARRIER();
+	return fiber_internal_port_current_context;
+}
+
+__STATIC_FORCEINLINE void fiber_port_seed_current_context(FiberContext *ctx)
+{
+	__DMB();
+	fiber_internal_port_current_context = ctx;
+	__DMB();
+}
+
+__STATIC_FORCEINLINE void fiber_port_publish_switch_slots(FiberContext *from, FiberContext *to)
+{
+	/* PendSV reads the target slot first; publish source before target. */
+	__DMB();
+	fiber_internal_port_switch_from_slot = from;
+	__DMB();
+	fiber_internal_port_switch_to_slot = to;
+	__DMB();
+}
+
+__STATIC_FORCEINLINE void fiber_port_pend_switch(void)
+{
+	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* FIBER_PORT_FIBER_PORT_H_ */

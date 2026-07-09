@@ -14,6 +14,33 @@ Add the repository root to the include path, then include the public API:
 #include "fiber/fiber_core.h"
 ```
 
+Compile the runtime sources into the application:
+
+```text
+fiber/fiber_core.c
+fiber/fiber_boot.c
+fiber/fiber_stack.c
+fiber/port/fiber_port_state.c
+fiber/target/fiber_fpu.c
+fiber/target/fiber_irq.c
+fiber/target/fiber_panic.c
+```
+
+Port selection defaults to automatic detection from compiler ARM architecture
+macros. Production builds may select the profile explicitly, for example:
+
+```c
+#define FIBER_PORT_PROFILE FIBER_PORT_PROFILE_ARMV7EM
+```
+
+The currently supported profile names are `FIBER_PORT_PROFILE_ARMV6M`,
+`FIBER_PORT_PROFILE_ARMV7M`, `FIBER_PORT_PROFILE_ARMV7EM`,
+`FIBER_PORT_PROFILE_ARMV8M_BASELINE`, `FIBER_PORT_PROFILE_ARMV8M_MAINLINE`, and
+`FIBER_PORT_PROFILE_ARMV81M_MAINLINE`. Leave `FIBER_PORT_PROFILE` undefined for
+auto-detection. When compiler ARM architecture macros are available, an
+explicit profile must match them. `FIBER_PORT_PROFILE_ALLOW_MISMATCH` is only
+for unusual toolchains or bring-up experiments.
+
 Before starting fibers, initialize PendSV priority:
 
 ```c
@@ -153,6 +180,14 @@ bring-up defaults remain the conservative safety settings above.
 The STM32H7 / Cortex-M7 path is the primary validated target. The core switch
 matches the FreeRTOS PendSV pattern: save `r4-r11`, preserve `EXC_RETURN`, run
 on PSP, and conditionally save `s16-s31` when an extended FP frame is active.
+Auto selection maps STM32H7/Cortex-M7 to `FIBER_PORT_NAME == "armv7em"`.
+
+FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The current
+`fiber` PendSV path does not write `BASEPRI`, so the FreeRTOS r0p1 workaround
+around handler-side `BASEPRI` writes is not needed by the current
+implementation. If a future v2 port writes `BASEPRI` from PendSV, SVC, or a
+handler-side scheduler section, Cortex-M7/r0p1 must become an explicit policy
+or source split before claiming parity with the FreeRTOS CM7 port.
 
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.

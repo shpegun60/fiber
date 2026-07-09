@@ -14,13 +14,9 @@
  */
 
 #include "fiber_core.h"
+#include "port/fiber_port.h"
 
 BT_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
-
-/* Global exchange slots for cooperative switch trigger */
-static FiberContext *volatile g_from = 0;
-static FiberContext *volatile g_to   = 0;
-static FiberContext *volatile g_current = 0;
 
 /* ---------------- Small helpers ---------------- */
 __STATIC_FORCEINLINE uint32_t fiber_read_r9(void) { uint32_t v; __ASM volatile("mov %0, r9":"=r"(v)); return v; }
@@ -105,7 +101,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	*(--sp) = (uint32_t)(uintptr_t)arg;                       /* R0: task argument */
 
 	/* -------------------- Software-saved area (callee-saved + EXC_RETURN) -------------------- */
-#if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__)
+#if FIBER_PORT_IS_BASELINE
 	/* M0/M23 memory (low to high): [LR][r8..r11][r4..r7] */
 	*(--sp) = 0;               /* r7 */
 	*(--sp) = 0;               /* r6 */
@@ -146,8 +142,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 FiberContext* fiber_current(void)
 {
-	__COMPILER_BARRIER();
-	return g_current;
+	return fiber_port_load_current_context();
 }
 
 FIBER_NORETURN
@@ -156,9 +151,7 @@ void fiber_start(FiberContext* const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(ctx->boot.sealed != 0u, 's');
 
-	__DMB();
-	g_current = ctx;
-	__DMB();
+	fiber_port_seed_current_context(ctx);
 
 	fiber_boot(&ctx->boot);
 	FIBER_UNREACHABLE();
@@ -178,7 +171,7 @@ void fiber_yield_to(FiberContext* const to)
  * Goals:
  *  - Reject NULL 'from' in the public API
  *  - No-op when 'to' is NULL or 'to' == 'from'
- *  - Write ordering: g_from must be visible before g_to becomes visible
+ *  - Write ordering: source slot must be visible before target slot becomes visible
  *  - Pend PendSV only after both slots are published
  *  - Optional IRQ masking while publishing slots (universal across M0..M33)
  *  - Keep barriers conservative to avoid reordering surprises
@@ -241,17 +234,11 @@ void fiber_switch(FiberContext* const from, FiberContext* const to)
 	const uint32_t pm = fiber_primask_save_disable_local();
 #endif
 
-	/* Publish slots in this exact order: g_from first, then g_to.
-	 * PendSV reads g_to first; if it's NULL it bails out. This avoids a window
-	 * where handler would see g_to != NULL but g_from not yet stored. */
-	__DMB();                 /* complete earlier memory ops before publishing slots */
-	g_from = from;           /* 1) publish source */
-	__DMB();                 /* order g_from store before g_to store */
-	g_to   = to;             /* 2) publish target */
-	__DMB();                 /* ensure both slot stores are globally visible */
+	/* Publish source before target so PendSV cannot see a target without a source. */
+	fiber_port_publish_switch_slots(from, to);
 
 	/* Pend PendSV after slots are visible. Strongly ordered afterwards. */
-	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	fiber_port_pend_switch();
 
 #if FIBER_SWITCH_MASK_IRQS
 	fiber_primask_restore_local(pm);
@@ -277,7 +264,7 @@ BT_STATIC_ASSERT(OFF_TO_PSLIM < 4096, "OFF_TO_PSLIM must fit Thumb-2 LDR imm12")
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
 {
-#if defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__)
+#if FIBER_PORT_IS_BASELINE
 	/* ------------------------ Cortex-M0/M0+ / v8-M Baseline ------------------------ */
 	__ASM volatile(
 			".syntax unified                         \n"
@@ -294,18 +281,18 @@ void fiber_pendsv(void)
 			"isb                                    \n" /* sync pipeline before touching stack memory */
 
 			/* ----------------------------------------------------------------------
-			 * Load exchange pointers (g_to, g_from) and early exit if no target
+			 * Load exchange pointers and early exit if no target
 			 * ---------------------------------------------------------------------- */
-			"ldr   r2, =g_to                        \n" /* r2 = &g_to */
-			"ldr   r2, [r2]                         \n" /* r2 = g_to */
+			"ldr   r2, =fiber_internal_port_switch_to_slot \n" /* r2 = &target slot */
+			"ldr   r2, [r2]                         \n" /* r2 = target context */
 			"cmp   r2, #0                           \n" /* Thumb-1 safe null check */
 			"beq   5f                               \n" /* if no target, nothing to do: return */
 
-			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
-			"ldr   r1, [r1]                         \n" /* r1 = g_from */
+			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
+			"ldr   r1, [r1]                         \n" /* r1 = source context */
 
 			/* ----------------------------------------------------------------------
-			 * Save current context (only if g_from != NULL)
+			 * Save current context (only if source slot is not NULL)
 			 * SW layout low->high: [LR][r8..r11][r4..r7]
 			 * ARMv6-M lacks STMDB, so do manual pre-decrement + STMIA.
 			 * ---------------------------------------------------------------------- */
@@ -367,15 +354,15 @@ void fiber_pendsv(void)
 			"isb                                    \n" /* sync before exception return */
 
 			/* Publish the runtime-owned current context, FreeRTOS pxCurrentTCB style. */
-			"ldr   r1, =g_current                   \n" /* r1 = &g_current */
-			"str   r2, [r1]                         \n" /* g_current = to */
+			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
+			"str   r2, [r1]                         \n" /* current context = to */
 
 			/* Clear exchange slots for hygiene/diagnostics */
 			"movs  r3, #0                           \n" /* r3 = 0 */
-			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
-			"str   r3, [r1]                         \n" /* g_from = NULL */
-			"ldr   r1, =g_to                        \n" /* r1 = &g_to */
-			"str   r3, [r1]                         \n" /* g_to = NULL */
+			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
+			"str   r3, [r1]                         \n" /* source slot = NULL */
+			"ldr   r1, =fiber_internal_port_switch_to_slot \n" /* r1 = &target slot */
+			"str   r3, [r1]                         \n" /* target slot = NULL */
 
 #if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"  /* (optional) serialize before branch */
@@ -419,17 +406,17 @@ void fiber_pendsv(void)
 			"isb                                    \n" /* synchronize */
 
 			/* ----------------------------------------------------------------------
-			 * Load exchange pointers (g_to, g_from) and early exit if no target
+			 * Load exchange pointers and early exit if no target
 			 * ---------------------------------------------------------------------- */
-			"ldr   r2, =g_to                        \n" /* r2 = &g_to */
-			"ldr   r2, [r2]                         \n" /* r2 = g_to */
+			"ldr   r2, =fiber_internal_port_switch_to_slot \n" /* r2 = &target slot */
+			"ldr   r2, [r2]                         \n" /* r2 = target context */
 			"cbz   r2, 5f                           \n" /* if no target, return */
 
-			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
-			"ldr   r1, [r1]                         \n" /* r1 = g_from */
+			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
+			"ldr   r1, [r1]                         \n" /* r1 = source context */
 
 			/* ----------------------------------------------------------------------
-			 * Save source context (only if g_from != NULL)
+			 * Save source context (only if source slot is not NULL)
 			 * Save r4..r11 and EXC_RETURN; optionally save S16..S31 if extended FP frame
 			 * ---------------------------------------------------------------------- */
 			"cbz   r1, 1f                           \n" /* skip if from == NULL */
@@ -479,15 +466,15 @@ void fiber_pendsv(void)
 			"isb                                    \n" /* synchronize before exception return */
 
 			/* Publish the runtime-owned current context, FreeRTOS pxCurrentTCB style. */
-			"ldr   r1, =g_current                   \n" /* r1 = &g_current */
-			"str   r2, [r1]                         \n" /* g_current = to */
+			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
+			"str   r2, [r1]                         \n" /* current context = to */
 
 			/* Clear exchange slots to avoid stale pointers */
 			"movs  r3, #0                           \n" /* r3 = 0 */
-			"ldr   r1, =g_from                      \n" /* r1 = &g_from */
-			"str   r3, [r1]                         \n" /* g_from = NULL */
-			"ldr   r1, =g_to                        \n" /* r1 = &g_to */
-			"str   r3, [r1]                         \n" /* g_to = NULL */
+			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
+			"str   r3, [r1]                         \n" /* source slot = NULL */
+			"ldr   r1, =fiber_internal_port_switch_to_slot \n" /* r1 = &target slot */
+			"str   r3, [r1]                         \n" /* target slot = NULL */
 
 #if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"  /* (optional) serialize before branch */
