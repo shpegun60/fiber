@@ -588,17 +588,18 @@ Minimum evidence for stronger labels:
 
 1. Create this contract on the `v2` branch.
 2. Add deterministic port-selection and feature-normalization headers.
-3. Move the current STM32H7/Cortex-M7 implementation into an ARMv7E-M port
+3. Add a common `fiber_port.h` boundary and internal port state.
+4. Add an ARMv7E-M port file shell with no behavior change.
+5. Move the current STM32H7/Cortex-M7 implementation into the ARMv7E-M port
    boundary without changing behavior.
-4. Add a common `fiber_port.h` boundary.
-5. Keep the existing compile matrix green.
-6. Add vector wiring validation hooks for PendSV and SVC where possible.
-7. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
-8. Validate direct start and SVC start separately on STM32H7.
-9. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
-10. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
-11. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
-12. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
+6. Keep the existing compile matrix green.
+7. Add vector wiring validation hooks for PendSV and SVC where possible.
+8. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
+9. Validate direct start and SVC start separately on STM32H7.
+10. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
+11. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
+12. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
+13. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
 
 ## Implementation Strategy
 
