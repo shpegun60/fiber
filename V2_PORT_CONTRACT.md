@@ -142,7 +142,7 @@ Required rules:
   in purpose to FreeRTOS `FREERTOS_PORT`;
 - verify explicit `FIBER_PORT_PROFILE` against compiler `__ARM_ARCH_*` macros
   when those macros are available;
-- allow explicit profile mismatch only behind a named opt-in escape hatch for
+- allow selection mismatch only behind a named opt-in escape hatch for
   nonstandard toolchains;
 - reserve `FIBER_FORCE_PORT_*` for unusual toolchains and compatibility, and do
   not allow it to be mixed with `FIBER_PORT_PROFILE`;
@@ -180,9 +180,10 @@ Future splits may add more specific profiles, for example a Cortex-M7 r0p1
 profile or ARMv8-M Secure/Non-secure profiles, when the implementation needs a
 separate source path rather than only a policy gate.
 
-`FIBER_PORT_PROFILE_ALLOW_MISMATCH` exists only for unusual toolchains or
+`FIBER_PORT_SELECTION_ALLOW_MISMATCH` exists only for unusual toolchains or
 bring-up experiments where compiler architecture macros are missing or known to
-be wrong. Normal production builds should leave it disabled.
+be wrong. Normal production builds should leave it disabled. The older
+`FIBER_PORT_PROFILE_ALLOW_MISMATCH` spelling is kept as a compatibility alias.
 
 ## Core Profiles
 

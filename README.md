@@ -38,8 +38,9 @@ The currently supported profile names are `FIBER_PORT_PROFILE_ARMV6M`,
 `FIBER_PORT_PROFILE_ARMV8M_BASELINE`, `FIBER_PORT_PROFILE_ARMV8M_MAINLINE`, and
 `FIBER_PORT_PROFILE_ARMV81M_MAINLINE`. Leave `FIBER_PORT_PROFILE` undefined for
 auto-detection. When compiler ARM architecture macros are available, an
-explicit profile must match them. `FIBER_PORT_PROFILE_ALLOW_MISMATCH` is only
-for unusual toolchains or bring-up experiments.
+explicit profile must match them. `FIBER_PORT_SELECTION_ALLOW_MISMATCH` is only
+for unusual toolchains or bring-up experiments where the compiler macros are
+missing or known to be wrong.
 
 Before starting fibers, initialize PendSV priority:
 
