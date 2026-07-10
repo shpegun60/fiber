@@ -74,6 +74,17 @@ The board harness uses compile-time validation modes:
 `fiber_live.validation_mode_seen` records the selected mode, and
 `fiber_live.expected_panic_code` records the expected panic code for trap modes.
 
+The current STM32H7 board harness lives in the embedding application tree, not
+inside this repository:
+
+```text
+h7s_fiber_test/Boot/app_core/app_core.cpp
+```
+
+This repository documents the required validation modes and expected results.
+The embedding application must keep its board harness in sync until a
+standalone board-validation example is added to this repository.
+
 Validate these cases from Thread mode:
 
 - `fiber_scheduler_set_pick_next(valid_hook, user)` before start succeeds.
