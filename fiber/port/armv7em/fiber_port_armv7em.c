@@ -24,6 +24,41 @@ enum {
 BT_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
 BT_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
 
+void fiber_port_init_context_frame(FiberContext * const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'C');
+	fiber_boot_check(&ctx->boot);
+
+	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
+
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+
+	/* Hardware exception frame, low address after software frame restore. */
+	*(--sp) = fiber_port_initial_xpsr();
+	*(--sp) = fiber_port_stacked_pc((uintptr_t)ctx->boot.entry);
+	*(--sp) = ((uint32_t)(uintptr_t)&fiber_internal_task_return) | 1u;
+	*(--sp) = 0u; /* R12 */
+	*(--sp) = 0u; /* R3  */
+	*(--sp) = 0u; /* R2  */
+	*(--sp) = 0u; /* R1  */
+	*(--sp) = (uint32_t)(uintptr_t)ctx->boot.arg;
+
+	/* ARMv7E-M software frame, low to high: [r4..r11][LR(EXC_RETURN)]. */
+	*(--sp) = FIBER_INITIAL_EXC_RETURN;
+	*(--sp) = 0u;                    /* r11 */
+	*(--sp) = 0u;                    /* r10 */
+	*(--sp) = fiber_port_read_r9();  /* r9  */
+	*(--sp) = 0u;                    /* r8  */
+	*(--sp) = 0u;                    /* r7  */
+	*(--sp) = 0u;                    /* r6  */
+	*(--sp) = 0u;                    /* r5  */
+	*(--sp) = 0u;                    /* r4  */
+
+	ctx->sp = sp;
+
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+}
+
 #if FIBER_START_USE_SVC
 FIBER_NORETURN
 FIBER_ATTR_NAKED_ASM

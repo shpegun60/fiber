@@ -18,6 +18,28 @@ extern "C" {
  * Common runtime owns when these helpers are called. The port layer owns the
  * exact CPU-visible state slots and the PendSV trigger mechanism.
  */
+__STATIC_FORCEINLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t v;
+	__ASM volatile("mov %0, r9" : "=r"(v));
+	return v;
+}
+
+__STATIC_FORCEINLINE uint32_t fiber_port_initial_xpsr(void)
+{
+	return 0x01000000u;
+}
+
+__STATIC_FORCEINLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
+{
+	return (uint32_t)(entry & ~(uintptr_t)1u);
+}
+
+FIBER_NORETURN
+void fiber_internal_task_return(void);
+
+void fiber_port_init_context_frame(FiberContext *ctx);
+
 __STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)
 {
 	__COMPILER_BARRIER();

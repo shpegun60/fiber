@@ -15,7 +15,6 @@ void *volatile fiber_internal_port_scheduler_user = 0;
 # define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #endif
 
-#define FIBER_PORT_SW_FRAME_BYTES      (9u * 4u)
 #define FIBER_PORT_HIGH_FP_FRAME_BYTES (16u * 4u)
 
 void fiber_internal_validate_restore_context(FiberContext *ctx)
@@ -30,7 +29,7 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 	FIBER_REQUIRE((sp & 7u) == 4u, 'A');
 	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
-	uintptr_t required_bytes = (uintptr_t)FIBER_PORT_SW_FRAME_BYTES
+	uintptr_t required_bytes = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES
 			+ (uintptr_t)FIBER_EXC_BASE_BYTES;
 	FIBER_REQUIRE((ctx->boot.stack_top - sp) >= required_bytes, 'X');
 
@@ -95,4 +94,3 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 }
 
 #undef FIBER_PORT_HIGH_FP_FRAME_BYTES
-#undef FIBER_PORT_SW_FRAME_BYTES

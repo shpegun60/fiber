@@ -18,23 +18,66 @@
 
 BT_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
 
-/* ---------------- Small helpers ---------------- */
-__STATIC_FORCEINLINE uint32_t fiber_read_r9(void) { uint32_t v; __ASM volatile("mov %0, r9":"=r"(v)); return v; }
-__STATIC_FORCEINLINE uint32_t xpsr_T(void) { return 0x01000000u; }
-__STATIC_FORCEINLINE uint32_t fiber_stacked_pc(entry_t entry) { return ((uint32_t)(uintptr_t)entry) & ~1u; }
-
 /* Safety net if a task ever returns from its entry function */
-FIBER_NORETURN FIBER_ATTR_SENSITIVE static void fiber_task_return(void) { fiber_panic('R'); }
+FIBER_NORETURN FIBER_ATTR_SENSITIVE void fiber_internal_task_return(void) { fiber_panic('R'); }
+
+/*
+ * Transitional fallback for ports whose frame builder has not been moved into a
+ * concrete port source yet. ARMv7E-M and ARMv6-M already own this in their port
+ * files. This block should shrink as v2 ports become real FreeRTOS-style units.
+ */
+#if !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M
+void fiber_port_init_context_frame(FiberContext * const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'C');
+	fiber_boot_check(&ctx->boot);
+
+	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
+
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+
+	*(--sp) = fiber_port_initial_xpsr();
+	*(--sp) = fiber_port_stacked_pc((uintptr_t)ctx->boot.entry);
+	*(--sp) = ((uint32_t)(uintptr_t)&fiber_internal_task_return) | 1u;
+	*(--sp) = 0u; /* R12 */
+	*(--sp) = 0u; /* R3  */
+	*(--sp) = 0u; /* R2  */
+	*(--sp) = 0u; /* R1  */
+	*(--sp) = (uint32_t)(uintptr_t)ctx->boot.arg;
+
+#if FIBER_PORT_IS_BASELINE
+	/* v8-M Baseline transitional layout, low to high: [LR][r4..r7][r8..r11]. */
+	*(--sp) = 0u;                    /* r11 */
+	*(--sp) = 0u;                    /* r10 */
+	*(--sp) = fiber_port_read_r9();  /* r9  */
+	*(--sp) = 0u;                    /* r8  */
+	*(--sp) = 0u;                    /* r7  */
+	*(--sp) = 0u;                    /* r6  */
+	*(--sp) = 0u;                    /* r5  */
+	*(--sp) = 0u;                    /* r4  */
+	*(--sp) = FIBER_INITIAL_EXC_RETURN;
+#else
+	/* Mainline transitional layout, low to high: [r4..r11][LR]. */
+	*(--sp) = FIBER_INITIAL_EXC_RETURN;
+	*(--sp) = 0u;                    /* r11 */
+	*(--sp) = 0u;                    /* r10 */
+	*(--sp) = fiber_port_read_r9();  /* r9  */
+	*(--sp) = 0u;                    /* r8  */
+	*(--sp) = 0u;                    /* r7  */
+	*(--sp) = 0u;                    /* r6  */
+	*(--sp) = 0u;                    /* r5  */
+	*(--sp) = 0u;                    /* r4  */
+#endif
+
+	ctx->sp = sp;
+
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+}
+#endif /* !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M */
 
 /* ---------------- Paranoid seed builder ----------------
- * We build a full software area (callee-saved + EXC_RETURN) under a hardware frame.
- * Layouts:
- *   v6-M / v8-M Baseline frame:  [LR][r4..r7][r8..r11]  (low -> high)
- *   v7/v8 Mainline frame:        [r4..r11][LR]           (low -> high)
- * The hardware frame is always the standard 8 registers (R0..R3, R12, LR, PC, xPSR).
- *
- * We also reserve *one* HW frame of headroom above current PSP to survive the first
- * exception return without running into canary/PSPLIM, exactly as in robust RTOS ports.
+ * Common code validates inputs and stack bounds. The selected port owns the
+ * actual CPU software-frame layout under the synthetic hardware exception frame.
  */
 void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const stack_end,
 		const entry_t entry, void* const arg)
@@ -67,12 +110,12 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	 * We require:
 	 *   - FIBER_EXC_PER_LEVEL bytes headroom (one full HW exception level as defined by your platform)
 	 *   - one "real" HW frame we build (always base 8 regs = FIBER_EXC_BASE_BYTES)
-	 *   - SW area: 9 words (36 bytes)
+	 *   - port-owned software frame
 	 */
 	{
 		const size_t need_seed = (size_t)FIBER_EXC_PER_LEVEL
 				+ (size_t)FIBER_EXC_BASE_BYTES
-				+ (size_t)(9u * 4u);
+				+ (size_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
 		FIBER_REQUIRE(ctx->boot.avail >= need_seed, 'Z');
 	}
 
@@ -85,47 +128,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	}
 #endif
 
-/* ------ Reserve one HW frame headroom above (protects first EXC return) ------ */
-	uint32_t* sp = (uint32_t*)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* -------------------- Hardware frame (8 words) -------------------- */
-	*(--sp) = xpsr_T();                                       /* xPSR: T-bit set */
-	*(--sp) = fiber_stacked_pc(entry);                        /* PC: task entry; xPSR.T selects Thumb */
-	*(--sp) = ((uint32_t)(uintptr_t)&fiber_task_return) | 1u; /* LR: if task returns, trap into WFI loop */
-	*(--sp) = 0; /* R12 */
-	*(--sp) = 0; /* R3  */
-	*(--sp) = 0; /* R2  */
-	*(--sp) = 0; /* R1  */
-	*(--sp) = (uint32_t)(uintptr_t)arg;                       /* R0: task argument */
-
-	/* -------------------- Software-saved area (callee-saved + EXC_RETURN) -------------------- */
-#if FIBER_PORT_IS_BASELINE
-	/* M0/M23 memory (low to high): [LR][r4..r7][r8..r11] */
-	*(--sp) = 0;               /* r11 */
-	*(--sp) = 0;               /* r10 */
-	*(--sp) = fiber_read_r9(); /* r9  (seed SB base) */
-	*(--sp) = 0;               /* r8  */
-	*(--sp) = 0;               /* r7 */
-	*(--sp) = 0;               /* r6 */
-	*(--sp) = 0;               /* r5 */
-	*(--sp) = 0;               /* r4 */
-	*(--sp) = FIBER_INITIAL_EXC_RETURN; /* LR(EXC_RETURN): Thread via PSP, no FP frame */
-#else
-	/* M3/M4/M7/M33 memory (low to high): [r4..r11][LR] */
-	*(--sp) = FIBER_INITIAL_EXC_RETURN; /* LR(EXC_RETURN): Thread via PSP, no FP frame */
-	*(--sp) = 0;               /* r11 */
-	*(--sp) = 0;               /* r10 */
-	*(--sp) = fiber_read_r9(); /* r9  (seed SB base) */
-	*(--sp) = 0;               /* r8  */
-	*(--sp) = 0;               /* r7 */
-	*(--sp) = 0;               /* r6 */
-	*(--sp) = 0;               /* r5 */
-	*(--sp) = 0;               /* r4 */
-#endif
-
-	ctx->sp = sp;
+	fiber_port_init_context_frame(ctx);
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
