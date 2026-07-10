@@ -846,6 +846,11 @@ validation before carrying the same claim.
 Behavior-changing commits should be small enough that a failed board validation
 can be traced to one decision.
 
+Changing the `FiberContext.sp` save/restore invariant is a behavior-changing
+commit, even when the new invariant is more FreeRTOS-like. Such a change must
+repeat the relevant board runtime validation before inheriting an earlier
+runtime-validated support label.
+
 ## Validation Levels
 
 Use these support labels consistently:

@@ -1,5 +1,33 @@
 # Fiber Decision Log
 
+## 2026-07-10: v2 Scheduler Hook State Checkpoint
+
+Commit `cf610cc` prepares the v2 scheduler-driven port boundary:
+
+- `fiber_port_state.h` now owns the internal scheduler hook state:
+  current context, pick-next function pointer, and user context pointer.
+- The port state layer provides a stable C bridge for future PendSV/SVC
+  scheduler selection.
+- The bridge validates the hook and returned context before restore.
+- The public scheduler API is intentionally not exposed yet. `fiber_core.h`
+  still exposes the low-level/current API only, because the ARMv7E-M PendSV path
+  has not migrated to scheduler-driven selection yet.
+
+The same checkpoint also changes the validated ARMv7E-M `FiberContext.sp`
+invariant:
+
+- `FiberContext.sp` now follows the FreeRTOS `pxTopOfStack` model.
+- A non-running context stores the last saved software-frame pointer.
+- While a fiber is running, the live stack pointer is CPU PSP.
+- The port updates `ctx->sp` when saving a context as the switch source.
+- The port no longer moves the target `ctx->sp` forward after restore.
+
+This invariant is cleaner and better aligned with FreeRTOS, but it is a
+behavior-affecting change in the STM32H7/Cortex-M7 validated path. Compile
+checks and H7 build passed for this checkpoint, but the H7 runtime validation
+must be repeated before this v2 path carries the previous H7 runtime-validated
+claim.
+
 ## 2026-07-04: Context Switch Hardening
 
 The current implementation is treated as a FreeRTOS-style cooperative PendSV

@@ -81,6 +81,18 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P0: Next Validation
 
+0. Repeat STM32H7 runtime validation after `cf610cc`.
+
+   `cf610cc` prepared the v2 scheduler hook state and also changed the
+   `FiberContext.sp` invariant in the ARMv7E-M/H7 restore path. The new
+   invariant matches the FreeRTOS `pxTopOfStack` model: `ctx->sp` is updated
+   when a context is saved as the source, and the target `ctx->sp` is not moved
+   forward after restore.
+
+   This is architecturally cleaner, but it is behavior-affecting. The v2 path
+   must repeat the H7 runtime validation checklist before carrying the previous
+   H7 runtime-validated claim.
+
 1. Add a compile-only matrix for representative Cortex-M targets.
 
    Tooling:
