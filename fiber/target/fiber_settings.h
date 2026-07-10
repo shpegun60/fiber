@@ -55,12 +55,17 @@
 #endif
 
 #ifndef FIBER_SWITCH_MASK_IRQS
-# define FIBER_SWITCH_MASK_IRQS 1        /* mask IRQs while publishing switch slots */
+# define FIBER_SWITCH_MASK_IRQS 1        /* mask IRQs while pending a scheduler switch */
 #endif
 
 /* Validate real switches against the runtime-owned current context when known. */
 #ifndef FIBER_VALIDATE_CURRENT
 # define FIBER_VALIDATE_CURRENT 1
+#endif
+
+/* Validate the scheduler-selected context before PendSV restores it. */
+#ifndef FIBER_VALIDATE_SCHEDULED_CONTEXT
+# define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #endif
 
 /* Set to 1 for ARMv8-M Non-secure projects that need the Non-secure EXC_RETURN

@@ -15,9 +15,9 @@
 /*
  * ARMv7E-M PendSV implementation.
  *
- * This is a mechanical move of the validated STM32H7/Cortex-M7 mainline path
- * from fiber_core.c. Do not add scheduler policy here. The common runtime owns
- * switch validation, current-context ownership, and publication ordering.
+ * PendSV saves the runtime-owned current context, calls the scheduler bridge
+ * under BASEPRI, then restores the returned context. The port never receives a
+ * preselected target from Thread mode.
  */
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
@@ -38,66 +38,48 @@ void fiber_pendsv(void)
 			"isb                                    \n" /* synchronize */
 
 			/* ----------------------------------------------------------------------
-			 * Load exchange pointers and early exit if no target
+			 * Scheduler-driven path.
+			 * Save runtime-owned current context, call the scheduler bridge under the
+			 * port BASEPRI critical section, and restore the returned context.
 			 * ---------------------------------------------------------------------- */
-			"ldr   r2, =fiber_internal_port_switch_to_slot \n" /* r2 = &target slot */
-			"ldr   r2, [r2]                         \n" /* r2 = target context */
-			"cbz   r2, 5f                           \n" /* if no target, return */
+			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
+			"ldr   r1, [r1]                         \n" /* r1 = current context */
+			"cmp   r1, #0                           \n"
+			"beq   90f                              \n" /* no current is a fatal port state */
 
-			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
-			"ldr   r1, [r1]                         \n" /* r1 = source context */
-
-			/* ----------------------------------------------------------------------
-			 * Save source context (only if source slot is not NULL)
-			 * Save r4..r11 and EXC_RETURN; optionally save S16..S31 if extended FP frame
-			 * ---------------------------------------------------------------------- */
-			"cbz   r1, 1f                           \n" /* skip if from == NULL */
-
-#if FIBER_HAS_FPU
-			/* SAVE high FP regs S16..S31 iff extended frame present (LR.bit4 == 0) */
+#if FIBER_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n" /* 1 => base frame only, 0 => extended present */
 			"bne   2f                               \n" /* if bit4==1 then skip FP save */
 			"vstmdb r0!, {s16-s31}                  \n" /* push S16..S31 */
-			"2:                                     \n" /* label: skip-fpu-save */
-#endif /* FIBER_HAS_FPU */
+			"2:                                     \n" /* scheduler skip-fpu-save */
+#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
 
 			"stmdb r0!, {r4-r11, r14}               \n" /* push r4..r11 and LR(EXC_RETURN) */
-			"str   r0, [r1]                         \n" /* from->sp = r0 */
+			"str   r0, [r1]                         \n" /* current->sp = r0 */
 
-			"1:                                     \n" /* label: skip-save */
+			FBR_ASM_ENTER_SCHEDULER_CRITICAL
+			"mov   r0, r1                           \n" /* arg0 = current */
+			"bl    fiber_internal_scheduler_pick_next_from_pendsv \n"
+			FBR_ASM_EXIT_SCHEDULER_CRITICAL
+
+			"mov   r2, r0                           \n" /* r2 = selected next context */
 
 			/* ----------------------------------------------------------------------
-			 * Load target SW area: [r4..r11][r14]
+			 * Restore selected context. Current ownership was already published by
+			 * the scheduler bridge before returning here.
 			 * ---------------------------------------------------------------------- */
-			"ldr   r0, [r2]                         \n" /* r0 = to->sp */
+			"ldr   r0, [r2]                         \n" /* r0 = target->sp */
 			"ldmia r0!, {r4-r11, r14}               \n" /* pop r4..r11 and LR(EXC_RETURN) */
 
-#if FIBER_HAS_FPU
-			/* RESTORE high FP regs if target wants extended FP frame (LR bit4 == 0) */
-			"tst   r14, #0x10                       \n" /* check target EXC_RETURN */
-			"bne   3f                               \n" /* if bit4==1 then skip FP restore */
+#if FIBER_HAS_EXTENDED_FP_CONTEXT
+			"tst   r14, #0x10                       \n" /* 1 => base frame only, 0 => extended present */
+			"bne   22f                              \n" /* if bit4==1 then skip FP restore */
 			"vldmia r0!, {s16-s31}                  \n" /* pop S16..S31 */
-			"3:                                     \n" /* label: skip-fpu-restore */
-#endif /* FIBER_HAS_FPU */
+			"22:                                    \n" /* skip-fpu-restore */
+#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
 
-			/* ----------------------------------------------------------------------
-			 * Program PSP to target HW frame and clean exchange slots.
-			 * Keep to->sp pointing at the saved SW frame, FreeRTOS pxTopOfStack style.
-			 * It is updated only when that context is saved as the source.
-			 * ---------------------------------------------------------------------- */
-			"msr   psp, r0                          \n" /* PSP := start of HW frame for 'to' */
+			"msr   psp, r0                          \n" /* PSP := start of target HW frame */
 			"isb                                    \n" /* synchronize before exception return */
-
-			/* Publish the runtime-owned current context, FreeRTOS pxCurrentTCB style. */
-			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
-			"str   r2, [r1]                         \n" /* current context = to */
-
-			/* Clear exchange slots to avoid stale pointers */
-			"movs  r3, #0                           \n" /* r3 = 0 */
-			"ldr   r1, =fiber_internal_port_switch_from_slot \n" /* r1 = &source slot */
-			"str   r3, [r1]                         \n" /* source slot = NULL */
-			"ldr   r1, =fiber_internal_port_switch_to_slot \n" /* r1 = &target slot */
-			"str   r3, [r1]                         \n" /* target slot = NULL */
 
 #if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"  /* (optional) serialize before branch */
@@ -113,14 +95,14 @@ void fiber_pendsv(void)
 			"bx    r14                              \n" /* exception return to Thread mode via PSP */
 
 			/* ----------------------------------------------------------------------
-			 * Epilogue: early-out if no target
+			 * Fatal port state: scheduler path entered without a current context.
 			 * ---------------------------------------------------------------------- */
-			"5:                                     \n"
-			"dsb                                    \n" /* ensure memory effects complete */
-			"isb                                    \n" /* synchronize pipeline */
-			"bx    lr                               \n" /* nothing to do -> return */
+			"90:                                    \n"
+			"movs  r0, #67                          \n" /* 'C' */
+			"bl    fiber_panic                      \n"
+			"b     90b                              \n"
 			:
-			:
+			: [sched_basepri] "i" (FIBER_SCHEDULER_BASEPRI)
 			: "memory","cc"
 	);
 }

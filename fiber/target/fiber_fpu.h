@@ -3,7 +3,8 @@
  *
  *  Minimal, robust FPU detection and enable helper for Cortex-M.
  *  - No hard build failures; diagnostics are warnings only.
- *  - Final policy flag: FIBER_HAS_FPU (controls FP save/restore in context switch).
+ *  - FIBER_HAS_FPU describes scalar FP availability.
+ *  - FIBER_HAS_EXTENDED_FP_CONTEXT is the context-switch save/restore policy.
  *  - Early enable helper: fiber_fpu_enable_early().
  *
  *  This header assumes CMSIS core is available via "mcu_core.h".

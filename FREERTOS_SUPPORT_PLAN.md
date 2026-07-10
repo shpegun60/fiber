@@ -36,9 +36,9 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 - The initial stacked `PC` has bit 0 clear; Thumb state comes from `xPSR.T`.
 - `FIBER_INITIAL_EXC_RETURN` is configurable.
 - The first direct fiber boot clears `CONTROL.FPCA` when an FP context exists.
-- `fiber_switch()` rejects calls from Handler mode.
-- `fiber_switch()` rejects real switches while `PRIMASK` is already set.
-- `fiber_switch()` rejects real switches while `BASEPRI` is already set on cores
+- `fiber_schedule()` rejects calls from Handler mode.
+- `fiber_schedule()` rejects scheduler jumps while `PRIMASK` is already set.
+- `fiber_schedule()` rejects scheduler jumps while `BASEPRI` is already set on cores
   that implement BASEPRI.
 
 Closed hardening items from the FreeRTOS comparison:
@@ -49,33 +49,42 @@ Closed hardening items from the FreeRTOS comparison:
 - real switches are rejected when `PRIMASK` would defer PendSV;
 - real switches are rejected when `BASEPRI` would defer PendSV;
 - STM32H7 hardware validation covered a normal long-running switch loop,
-  pre-boot FP use, current-fiber tracking, no-op switches under `PRIMASK` and
-  `BASEPRI`, and forced delayed-switch traps for `PRIMASK` (`'p'`) and
-  `BASEPRI` (`'b'`);
+  pre-boot FP use, current-fiber tracking, and forced delayed-switch traps for
+  `PRIMASK` (`'p'`) and `BASEPRI` (`'b'`);
 - STM32H7 performance-mode validation also covered
   `FIBER_FPU_LAZY = 1`, `FIBER_SWITCH_MASK_IRQS = 0`, and
   `FIBER_SWITCH_STRICT_BARRIERS = 0` for a long-running switch loop;
 - current-fiber ownership is implemented through `fiber_start()`,
-  `fiber_current()`, and `fiber_yield_to()`;
+  `fiber_current()`, `fiber_schedule()`, and the scheduler bridge;
 - startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
   not implement it;
 - obsolete archived `fiber/old` source was removed so audits and validation
   only cover the active runtime implementation;
+- runtime exception setup validation checks PendSV priority, PendSV/SVC vector
+  routing, BASEPRI priority-bit policy, FreeRTOS-style `AIRCR.PRIGROUP`
+  compatibility, and Cortex-M7 r0p0/r0p1 errata gating;
+- handler-side scheduler calls use the FreeRTOS critical-section pattern:
+  `BASEPRI` on BASEPRI-capable ports and saved `PRIMASK` on BASEPRI-less ports;
+- portable defaults are back to conservative settings:
+  `FIBER_FPU_LAZY = 0`, `FIBER_SWITCH_MASK_IRQS = 1`, and
+  `FIBER_SWITCH_STRICT_BARRIERS = 1`;
 - source comments no longer claim full "all STM32" validation;
 - M0/M0+ MSP rewind behavior is documented as platform-dependent;
-- M23 and M55/MVE are documented as not yet validated.
+- M23, M33, M55/MVE, TrustZone/Non-secure, and PAC/BTI runtime use is now
+  explicitly policy-gated until FreeRTOS-style context layout and hardware
+  validation exist.
 
 ## Support Matrix
 
 | Core family | Current state | Target state |
 | --- | --- | --- |
-| Cortex-M0/M0+ | Baseline path is FreeRTOS-like, not hardware validated | Validate, document MSP rewind policy |
+| Cortex-M0/M0+ | Baseline path is FreeRTOS-like and uses PRIMASK around the scheduler bridge, not hardware validated | Validate, document MSP rewind policy |
 | Cortex-M3 | Mainline path works with universal `r4-r11,lr` frame | Compile and smoke-test |
 | Cortex-M4F | FPU-aware path matches FreeRTOS pattern | Compile and FP stress-test |
 | Cortex-M7F | Primary validated path for STM32H7 | Keep validated |
-| Cortex-M23 | Not validated; generic baseline path does not implement active PSPLIM | Decide support or explicitly exclude |
-| Cortex-M33 | Mainline PSPLIM is restored from `boot.stack_base` | Validate non-MPU and Non-secure configs |
-| Cortex-M55/MVE | Not validated | Add MVE/PAC/BTI policy before claiming support |
+| Cortex-M23 | Compile-covered; runtime-gated by default; generic baseline path has no PSPLIM slot | Add FreeRTOS-style PSPLIM slot/security policy or keep excluded |
+| Cortex-M33 | Compile-covered; runtime-gated by default; simple PSPLIM register policy exists | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
+| Cortex-M55/MVE | Compile-covered; runtime-gated by default; MVE-FP maps to extended FP context, MVE-only is rejected | Add MVE/PAC/BTI context policy and hardware validation |
 
 ## Priority Roadmap
 
@@ -115,6 +124,9 @@ Closed hardening items from the FreeRTOS comparison:
    - Cortex-M55 without FPU
    - Cortex-M55F
    - Cortex-M55 MVE-FP
+   - ARMv8-M/ARMv8.1-M `FIBER_RUN_NONSECURE=1` compile mode
+   - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
+     `FIBER_TZ_NS=1` and `-mcmse`
 
    Each target must prove that `FIBER_HAS_BASEPRI` and the PSPLIM/FPU feature
    macros are defined before they are used. This is a compile sanity check only;
@@ -124,17 +136,23 @@ Closed hardening items from the FreeRTOS comparison:
 
    Already covered manually on hardware:
 
-   - normal `fiber_switch()`;
-   - no-op `fiber_switch(from, NULL)`;
-   - no-op `fiber_switch(from, from)`;
-   - real switch with `PRIMASK != 0` must trap;
-   - real switch with `BASEPRI != 0` must trap on BASEPRI-capable cores.
+   - normal scheduler-driven `fiber_schedule()`;
+   - scheduler jump with `PRIMASK != 0` must trap;
+   - scheduler jump with `BASEPRI != 0` must trap on BASEPRI-capable cores.
 
    Remaining useful cases:
 
-   - `fiber_switch()` from Handler mode must trap;
-   - manual `fiber_switch(wrong_from, to)` must trap when current tracking is
-     active;
+   - `fiber_schedule()` from Handler mode must trap;
+   - invalid `AIRCR.PRIGROUP` for the scheduler `BASEPRI` policy must trap with
+     `'g'`;
+   - missing scheduler hook must trap with `'K'`;
+   - scheduler hook returning `NULL` must trap with `'N'`;
+   - changing the scheduler hook after the current context is seeded must trap
+     with `'k'`;
+   - scheduler hook returning an uninitialized or corrupted context must trap
+     before PendSV restores PSP;
+   - scheduler hook returning a context with a bad EXC_RETURN or insufficient
+     restore-frame headroom must trap before exception return;
    - package the manual checks into a repeatable board validation mode.
 
 3. Keep the FPU startup hygiene stress test active.
@@ -169,26 +187,30 @@ Closed hardening items from the FreeRTOS comparison:
 1. Keep Cortex-M7 r0p1 errata policy explicit.
 
    FreeRTOS wraps `BASEPRI` writes in PendSV on Cortex-M7 r0p1 because of ARM
-   errata 837070. The current `fiber` PendSV implementation does not write
-   `BASEPRI`; it only rejects `BASEPRI != 0` before requesting a switch from
-   Thread mode. Therefore the workaround is not needed today.
+   errata 837070. The ARMv7E-M scheduler-driven `fiber` PendSV path now writes
+   `BASEPRI` around the scheduler bridge, then restores the previous value
+   before restoring the selected context.
 
-   If a future scheduler path, priority-aware yield path, or critical section
-   writes `BASEPRI` from PendSV, the FreeRTOS-style r0p1 workaround must be
-   implemented before claiming support for affected M7 revisions.
+   `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style workaround
+   around the `BASEPRI` raise operation. The compile matrix builds Cortex-M7 and
+   Cortex-M7F with this gate enabled. Runtime startup checks CPUID and traps if
+   an affected r0p0/r0p1 core runs without the workaround. Real affected M7
+   hardware validation is still required before claiming parity with the
+   FreeRTOS CM7/r0p1 port.
 
-2. Decide Cortex-M23 support.
+2. Finish Cortex-M23 support or keep it explicitly excluded.
 
    Options:
 
    - implement a v8-M Baseline path with a PSPLIM slot similar to FreeRTOS NTZ;
    - or mark M23 as not supported until hardware/toolchain validation exists.
 
-   Current policy: M23 is not a validated target. FreeRTOS has a PSPLIM slot in
-   the CM23 NTZ context layout, but it also gates actual PSPLIM register access
-   through target/security configuration because Non-secure Cortex-M23 does not
-   have a Non-secure PSPLIM register. Do not enable generic M23 PSPLIM behavior
-   just because the slot exists.
+   Current policy: M23 is compile-covered but runtime-gated by default.
+   FreeRTOS has a PSPLIM slot in the CM23 NTZ context layout, but it also gates
+   actual PSPLIM register access through target/security configuration because
+   Non-secure Cortex-M23 does not have a Non-secure PSPLIM register. The fiber
+   baseline path still has no PSPLIM slot, and `FIBER_USE_PSPLIM_REGISTER`
+   remains disabled unless a future port explicitly implements that layout.
 
    Future direction: copying the FreeRTOS-style M23 layout is useful if `fiber`
    wants to claim ARMv8-M Baseline/Mainline parity. That work should be done as
@@ -201,7 +223,7 @@ Closed hardening items from the FreeRTOS comparison:
    - M23 Secure-only behavior, which needs separate validation;
    - M33/M55 Mainline behavior, where PSPLIM register access is expected.
 
-3. Validate ARMv8-M Non-secure behavior.
+3. Implement and validate ARMv8-M Non-secure behavior.
 
    Required checks:
 
@@ -209,41 +231,63 @@ Closed hardening items from the FreeRTOS comparison:
    - PSPLIM symbol selection;
    - CPACR/NSACR behavior for FP access;
    - vector table and PendSV wiring in the current security domain.
+   - context slots for `CONTROL`, `PSPLIM`, and security-domain state when
+     matching a FreeRTOS CM33/CM55-style port.
 
-4. Add an explicit MVE policy for Cortex-M55 class targets.
+   Current policy: Non-secure and Secure-to-Non-secure bank builds remain
+   compile-covered, but runtime use requires
+   `FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME=1`.
+
+4. Complete MVE/PAC/BTI policy for Cortex-M55 class targets.
 
    Required checks:
 
-   - whether the toolchain exposes MVE use through existing FP macros;
-   - whether `FIBER_HAS_FPU` must become a broader extended-context flag;
-   - whether PAC/BTI state needs an explicit unsupported note or implementation.
+   - MVE-FP uses the current extended FP save/restore model;
+   - MVE without scalar FP is rejected by runtime policy validation;
+   - PAC/BTI context support is compile-blocked until save/restore is
+     implemented;
+   - hardware validation is still required before enabling MVE runtime by
+     default.
 
 ### P2: API Safety
 
 1. Keep current-fiber tracking on the preferred API path.
 
-   The preferred API now mirrors the FreeRTOS `pxCurrentTCB` ownership model:
+   The preferred low-level API now mirrors the FreeRTOS `pxCurrentTCB`
+   ownership model:
 
    ```c
    FiberContext *fiber_current(void);
-   void fiber_yield_to(FiberContext *to);
+   void fiber_schedule(void);
+   void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
+                                      void *user);
    FIBER_NORETURN void fiber_start(FiberContext *ctx);
    ```
 
-   `fiber_start()` seeds the first current context. PendSV updates the current
-   context to the target on every real switch. `FIBER_VALIDATE_CURRENT = 1`
-   rejects real switches whose manual `from` argument does not match the
-   runtime-owned current context once it is known.
+   `fiber_start()` seeds the first current context. PendSV saves that context,
+   asks the scheduler bridge for the next context, and restores only the
+   returned context. The core API does not accept `from` or `to` from Thread
+   mode.
 
-   The advanced `fiber_switch(from, to)` and `fiber_boot(&ctx->boot)` APIs remain
-   available for manual integrations, but normal users should not need to pass
-   `from`.
+   `fiber_boot(&ctx->boot)` remains available for low-level/manual start
+   experiments, but it cannot seed current ownership before the first switch
+   because a `FiberBoot` record does not point back to its owning
+   `FiberContext`.
 
-2. Add optional vector wiring verification.
+2. Keep vector wiring verification active.
 
    Rationale: FreeRTOS validates critical handler wiring in its startup path.
-   `fiber` should provide an optional check that `PendSV_Handler` reaches
-   `fiber_pendsv()`, where the platform makes that observable.
+   `fiber_exception_runtime_check()` now verifies that the active vector table
+   routes PendSV and SVC to the expected handler symbols. The default PendSV
+   model expects an application wrapper `PendSV_Handler()` that branches to
+   `fiber_pendsv()` without clobbering LR/EXC_RETURN. A normal C wrapper that
+   emits `bl fiber_pendsv` is invalid because `fiber_pendsv()` needs the
+   hardware `EXC_RETURN` in LR. Projects that vector directly to
+   `fiber_pendsv()` must set `FIBER_PENDSV_VECTOR_DIRECT=1`.
+
+   This proves vector-table routing. A future SVC first-start implementation
+   must add a separate SVC dispatch validation because the current direct-start
+   path does not use SVC.
 
 3. Consider an optional SVC-based first-fiber start path.
 

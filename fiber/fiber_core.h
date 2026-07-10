@@ -24,6 +24,11 @@ typedef struct FiberContext {
     FiberBoot  boot;
 } FiberContext;
 
+#ifndef FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
+#define FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
+typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *user);
+#endif
+
 void fiber_init(FiberContext* const ctx,
 			void* const stack_begin,
 			void* const stack_end,
@@ -35,10 +40,9 @@ FiberContext* fiber_current(void);
 FIBER_NORETURN
 void fiber_start(FiberContext* const ctx);
 
-void fiber_yield_to(FiberContext* const to);
+void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user);
 
-/* from must be non-NULL; to may be NULL for a no-op. */
-void fiber_switch(FiberContext* const from, FiberContext* const to);
+void fiber_schedule(void);
 
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void);

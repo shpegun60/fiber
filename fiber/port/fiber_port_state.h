@@ -13,7 +13,10 @@ extern "C" {
 
 typedef struct FiberContext FiberContext;
 
+#ifndef FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
+#define FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
 typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *user);
+#endif
 
 /*
  * Scheduler-driven v2 state.
@@ -30,14 +33,6 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
                                                  void *user);
 
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
-
-/*
- * Legacy publication slots used by the current fiber_switch(from, to) path.
- * TODO(v2): remove these from the normal PendSV ABI after the ARMv7E-M port
- * migrates to current_context + scheduler bridge + pick_next hook.
- */
-extern FiberContext *volatile fiber_internal_port_switch_from_slot;
-extern FiberContext *volatile fiber_internal_port_switch_to_slot;
 
 #ifdef __cplusplus
 } /* extern "C" */

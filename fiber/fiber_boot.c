@@ -13,7 +13,8 @@
  * Arch support notes:
  * - ARMv6-M (Cortex-M0/M0+): PSP present; CONTROL.SPSEL works; no PSPLIM; no Mem/Bus/Usage faults; no FPU.
  * - ARMv7-M / ARMv7E-M: PSP present; optional FPU; no PSPLIM.
- * - ARMv8-M Mainline: PSP + PSPLIM; optional TrustZone (NSACR/SCB_NS) guarded by ifdefs.
+ * - ARMv8-M Mainline: PSP + policy-gated PSPLIM; TrustZone runtime is gated
+ *   until a full FreeRTOS-style security-domain context layout is implemented.
  */
 
 #include "fiber_boot.h"
@@ -607,12 +608,12 @@ void fiber_boot(const FiberBoot* const ctx)
 	/* Platform hygiene before switching stacks. */
 	fiber_platform_bootstrap();
 
-	/* Program PSPLIM on Armv8-M Mainline (e.g., Cortex-M33). */
-#if FIBER_HAS_PSPLIM
+	/* Program PSPLIM only when the selected security policy allows register access. */
+#if FIBER_USE_PSPLIM_REGISTER
 	fiber_psplim_config((uint32_t)ctx->stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }							/* ensure PSPLIM is live before using PSP */
 	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)ctx->stack_base, 'L');/* read-back verify */
-#endif /* FIBER_HAS_PSPLIM */
+#endif /* FIBER_USE_PSPLIM_REGISTER */
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 

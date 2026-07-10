@@ -2,9 +2,10 @@
 
 Small cooperative fiber switcher for STM32/Cortex-M projects.
 
-The context switch is requested from Thread mode with `fiber_switch()` and is
-performed by PendSV. The application must wire `PendSV_Handler()` to
-`fiber_pendsv()`.
+The context switch is requested from Thread mode with `fiber_schedule()` and is
+performed by PendSV through an application-provided scheduler hook. The
+application must wire `PendSV_Handler()` so it branches to `fiber_pendsv()`
+without clobbering LR/EXC_RETURN.
 
 ## Project Setup
 
@@ -71,11 +72,28 @@ static uint32_t counter1 = 0;
 static uint32_t counter2 = 0;
 static uint32_t counter3 = 0;
 
+static FiberContext *pick_next(FiberContext *current, void *)
+{
+	if (current == &f1) {
+		return &f2;
+	}
+
+	if (current == &f2) {
+		return &f3;
+	}
+
+	if (current == &f3) {
+		return &f1;
+	}
+
+	return &f1;
+}
+
 void fiber1_entry(void*)
 {
 	for (;;) {
 		counter1++;
-		fiber_yield_to(&f3);
+		fiber_schedule();
 	}
 }
 
@@ -83,7 +101,7 @@ void fiber2_entry(void*)
 {
 	for (;;) {
 		counter2++;
-		fiber_yield_to(&f1);
+		fiber_schedule();
 	}
 }
 
@@ -91,7 +109,7 @@ void fiber3_entry(void*)
 {
 	for (;;) {
 		counter3++;
-		fiber_yield_to(&f2);
+		fiber_schedule();
 	}
 }
 
@@ -103,6 +121,8 @@ void app_main(void)
 	fiber_init(&f2, stack2, stack2 + sizeof(stack2), fiber2_entry, (void*)2);
 	fiber_init(&f3, stack3, stack3 + sizeof(stack3), fiber3_entry, (void*)3);
 
+	fiber_scheduler_set_pick_next(pick_next, NULL);
+
 	fiber_start(&f1);
 
 	for (;;) {
@@ -110,14 +130,24 @@ void app_main(void)
 }
 ```
 
+`fiber_scheduler_set_pick_next()` must be called from Thread mode before
+`fiber_start()`. A `NULL` hook traps with `'K'`; changing the hook after the
+runtime-owned current context is seeded traps with `'k'`. `fiber_start()` also
+requires a configured hook and traps with `'K'` before entering the first fiber
+if the hook is missing.
+
 `fiber_start()` seeds the runtime-owned current context, checks the environment,
 prepares the platform, switches Thread mode to PSP, and tail-calls the selected
 fiber entry. It does not return.
 
-`fiber_current()` returns the runtime-owned current fiber. `fiber_yield_to(to)`
-uses it as the source context. The lower-level `fiber_switch(from, to)` API is
-kept for advanced/manual integrations, but normal application code should prefer
-`fiber_yield_to()`.
+`fiber_current()` returns the runtime-owned current fiber. `fiber_schedule()`
+does not choose a task by itself. It enters PendSV, saves the current context,
+calls the configured scheduler bridge under the port critical section, and
+restores the returned context. A missing hook, `NULL` returned context,
+uninitialized context, corrupted boot seal, out-of-bounds saved stack pointer,
+invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
+traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
+`FiberContext`, not by returning `NULL`.
 
 ## FPU Stress Example
 
@@ -131,7 +161,7 @@ void fiber_fpu_stress_entry(void*)
 
 	for (;;) {
 		acc += 1.0;
-		fiber_yield_to(&f2);
+		fiber_schedule();
 	}
 }
 ```
@@ -143,25 +173,69 @@ In `stm32xxx_it.c`:
 ```c
 #include "fiber/fiber_core.h"
 
+FIBER_ATTR_NAKED_ASM
 void PendSV_Handler(void)
 {
-	fiber_pendsv();
+	__ASM volatile("b fiber_pendsv");
 }
 ```
+
+`fiber_pendsv()` is a naked exception handler body. It must see the original
+handler LR value, which is the hardware `EXC_RETURN`. Do not use a normal C
+wrapper that emits `bl fiber_pendsv`; that overwrites LR with a function return
+address. Direct vectoring to `fiber_pendsv()` is also valid when
+`FIBER_PENDSV_VECTOR_DIRECT=1` is set.
 
 ## Safety Defaults
 
 - `FIBER_SWITCH_STRICT_BARRIERS = 1`
 - `FIBER_SWITCH_MASK_IRQS = 1`
 - `FIBER_FPU_LAZY = 0`
+- `FIBER_VALIDATE_SCHEDULED_CONTEXT = 1`
 
-`fiber_switch()` is a Thread-mode API. Calling it from an interrupt traps through
-`FIBER_REQUIRE`. The `from` context must be non-NULL; `to == NULL` is treated as
-a no-op. A real switch also requires `PRIMASK == 0`, so the switch cannot be
-silently delayed out of a masked interrupt region. On cores with BASEPRI, a real
-switch also requires `BASEPRI == 0`. When current tracking is active,
-`FIBER_VALIDATE_CURRENT = 1` rejects real switches whose `from` argument is not
-the runtime-owned current context.
+`fiber_schedule()` is a Thread-mode API. Calling it from an interrupt traps
+through `FIBER_REQUIRE`. A real scheduler jump requires `PRIMASK == 0`, so the
+switch cannot be silently delayed out of a masked interrupt region. On cores
+with BASEPRI, a real scheduler jump also requires `BASEPRI == 0`.
+
+`fiber_pendsv_init_lowest_priority()` and `fiber_start()` run the runtime
+exception setup check by default. The check verifies:
+
+- PendSV priority reads back as the lowest priority;
+- vector table entries route PendSV and SVC to the expected handlers;
+- `FIBER_SCHEDULER_BASEPRI` matches the implemented NVIC priority bits;
+- `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` threshold;
+- affected Cortex-M7 r0p0/r0p1 cores require
+  `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;
+- unvalidated v8-M Baseline/Mainline, v8.1-M, TrustZone bank targeting, MVE,
+  and PAC/BTI scenarios require an explicit `FIBER_ALLOW_UNVALIDATED_*` opt-in
+  before runtime use.
+
+The default vector check expects an application wrapper named
+`PendSV_Handler()`. That wrapper must be a naked branch/tail branch that
+preserves LR/EXC_RETURN. If the vector table points directly to
+`fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`.
+
+The handler-side scheduler bridge follows FreeRTOS-style critical-section
+discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
+BASEPRI-less ports save `PRIMASK`, disable interrupts, call the hook, and
+restore `PRIMASK`.
+
+The v8-M feature policy is intentionally strict. Compile-only coverage exists
+for M23/M33/M55/MVE-FP, but runtime startup traps by default for profiles whose
+FreeRTOS ports require extra context state not implemented here yet:
+
+```c
+#define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 1
+#define FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME 1
+#define FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME 1
+#define FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME 1
+#define FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME 1
+#define FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME 1
+```
+
+Use those only for bring-up experiments. They do not add FreeRTOS-level
+PSPLIM/CONTROL/secure-context/PAC-key handling.
 
 ## H7 Performance Mode
 
@@ -184,12 +258,14 @@ matches the FreeRTOS PendSV pattern: save `r4-r11`, preserve `EXC_RETURN`, run
 on PSP, and conditionally save `s16-s31` when an extended FP frame is active.
 Auto selection maps STM32H7/Cortex-M7 to `FIBER_PORT_NAME == "armv7em"`.
 
-FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The current
-`fiber` PendSV path does not write `BASEPRI`, so the FreeRTOS r0p1 workaround
-around handler-side `BASEPRI` writes is not needed by the current
-implementation. If a future v2 port writes `BASEPRI` from PendSV, SVC, or a
-handler-side scheduler section, Cortex-M7/r0p1 must become an explicit policy
-or source split before claiming parity with the FreeRTOS CM7 port.
+FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The
+ARMv7E-M scheduler-driven PendSV path now raises `BASEPRI` around the scheduler
+bridge, then restores the previous `BASEPRI` value before restoring the selected
+fiber. `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style
+`cpsid i` / `msr BASEPRI` / `cpsie i` workaround for affected Cortex-M7 r0p1
+parts. Runtime startup now checks CPUID and traps on affected r0p0/r0p1 cores if
+the workaround is not enabled. The compile matrix builds this branch, but real
+affected hardware validation is still required before claiming r0p1 parity.
 
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.
@@ -199,9 +275,14 @@ M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define
 `FIBER_RUN_NONSECURE = 1` to select `0xFFFFFFBCu`, or override
 `FIBER_INITIAL_EXC_RETURN` directly.
 
-Cortex-M23 and Cortex-M55/MVE are not yet validated targets. Keep
-`FIBER_FORCE_SAVE_FPU = 1` in mind for MVE experiments if the toolchain does not
-make the extended FP context visible through the usual FPU macros.
+Cortex-M23, Cortex-M33, Cortex-M55, MVE, TrustZone/Non-secure, and PAC/BTI
+scenarios are compile-covered but runtime-gated until their FreeRTOS-style
+context layout is implemented and hardware-validated. `FIBER_USE_PSPLIM_REGISTER`
+separates PSPLIM register access from the broader architecture profile so M23
+security-domain variants cannot accidentally write a missing or wrong-bank
+PSPLIM register. MVE-only configurations are rejected at runtime unless
+explicitly allowed, and MVE-FP is treated as extended FP/MVE context but still
+requires hardware validation.
 
 On Cortex-M0/M0+, `FIBER_REWIND_MSP` may need to be disabled unless the platform
 provides a reliable initial MSP source.

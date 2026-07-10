@@ -12,6 +12,7 @@
 #include "fiber_compiler.h"
 #include "../port/fiber_port_select.h"
 #include "fiber_fpu.h"
+#include "fiber_feature_policy.h"
 #include "fiber_pslim.h"
 #include "fiber_vtor.h"
 #include "fiber_basepri.h"
@@ -56,7 +57,7 @@ BT_STATIC_ASSERT((FIBER_INITIAL_EXC_RETURN & 0x10u) != 0u, "[fiber]: initial EXC
 /* -------------------------------------------------------------------------- */
 enum {
     FIBER_EXC_BASE_BYTES         = 8u  * 4u,                        	/* r0..r3,r12,lr,pc,xPSR (8 words) */
-    FIBER_EXC_FP_EXT_BYTES       = (FIBER_HAS_FPU ? (18u * 4u) : 0u),	/* S0..S15 + FPSCR (18 words)      */
+    FIBER_EXC_FP_EXT_BYTES       = (FIBER_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u),	/* S0..S15 + FPSCR (18 words)      */
     FIBER_EXC_PER_LEVEL          = FIBER_EXC_BASE_BYTES + FIBER_EXC_FP_EXT_BYTES,
     FIBER_STACK_WITHOUT_REDZONE  = FIBER_EXC_PER_LEVEL * FIBER_EXC_LEVELS_ON_PSP + FIBER_BOOT_EXTRA_BYTES,
     FIBER_STACK_MIN_BOOT         = FIBER_STACK_REDZONE_BYTES + FIBER_STACK_WITHOUT_REDZONE

@@ -11,7 +11,8 @@
  * Arch support notes:
  * - ARMv6-M (Cortex-M0/M0+): PSP present; CONTROL.SPSEL works; no PSPLIM; no Mem/Bus/Usage faults; no FPU.
  * - ARMv7-M / ARMv7E-M: PSP present; optional FPU; no PSPLIM.
- * - ARMv8-M Mainline: PSP + PSPLIM; optional TrustZone (NSACR/SCB_NS) guarded by ifdefs.
+ * - ARMv8-M Mainline: PSP + policy-gated PSPLIM; TrustZone runtime is gated
+ *   until a full FreeRTOS-style security-domain context layout is implemented.
  */
 
 #ifndef FIBER_TARGET_FIBER_BOOT_H_

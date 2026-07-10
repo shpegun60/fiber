@@ -16,6 +16,7 @@
 #define FIBER_TOOLS_FIBER_PSLIM_H_
 
 #include "fiber_diagnostics.h"
+#include "fiber_feature_policy.h"
 #include "mcu_core.h"
 
 /* --------- PSPLIM feature (compile-time) ---------------------------------- */
@@ -45,11 +46,12 @@
 
 /* --------- PSPLIM access helpers ------------------------------------------ */
 /* Use CMSIS intrinsics when available; otherwise use minimal inline-ASM.
- * These helpers act only when FIBER_HAS_PSPLIM==1. On older cores they compile
- * to stubs to avoid illegal instruction faults at runtime.
+ * These helpers act only when FIBER_USE_PSPLIM_REGISTER==1. On older cores or
+ * unsupported security-domain policies they compile to stubs to avoid illegal
+ * instruction faults at runtime.
  */
 
-#if FIBER_HAS_PSPLIM
+#if FIBER_USE_PSPLIM_REGISTER
 
 /* Read PSPLIM (current Security state). */
 __STATIC_FORCEINLINE uint32_t fiber_get_psplim(void)
@@ -89,13 +91,14 @@ __STATIC_FORCEINLINE void fiber_psplim_config(uint32_t stack_low_addr)
 		volatile uint32_t rb = fiber_get_psplim(); (void)rb;
 	}
 }
-#endif /* FIBER_HAS_PSPLIM */
+#endif /* FIBER_USE_PSPLIM_REGISTER */
 
 /* ---------- PSPLIM symbol alias for TrustZone (optional) ---------- */
-/* Define FIBER_TZ_NS=1 for non-secure builds to target psplim_ns */
+/* Define FIBER_TZ_NS=1 in Secure builds that must target the Non-secure bank. */
 #ifndef FBR_PSPLIM_SYM
-# if FIBER_HAS_PSPLIM
-#  if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3) && defined(FIBER_TZ_NS)
+# if FIBER_USE_PSPLIM_REGISTER
+#  if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3) \
+		&& defined(FIBER_TZ_NS) && (FIBER_TZ_NS+0)
 #   define FBR_PSPLIM_SYM "psplim_ns"
 #  else
 #   define FBR_PSPLIM_SYM "psplim"
@@ -105,7 +108,7 @@ __STATIC_FORCEINLINE void fiber_psplim_config(uint32_t stack_low_addr)
 
 /* ---------- Inline ASM helpers ---------- */
 #ifndef FBR_ASM_MSR_PSPLIM
-# if FIBER_HAS_PSPLIM
+# if FIBER_USE_PSPLIM_REGISTER
 #  define FBR_ASM_MSR_PSPLIM(_reg)  "msr   " FBR_PSPLIM_SYM ", " _reg " \n"
 # else
 #  define FBR_ASM_MSR_PSPLIM(_reg)  /* no-op */

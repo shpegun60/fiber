@@ -144,9 +144,44 @@ try {
         }
 
         $selectionModes = @(
-            [pscustomobject]@{ Name = "auto";     Defines = @() },
-            [pscustomobject]@{ Name = "explicit"; Defines = @("-DFIBER_PORT_PROFILE=$profile") }
+            [pscustomobject]@{ Name = "auto";     Defines = @(); ExtraArgs = @() },
+            [pscustomobject]@{ Name = "explicit"; Defines = @("-DFIBER_PORT_PROFILE=$profile"); ExtraArgs = @() }
         )
+
+        if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
+            $selectionModes += [pscustomobject]@{
+                Name = "explicit-r0p1-errata"
+                Defines = @(
+                    "-DFIBER_PORT_PROFILE=$profile",
+                    "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
+                )
+                ExtraArgs = @()
+            }
+        }
+
+        if (($cfg.Name -eq "cortex-m33") -or
+            ($cfg.Name -eq "cortex-m33f") -or
+            ($cfg.Name -eq "cortex-m55") -or
+            ($cfg.Name -eq "cortex-m55f") -or
+            ($cfg.Name -eq "cortex-m55-mve-fp")) {
+            $selectionModes += [pscustomobject]@{
+                Name = "explicit-nonsecure-exc-return"
+                Defines = @(
+                    "-DFIBER_PORT_PROFILE=$profile",
+                    "-DFIBER_RUN_NONSECURE=1"
+                )
+                ExtraArgs = @()
+            }
+            $selectionModes += [pscustomobject]@{
+                Name = "explicit-secure-target-ns-bank"
+                Defines = @(
+                    "-DFIBER_PORT_PROFILE=$profile",
+                    "-DFIBER_RUN_NONSECURE=1",
+                    "-DFIBER_TZ_NS=1"
+                )
+                ExtraArgs = @("-mcmse")
+            }
+        }
 
         foreach ($mode in $selectionModes) {
             $cfgDir = Join-Path (Join-Path $buildRoot $cfg.Name) $mode.Name
@@ -197,7 +232,7 @@ void Error_Handler(void);
                 $objName = ($source -replace '[\\/]', '_') + ".o"
                 $objPath = Join-Path $cfgDir $objName
 
-                $args = $cfg.CpuArgs + @(
+                $args = $cfg.CpuArgs + $mode.ExtraArgs + @(
                     "-mthumb"
                 ) + $cfg.Extra + @(
                     "-std=gnu11",

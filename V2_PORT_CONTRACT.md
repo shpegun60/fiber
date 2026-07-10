@@ -221,10 +221,10 @@ Backlog required before stronger parity claims:
 
 | Area | Current v2 status | Required future work |
 | --- | --- | --- |
-| Cortex-M7 r0p1 | Documented policy only. Current PendSV does not write `BASEPRI`, so the FreeRTOS r0p1 workaround is not required by the current code path. | Add a dedicated CM7/r0p1 policy or source split if any future PendSV, SVC, or handler-side section writes `BASEPRI`. Validate on real Cortex-M7 hardware before claiming parity with the FreeRTOS CM7 port. |
-| ARMv8-M Baseline / M23 | Selection and compile-only coverage exist. Full PSPLIM/security behavior is not FreeRTOS-level yet. | Define PSPLIM slot policy, PSPLIM register access gates, Secure/Non-secure ownership, and hardware validation for the claimed domain. |
-| ARMv8-M Mainline / M33 | Selection and compile-only coverage exist. TrustZone, Non-secure, NTZ, and TFM variants are not split like FreeRTOS yet. | Split or explicitly gate Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, and SVC/PendSV domain routing. |
-| ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile. Full MVE/PAC/BTI policy is not implemented. | Define MVE extended-context policy, PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
+| Cortex-M7 r0p0/r0p1 | ARMv7E-M scheduler-driven PendSV has an explicit `FIBER_CORTEX_M7_R0P1_ERRATA_837070` gate around handler-side `BASEPRI` writes, the compile matrix builds that branch, and runtime startup traps if affected CPUID values run without the gate. Hardware validation is not recorded yet. | Validate on affected Cortex-M7 hardware before claiming parity with the FreeRTOS CM7 r0p1 port. Consider a dedicated CM7/r0p1 source split if the policy grows beyond the current guarded BASEPRI sequence. |
+| ARMv8-M Baseline / M23 | Selection and compile-only coverage exist. Runtime is gated by default. The generic baseline path still has no FreeRTOS-style PSPLIM slot. | Implement a PSPLIM slot/security policy or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
+| ARMv8-M Mainline / M33 | Selection and compile-only coverage exist. Runtime is gated by default. Simple PSPLIM register access is separate from full FreeRTOS CONTROL/PSPLIM/security context. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
+| ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile. Runtime is gated by default. MVE-FP maps to extended FP context; MVE-only and PAC/BTI are not implemented. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
 | Source layout | Selection gates exist, but the main implementation is still being split from a shared source path. | Move CPU-specific save/restore/start logic into exactly one selected port source path per profile, matching the FreeRTOS discipline where the build includes one concrete port. |
 | Hardware evidence | H7/M7 is the strongest validated path. Other profiles are compile-only unless separately recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
@@ -262,38 +262,30 @@ FiberContext *fiber_current(void);
 void fiber_yield(void);
 void fiber_sleep_until(uint32_t tick);
 void fiber_schedule(void);
-void fiber_yield_to(FiberContext *to);
 FIBER_NORETURN void fiber_start(FiberContext *ctx);
-void fiber_switch(FiberContext *from, FiberContext *to);
 ```
 
-Current low-level user code can call `fiber_start()` and `fiber_yield_to()`.
+Current low-level user code should call `fiber_start()` and `fiber_schedule()`.
 The long-term v2 user path should be `fiber_start()`, `fiber_yield()`,
-`fiber_sleep_until()`, and wait/wake APIs. `fiber_yield_to()` and
-`fiber_switch(from, to)` remain advanced/manual primitives.
+`fiber_sleep_until()`, and wait/wake APIs. Direct target selection from Thread
+mode is not part of the core API.
 
 The low-level primitive that enters the scheduler-driven PendSV path should not
 own yield/sleep/wait policy. Its working name is `fiber_schedule()`; a name such
 as `fiber_jump_scheduler()` is also acceptable if it makes the boundary clearer.
 This primitive only requests entry into the scheduler/port path.
 
-Common switch preconditions:
+Common scheduler-jump preconditions:
 
-- `fiber_switch()` is a Thread-mode API;
-- `from != NULL` for a real switch;
-- `to == NULL` is a no-op;
-- `to == from` is a no-op;
-- real switches require `PRIMASK == 0`;
-- real switches require `BASEPRI == 0` on cores that implement BASEPRI;
-- when current validation is active, manual `from` must match
-  `fiber_current()`.
+- `fiber_schedule()` is a Thread-mode API;
+- a runtime-owned current context must already be seeded;
+- real scheduler jumps require `PRIMASK == 0`;
+- real scheduler jumps require `BASEPRI == 0` on cores that implement BASEPRI;
+- the scheduler hook must return a real initialized `FiberContext`.
 
-No-op switches should not trap only because interrupt masks are set. A call that
-cannot cause a real PendSV switch may return after a compiler barrier.
-
-Once the scheduler layer exists, new examples should prefer `fiber_yield()` and
-sleep/wait APIs. Examples should avoid direct `fiber_switch(from, to)` unless
-they are documenting advanced integration or port validation.
+New examples should prefer `fiber_yield()` and sleep/wait APIs once those are
+implemented. Low-level examples may call `fiber_schedule()` directly to show the
+core scheduler jump.
 
 User-facing scheduling APIs must update scheduler state before requesting the
 core scheduler jump:
@@ -465,10 +457,10 @@ The exact names may change, but the boundary should not:
 - the hook returns the `FiberContext` to restore next;
 - architecture assembly restores only the returned context.
 
-In the final scheduler-driven path, `from/to` publication slots should not be
-the normal PendSV ABI. The port should not receive a preselected target from
-Thread mode. PendSV/SVC should derive the source from the runtime-owned current
-context, save it, call the scheduler bridge, and restore the returned context.
+In the scheduler-driven path, `from/to` publication slots are not part of the
+PendSV ABI. The port does not receive a preselected target from Thread mode.
+PendSV/SVC derives the source from the runtime-owned current context, saves it,
+calls the scheduler bridge, and restores the returned context.
 
 The normal scheduler-driven port state should be reduced to:
 
@@ -489,20 +481,17 @@ save current context
 enter port scheduler critical section
 next = fiber_internal_scheduler_pick_next_from_pendsv(current)
 panic if next == NULL
+panic if next is not a valid restore target
 current_context = next
 exit port scheduler critical section
 restore next context
 ```
 
-After this migration, `fiber_port_state.h` should remain as the narrow internal
-scheduler/port runtime-state header. Its normal scheduler-driven contents should
-be the current context, the stable scheduler bridge declaration, the pick-next
-function pointer, and the user context pointer. Do not leave both `from/to`
-slots and a scheduler hook as competing normal switch mechanisms.
-
-If `fiber_yield_to(to)` or `fiber_switch(from, to)` remains as an advanced test
-primitive, it must be clearly separated from the normal scheduler-driven ABI and
-must not weaken the scheduler hook contract.
+`fiber_port_state.h` should remain as the narrow internal scheduler/port
+runtime-state header. Its normal scheduler-driven contents are the current
+context, the stable scheduler bridge declaration, the pick-next function
+pointer, and the user context pointer. Do not reintroduce `from/to` slots as a
+competing switch mechanism.
 
 The internal bridge should have a narrow shape, for example:
 
@@ -515,7 +504,10 @@ The bridge owns validation around the user hook:
 - the hook must be configured before the scheduler starts;
 - changing the hook while fibers are running is forbidden unless a future API
   defines a sealed, synchronized replacement protocol;
+- hook installation must be rejected after the runtime-owned current context has
+  been seeded;
 - the default hook pointer is `NULL`;
+- explicitly installing a `NULL` hook is invalid;
 - a scheduler-driven PendSV/SVC path must panic if no hook is configured;
 - the hook must return a non-NULL context for every real scheduler-driven
   switch;
@@ -523,6 +515,12 @@ The bridge owns validation around the user hook:
 - idle must be represented by a real initialized `FiberContext`, selected by
   the scheduler hook like any other runnable context;
 - the returned context must be initialized, sealed, and eligible for restore;
+- the bridge must validate the returned context before architecture assembly
+  restores it: non-NULL `sp`, boot seal, stack bounds, saved-frame alignment
+  (`sp % 8 == 4` for the current 36-byte software frame), software-frame
+  plus hardware exception-frame headroom, EXC_RETURN signature and Thread/PSP
+  bits, and any port-specific extended-frame headroom such as `s16-s31` plus
+  the hardware FP extension frame;
 - returning the current context is allowed only when the scheduler contract says
   staying on the current task is safe.
 
@@ -534,13 +532,20 @@ Critical-section requirements:
 
 - on cores that implement `BASEPRI`, protect the scheduler bridge/hook with a
   `BASEPRI` threshold suitable for scheduler-aware ISRs;
+- validate that the configured scheduler `BASEPRI` uses only hardware-implemented
+  NVIC priority bits and still masks at least one implemented priority level;
+- validate `AIRCR.PRIGROUP` so the scheduler `BASEPRI` policy is not undermined
+  by an unexpected subpriority split, following the FreeRTOS Cortex-M port rule;
 - do not save `BASEPRI` as part of `FiberContext`;
-- restore the previous `BASEPRI` value after the scheduler bridge returns or
-  panics;
+- restore the previous `BASEPRI` value after the scheduler bridge returns;
+  no-return panic paths may stop before restore because execution does not
+  continue;
 - on Cortex-M7 r0p1, any handler-side `BASEPRI` write must use the documented
   errata 837070 workaround before that path can be considered supported;
-- on cores without `BASEPRI`, define an explicit `PRIMASK` or unsupported-ISR
-  policy before exposing ISR-side wake/tick APIs;
+- on cores without `BASEPRI`, protect the handler-side scheduler bridge with a
+  saved `PRIMASK` critical section, matching the FreeRTOS Cortex-M0 discipline;
+- ISR-side wake/tick APIs for no-BASEPRI ports still need an explicit API-level
+  policy before they are exposed;
 - ISRs above the configured scheduler priority threshold must not call
   scheduler-aware fiber APIs directly.
 
@@ -624,11 +629,11 @@ Scheduler-driven state such as current context, pick-next hook, and hook user
 data must live in an internal port-state module. It may be visible to port
 sources through an internal header, but it must not become user-facing API.
 
-Avoid a port-level function shaped like `fiber_port_request_switch(from, to)`
-unless it is only a legacy/manual thin wrapper. Passing `from` and `to` to the
-port as the normal semantic request makes it too easy for the port to start
-owning runtime policy. The preferred boundary is: common updates scheduler
-state, then the port enters the architecture-specific scheduler switch path.
+Avoid a port-level function shaped like `fiber_port_request_switch(from, to)`.
+Passing `from` and `to` to the port makes it too easy for the port to start
+owning runtime policy. The required boundary is: common code requests a
+scheduler jump, then the port enters the architecture-specific scheduler switch
+path and restores only the context returned by the scheduler bridge.
 
 Port entry points must document whether they are callable from Thread mode,
 Handler mode, or both. Undefined call mode is not acceptable for start/switch
@@ -667,8 +672,11 @@ All ports that use PendSV must preserve the FreeRTOS-style invariants:
 - never allow a real cooperative switch to be silently delayed by interrupt
   masks.
 
-PendSV must not call user code directly. It may only restore the selected
-context and return through the architecture-defined exception-return path.
+PendSV must not call arbitrary user code directly. A scheduler-driven path may
+call the configured pick-next hook only through the stable scheduler bridge and
+only inside the port-defined scheduler critical section. After a context is
+selected and validated, PendSV restores only that context and returns through
+the architecture-defined exception-return path.
 
 If a port uses SVC and PendSV together, their shared state ownership must be
 documented. The first-start SVC path must not create a second current-context
@@ -683,6 +691,11 @@ Required rules:
 - the application must know whether it provides `PendSV_Handler` and
   `SVC_Handler`, or whether the library provides weak/default handlers;
 - a build must not silently override an application handler;
+- a wrapper for a naked PendSV body must preserve LR/EXC_RETURN; a normal C
+  wrapper that emits `bl fiber_pendsv` is invalid because it overwrites LR with
+  a function return address;
+- direct vectoring to the naked PendSV body or a naked branch wrapper is the
+  preferred wiring model;
 - if handler chaining is supported, the chaining rule must be documented;
 - vector-table relocation and security-domain vector selection must be explicit
   for ARMv8-M targets;
@@ -743,10 +756,18 @@ Each FPU/MVE port must state:
 
 - whether compiler flags use soft, softfp, or hard FP ABI;
 - whether the target exposes classic scalar FP, MVE, or both;
-- whether `FIBER_HAS_FPU` means only scalar FP or all extended context;
+- whether `FIBER_HAS_EXTENDED_FP_CONTEXT` is enabled for the target;
 - whether `FIBER_FORCE_SAVE_FPU` is required for the target;
 - how FPCCR lazy-stacking bits are configured or intentionally left untouched;
 - whether pre-start FP code is part of the validation case.
+
+Current v2 policy:
+
+- `FIBER_HAS_EXTENDED_FP_CONTEXT` follows scalar FP support.
+- MVE-FP is treated as an extended FP/MVE context candidate, but runtime use is
+  gated until hardware validation.
+- MVE without scalar FP is rejected by runtime policy validation because the
+  current assembly does not implement a separate MVE-only save path.
 
 Do not infer MVE safety from a scalar double-accumulator test alone.
 
@@ -771,6 +792,15 @@ Required gates:
 - explicit vector-domain policy for SVC and PendSV;
 - explicit FP access policy for CPACR/NSACR when applicable.
 
+Current v2 policy:
+
+- `FIBER_USE_PSPLIM_REGISTER` is the actual PSPLIM access gate.
+- ARMv8-M Baseline/Mainline, ARMv8.1-M, TrustZone/Non-secure bank targeting,
+  MVE, and PAC/BTI runtime use is blocked by default unless the matching
+  `FIBER_ALLOW_UNVALIDATED_*` opt-in is set for bring-up.
+- The opt-in only allows experiments; it does not add the FreeRTOS-style
+  CONTROL/PSPLIM/secure-context/PAC-key context slots.
+
 ARMv8-M support claims must name the exact domain:
 
 - Secure-only;
@@ -788,18 +818,20 @@ ARM errata 837070.
 FreeRTOS routes `GCC_ARM_CM7` to a dedicated `portable/GCC/ARM_CM7/r0p1` port
 instead of treating Cortex-M7 as only a generic ARMv7E-M build.
 
-The current `fiber` PendSV path does not write `BASEPRI`; it rejects
-`BASEPRI != 0` before requesting a cooperative switch from Thread mode. Because
-of that, the workaround is not required by the current implementation.
+The ARMv7E-M scheduler-driven PendSV path writes `BASEPRI` around the scheduler
+bridge. The write is guarded by `FIBER_CORTEX_M7_R0P1_ERRATA_837070`; when that
+gate is enabled, the port emits the FreeRTOS-style `cpsid i` / `msr BASEPRI` /
+`cpsie i` workaround around the raise operation.
 
-If any future port writes `BASEPRI` from PendSV, SVC, or a handler-side
-scheduler section, the affected Cortex-M7 r0p1 workaround must be implemented
-before claiming support for that path.
+This gate is compile-covered by the matrix for Cortex-M7 and Cortex-M7F. Runtime
+startup also checks CPUID and traps on affected Cortex-M7 r0p0/r0p1 cores when
+the gate is not enabled. This is still not a hardware validation claim.
+Affected Cortex-M7 r0p0/r0p1 hardware must pass runtime scheduler-switch
+validation before parity with the FreeRTOS CM7/r0p1 port can be claimed.
 
-If that happens, the ARMv7E-M profile must either split into a dedicated
-Cortex-M7/r0p1 source path or add an explicit r0p1 policy gate with compile and
-hardware validation. A generic ARMv7E-M claim is not enough once PendSV starts
-touching `BASEPRI`.
+If this policy grows beyond a guarded `BASEPRI` sequence, ARMv7E-M should split
+into a dedicated Cortex-M7/r0p1 source path rather than hiding too much behavior
+behind generic ARMv7E-M conditionals.
 
 ## FreeRTOS Sync Policy
 
@@ -874,10 +906,13 @@ that feature profile.
 Minimum evidence for stronger labels:
 
 - `compile-only`: compile matrix entry, target flags, and warnings recorded;
+- `security-compile-only`: ARMv8-M/ARMv8.1-M `FIBER_RUN_NONSECURE=1` and
+  Secure-to-Non-secure bank aliases compile with the selected toolchain, without
+  claiming runtime security-domain behavior;
 - `smoke-tested`: board name, core, clock/config summary, and basic switch proof
   recorded;
-- `runtime-validated`: long run counters, current tracking, no-op switch checks,
-  PRIMASK/BASEPRI policy checks where applicable;
+- `runtime-validated`: long run counters, current tracking, scheduler hook
+  result validation, and PRIMASK/BASEPRI policy checks where applicable;
 - `fpu-validated`: all runtime checks plus pre-start FP use and FP accumulator
   integrity;
 - `security-validated`: exact Secure/Non-secure ownership and vector-domain
@@ -894,13 +929,20 @@ Minimum evidence for stronger labels:
 5. Move the current STM32H7/Cortex-M7 implementation into the ARMv7E-M port
    boundary without changing behavior.
 6. Keep the existing compile matrix green.
-7. Add vector wiring validation hooks for PendSV and SVC where possible.
+7. Add vector wiring validation hooks for PendSV and SVC where possible. Done
+   for active vector-table routing; future SVC-start dispatch validation remains
+   separate.
 8. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
 9. Validate direct start and SVC start separately on STM32H7.
 10. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
-11. Add ARMv8-M Baseline/Mainline PSPLIM and security-domain policy.
-12. Add ARMv8.1-M/MVE policy before claiming STM32N6-class support.
-13. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
+11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
+    selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
+    rejection.
+12. Add full ARMv8-M Baseline/Mainline PSPLIM and security-domain context
+    layout before claiming runtime support.
+13. Add full ARMv8.1-M/MVE/PAC/BTI context policy before claiming STM32N6-class
+    support.
+14. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
 
 ## Implementation Strategy
 
@@ -927,16 +969,19 @@ P2: ARMv6-M / Cortex-M0/M0+
   Record MSP rewind and VTOR caveats per target.
 
 P3: ARMv8-M Baseline / Cortex-M23
-  Define PSPLIM slot policy and register-access gates.
+  PSPLIM register-access gate exists.
+  Define PSPLIM context slot policy.
   Define Secure/Non-secure ownership before claiming FreeRTOS-level behavior.
 
 P4: ARMv8-M Mainline / Cortex-M33
-  Split or explicitly gate Secure, Non-secure, NTZ, and TFM behavior.
+  Runtime policy gates exist.
+  Split or implement Secure, Non-secure, NTZ, and TFM behavior.
   Validate EXC_RETURN, vector ownership, PSPLIM, CONTROL, and FP access policy.
 
 P5: ARMv8.1-M / Cortex-M55 / MVE
-  Define MVE extended-context policy.
-  Define PAC/BTI policy where applicable.
+  Runtime policy gates exist.
+  Define MVE-only save/restore if needed.
+  Define PAC/BTI context save/restore where applicable.
   Validate beyond scalar FP accumulator tests.
 ```
 
