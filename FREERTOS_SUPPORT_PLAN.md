@@ -90,17 +90,18 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P0: Next Validation
 
-0. Repeat STM32H7 runtime validation after `cf610cc`.
+0. Repeat STM32H7 runtime validation after `775648c`.
 
-   `cf610cc` prepared the v2 scheduler hook state and also changed the
-   `FiberContext.sp` invariant in the ARMv7E-M/H7 restore path. The new
-   invariant matches the FreeRTOS `pxTopOfStack` model: `ctx->sp` is updated
-   when a context is saved as the source, and the target `ctx->sp` is not moved
-   forward after restore.
+   `cf610cc` changed the ARMv7E-M/H7 `FiberContext.sp` invariant to the
+   FreeRTOS `pxTopOfStack` model. Commit `775648c` then integrated the larger
+   scheduler-driven v2 execution model: direct target switching is removed,
+   PendSV asks the scheduler bridge for the next context, handler-side scheduler
+   calls use the port critical-section policy, and runtime exception setup plus
+   unvalidated feature policies are enforced.
 
    This is architecturally cleaner, but it is behavior-affecting. The v2 path
-   must repeat the H7 runtime validation checklist before carrying the previous
-   H7 runtime-validated claim.
+   must repeat `H7_RUNTIME_VALIDATION.md` before carrying the previous H7
+   runtime-validated claim.
 
 1. Add a compile-only matrix for representative Cortex-M targets.
 
@@ -133,6 +134,10 @@ Closed hardening items from the FreeRTOS comparison:
    it does not promote M23/M33/M55/MVE to validated runtime targets.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
+
+   The canonical checklist is `H7_RUNTIME_VALIDATION.md`. That file is the
+   gate for promoting the v2 ARMv7E-M path back to H7 runtime-validated after
+   behavior-affecting changes.
 
    Already covered manually on hardware:
 

@@ -1,5 +1,18 @@
 # Fiber Decision Log
 
+## 2026-07-10: H7 Validation Gate After 775648c
+
+Commit `775648c` is a behavior-affecting v2 checkpoint. It is larger than a
+feature-policy-only change: it carries the scheduler-driven execution model,
+the pure scheduler port ABI, ARMv7E-M PendSV selection through the scheduler
+bridge, handler-side critical sections, exception setup validation, and
+unvalidated v8-M/MVE/TrustZone/PAC/BTI runtime gates.
+
+Compile matrix and STM32H7 build success are necessary, but they do not preserve
+the older H7 runtime-validated claim by themselves. The v2 ARMv7E-M path must
+pass `H7_RUNTIME_VALIDATION.md` on hardware before this branch claims the same
+runtime validation level as the previous H7 path.
+
 ## 2026-07-10: v8-M Feature Policy Gates
 
 The v2 runtime now has explicit policy gates for Cortex-M profiles whose

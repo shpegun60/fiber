@@ -299,6 +299,7 @@ This checks representative M0/M0+/M3/M4/M4F/M7/M7F/M23/M33/M33F/M55/M55F/M55
 MVE-FP builds. It does not replace hardware tests and does not promote
 M23/M33/M55/MVE to validated targets.
 
-See `DECISIONS.md` for the current context-switch decision log and
+See `DECISIONS.md` for the current context-switch decision log,
+`H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and
 `FREERTOS_SUPPORT_PLAN.md` for the roadmap toward FreeRTOS-style Cortex-M
 CPU-port support.
