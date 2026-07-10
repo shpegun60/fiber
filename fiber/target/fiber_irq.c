@@ -11,6 +11,7 @@
  * -------------------------------------------------------------------------- */
 
 #include "mcu_core.h"
+#include "fiber_target.h"
 #include "fiber_irq.h"
 #include "fiber_compiler.h"
 #include "fiber_panic.h"
@@ -21,6 +22,7 @@
 extern void PendSV_Handler(void);
 extern void SVC_Handler(void);
 extern void fiber_pendsv(void);
+extern void fiber_svc(void);
 
 #ifndef FIBER_FORCE_PRIGROUP
 #  define FIBER_FORCE_PRIGROUP   (-1)
@@ -29,7 +31,7 @@ extern void fiber_pendsv(void);
 #  define FIBER_TUNE_SYSTICK      0
 #endif
 #ifndef FIBER_TUNE_SVCALL
-#  define FIBER_TUNE_SVCALL       0
+#  define FIBER_TUNE_SVCALL       FIBER_START_USE_SVC
 #endif
 
 #ifndef FIBER_VALIDATE_EXCEPTION_SETUP
@@ -45,11 +47,24 @@ extern void fiber_pendsv(void);
 #endif
 
 #ifndef FIBER_VALIDATE_SVC_VECTOR
-#  define FIBER_VALIDATE_SVC_VECTOR FIBER_VALIDATE_VECTOR_WIRING
+#  define FIBER_VALIDATE_SVC_VECTOR (FIBER_VALIDATE_VECTOR_WIRING && FIBER_START_USE_SVC)
 #endif
 
 #ifndef FIBER_PENDSV_VECTOR_DIRECT
 #  define FIBER_PENDSV_VECTOR_DIRECT 0
+#endif
+
+#ifndef FIBER_SVC_VECTOR_DIRECT
+#  define FIBER_SVC_VECTOR_DIRECT 0
+#endif
+
+BT_STATIC_ASSERT((FIBER_PENDSV_VECTOR_DIRECT == 0) || (FIBER_PENDSV_VECTOR_DIRECT == 1),
+                 "[fiber]: FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1");
+BT_STATIC_ASSERT((FIBER_SVC_VECTOR_DIRECT == 0) || (FIBER_SVC_VECTOR_DIRECT == 1),
+                 "[fiber]: FIBER_SVC_VECTOR_DIRECT must be 0 or 1");
+
+#if FIBER_SVC_VECTOR_DIRECT && !FIBER_START_USE_SVC
+#  error "[fiber]: FIBER_SVC_VECTOR_DIRECT requires FIBER_START_USE_SVC"
 #endif
 
 #ifndef FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
@@ -62,6 +77,10 @@ extern void fiber_pendsv(void);
 
 #ifndef FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY
 #  define FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY FIBER_VALIDATE_EXCEPTION_SETUP
+#endif
+
+#ifndef FIBER_VALIDATE_SVC_PRIORITY
+#  define FIBER_VALIDATE_SVC_PRIORITY FIBER_START_USE_SVC
 #endif
 
 #ifndef __NVIC_PRIO_BITS
@@ -131,6 +150,15 @@ static void fiber_validate_pendsv_priority(void)
     const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
 
     FIBER_REQUIRE((rd & lowest) == lowest, 'P');
+}
+
+static void fiber_validate_svc_priority(void)
+{
+#if FIBER_VALIDATE_SVC_PRIORITY
+    const uint32_t rd = NVIC_GetPriority(SVCall_IRQn);
+
+    FIBER_REQUIRE(rd == 0u, 'w');
+#endif
 }
 
 #if FIBER_HAS_BASEPRI
@@ -259,6 +287,7 @@ void fiber_exception_runtime_check(void)
     fiber_validate_feature_policy();
 
     fiber_validate_pendsv_priority();
+    fiber_validate_svc_priority();
 
 #if FIBER_VALIDATE_PENDSV_VECTOR
 # if FIBER_PENDSV_VECTOR_DIRECT
@@ -269,7 +298,11 @@ void fiber_exception_runtime_check(void)
 #endif
 
 #if FIBER_VALIDATE_SVC_VECTOR
+# if FIBER_SVC_VECTOR_DIRECT
+    fiber_validate_vector_entry(11u, fiber_svc, 'y');
+# else
     fiber_validate_vector_entry(11u, SVC_Handler, 'y');
+# endif
 #endif
 
 #if FIBER_HAS_BASEPRI
@@ -307,10 +340,8 @@ void fiber_pendsv_init_lowest_priority(void)
 #endif
 
 #if FIBER_TUNE_SVCALL
-    /* Optional: set SVCall to a known priority (often above PendSV but below time-critical IRQs) */
-    /* Choose 'lowest-1' if available, else just lowest. Hardware will mask extra bits anyway. */
-    const uint32_t svc_prio = (lowest ? lowest - 1u : lowest);
-    NVIC_SetPriority(SVCall_IRQn, svc_prio);
+    /* Match the FreeRTOS first-task start policy: SVCall is highest priority. */
+    NVIC_SetPriority(SVCall_IRQn, 0u);
 #endif
 
     { __DSB(); __ISB(); __COMPILER_BARRIER(); }
@@ -325,6 +356,10 @@ void fiber_pendsv_init_lowest_priority(void)
 #if FIBER_TUNE_SYSTICK
         const uint32_t rd_stk = NVIC_GetPriority(SysTick_IRQn);
         FIBER_REQUIRE((rd_stk & lowest) == lowest, 'K'); /* 'K' - SysTick priority not at lowest */
+#endif
+#if FIBER_VALIDATE_SVC_PRIORITY
+        const uint32_t rd_svc = NVIC_GetPriority(SVCall_IRQn);
+        FIBER_REQUIRE(rd_svc == 0u, 'w'); /* 'w' - SVCall priority is not highest */
 #endif
     }
 

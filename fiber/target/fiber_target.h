@@ -11,6 +11,26 @@
 
 #include "fiber_compiler.h"
 #include "../port/fiber_port_select.h"
+
+#ifndef FIBER_START_USE_SVC
+# if FIBER_PORT_ARMV7EM
+#  define FIBER_START_USE_SVC 1
+# else
+#  define FIBER_START_USE_SVC 0
+# endif
+#endif
+
+#ifndef FIBER_SVC_START_NUMBER
+# define FIBER_SVC_START_NUMBER 70
+#endif
+
+#if FIBER_START_USE_SVC && !FIBER_PORT_ARMV7EM
+# error "[fiber]: FIBER_START_USE_SVC is currently implemented only for ARMv7E-M"
+#endif
+
+BT_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) && (FIBER_SVC_START_NUMBER <= 255),
+		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
+
 #include "fiber_fpu.h"
 #include "fiber_feature_policy.h"
 #include "fiber_pslim.h"

@@ -18,7 +18,7 @@ void *volatile fiber_internal_port_scheduler_user = 0;
 #define FIBER_PORT_SW_FRAME_BYTES      (9u * 4u)
 #define FIBER_PORT_HIGH_FP_FRAME_BYTES (16u * 4u)
 
-static void fiber_internal_validate_scheduled_context(FiberContext *ctx)
+void fiber_internal_validate_restore_context(FiberContext *ctx)
 {
 #if FIBER_VALIDATE_SCHEDULED_CONTEXT
 	FIBER_REQUIRE(ctx != 0, 'N');
@@ -77,13 +77,15 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current)
 {
 	FiberSchedulerPickNextFn const pick_next = fiber_internal_port_scheduler_pick_next;
+	__DMB();
+	void *const user = fiber_internal_port_scheduler_user;
 
 	FIBER_REQUIRE(current != 0, 'C');
 	FIBER_REQUIRE(pick_next != 0, 'K');
 
-	FiberContext *const next = pick_next(current, fiber_internal_port_scheduler_user);
+	FiberContext *const next = pick_next(current, user);
 
-	fiber_internal_validate_scheduled_context(next);
+	fiber_internal_validate_restore_context(next);
 
 	__DMB();
 	fiber_internal_port_current_context = next;

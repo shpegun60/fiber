@@ -29,7 +29,7 @@ FIBER_NORETURN FIBER_ATTR_SENSITIVE static void fiber_task_return(void) { fiber_
 /* ---------------- Paranoid seed builder ----------------
  * We build a full software area (callee-saved + EXC_RETURN) under a hardware frame.
  * Layouts:
- *   v6-M / v8-M Baseline frame:  [LR][r8..r11][r4..r7]  (low -> high)
+ *   v6-M / v8-M Baseline frame:  [LR][r4..r7][r8..r11]  (low -> high)
  *   v7/v8 Mainline frame:        [r4..r11][LR]           (low -> high)
  * The hardware frame is always the standard 8 registers (R0..R3, R12, LR, PC, xPSR).
  *
@@ -102,15 +102,15 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	/* -------------------- Software-saved area (callee-saved + EXC_RETURN) -------------------- */
 #if FIBER_PORT_IS_BASELINE
-	/* M0/M23 memory (low to high): [LR][r8..r11][r4..r7] */
-	*(--sp) = 0;               /* r7 */
-	*(--sp) = 0;               /* r6 */
-	*(--sp) = 0;               /* r5 */
-	*(--sp) = 0;               /* r4 */
+	/* M0/M23 memory (low to high): [LR][r4..r7][r8..r11] */
 	*(--sp) = 0;               /* r11 */
 	*(--sp) = 0;               /* r10 */
 	*(--sp) = fiber_read_r9(); /* r9  (seed SB base) */
 	*(--sp) = 0;               /* r8  */
+	*(--sp) = 0;               /* r7 */
+	*(--sp) = 0;               /* r6 */
+	*(--sp) = 0;               /* r5 */
+	*(--sp) = 0;               /* r4 */
 	*(--sp) = FIBER_INITIAL_EXC_RETURN; /* LR(EXC_RETURN): Thread via PSP, no FP frame */
 #else
 	/* M3/M4/M7/M33 memory (low to high): [r4..r11][LR] */
@@ -151,12 +151,40 @@ void fiber_start(FiberContext* const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(ctx->boot.sealed != 0u, 's');
 	FIBER_REQUIRE(fiber_port_scheduler_is_configured() != 0u, 'K');
+	FIBER_REQUIRE(fiber_current() == NULL, 'k');
 
 	fiber_exception_runtime_check();
 
+#if FIBER_START_USE_SVC
+	fiber_env_check();
+	fiber_boot_check(&ctx->boot);
+	fiber_platform_bootstrap();
+
+# if FIBER_USE_PSPLIM_REGISTER
+	fiber_psplim_config((uint32_t)ctx->boot.stack_base);
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)ctx->boot.stack_base, 'L');
+# endif
+
+	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&ctx->boot);
+	fiber_internal_validate_restore_context(ctx);
+
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+# if FIBER_HAS_BASEPRI
+	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b');
+# endif
+# if FIBER_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+# endif
+
+	fiber_port_seed_current_context(ctx);
+	fiber_port_start_first_context(msp_top);
+#else
 	fiber_port_seed_current_context(ctx);
 
 	fiber_boot(&ctx->boot);
+#endif
 	FIBER_UNREACHABLE();
 }
 
@@ -211,6 +239,9 @@ void fiber_schedule(void)
 #if FIBER_HAS_BASEPRI
 	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b'); /* do not defer PendSV behind BASEPRI */
 #endif
+#if FIBER_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f'); /* do not defer PendSV behind FAULTMASK */
+#endif
 
 #if FIBER_SWITCH_MASK_IRQS
 	const uint32_t pm = fiber_primask_save_disable_local();
@@ -234,12 +265,14 @@ void fiber_schedule(void)
 
 /* Safe constant for "to->boot.stack_base" offset in ASM (avoid nested-designator offsetof) */
 enum {
-	OFF_TO_PSLIM = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base)
+	OFF_TO_PSLIM = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base),
+	OFF_TO_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
 };
 
 BT_STATIC_ASSERT(OFF_TO_PSLIM < 4096, "OFF_TO_PSLIM must fit Thumb-2 LDR imm12");
+BT_STATIC_ASSERT(OFF_TO_STACK_TOP < 4096, "OFF_TO_STACK_TOP must fit Thumb-2 LDR imm12");
 
-#if !FIBER_PORT_ARMV7EM
+#if !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
 {
@@ -262,39 +295,50 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
+			"mrs   r3, control                      \n"
+			"movs  r2, #2                           \n"
+			"tst   r3, r2                           \n" /* Thread mode must already use PSP */
+			"beq   6f                               \n" /* direct-start window or foreign PendSV */
+
 			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
 			"cmp   r1, #0                           \n" /* Thumb-1 safe null check */
 			"beq   5f                               \n" /* no current is a fatal port state */
 
+			"ldr   r2, [r1, %c[offsb]]              \n" /* r2 = current->boot.stack_base */
+			"cmp   r0, r2                           \n"
+			"blo   7f                               \n" /* PSP is already below stack base */
+			"mov   r3, r0                           \n"
+			"subs  r3, #36                          \n" /* core software frame */
+			"bcc   7f                               \n"
+			"cmp   r3, r2                           \n"
+			"blo   7f                               \n" /* software frame would cross stack base */
+			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
+			"cmp   r0, r2                           \n"
+			"bhi   7f                               \n" /* PSP above declared stack top */
+
 			/* ----------------------------------------------------------------------
 			 * Save current context.
-			 * SW layout low->high: [LR][r8..r11][r4..r7]
+			 * SW layout low->high: [LR][r4..r7][r8..r11]
 			 * ARMv6-M lacks STMDB, so do manual pre-decrement + STMIA.
 			 * ---------------------------------------------------------------------- */
-			/* Reserve SW area (9 words = 36 bytes): [LR][r8..r11][r4..r7] */
+			/* Reserve SW area (9 words = 36 bytes): [LR][r4..r7][r8..r11] */
 			"subs  r0, #36                          \n" /* r0 = base of SW area */
+			"mov   r2, r0                           \n" /* r2 = base until publication */
 
-			/* Save LR(EXC_RETURN) at [base+0]. Thumb-1 cannot STR LR directly. */
+			/* Save LR(EXC_RETURN) and r4..r7 at [base+0..20). */
 			"mov   r3, lr                           \n"
-			"str   r3, [r0]                         \n"
+			"stmia r0!, {r3-r7}                     \n" /* r0 now points to [base+20] */
 
-			/* Save r4..r7 at [base+20] */
-			"mov   r3, r0                           \n"
-			"adds  r3, #20                          \n"
-			"stmia r3!, {r4-r7}                     \n" /* r0 untouched */
-
-			/* Stage and save r8..r11 at [base+4] */
+			/* Stage and save r8..r11 at [base+20..36). */
 			"mov   r4, r8                           \n"
 			"mov   r5, r9                           \n"
 			"mov   r6, r10                          \n"
 			"mov   r7, r11                          \n"
-			"mov   r3, r0                           \n"
-			"adds  r3, #4                           \n"
-			"stmia r3!, {r4-r7}                     \n" /* r3 now points to [base+20] */
+			"stmia r0!, {r4-r7}                     \n" /* r0 now points to HW frame */
 
-			/* current->sp = base (bottom of SW area) */
-			"str   r0, [r1]                         \n"
+			/* current->sp = base (publish only after the full SW frame is stored). */
+			"str   r2, [r1]                         \n"
 
 			FBR_ASM_ENTER_SCHEDULER_CRITICAL
 			/* Ask the scheduler bridge for the next context. */
@@ -304,32 +348,28 @@ void fiber_pendsv(void)
 			"mov   r2, r0                           \n" /* r2 = selected next context */
 
 			/* ----------------------------------------------------------------------
-			 * Restore selected context: [LR][r8..r11][r4..r7]
+			 * Restore selected context: [LR][r4..r7][r8..r11]
 			 * ---------------------------------------------------------------------- */
 			"ldr   r0, [r2]                         \n" /* r0 = target->sp (base) */
-			"ldr   r3, [r0]                         \n" /* r3 = saved EXC_RETURN */
-			"mov   lr, r3                           \n" /* LR = saved EXC_RETURN */
-
-			/* r3 := base+4; load staged r8..r11 into r4..r7, then move back to r8..r11 */
-			"mov   r3, r0                           \n"
-			"adds  r3, #4                           \n"
-			"ldmia r3!, {r4-r7}                     \n"
+			"adds  r0, #20                          \n" /* move to staged high regs */
+			"ldmia r0!, {r4-r7}                     \n" /* restore staged r8..r11 */
 			"mov   r8,  r4                          \n"
 			"mov   r9,  r5                          \n"
 			"mov   r10, r6                          \n"
 			"mov   r11, r7                          \n"
 
-			/* Now r3 == base+20; load real r4..r7; after this r3 == base+36 (HW frame) */
-			"ldmia r3!, {r4-r7}                     \n"
+			/* r0 is now base+36, the target HW frame. */
+			"msr   psp, r0                          \n" /* PSP := start of HW frame for 'to' */
+			"subs  r0, #36                          \n" /* move back to saved LR/r4-r7 */
+			"ldmia r0!, {r3-r7}                     \n" /* r3 = EXC_RETURN; r4-r7 restored */
+			"mov   lr, r3                           \n"
 
 			/* ----------------------------------------------------------------------
-			 * Program PSP for target HW frame.
 			 * Keep to->sp pointing at the saved SW frame. It is updated only when
 			 * that context is saved as the source, like FreeRTOS pxTopOfStack.
 			 * This generic baseline path does not program PSPLIM; M23
 			 * PSPLIM/security variants are not validated yet.
 			 * ---------------------------------------------------------------------- */
-			"msr   psp, r3                          \n" /* PSP := start of HW frame for 'to' */
 			"isb                                    \n" /* sync before exception return */
 
 #if FIBER_SWITCH_STRICT_BARRIERS
@@ -352,8 +392,19 @@ void fiber_pendsv(void)
 			"movs  r0, #67                          \n" /* 'C' */
 			"bl    fiber_panic                      \n"
 			"b     5b                               \n"
+
+			"6:                                     \n"
+			"movs  r0, #106                         \n" /* 'j' */
+			"bl    fiber_panic                      \n"
+			"b     6b                               \n"
+
+			"7:                                     \n"
+			"movs  r0, #100                         \n" /* 'd' */
+			"bl    fiber_panic                      \n"
+			"b     7b                               \n"
 			:
-			:
+			: [offsb] "I" (OFF_TO_PSLIM),
+			  [offtop] "I" (OFF_TO_STACK_TOP)
 			: "memory","cc"
 	);
 #else
@@ -376,10 +427,33 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
+			"mrs   r3, control                      \n"
+			"tst   r3, #2                           \n" /* Thread mode must already use PSP */
+			"beq   6f                               \n" /* direct-start window or foreign PendSV */
+
 			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
 			"cmp   r1, #0                           \n"
 			"beq   5f                               \n" /* no current is a fatal port state */
+
+			"ldr   r2, [r1, %c[offsb]]              \n" /* r2 = current->boot.stack_base */
+			"cmp   r0, r2                           \n"
+			"blo   7f                               \n" /* PSP is already below stack base */
+			"mov   r3, r0                           \n"
+#if FIBER_HAS_EXTENDED_FP_CONTEXT
+			"tst   lr, #0x10                        \n" /* extended FP save needs 64 more bytes */
+			"bne   8f                               \n"
+			"subs  r3, #64                          \n"
+			"bcc   7f                               \n"
+			"8:                                     \n"
+#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
+			"subs  r3, #36                          \n" /* core software frame */
+			"bcc   7f                               \n"
+			"cmp   r3, r2                           \n"
+			"blo   7f                               \n" /* software frame would cross stack base */
+			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
+			"cmp   r0, r2                           \n"
+			"bhi   7f                               \n" /* PSP above declared stack top */
 
 			/* ----------------------------------------------------------------------
 			 * Save current context.
@@ -454,8 +528,19 @@ void fiber_pendsv(void)
 			"movs  r0, #67                          \n" /* 'C' */
 			"bl    fiber_panic                      \n"
 			"b     5b                               \n"
+
+			"6:                                     \n"
+			"movs  r0, #106                         \n" /* 'j' */
+			"bl    fiber_panic                      \n"
+			"b     6b                               \n"
+
+			"7:                                     \n"
+			"movs  r0, #100                         \n" /* 'd' */
+			"bl    fiber_panic                      \n"
+			"b     7b                               \n"
 			:
 			: [offsb] "I" (OFF_TO_PSLIM),
+			  [offtop] "I" (OFF_TO_STACK_TOP),
 			  [sched_basepri] "i" (FIBER_SCHEDULER_BASEPRI)
 			  : "memory","cc"
 	);

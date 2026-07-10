@@ -281,6 +281,8 @@ Common scheduler-jump preconditions:
 - a runtime-owned current context must already be seeded;
 - real scheduler jumps require `PRIMASK == 0`;
 - real scheduler jumps require `BASEPRI == 0` on cores that implement BASEPRI;
+- real scheduler jumps require `FAULTMASK == 0` on cores that implement
+  FAULTMASK;
 - the scheduler hook must return a real initialized `FiberContext`.
 
 New examples should prefer `fiber_yield()` and sleep/wait APIs once those are
@@ -476,7 +478,9 @@ source of truth for the next context: the scheduler hook result.
 The expected scheduler-driven PendSV flow is:
 
 ```text
+panic if Thread mode is not already using PSP
 current = current_context
+panic if live PSP cannot hold the source software frame
 save current context
 enter port scheduler critical section
 next = fiber_internal_scheduler_pick_next_from_pendsv(current)
@@ -521,6 +525,13 @@ The bridge owns validation around the user hook:
   plus hardware exception-frame headroom, EXC_RETURN signature and Thread/PSP
   bits, and any port-specific extended-frame headroom such as `s16-s31` plus
   the hardware FP extension frame;
+- before saving a source context, PendSV must prove that Thread mode is already
+  running on PSP (`CONTROL.SPSEL == 1`). If this is false, the handler must panic
+  instead of saving an unrelated pre-start or foreign stack state;
+- before writing the source software frame, PendSV must prove that the live PSP
+  is inside the current context bounds and has enough headroom for the core
+  software frame plus any port-specific high-FP frame. If this is false, the
+  handler must panic before modifying memory below `stack_base`;
 - returning the current context is allowed only when the scheduler contract says
   staying on the current task is safe.
 
@@ -593,7 +604,7 @@ void fiber_port_seed_current_context(FiberContext *ctx);
 void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
                                         void *user);
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
-FIBER_NORETURN void fiber_port_start_first(FiberContext *to);
+FIBER_NORETURN void fiber_port_start_first_context(uintptr_t msp_top);
 uint32_t *fiber_port_init_stack(FiberContext *ctx,
                                 void *stack_begin,
                                 void *stack_end,
@@ -615,7 +626,7 @@ Exact names may change, but ownership should not:
   restore path, but it must follow the common current-context policy;
 - port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
-- port code owns optional SVC first-start mechanics;
+- port code owns SVC first-start mechanics where that port implements them;
 - port code owns feature gates that depend on architecture state.
 
 `FiberContext.sp` follows the FreeRTOS `pxTopOfStack` invariant: it points to
@@ -691,43 +702,56 @@ Required rules:
 - the application must know whether it provides `PendSV_Handler` and
   `SVC_Handler`, or whether the library provides weak/default handlers;
 - a build must not silently override an application handler;
-- a wrapper for a naked PendSV body must preserve LR/EXC_RETURN; a normal C
-  wrapper that emits `bl fiber_pendsv` is invalid because it overwrites LR with
-  a function return address;
-- direct vectoring to the naked PendSV body or a naked branch wrapper is the
+- a wrapper for a naked PendSV or SVC body must preserve LR/EXC_RETURN; a
+  normal C wrapper that emits `bl fiber_pendsv` or `bl fiber_svc` is invalid
+  because it overwrites LR with a function return address;
+- direct vectoring to the naked handler body or a naked branch wrapper is the
   preferred wiring model;
 - if handler chaining is supported, the chaining rule must be documented;
 - vector-table relocation and security-domain vector selection must be explicit
   for ARMv8-M targets;
-- an optional validation hook should prove that the expected PendSV/SVC handler
-  path is actually reached on hardware.
+- validation should prove that the expected PendSV/SVC handler path is actually
+  reached on hardware. Vector-table checks prove the first handler symbol, while
+  SVC-start ports should also validate the SVC dispatch value in the handler.
 
 If another RTOS, bootloader, monitor, or debug framework owns SVC or PendSV,
 `fiber` must require explicit integration instead of assuming ownership.
 
 ## First-Fiber Start Contract
 
-`main` uses a direct boot trampoline. It is validated on STM32H7/Cortex-M7 and
-must remain available for A/B testing.
-
-`v2` may add an optional SVC first-start path:
+`main` used a direct boot trampoline as the validated STM32H7/Cortex-M7
+first-start path. `v2` keeps the direct trampoline as a fallback/A-B path, but
+ARMv7E-M now defaults to an SVC first-start path:
 
 ```c
 #define FIBER_START_USE_SVC 1
 ```
 
-The SVC path should:
+The current ARMv7E-M SVC path:
 
-- enter the first fiber through exception return;
-- centralize first-start CPU flag setup in handler mode;
-- make vector wiring validation easier;
-- stay optional until it has hardware validation;
-- not remove the direct trampoline until both paths have comparable tests.
+- enters the first fiber through exception return;
+- centralizes first-start CPU flag setup before and inside the handler path;
+- requires privileged Thread/MSP state before issuing SVC;
+- optionally rewinds MSP through the sealed boot plan and verifies MSP
+  read-back;
+- clears any pending PendSV while interrupts are still masked before issuing
+  SVC;
+- requires SVCall to run at highest priority when SVC first-start is enabled;
+- uses `svc #FIBER_SVC_START_NUMBER` as the dispatch key;
+- rejects SVC entry from PSP;
+- validates the SVC immediate before restoring the first context;
+- validates the seeded current `FiberContext` before PSP is restored;
+- clears BASEPRI in the SVC handler before the first context is restored;
+- sets PSP and verifies `CONTROL.SPSEL` before exception return;
+- clears and verifies `CONTROL.FPCA` when the target has an FP context and
+  `FIBER_BOOT_CLEAR_FPCA` is enabled;
+- panics if the SVC instruction returns to the start helper.
 
-The SVC path is allowed to be more FreeRTOS-like, but it must stay cooperative.
-It must not introduce tick scheduling or priority scheduling by accident.
+This is deliberately more paranoid than the minimum FreeRTOS first-task start.
+It is still cooperative: it does not introduce tick scheduling or priority
+scheduling by accident.
 
-The SVC path must also define:
+The SVC path must keep defining:
 
 - the SVC number or dispatch mechanism;
 - whether it requires privileged Thread mode before start;
@@ -930,11 +954,15 @@ Minimum evidence for stronger labels:
    boundary without changing behavior.
 6. Keep the existing compile matrix green.
 7. Add vector wiring validation hooks for PendSV and SVC where possible. Done
-   for active vector-table routing; future SVC-start dispatch validation remains
-   separate.
-8. Add optional SVC first-start behind `FIBER_START_USE_SVC`.
+   for active vector-table routing. ARMv7E-M SVC-start dispatch also validates
+   the SVC immediate in the handler.
+8. Add optional SVC first-start behind `FIBER_START_USE_SVC`. Done for
+   ARMv7E-M as the default selected start path; other ports still use the
+   direct fallback unless they implement their own SVC path.
 9. Validate direct start and SVC start separately on STM32H7.
 10. Split ARMv6-M baseline support from ARMv7-M/ARMv7E-M mainline support.
+    Done for Cortex-M0/M0+ compile-only source layout; ARMv8-M Baseline remains
+    a separate runtime-gated portability task.
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.
@@ -965,6 +993,10 @@ P1: ARMv7-M / Cortex-M3
 
 P2: ARMv6-M / Cortex-M0/M0+
   Isolate the Thumb-1 baseline save/restore path.
+  Keep the software frame in FreeRTOS CM0 non-MPU order:
+  [LR][r4][r5][r6][r7][r8][r9][r10][r11].
+  Publish the saved stack pointer only after the complete software frame is
+  stored.
   Validate no BASEPRI/FPU assumptions.
   Record MSP rewind and VTOR caveats per target.
 

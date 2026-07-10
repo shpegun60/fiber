@@ -1,5 +1,60 @@
 # Fiber Decision Log
 
+## 2026-07-10: ARMv7E-M SVC First-Start Checkpoint
+
+The ARMv7E-M port now starts the first fiber through SVC by default:
+
+- `FIBER_START_USE_SVC` defaults to `1` for `FIBER_PORT_ARMV7EM`.
+- `fiber_start()` seeds the runtime-owned current context, validates the first
+  restore context, verifies interrupt-mask state, and then calls the port
+  first-start helper.
+- The first-start helper forces privileged Thread/MSP state, clears FPCA by
+  clearing `CONTROL`, optionally rewinds MSP through the sealed boot plan,
+  verifies MSP read-back, clears any pending PendSV while interrupts are still
+  masked, enables IRQ and fault exceptions, executes
+  `svc #FIBER_SVC_START_NUMBER`, and panics with `'y'` if SVC returns to the
+  helper.
+- `fiber_svc()` rejects SVC entry from PSP with `'l'`, validates the SVC
+  immediate and traps with `'u'` on mismatch, clears `BASEPRI` like the
+  FreeRTOS SVC first-task handler, validates the seeded current context,
+  restores the synthetic software frame, sets PSP, verifies `CONTROL.SPSEL`,
+  clears and verifies `CONTROL.FPCA` when configured, and enters the first fiber
+  by exception return.
+- `fiber_pendsv_init_lowest_priority()` sets SVCall to the highest priority
+  when SVC first-start is enabled, and runtime validation traps with `'w'` if
+  SVCall does not read back as highest priority.
+- The direct boot trampoline remains available as a fallback for ports without
+  SVC first-start support and for A/B validation.
+- The STM32H7 application must wire `SVC_Handler()` as a naked branch to
+  `fiber_svc()`. That wrapper lives in the embedding application tree, outside
+  this repository.
+
+This brings the ARMv7E-M first-start model closer to FreeRTOS while keeping the
+runtime cooperative. It is behavior-affecting and must pass
+`H7_RUNTIME_VALIDATION.md` before the v2 H7 path regains the previous hardware
+validation claim.
+
+## 2026-07-10: ARMv6-M Port Split Checkpoint
+
+The Cortex-M0/M0+ Thumb-1 PendSV path now lives in
+`fiber/port/armv6m/fiber_port_armv6m.c`.
+
+This is a mechanical port-layout step:
+
+- ARMv6-M uses the FreeRTOS Cortex-M0 non-MPU software frame order:
+  `[LR][r4][r5][r6][r7][r8][r9][r10][r11]`.
+- The saved stack pointer is published only after the full software frame is
+  stored. This is stricter than the FreeRTOS CM0 ordering, which writes the TCB
+  top-of-stack slot before completing the staged high-register stores.
+- ARMv6-M still uses saved `PRIMASK` around the scheduler bridge because the
+  profile has no `BASEPRI`.
+- `fiber_core.c` no longer defines `fiber_pendsv()` when `FIBER_PORT_ARMV6M`
+  is selected.
+- ARMv8-M Baseline and non-ARMv7E-M Mainline fallback code still remain in
+  `fiber_core.c` until their dedicated port files are split.
+- This does not create a runtime validation claim for STM32F0/G0/C0/L0/U0
+  class targets. ARMv6-M remains compile-only until hardware tests exist.
+
 ## 2026-07-10: H7 Validation Gate After 775648c
 
 Commit `775648c` is a behavior-affecting v2 checkpoint. It is larger than a
@@ -55,12 +110,18 @@ The v2 runtime now checks exception setup before the first fiber starts:
 - `fiber_exception_runtime_check()` is called by
   `fiber_pendsv_init_lowest_priority()` and again by `fiber_start()`.
 - PendSV priority must read back as the lowest priority.
-- PendSV and SVC vector entries must point at the expected handler symbols.
+- PendSV and, when SVC first-start is enabled, SVC vector entries must point at
+  the expected handler symbols.
 - The default PendSV model expects an application `PendSV_Handler()` wrapper.
   That wrapper must branch to `fiber_pendsv()` without clobbering
   LR/EXC_RETURN. A normal C wrapper that emits `bl fiber_pendsv` is invalid.
   Direct vectoring to `fiber_pendsv()` is supported with
   `FIBER_PENDSV_VECTOR_DIRECT=1`.
+- The default ARMv7E-M SVC model expects an application `SVC_Handler()` wrapper
+  that branches to `fiber_svc()` without clobbering LR/EXC_RETURN. Direct
+  vectoring to `fiber_svc()` is supported with `FIBER_SVC_VECTOR_DIRECT=1`.
+  `FIBER_VALIDATE_SVC_VECTOR` defaults to active only when
+  `FIBER_START_USE_SVC=1`.
 - `FIBER_SCHEDULER_BASEPRI` is validated against the hardware-implemented NVIC
   priority bits using a FreeRTOS-style write/readback probe.
 - `AIRCR.PRIGROUP` is validated with the same FreeRTOS-style rule used by the
@@ -120,6 +181,12 @@ The ARMv7E-M port now has a scheduler-driven PendSV path:
   handler-side scheduler critical section, calls
   `fiber_internal_scheduler_pick_next_from_pendsv()`, and restores the returned
   context.
+- PendSV refuses to save a source context unless Thread mode is already using
+  PSP. A spurious PendSV before the first PSP context is active traps with panic
+  code `'j'` instead of overwriting `ctx->sp` with a pre-start stack state.
+- PendSV also checks live PSP source-save headroom before writing the software
+  frame. If the core or high-FP save would cross the current fiber stack base,
+  it traps with panic code `'d'` before modifying memory below the stack.
 - The scheduler bridge validates current context, configured hook, returned
   context, sealed boot state, saved stack pointer alignment (`ctx->sp % 8 == 4`
   for the saved 36-byte software frame), stack bounds, software-frame plus
@@ -219,14 +286,11 @@ Hardening decisions:
   because a pending PendSV delayed past a critical section is unsafe.
 - On cores with BASEPRI, `fiber_schedule()` also rejects scheduler jumps when
   `BASEPRI` is already set.
-- The direct boot trampoline clears `CONTROL.FPCA` before entering the first
-  fiber when an FPU context exists.
-- The direct boot trampoline remains the default start path. A future optional
-  SVC-based first-fiber start path may be added to match the FreeRTOS first-task
-  model more closely, where the first context is entered by exception return
-  instead of a direct branch. It should be gated by a dedicated option and kept
-  separate from the validated STM32H7/M7 trampoline path until hardware tests
-  prove the SVC path.
+- On cores with FAULTMASK, `fiber_schedule()` also rejects scheduler jumps when
+  `FAULTMASK` is already set.
+- The first-start path clears `CONTROL.FPCA` before entering the first fiber
+  when an FPU context exists. On the current ARMv7E-M v2 path this happens
+  through SVC first-start; the direct trampoline remains a fallback path.
 - The preferred low-level runtime API is `fiber_start()` plus
   `fiber_schedule()`. Higher-level yield/sleep/wait APIs should update scheduler
   state and then call `fiber_schedule()`.

@@ -48,6 +48,11 @@ __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 }
 
+#if FIBER_START_USE_SVC
+FIBER_NORETURN
+void fiber_port_start_first_context(uintptr_t msp_top);
+#endif
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

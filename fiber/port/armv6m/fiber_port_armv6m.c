@@ -1,0 +1,155 @@
+/*
+ * fiber_port_armv6m.c
+ *
+ * ARMv6-M PendSV port.
+ *
+ * This file owns the Cortex-M0/M0+ Thumb-1 PendSV implementation. The port is
+ * compile-covered only; hardware validation is still required before claiming
+ * runtime support on a specific STM32 ARMv6-M target.
+ */
+
+#include "../fiber_port.h"
+#include "../../fiber_core.h"
+
+#if FIBER_PORT_ARMV6M
+
+enum {
+	FBR_OFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base),
+	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
+};
+
+BT_STATIC_ASSERT(FBR_OFF_STACK_BASE <= 124, "FBR_OFF_STACK_BASE must fit Thumb-1 LDR word offset");
+BT_STATIC_ASSERT(FBR_OFF_STACK_TOP <= 124, "FBR_OFF_STACK_TOP must fit Thumb-1 LDR word offset");
+
+/*
+ * ARMv6-M PendSV implementation.
+ *
+ * ARMv6-M has no BASEPRI, no FPU, and no Thumb-2 STMDB/LDMIA high-register
+ * convenience path. The scheduler bridge is protected with saved PRIMASK
+ * through FBR_ASM_ENTER_SCHEDULER_CRITICAL.
+ */
+FIBER_ATTR_NAKED_ASM
+void fiber_pendsv(void)
+{
+	__ASM volatile(
+			".syntax unified                         \n"
+
+			/* ----------------------------------------------------------------------
+			 * Prologue: get PSP and sync pipeline.
+			 * ---------------------------------------------------------------------- */
+			"mrs   r0, psp                          \n" /* r0 = PSP */
+
+#if FIBER_SWITCH_STRICT_BARRIERS
+			"dsb                                    \n"
+#else
+			"dmb                                    \n"
+#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"isb                                    \n"
+
+			/* ----------------------------------------------------------------------
+			 * Load runtime-owned current context.
+			 * ---------------------------------------------------------------------- */
+			"mrs   r3, control                      \n"
+			"movs  r2, #2                           \n"
+			"tst   r3, r2                           \n" /* Thread mode must already use PSP */
+			"beq   91f                              \n" /* direct-start window or foreign PendSV */
+
+			"ldr   r1, =fiber_internal_port_current_context \n"
+			"ldr   r1, [r1]                         \n" /* r1 = current context */
+			"cmp   r1, #0                           \n"
+			"beq   90f                              \n" /* no current is fatal */
+
+			"ldr   r2, [r1, %c[offsb]]              \n" /* r2 = current->boot.stack_base */
+			"cmp   r0, r2                           \n"
+			"blo   92f                              \n" /* PSP is already below stack base */
+			"mov   r3, r0                           \n"
+			"subs  r3, #36                          \n" /* core software frame */
+			"bcc   92f                              \n"
+			"cmp   r3, r2                           \n"
+			"blo   92f                              \n" /* software frame would cross stack base */
+			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n" /* PSP above declared stack top */
+
+			/* ----------------------------------------------------------------------
+			 * Save current context.
+			 *
+			 * SW layout low->high:
+			 *   [LR][r4][r5][r6][r7][r8][r9][r10][r11]
+			 *
+			 * ARMv6-M cannot push high registers directly here, so r8-r11 are staged
+			 * through r4-r7 and stored manually.
+			 * ---------------------------------------------------------------------- */
+			"subs  r0, #36                          \n" /* reserve 9 words */
+			"mov   r2, r0                           \n" /* keep base until publication */
+
+			"mov   r3, lr                           \n"
+			"stmia r0!, {r3-r7}                     \n" /* save EXC_RETURN and low regs */
+
+			"mov   r4, r8                           \n"
+			"mov   r5, r9                           \n"
+			"mov   r6, r10                          \n"
+			"mov   r7, r11                          \n"
+			"stmia r0!, {r4-r7}                     \n" /* save staged high regs */
+
+			"str   r2, [r1]                         \n" /* current->sp = complete SW frame */
+
+			FBR_ASM_ENTER_SCHEDULER_CRITICAL
+			"mov   r0, r1                           \n" /* arg0 = current */
+			"bl    fiber_internal_scheduler_pick_next_from_pendsv \n"
+			FBR_ASM_EXIT_SCHEDULER_CRITICAL
+
+			"mov   r2, r0                           \n" /* r2 = selected next */
+
+			/* ----------------------------------------------------------------------
+			 * Restore selected context.
+			 * ---------------------------------------------------------------------- */
+			"ldr   r0, [r2]                         \n" /* r0 = target->sp */
+			"adds  r0, #20                          \n" /* move to staged r8-r11 */
+			"ldmia r0!, {r4-r7}                     \n" /* staged r8-r11 */
+			"mov   r8,  r4                          \n"
+			"mov   r9,  r5                          \n"
+			"mov   r10, r6                          \n"
+			"mov   r11, r7                          \n"
+
+			"msr   psp, r0                          \n" /* PSP = target HW frame */
+			"subs  r0, #36                          \n" /* move to saved EXC_RETURN and low regs */
+			"ldmia r0!, {r3-r7}                     \n" /* r3 = EXC_RETURN; restore low regs */
+			"mov   lr, r3                           \n"
+
+			"isb                                    \n"
+
+#if FIBER_SWITCH_STRICT_BARRIERS
+			"dsb                                    \n"
+#else
+			"dmb                                    \n"
+#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"isb                                    \n"
+
+			"bx    lr                               \n" /* exception return */
+
+			/* ----------------------------------------------------------------------
+			 * Fatal port state: scheduler path entered without a current context.
+			 * ---------------------------------------------------------------------- */
+			"90:                                    \n"
+			"movs  r0, #67                          \n" /* 'C' */
+			"bl    fiber_panic                      \n"
+			"b     90b                              \n"
+
+			"91:                                    \n"
+			"movs  r0, #106                         \n" /* 'j' */
+			"bl    fiber_panic                      \n"
+			"b     91b                              \n"
+
+			"92:                                    \n"
+			"movs  r0, #100                         \n" /* 'd' */
+			"bl    fiber_panic                      \n"
+			"b     92b                              \n"
+			:
+			: [offsb] "I" (FBR_OFF_STACK_BASE),
+			  [offtop] "I" (FBR_OFF_STACK_TOP)
+			: "memory","cc"
+	);
+}
+
+#endif /* FIBER_PORT_ARMV6M */

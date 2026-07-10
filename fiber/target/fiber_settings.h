@@ -82,7 +82,7 @@
 # endif
 #endif
 
-/* Clear CONTROL.FPCA before the first direct fiber entry when FPU context exists. */
+/* Clear CONTROL.FPCA before the first fiber entry when FPU context exists. */
 #ifndef FIBER_BOOT_CLEAR_FPCA
 # define FIBER_BOOT_CLEAR_FPCA 1
 #endif

@@ -77,6 +77,10 @@ void   		fiber_boot_check  (const FiberBoot* const ctx);
 /* NEW: environment precondition check (Thread mode, priv., MSP selected) */
 void          fiber_env_check   (void);
 
+/* Shared start hygiene used by direct trampoline and SVC first-start paths. */
+void          fiber_platform_bootstrap(void);
+uintptr_t     fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx);
+
 /* NEW: final boot using a prepared and validated context */
 FIBER_NORETURN
 void         fiber_boot        (const FiberBoot* const ctx);

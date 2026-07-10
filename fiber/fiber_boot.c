@@ -213,7 +213,7 @@ static inline void fiber_clear_sticky_faults(void)
 /* Platform bootstrap: enable faults, enforce STKALIGN, UB traps, FPU policy. */
 /* Idempotent and safe to call multiple times at boot.                        */
 /* -------------------------------------------------------------------------- */
-static inline void fiber_platform_bootstrap(void)
+void fiber_platform_bootstrap(void)
 {
 	fiber_clear_sticky_faults();
 
@@ -265,6 +265,44 @@ static inline void fiber_platform_bootstrap(void)
 
 	/* Optionally enable FPU access (CP10/CP11) if an FPU exists and the build may emit FP instructions.	 */
 	fiber_fpu_enable_early();
+}
+
+uintptr_t fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'n');
+	fiber_boot_check(ctx);
+
+	if (ctx->msp_policy == FIBER_MSP_POLICY_REWIND) {
+		uint32_t ra = fiber_read_initial_msp();
+		__ISB();
+		uint32_t rb = fiber_read_initial_msp();
+
+		if ((ra == 0u) || (ra != rb)) {
+			const uintptr_t fb = fiber_fallback_initial_msp();
+			FIBER_REQUIRE(fb != 0u, 'f');
+			ra = (uint32_t)fb;
+			rb = (uint32_t)fb;
+		}
+
+		const uintptr_t expected = fiber_stack_align_down((uintptr_t)ra);
+		FIBER_REQUIRE(expected == ctx->msp_top, 'W');
+		FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
+		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+		return ctx->msp_top;
+	}
+
+	const uintptr_t cur_msp = fiber_stack_align_down((uintptr_t)__get_MSP());
+	FIBER_REQUIRE(cur_msp == ctx->msp_top, 'K');
+	FIBER_REQUIRE(!(cur_msp > ctx->stack_base && cur_msp <= ctx->stack_top), 'o');
+	{
+		const size_t gap = (cur_msp > ctx->stack_top)
+							 ? (size_t)(cur_msp - ctx->stack_top)
+									 : (size_t)(ctx->stack_base - cur_msp);
+		FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES, 'g');
+	}
+
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	return 0u;
 }
 
 
@@ -617,42 +655,9 @@ void fiber_boot(const FiberBoot* const ctx)
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
-	/* MSP handling according to the sealed plan. */
-	if (ctx->msp_policy == FIBER_MSP_POLICY_REWIND) {
-		/* Re-read initial MSP and require equality to planned value (extra paranoia). */
-		uint32_t ra = fiber_read_initial_msp();
-		__ISB();
-		uint32_t rb = fiber_read_initial_msp();
-
-		if ((ra == 0u) || (ra != rb)) {
-			const uintptr_t fb = fiber_fallback_initial_msp();
-			FIBER_REQUIRE(fb != 0u, 'f');
-			ra = (uint32_t)fb;
-			rb = (uint32_t)fb;
-		}
-		const uintptr_t expected = fiber_stack_align_down((uintptr_t)ra);
-		FIBER_REQUIRE(expected == ctx->msp_top, 'W');
-
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-		fiber_boot_trampoline((void*)ctx->stack_top, ctx->entry, ctx->arg,
-				(void*)ctx->msp_top);
-	} else {
-		/* VALIDATE policy: current MSP must equal the planned value. */
-		const uintptr_t cur_msp = fiber_stack_align_down((uintptr_t)__get_MSP());
-		FIBER_REQUIRE(cur_msp == ctx->msp_top, 'K'); /* MSP drifted since planning */
-
-		/* Also re-assert non-overlap and minimum gap just before the jump. */
-		FIBER_REQUIRE(!(cur_msp > ctx->stack_base && cur_msp <= ctx->stack_top), 'o');
-		{
-			const size_t gap = (cur_msp > ctx->stack_top)
-								 ? (size_t)(cur_msp - ctx->stack_top)
-										 : (size_t)(ctx->stack_base - cur_msp);
-			FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES, 'g');
-		}
-
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-		fiber_boot_trampoline((void*)ctx->stack_top, ctx->entry, ctx->arg, 0);
-	}
+	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(ctx);
+	fiber_boot_trampoline((void*)ctx->stack_top, ctx->entry, ctx->arg,
+			(void*)msp_top);
 
 	/* If we ever get here, the world is broken. Scream and park forever. */
 	__BKPT(0);                 /* outside a debugger this typically HardFaults */

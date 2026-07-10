@@ -20,6 +20,7 @@ Run the validation first with portable conservative defaults:
 #define FIBER_SWITCH_STRICT_BARRIERS 1
 #define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #define FIBER_VALIDATE_EXCEPTION_SETUP 1
+#define FIBER_START_USE_SVC 1
 ```
 
 Performance-mode runs may be recorded separately, but they must not replace the
@@ -40,6 +41,8 @@ validated STM32H7 build.
 The runtime check must cover:
 
 - PendSV priority reads back as the lowest priority.
+- SVCall priority reads back as highest priority when SVC first-start is
+  enabled.
 - PendSV vector routing matches the configured wrapper/direct mode.
 - SVC vector routing matches the configured policy.
 - `FIBER_SCHEDULER_BASEPRI` uses only implemented NVIC priority bits.
@@ -51,6 +54,7 @@ Expected setup panic codes when deliberately misconfigured:
 
 - `'Y'`: PendSV vector mismatch.
 - `'y'`: SVC vector mismatch.
+- `'w'`: SVCall priority is not highest while SVC first-start is enabled.
 - `'Q'`: scheduler `BASEPRI` masks no implemented priority bits.
 - `'q'`: scheduler `BASEPRI` contains unimplemented priority bits.
 - `'g'`: priority grouping or priority threshold is incompatible.
@@ -69,6 +73,7 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BASEPRI
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_NULL_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_CONTEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_FAULTMASK
 ```
 
 `fiber_live.validation_mode_seen` records the selected mode, and
@@ -98,6 +103,22 @@ return `NULL`.
 
 ## First Start
 
+On ARMv7E-M, the default first-start path is SVC-based. The application must
+provide a naked `SVC_Handler()` branch wrapper that reaches `fiber_svc()` while
+preserving the original SVC handler LR/EXC_RETURN:
+
+```c
+FIBER_ATTR_NAKED_ASM
+void SVC_Handler(void)
+{
+	__ASM volatile("b fiber_svc");
+}
+```
+
+If the vector table points directly to `fiber_svc()` instead of an application
+wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR` defaults
+to active only when `FIBER_START_USE_SVC=1`.
+
 Validate these cases:
 
 - `fiber_start(ctx)` without a configured scheduler hook traps with `'K'`.
@@ -105,6 +126,20 @@ Validate these cases:
   first fiber.
 - pre-start floating-point work does not leak `CONTROL.FPCA` into the first
   fiber when an FP context exists.
+- stale pending PendSV is cleared by the start helper before interrupts are
+  reopened for SVC.
+- fault exceptions are enabled before SVC and `BASEPRI` is cleared inside the
+  SVC handler before the first context is restored.
+- first entry arrives through SVC exception return, not a direct function call.
+- `fiber_port_start_first_context()` does not continue after the `svc`
+  instruction. If it does, it traps with `'y'`.
+- SVC entry from PSP or rejected first-start CPU state traps with `'l'`.
+- wrong SVC immediate value traps with `'u'`.
+- failed PSP/CONTROL verification before first exception return traps with
+  `'j'`.
+
+The direct trampoline fallback must be validated separately if
+`FIBER_START_USE_SVC=0` is used for A/B testing.
 
 ## Scheduler Jump API
 
@@ -114,6 +149,7 @@ Validate these `fiber_schedule()` cases:
 - calling from Handler mode traps with `'i'`.
 - calling while `PRIMASK != 0` traps with `'p'`.
 - calling while `BASEPRI != 0` traps with `'b'` on BASEPRI-capable cores.
+- calling while `FAULTMASK != 0` traps with `'f'` on FAULTMASK-capable cores.
 
 No real scheduler jump may be silently delayed behind interrupt masks.
 
@@ -127,6 +163,10 @@ returned context, and restores only that context.
 Validate these scheduler result cases:
 
 - valid returned context switches correctly.
+- PendSV entered while Thread mode is not using PSP traps with `'j'`; this
+  catches pre-start or foreign PendSV entry before any PSP context is saved.
+- live PSP without enough space for the source software frame traps with `'d'`
+  before PendSV writes below the current fiber stack base.
 - returned `NULL` traps with `'N'`.
 - returned context with `sp == NULL` traps with `'P'`.
 - returned context with invalid saved-frame alignment traps with `'A'`.

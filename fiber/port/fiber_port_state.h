@@ -32,6 +32,8 @@ extern void *volatile fiber_internal_port_scheduler_user;
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                                  void *user);
 
+void fiber_internal_validate_restore_context(FiberContext *ctx);
+
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 
 #ifdef __cplusplus

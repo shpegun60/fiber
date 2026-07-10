@@ -5,7 +5,10 @@ Small cooperative fiber switcher for STM32/Cortex-M projects.
 The context switch is requested from Thread mode with `fiber_schedule()` and is
 performed by PendSV through an application-provided scheduler hook. The
 application must wire `PendSV_Handler()` so it branches to `fiber_pendsv()`
-without clobbering LR/EXC_RETURN.
+without clobbering LR/EXC_RETURN. On ARMv7E-M, the default first-fiber start is
+FreeRTOS-like: `fiber_start()` enters the first context through SVC and an
+exception return, so the application must also wire `SVC_Handler()` to branch to
+`fiber_svc()`.
 
 ## Project Setup
 
@@ -22,6 +25,7 @@ fiber/fiber_core.c
 fiber/fiber_boot.c
 fiber/fiber_stack.c
 fiber/port/fiber_port_state.c
+fiber/port/armv6m/fiber_port_armv6m.c
 fiber/port/armv7em/fiber_port_armv7em.c
 fiber/target/fiber_fpu.c
 fiber/target/fiber_irq.c
@@ -137,8 +141,14 @@ requires a configured hook and traps with `'K'` before entering the first fiber
 if the hook is missing.
 
 `fiber_start()` seeds the runtime-owned current context, checks the environment,
-prepares the platform, switches Thread mode to PSP, and tail-calls the selected
-fiber entry. It does not return.
+prepares the platform, validates the first restore context, and does not return.
+On ARMv7E-M, `FIBER_START_USE_SVC` defaults to `1`: `fiber_start()` resets the
+first-start CPU state to privileged Thread/MSP, optionally rewinds MSP, executes
+`svc #FIBER_SVC_START_NUMBER`, and the SVC handler enters the first fiber by
+exception return on PSP. The helper clears any pending PendSV immediately before
+enabling interrupts for SVC, so a stale scheduler exception cannot run before
+the first PSP context exists. Ports without SVC first-start support keep the
+direct boot trampoline fallback.
 
 `fiber_current()` returns the runtime-owned current fiber. `fiber_schedule()`
 does not choose a task by itself. It enters PendSV, saves the current context,
@@ -148,6 +158,15 @@ uninitialized context, corrupted boot seal, out-of-bounds saved stack pointer,
 invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
 traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 `FiberContext`, not by returning `NULL`.
+
+PendSV verifies that Thread mode is already using PSP before saving a source
+context. A pre-start or foreign PendSV that arrives while Thread mode still uses
+MSP traps with `'j'` instead of saving an invalid stack state.
+
+Before writing the source software frame, PendSV also checks that the live PSP
+is inside the current fiber stack bounds and has enough headroom for the core
+frame plus any high-FP save. If not, it traps with `'d'` before writing below
+`stack_base`.
 
 ## FPU Stress Example
 
@@ -166,7 +185,7 @@ void fiber_fpu_stress_entry(void*)
 }
 ```
 
-## PendSV Handler
+## Exception Handlers
 
 In `stm32xxx_it.c`:
 
@@ -178,6 +197,12 @@ void PendSV_Handler(void)
 {
 	__ASM volatile("b fiber_pendsv");
 }
+
+FIBER_ATTR_NAKED_ASM
+void SVC_Handler(void)
+{
+	__ASM volatile("b fiber_svc");
+}
 ```
 
 `fiber_pendsv()` is a naked exception handler body. It must see the original
@@ -186,23 +211,36 @@ wrapper that emits `bl fiber_pendsv`; that overwrites LR with a function return
 address. Direct vectoring to `fiber_pendsv()` is also valid when
 `FIBER_PENDSV_VECTOR_DIRECT=1` is set.
 
+`fiber_svc()` is also a naked handler body. The ARMv7E-M SVC start path checks
+that SVC arrived from MSP, decodes the configured SVC immediate, validates the
+seeded current context, switches to PSP, and returns through the synthetic
+exception frame. A normal C wrapper is not valid for the same LR/EXC_RETURN
+reason. Direct vectoring to `fiber_svc()` is valid when
+`FIBER_SVC_VECTOR_DIRECT=1` is set.
+
 ## Safety Defaults
 
 - `FIBER_SWITCH_STRICT_BARRIERS = 1`
 - `FIBER_SWITCH_MASK_IRQS = 1`
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_VALIDATE_SCHEDULED_CONTEXT = 1`
+- `FIBER_START_USE_SVC = 1` on ARMv7E-M, `0` on ports without SVC first-start
+  support
 
 `fiber_schedule()` is a Thread-mode API. Calling it from an interrupt traps
 through `FIBER_REQUIRE`. A real scheduler jump requires `PRIMASK == 0`, so the
 switch cannot be silently delayed out of a masked interrupt region. On cores
-with BASEPRI, a real scheduler jump also requires `BASEPRI == 0`.
+with BASEPRI, a real scheduler jump also requires `BASEPRI == 0`. On cores with
+FAULTMASK, `FAULTMASK` must also be clear.
 
 `fiber_pendsv_init_lowest_priority()` and `fiber_start()` run the runtime
 exception setup check by default. The check verifies:
 
 - PendSV priority reads back as the lowest priority;
-- vector table entries route PendSV and SVC to the expected handlers;
+- when SVC first-start is enabled, SVCall priority reads back as highest
+  priority;
+- vector table entries route PendSV and, when SVC first-start is enabled, SVC to
+  the expected handlers;
 - `FIBER_SCHEDULER_BASEPRI` matches the implemented NVIC priority bits;
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` threshold;
 - affected Cortex-M7 r0p0/r0p1 cores require
@@ -211,10 +249,16 @@ exception setup check by default. The check verifies:
   and PAC/BTI scenarios require an explicit `FIBER_ALLOW_UNVALIDATED_*` opt-in
   before runtime use.
 
-The default vector check expects an application wrapper named
-`PendSV_Handler()`. That wrapper must be a naked branch/tail branch that
+The default vector check expects application wrappers named `PendSV_Handler()`
+and `SVC_Handler()`. Each wrapper must be a naked branch/tail branch that
 preserves LR/EXC_RETURN. If the vector table points directly to
-`fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`.
+`fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`. If it points directly
+to `fiber_svc()`, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR`
+defaults to enabled only when `FIBER_START_USE_SVC=1`, so non-SVC ports do not
+need an SVC vector by default. The SVC start path also checks at runtime that
+the SVC immediate is `FIBER_SVC_START_NUMBER`; a wrong SVC dispatch traps with
+`'u'`, and an SVC that returns to
+`fiber_port_start_first_context()` traps with `'y'`.
 
 The handler-side scheduler bridge follows FreeRTOS-style critical-section
 discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
@@ -269,6 +313,14 @@ affected hardware validation is still required before claiming r0p1 parity.
 
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.
+
+The ARMv7E-M first-start path now enters that synthetic frame through SVC, not a
+direct branch. It is intentionally stricter than the direct fallback: it
+requires a configured scheduler hook, requires no active interrupt masks,
+verifies MSP setup, validates the restore context, checks SVC provenance and
+immediate value, clears pending PendSV before opening interrupts for SVC,
+enables IRQ and fault exceptions, clears BASEPRI in the SVC handler, then sets
+PSP/CONTROL immediately before exception return.
 
 `FIBER_INITIAL_EXC_RETURN` defaults to `0xFFFFFFFDu`, which is correct for
 M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define

@@ -47,6 +47,9 @@ void fiber_schedule(void);
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void);
 
+FIBER_ATTR_NAKED_ASM
+void fiber_svc(void);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
