@@ -1,9 +1,32 @@
 # Fiber Decision Log
 
-## 2026-07-11: Transitional Port Common Split
+## 2026-07-11: Start Real Port Common Helpers
 
-Architecture fallback code for profiles that are not concrete v2 ports yet now
-lives in `fiber/port/common`.
+The `port/common` name is now reserved for reusable helper code and contains the
+shared PRIMASK helper header.
+
+This layer may provide low-level reusable operations, but selected ports still
+own policy: when to mask, which scheduler critical section to use, and which
+architecture errata rules apply.
+
+## 2026-07-11: Rename Transitional v8-M Fallback
+
+The temporary v8-M fallback directory was renamed from `port/common` to
+`port/transitional_v8m`.
+
+This is intentionally a naming-only boundary cleanup:
+
+- `transitional_v8m` is not a real shared helper layer;
+- it remains compile-covered and runtime-gated;
+- it must be split into concrete v8-M ports before any FreeRTOS-level runtime
+  support claim is made;
+- the future `port/common` name is reserved for reusable helper code, not
+  selected-port fallback behavior.
+
+## 2026-07-11: Transitional v8-M Port Split
+
+Architecture fallback code for v8-M profiles that are not concrete v2 ports yet
+lives in `fiber/port/transitional_v8m`.
 
 This is a boundary cleanup:
 
@@ -11,9 +34,10 @@ This is a boundary cleanup:
   construction for any selected port;
 - `fiber_core.c` also delegates PRIMASK save/restore helpers to the port
   boundary;
-- `fiber_port_selected.h` includes `common/fiber_port_common.h` only for
-  profiles that do not yet have a concrete selected port header;
-- `port/common` remains transitional and runtime-gated. It is not a
+- `fiber_port_selected.h` includes
+  `transitional_v8m/fiber_port_transitional_v8m.h` only for profiles that do
+  not yet have a concrete selected port header;
+- `port/transitional_v8m` remains transitional and runtime-gated. It is not a
   FreeRTOS-level support claim for v8-M Baseline/Mainline or ARMv8.1-M.
 
 The validated ARMv7E-M/H7 path remains in `port/armv7em` and is not changed by
@@ -32,7 +56,7 @@ This is a focused port-layout step:
 - ARMv7-M has no high-FP, PSPLIM, MVE, PAC, or BTI handling in this port;
 - `fiber_core.c` no longer defines `fiber_pendsv()` or
   `fiber_port_init_context_frame()` for ARMv7-M;
-- the remaining common fallback is now limited to runtime-gated v8-M
+- the remaining transitional fallback is now limited to runtime-gated v8-M
   transitional profiles.
 
 This does not create a runtime validation claim for STM32F1/Cortex-M3 class

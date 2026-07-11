@@ -22,7 +22,7 @@
 #elif FIBER_PORT_ARMV7EM
 # include "armv7em/fiber_port_armv7em.h"
 #else
-# include "common/fiber_port_common.h"
+# include "transitional_v8m/fiber_port_transitional_v8m.h"
 #endif
 
 enum {

@@ -238,8 +238,8 @@ Closed hardening items from the FreeRTOS comparison:
 
    Move out of common code:
 
-   - common fallback `fiber_port_init_context_frame()`;
-   - common fallback `fiber_pendsv()`;
+   - transitional fallback `fiber_port_init_context_frame()`;
+   - transitional fallback `fiber_pendsv()`;
    - direct startup trampoline mechanics;
    - SVC first-start mechanics;
    - CONTROL/PSP/MSP programming;
@@ -256,9 +256,12 @@ Closed hardening items from the FreeRTOS comparison:
    - scheduler hook storage and current-context ownership policy;
    - portable diagnostics and app-provided RAM/code plausibility hooks.
 
-   A common fallback may exist only under `port/common` as a clearly marked
-   transitional split aid. A port cannot be claimed as FreeRTOS-level while it
-   depends on the `port/common` PendSV or frame layout.
+   A transitional fallback may exist only under an explicitly transitional
+   directory such as `port/transitional_v8m`. A port cannot be claimed as
+   FreeRTOS-level while it depends on transitional PendSV or frame layout.
+
+   The `port/common` name is reserved for reusable helper code, not
+   selected-port fallback behavior.
 
 2. Keep Cortex-M7 r0p1 errata policy explicit.
 

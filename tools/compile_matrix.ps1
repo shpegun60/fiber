@@ -91,7 +91,7 @@ $sources = @(
     "fiber\fiber_boot.c",
     "fiber\fiber_stack.c",
     "fiber\port\fiber_port_state.c",
-    "fiber\port\common\fiber_port_common.c",
+    "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
     "fiber\port\armv6m\fiber_port_armv6m.c",
     "fiber\port\armv7m\fiber_port_armv7m.c",
     "fiber\port\armv7em\fiber_port_armv7em.c",

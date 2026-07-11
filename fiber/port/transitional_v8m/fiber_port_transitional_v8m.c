@@ -1,8 +1,8 @@
 /*
- * fiber_port_common.c
+ * fiber_port_transitional_v8m.c
  *
- * Transitional fallback implementation for Cortex-M profiles whose dedicated
- * FreeRTOS-style port split is not finished yet.
+ * Transitional fallback implementation for v8-M profiles whose dedicated
+ * FreeRTOS-style port splits are not finished yet.
  *
  * This file is intentionally not a production support claim. It exists to keep
  * CPU-specific assembly out of the common runtime while v8-M ports are split

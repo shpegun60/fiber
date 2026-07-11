@@ -1,12 +1,12 @@
 /*
- * fiber_port_common.h
+ * fiber_port_transitional_v8m.h
  *
- * Transitional selected-port interface for profiles that do not yet have a
- * concrete FreeRTOS-style port source.
+ * Transitional selected-port interface for v8-M profiles that do not yet have
+ * concrete FreeRTOS-style port sources.
  */
 
-#ifndef FIBER_PORT_COMMON_FIBER_PORT_COMMON_H_
-#define FIBER_PORT_COMMON_FIBER_PORT_COMMON_H_
+#ifndef FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORT_TRANSITIONAL_V8M_H_
+#define FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORT_TRANSITIONAL_V8M_H_
 
 #include "../../target/fiber_target.h"
 #include "../fiber_port_types.h"
@@ -38,4 +38,4 @@ void fiber_svc(void);
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_COMMON_FIBER_PORT_COMMON_H_ */
+#endif /* FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORT_TRANSITIONAL_V8M_H_ */
