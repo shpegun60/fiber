@@ -72,9 +72,20 @@ Closed hardening items from the FreeRTOS comparison:
 - ARMv7E-M SVC first-start validates privileged Thread/MSP setup, MSP read-back,
   pending-PendSV cleanup, SVC provenance, SVC immediate value,
   restore-context integrity, fault exception enable, BASEPRI cleanup, PSP setup,
-  and `CONTROL.SPSEL`/`CONTROL.FPCA` state before exception return;
+  and `CONTROL.FPCA` state before exception return. Thread PSP selection is
+  performed by the `EXC_RETURN` value, matching the FreeRTOS first-task start
+  model;
 - handler-side scheduler calls use the FreeRTOS critical-section pattern:
   `BASEPRI` on BASEPRI-capable ports and saved `PRIMASK` on BASEPRI-less ports;
+- initial software-frame sizing, saved-SP modulo validation, and saved
+  `EXC_RETURN` word selection now come from selected port traits instead of a
+  common hard-coded 36-byte assumption;
+- port sources use the shared `fiber_port_types.h` type ABI and no longer
+  depend on the public `fiber_core.h` API header or on `fiber_boot.h` for data
+  layout definitions;
+- scheduled context restore uses a fast sealed-record check by default; the
+  full `FiberBoot` hash is still checked during init/start and is opt-in for
+  every switch through `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
 - portable defaults are back to conservative settings:
   `FIBER_FPU_LAZY = 0`, `FIBER_SWITCH_MASK_IRQS = 1`, and
   `FIBER_SWITCH_STRICT_BARRIERS = 1`;
@@ -100,7 +111,7 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P0: Next Validation
 
-0. Repeat STM32H7 runtime validation after `775648c`.
+0. Keep STM32H7 runtime validation current after behavior changes.
 
    `cf610cc` changed the ARMv7E-M/H7 `FiberContext.sp` invariant to the
    FreeRTOS `pxTopOfStack` model. Commit `775648c` then integrated the larger
@@ -112,8 +123,18 @@ Closed hardening items from the FreeRTOS comparison:
    This is architecturally cleaner, but it is behavior-affecting. The later
    ARMv7E-M SVC first-start checkpoint is also behavior-affecting because the
    first fiber is entered by SVC exception return instead of a direct branch.
-   The v2 path must repeat `H7_RUNTIME_VALIDATION.md` before carrying the
-   previous H7 runtime-validated claim.
+
+   The 2026-07-11 STM32H7 run passed the active H7 validation set after two SVC
+   migration fixes:
+
+   - SVC first-start must select Thread PSP through `EXC_RETURN`, not by
+     writing `CONTROL.SPSEL` from Handler mode;
+   - PendSV must validate the interrupted stack source through active
+     `LR`/`EXC_RETURN` bit 2, not by reading `CONTROL.SPSEL`.
+
+   Repeat `H7_RUNTIME_VALIDATION.md` after every behavior-affecting change to
+   startup, PendSV, scheduler bridge state, saved stack layout, exception setup,
+   interrupt-mask policy, or selected-port traits.
 
 1. Add a compile-only matrix for representative Cortex-M targets.
 
@@ -154,19 +175,21 @@ Closed hardening items from the FreeRTOS comparison:
    Already covered manually on hardware:
 
    - normal scheduler-driven `fiber_schedule()`;
+   - missing scheduler hook traps with `'K'`;
+   - `NULL` scheduler hook traps with `'K'`;
+   - changing the scheduler hook after the current context is seeded traps with
+     `'k'`;
    - scheduler jump with `PRIMASK != 0` must trap;
    - scheduler jump with `BASEPRI != 0` must trap on BASEPRI-capable cores;
    - scheduler jump with `FAULTMASK != 0` must trap on FAULTMASK-capable cores.
+   - scheduler hook returning `NULL` traps with `'N'`;
+   - scheduler hook returning a context with `sp == NULL` traps with `'P'`.
 
    Remaining useful cases:
 
    - `fiber_schedule()` from Handler mode must trap;
    - invalid `AIRCR.PRIGROUP` for the scheduler `BASEPRI` policy must trap with
      `'g'`;
-   - missing scheduler hook must trap with `'K'`;
-   - scheduler hook returning `NULL` must trap with `'N'`;
-   - changing the scheduler hook after the current context is seeded must trap
-     with `'k'`;
    - scheduler hook returning an uninitialized or corrupted context must trap
      before PendSV restores PSP;
    - scheduler hook returning a context with a bad EXC_RETURN or insufficient
@@ -202,7 +225,38 @@ Closed hardening items from the FreeRTOS comparison:
 
 ### P1: FreeRTOS Port Parity Decisions
 
-1. Keep Cortex-M7 r0p1 errata policy explicit.
+1. Finish the FreeRTOS-style port ownership split.
+
+   Target rule: each selected `port/arm*/fiber_port_*.h` exports the whole
+   architecture interface for that profile. Common runtime files include only
+   `fiber_port_selected.h` or `fiber_port.h` and must not contain
+   architecture-specific switch assembly.
+
+   Move out of common code:
+
+   - common fallback `fiber_port_init_context_frame()`;
+   - common fallback `fiber_pendsv()`;
+   - direct startup trampoline mechanics;
+   - SVC first-start mechanics;
+   - CONTROL/PSP/MSP programming;
+   - PendSV/SVC priority setup and vector routing validation;
+   - BASEPRI/PRIMASK scheduler critical-section assembly;
+   - Cortex-M7 r0p0/r0p1 errata policy;
+   - PSPLIM/FPU/MVE/PAC/BTI policy decisions that depend on the selected
+     architecture profile.
+
+   Keep in common code:
+
+   - public cooperative API semantics;
+   - `FiberBoot` construction, sealing, and common range validation;
+   - scheduler hook storage and current-context ownership policy;
+   - portable diagnostics and app-provided RAM/code plausibility hooks.
+
+   A common fallback may exist only as a clearly marked transitional split aid.
+   A port cannot be claimed as FreeRTOS-level while it depends on common fallback
+   PendSV or common fallback frame layout.
+
+2. Keep Cortex-M7 r0p1 errata policy explicit.
 
    FreeRTOS wraps `BASEPRI` writes in PendSV on Cortex-M7 r0p1 because of ARM
    errata 837070. The ARMv7E-M scheduler-driven `fiber` PendSV path now writes
@@ -216,7 +270,7 @@ Closed hardening items from the FreeRTOS comparison:
    hardware validation is still required before claiming parity with the
    FreeRTOS CM7/r0p1 port.
 
-2. Finish Cortex-M23 support or keep it explicitly excluded.
+3. Finish Cortex-M23 support or keep it explicitly excluded.
 
    Options:
 
@@ -241,7 +295,7 @@ Closed hardening items from the FreeRTOS comparison:
    - M23 Secure-only behavior, which needs separate validation;
    - M33/M55 Mainline behavior, where PSPLIM register access is expected.
 
-3. Implement and validate ARMv8-M Non-secure behavior.
+4. Implement and validate ARMv8-M Non-secure behavior.
 
    Required checks:
 
@@ -256,7 +310,7 @@ Closed hardening items from the FreeRTOS comparison:
    compile-covered, but runtime use requires
    `FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME=1`.
 
-4. Complete MVE/PAC/BTI policy for Cortex-M55 class targets.
+5. Complete MVE/PAC/BTI policy for Cortex-M55 class targets.
 
    Required checks:
 
@@ -288,10 +342,10 @@ Closed hardening items from the FreeRTOS comparison:
    mode.
 
    On ARMv7E-M, the current first-start path uses SVC. Other ports may still use
-   the direct trampoline fallback. PendSV must still verify that Thread mode is
-   already using PSP before saving a source context. A pre-start or foreign
-   PendSV now traps with `'j'` instead of publishing a bogus saved stack
-   pointer.
+   the direct trampoline fallback. PendSV must still verify from the active
+   `EXC_RETURN` value that the interrupted Thread context used PSP before
+   saving a source context. A pre-start or foreign PendSV now traps with `'j'`
+   instead of publishing a bogus saved stack pointer.
 
    The port also checks live PSP source-save headroom before writing the
    software frame. If the save would cross the current fiber stack base, it
@@ -332,7 +386,9 @@ Closed hardening items from the FreeRTOS comparison:
    privileged Thread/MSP setup, optional MSP rewind and read-back, pending
    PendSV cleanup before interrupts reopen, SVC immediate validation,
    seeded-current validation, fault exception enable, BASEPRI cleanup, PSP
-   setup, `CONTROL.SPSEL`, and `CONTROL.FPCA` verification.
+   setup, and `CONTROL.FPCA` verification. The SVC handler does not set
+   `CONTROL.SPSEL` from Handler mode; the first Thread-mode PSP entry is
+   selected by `EXC_RETURN`, as in the FreeRTOS first-task start path.
 
    The direct trampoline remains available as a fallback and A/B validation
    path for ports that do not implement SVC start. The SVC and direct paths must
@@ -349,6 +405,10 @@ Closed hardening items from the FreeRTOS comparison:
 The library can claim FreeRTOS-style STM32 Cortex-M CPU-port support only when:
 
 - each claimed core family has an explicit support status;
+- each claimed core family has a concrete selected port header/source pair that
+  exports the full port interface;
+- common runtime files contain no architecture-specific PendSV, SVC, direct
+  trampoline, or synthetic-frame fallback for claimed ports;
 - the claimed core families compile with representative GCC target flags;
 - the STM32H7/M7 path remains hardware validated;
 - M23, M33 Non-secure, and M55/MVE are either implemented and validated or

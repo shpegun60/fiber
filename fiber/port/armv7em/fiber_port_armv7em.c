@@ -9,7 +9,6 @@
  */
 
 #include "../fiber_port.h"
-#include "../../fiber_core.h"
 
 #if FIBER_PORT_ARMV7EM
 
@@ -27,7 +26,7 @@ BT_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 L
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_boot_check(&ctx->boot);
+	fiber_port_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
 
@@ -162,17 +161,14 @@ void fiber_svc(void)
 			"msr   psp, r0                          \n"
 			"isb                                    \n"
 
-			"mrs   r3, control                      \n"
+			/*
+			 * Do not set CONTROL.SPSEL from Handler mode. FreeRTOS-style first
+			 * start selects PSP through EXC_RETURN in r14. The Thread-mode
+			 * pre-SVC path already cleared CONTROL.FPCA and verified privileged
+			 * Thread/MSP state before entering SVC.
+			 */
 #if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
-			"bic   r3, r3, #4                       \n"
-#endif
-			"orr   r3, r3, #2                       \n"
-			"msr   control, r3                      \n"
-			"isb                                    \n"
 			"mrs   r3, control                      \n"
-			"tst   r3, #2                           \n"
-			"beq   95f                              \n"
-#if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
 			"tst   r3, #4                           \n"
 			"bne   95f                              \n"
 #endif
@@ -240,9 +236,11 @@ void fiber_pendsv(void)
 			 * Save runtime-owned current context, call the scheduler bridge under the
 			 * port BASEPRI critical section, and restore the returned context.
 			 * ---------------------------------------------------------------------- */
-			"mrs   r3, control                      \n"
-			"tst   r3, #2                           \n" /* Thread mode must already use PSP */
-			"beq   91f                              \n" /* direct-start window or foreign PendSV */
+			/* In Handler mode, EXC_RETURN is the source of truth for the
+			 * interrupted stack. Do not use CONTROL.SPSEL as the PendSV proof.
+			 */
+			"tst   lr, #4                           \n" /* interrupted Thread context must use PSP */
+			"beq   91f                              \n" /* foreign/pre-start PendSV used MSP */
 
 			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
@@ -260,7 +258,7 @@ void fiber_pendsv(void)
 			"bcc   92f                              \n"
 			"8:                                     \n"
 #endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
-			"subs  r3, #36                          \n" /* core software frame */
+			"subs  r3, #%c[swbytes]                 \n" /* core software frame */
 			"bcc   92f                              \n"
 			"cmp   r3, r2                           \n"
 			"blo   92f                              \n" /* software frame would cross stack base */
@@ -334,6 +332,7 @@ void fiber_pendsv(void)
 			"b     92b                              \n"
 			:
 			: [sched_basepri] "i" (FIBER_SCHEDULER_BASEPRI),
+			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)
 			: "memory","cc"

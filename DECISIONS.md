@@ -1,5 +1,54 @@
 # Fiber Decision Log
 
+## 2026-07-11: H7 SVC/PendSV Runtime Validation Pass
+
+The STM32H7 / Cortex-M7 v2 ARMv7E-M path passed the current scheduler-driven
+hardware validation set after the SVC first-start and PendSV source-save
+corrections.
+
+Observed normal run:
+
+- `validation_flags = 0x000001FF`;
+- `validation_failures = 0`;
+- `last_panic_code = 0`;
+- all three counters progressed equally into multi-million switch counts;
+- FP accumulator relationships stayed valid.
+
+Observed trap runs:
+
+- no scheduler hook trapped with `'K'`;
+- `NULL` scheduler hook trapped with `'K'`;
+- scheduler hook hot-swap after start trapped with `'k'`;
+- `fiber_schedule()` under `PRIMASK` trapped with `'p'`;
+- `fiber_schedule()` under `BASEPRI` trapped with `'b'`;
+- scheduler hook returning `NULL` trapped with `'N'`;
+- scheduler hook returning a context with `sp == NULL` trapped with `'P'`;
+- `fiber_schedule()` under `FAULTMASK` trapped with `'f'`.
+
+Two defects were found during the SVC migration and are now documented as
+port-contract rules:
+
+- SVC first-start must not rely on writing `CONTROL.SPSEL` from Handler mode.
+  Thread-mode PSP selection comes from `EXC_RETURN`, matching the FreeRTOS
+  first-task start model.
+- PendSV must validate the active interrupted stack by inspecting
+  `LR`/`EXC_RETURN` bit 2. `CONTROL.SPSEL` is not a sufficient proof inside
+  Handler mode after an exception-entry path.
+
+The same defect class was checked in the other current switch implementations:
+
+- ARMv6-M PendSV checks `LR`/`EXC_RETURN` bit 2 and has no SVC first-start path;
+- transitional baseline fallback PendSV checks `LR`/`EXC_RETURN` bit 2;
+- transitional non-ARMv7E-M mainline fallback PendSV checks `LR`/`EXC_RETURN`
+  bit 2;
+- the direct trampoline fallback still writes `CONTROL.SPSEL`, but only from
+  Thread mode. It remains a separate start path and needs a separate validation
+  record if enabled.
+
+This restores the H7 runtime-validation claim for the active ARMv7E-M SVC
+start plus scheduler-driven PendSV path. It does not validate M0/M23/M33/M55
+hardware or ARMv8-M security/MVE/PAC/BTI behavior.
+
 ## 2026-07-10: ARMv7E-M SVC First-Start Checkpoint
 
 The ARMv7E-M port now starts the first fiber through SVC by default:
@@ -17,9 +66,10 @@ The ARMv7E-M port now starts the first fiber through SVC by default:
 - `fiber_svc()` rejects SVC entry from PSP with `'l'`, validates the SVC
   immediate and traps with `'u'` on mismatch, clears `BASEPRI` like the
   FreeRTOS SVC first-task handler, validates the seeded current context,
-  restores the synthetic software frame, sets PSP, verifies `CONTROL.SPSEL`,
-  clears and verifies `CONTROL.FPCA` when configured, and enters the first fiber
-  by exception return.
+  restores the synthetic software frame, sets PSP, verifies `CONTROL.FPCA` when
+  configured, and enters the first fiber by exception return. The SVC handler
+  does not set `CONTROL.SPSEL` from Handler mode; Thread PSP selection comes
+  from `EXC_RETURN`, matching the FreeRTOS first-task start pattern.
 - `fiber_pendsv_init_lowest_priority()` sets SVCall to the highest priority
   when SVC first-start is enabled, and runtime validation traps with `'w'` if
   SVCall does not read back as highest priority.

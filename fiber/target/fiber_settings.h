@@ -68,6 +68,12 @@
 # define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #endif
 
+/* 1 = recompute the sealed FiberBoot hash on every scheduled restore.
+ * Leave 0 for normal validation; full hash checks still run during init/start. */
+#ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+# define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
+#endif
+
 /* Set to 1 for ARMv8-M Non-secure projects that need the Non-secure EXC_RETURN
  * encoding used by FreeRTOS ports. Leave 0 for M3/M4/M7 and secure-only builds. */
 #ifndef FIBER_RUN_NONSECURE

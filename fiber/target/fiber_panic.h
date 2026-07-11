@@ -10,6 +10,10 @@
 
 #include "fiber_compiler.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* --------------------------------------------------------------------------
  * Panic/require: if the app didn't provide a global one, ship a weak fallback.
  * -------------------------------------------------------------------------- */
@@ -20,5 +24,9 @@
 FIBER_WEAK FIBER_NORETURN
 FIBER_ATTR_SENSITIVE
 void fiber_panic(char code);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* FIBER_FIBER_PANIC_H_ */

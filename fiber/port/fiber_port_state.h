@@ -7,19 +7,10 @@
 #ifndef FIBER_PORT_FIBER_PORT_STATE_H_
 #define FIBER_PORT_FIBER_PORT_STATE_H_
 
+#include "fiber_port_types.h"
+
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-typedef struct FiberContext FiberContext;
-
-enum {
-	FIBER_PORT_SOFTWARE_FRAME_BYTES = 9u * 4u
-};
-
-#ifndef FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
-#define FIBER_SCHEDULER_PICK_NEXT_FN_DEFINED
-typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *user);
 #endif
 
 /*

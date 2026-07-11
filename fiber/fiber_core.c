@@ -14,6 +14,7 @@
  */
 
 #include "fiber_core.h"
+#include "fiber_boot.h"
 #include "port/fiber_port.h"
 
 BT_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
@@ -134,7 +135,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	/* Intentionally expect sp % 8 == 4 after placing SW area.
 	 * After removing SW area in PendSV, PSP will be 8-byte aligned exactly at HW frame. */
-	FIBER_REQUIRE((((uintptr_t)ctx->sp) & 7u) == 4u, 'A');
+	FIBER_REQUIRE((((uintptr_t)ctx->sp) & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 
 	/* Ensure PSP is inside declared PSP region [stack_base, stack_top - HW_headroom] */
 	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');
@@ -298,10 +299,13 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
-			"mrs   r3, control                      \n"
-			"movs  r2, #2                           \n"
-			"tst   r3, r2                           \n" /* Thread mode must already use PSP */
-			"beq   6f                               \n" /* direct-start window or foreign PendSV */
+			/* Transitional baseline fallback: use active EXC_RETURN bit 2,
+			 * not CONTROL.SPSEL, to prove the interrupted Thread used PSP.
+			 */
+			"movs  r2, #4                           \n"
+			"mov   r3, lr                           \n"
+			"tst   r3, r2                           \n" /* interrupted Thread context must use PSP */
+			"beq   6f                               \n" /* foreign/pre-start PendSV used MSP */
 
 			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
@@ -430,9 +434,11 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
-			"mrs   r3, control                      \n"
-			"tst   r3, #2                           \n" /* Thread mode must already use PSP */
-			"beq   6f                               \n" /* direct-start window or foreign PendSV */
+			/* Transitional mainline fallback: use active EXC_RETURN bit 2,
+			 * not CONTROL.SPSEL, to prove the interrupted Thread used PSP.
+			 */
+			"tst   lr, #4                           \n" /* interrupted Thread context must use PSP */
+			"beq   6f                               \n" /* foreign/pre-start PendSV used MSP */
 
 			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */

@@ -32,6 +32,17 @@ fiber/target/fiber_irq.c
 fiber/target/fiber_panic.c
 ```
 
+The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
+only selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h`
+includes the concrete selected `arm*/fiber_port_*.h` interface and its
+port-owned frame traits. Public runtime code should use `fiber/fiber_core.h`;
+exception wiring or low-level port integration may include `fiber/port/fiber_port.h`.
+The v2 target is FreeRTOS-style ownership: each concrete `arm*` port exports
+the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
+exception setup, and architecture-specific critical-section policy. Common
+runtime files should not keep architecture-specific fallback switch assembly for
+ports that are claimed as supported.
+
 Port selection defaults to automatic detection from compiler ARM architecture
 macros. Production builds may select the profile explicitly, for example:
 
@@ -159,9 +170,9 @@ invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
 traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 `FiberContext`, not by returning `NULL`.
 
-PendSV verifies that Thread mode is already using PSP before saving a source
-context. A pre-start or foreign PendSV that arrives while Thread mode still uses
-MSP traps with `'j'` instead of saving an invalid stack state.
+PendSV verifies the active `EXC_RETURN` value before saving a source context.
+If the interrupted Thread context used MSP instead of PSP, a pre-start or
+foreign PendSV traps with `'j'` instead of saving an invalid stack state.
 
 Before writing the source software frame, PendSV also checks that the live PSP
 is inside the current fiber stack bounds and has enough headroom for the core
@@ -224,6 +235,7 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - `FIBER_SWITCH_MASK_IRQS = 1`
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_VALIDATE_SCHEDULED_CONTEXT = 1`
+- `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
 - `FIBER_START_USE_SVC = 1` on ARMv7E-M, `0` on ports without SVC first-start
   support
 

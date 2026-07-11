@@ -203,6 +203,59 @@ The long-run pass criteria are:
 Record the exact counter snapshot, settings, board, core revision, compiler
 flags, and commit hash with each successful run.
 
+## Recorded Result: 2026-07-11
+
+The STM32H7 board run passed the current scheduler-driven ARMv7E-M validation
+set after the SVC first-start and PendSV source-save corrections.
+
+Normal run:
+
+```text
+validation_flags    = 0x000001FF
+validation_failures = 0
+last_panic_code     = 0
+counter1            = counter2 = counter3 = 18832997 or higher in observed runs
+fpu_acc2            = 2 * fpu_acc1
+fpu_acc3            = 3 * fpu_acc1
+```
+
+Trap modes passed:
+
+```text
+FIBER_VAL_TRAP_NO_HOOK      -> 'K'
+FIBER_VAL_TRAP_NULL_HOOK    -> 'K'
+FIBER_VAL_TRAP_HOT_SWAP     -> 'k'
+FIBER_VAL_TRAP_PRIMASK      -> 'p'
+FIBER_VAL_TRAP_BASEPRI      -> 'b'
+FIBER_VAL_TRAP_NULL_NEXT    -> 'N'
+FIBER_VAL_TRAP_BAD_CONTEXT  -> 'P'
+FIBER_VAL_TRAP_FAULTMASK    -> 'f'
+```
+
+For each trap run, `last_panic_code == expected_panic_code` and
+`validation_failures == 0`.
+
+Two SVC migration defects were found and fixed before this pass:
+
+- the SVC handler must not set `CONTROL.SPSEL` from Handler mode; the first
+  Thread-mode PSP entry is selected by the restored `EXC_RETURN` value;
+- PendSV must prove that the interrupted Thread context used PSP by checking
+  the active `LR`/`EXC_RETURN` bit 2, not by reading `CONTROL.SPSEL`.
+
+Other active/fallback switch paths were audited for the same class of defect:
+
+- ARMv7E-M SVC start now uses `EXC_RETURN` for Thread PSP selection and verifies
+  FPCA only as a separate hygiene check;
+- ARMv7E-M PendSV checks active `LR`/`EXC_RETURN` bit 2 before saving the source
+  context;
+- ARMv6-M PendSV has no SVC first-start path and checks active `LR`/`EXC_RETURN`
+  bit 2 with a Thumb-1-safe sequence;
+- transitional baseline and non-ARMv7E-M mainline fallback PendSV paths also
+  check active `LR`/`EXC_RETURN` bit 2;
+- the direct trampoline fallback still writes `CONTROL.SPSEL`, but that path is
+  different: it runs in Thread mode and must be validated separately when
+  `FIBER_START_USE_SVC=0` is used.
+
 ## Performance Mode
 
 After the conservative run passes, STM32H7 performance mode may be tested with:

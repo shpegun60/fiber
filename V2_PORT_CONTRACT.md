@@ -112,24 +112,62 @@ fiber/
     fiber_diagnostics.h
   port/
     fiber_port.h
+    fiber_port_boot_record.h
+    fiber_port_select.h
+    fiber_port_selected.h
+    fiber_port_types.h
     fiber_port_state.c
     fiber_port_state.h
     armv6m/
+      fiber_port_armv6m.h
       fiber_port_armv6m.c
     armv7m/
+      fiber_port_armv7m.h
       fiber_port_armv7m.c
     armv7em/
+      fiber_port_armv7em.h
       fiber_port_armv7em.c
     armv8m_baseline/
+      fiber_port_armv8m_baseline.h
       fiber_port_armv8m_baseline.c
     armv8m_mainline/
+      fiber_port_armv8m_mainline.h
       fiber_port_armv8m_mainline.c
     armv81m_mainline/
+      fiber_port_armv81m_mainline.h
       fiber_port_armv81m_mainline.c
 ```
 
 The current one-file implementation may be split gradually. Behavior should not
 change during a pure file-layout split.
+
+## FreeRTOS-Style Port Ownership Model
+
+The target architecture is a FreeRTOS-style port boundary:
+
+- `fiber_core.c` owns public cooperative runtime semantics only;
+- `fiber_core.c` must not own CPU exception-handler assembly;
+- `fiber_core.c` must not own architecture-specific synthetic frame layout;
+- `fiber_core.c` must not contain a fallback PendSV implementation once the
+  v2 split is complete;
+- `fiber_boot.c` owns portable boot-record construction and validation only;
+- first-context CPU startup, SVC startup, direct trampoline startup, CONTROL
+  writes, PSP/MSP programming, and exception-return mechanics are port-owned;
+- exception setup such as PendSV/SVC priority, vector wiring validation,
+  implemented-priority-bit probing, and M7 errata policy is port-owned;
+- support helpers such as FPU, PSPLIM, VTOR, BASEPRI, and fault hygiene may be
+  shared, but the selected port owns the policy for when and how they are used.
+
+In the final v2 shape each concrete `port/arm*/fiber_port_*.h` exports the
+selected port interface. The common runtime includes only
+`fiber_port_selected.h` or `fiber_port.h`; it does not include concrete
+architecture headers directly and does not branch into architecture-specific
+implementation logic.
+
+Temporary transitional fallback code is allowed only while splitting ports. It
+must be clearly marked, compile-covered, and tracked as debt. A port cannot be
+claimed as FreeRTOS-level while it depends on a common fallback PendSV or common
+fallback frame builder.
 
 ## Port Selection Contract
 
@@ -249,6 +287,7 @@ The common runtime owns:
 The common runtime does not own:
 
 - physical exception frame layout;
+- software-frame size, saved-SP modulo, and EXC_RETURN word index;
 - assembly save/restore sequences;
 - security-domain register access;
 - PSPLIM/MSPLIM register access;
@@ -525,9 +564,10 @@ The bridge owns validation around the user hook:
   plus hardware exception-frame headroom, EXC_RETURN signature and Thread/PSP
   bits, and any port-specific extended-frame headroom such as `s16-s31` plus
   the hardware FP extension frame;
-- before saving a source context, PendSV must prove that Thread mode is already
-  running on PSP (`CONTROL.SPSEL == 1`). If this is false, the handler must panic
-  instead of saving an unrelated pre-start or foreign stack state;
+- before saving a source context, PendSV must prove from the active
+  `EXC_RETURN` value that the interrupted Thread context used PSP. If this is
+  false, the handler must panic instead of saving an unrelated pre-start or
+  foreign MSP stack state;
 - before writing the source software frame, PendSV must prove that the live PSP
   is inside the current context bounds and has enough headroom for the core
   software frame plus any port-specific high-FP frame. If this is false, the
@@ -592,12 +632,20 @@ on C++ ABI details.
 Each architecture port should provide a small ABI to the common layer:
 
 ```c
+enum {
+    FIBER_PORT_SOFTWARE_FRAME_WORDS = ...,
+    FIBER_PORT_SOFTWARE_FRAME_BYTES = ...,
+    FIBER_PORT_EXC_RETURN_WORD_INDEX = ...
+};
+
 extern FiberContext *volatile fiber_internal_port_current_context;
 extern FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next;
 extern void *volatile fiber_internal_port_scheduler_user;
 
 void fiber_port_init(void);
-void fiber_port_set_pendsv_lowest_priority(void);
+void fiber_port_exception_setup(void);
+void fiber_port_platform_bootstrap(void);
+uintptr_t fiber_port_prepare_msp_for_start(const FiberBoot *boot);
 void fiber_port_pend_switch(void);
 FiberContext *fiber_port_load_current_context(void);
 void fiber_port_seed_current_context(FiberContext *ctx);
@@ -605,16 +653,28 @@ void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
                                         void *user);
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 FIBER_NORETURN void fiber_port_start_first_context(uintptr_t msp_top);
-uint32_t *fiber_port_init_stack(FiberContext *ctx,
-                                void *stack_begin,
-                                void *stack_end,
-                                FiberEntry entry,
-                                void *arg);
+void fiber_port_init_context_frame(FiberContext *ctx);
 void fiber_pendsv(void);
+void fiber_svc(void);
 ```
 
 Exact names may change, but ownership should not:
 
+- `fiber_port_types.h` owns the shared type ABI: `entry_t`, `FiberBoot`,
+  `FiberContext`, and the scheduler hook function type. It does not include
+  `fiber_boot.h` or `fiber_core.h`, so ports can inspect offsets without
+  depending on public runtime API headers;
+- `fiber_port_boot_record.h` owns the `FiberBoot` integrity constants and hash
+  helper used by both boot construction and port-side restore validation;
+- scheduled restore validation uses a fast sealed-record check by default and
+  must not recompute the full boot-record hash on every switch unless
+  `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1` is explicitly selected;
+- `fiber_port_select.h` owns strict compile-time profile selection only;
+- `fiber_port_selected.h` includes the selected `arm*/fiber_port_*.h`
+  interface and is the common-runtime entry point for port-owned frame
+  constants and low-level handler declarations;
+- each concrete `arm*/fiber_port_*.h` must declare its port interface and frame
+  traits without including `fiber_boot.h` or `fiber_core.h`;
 - common code decides whether a switch is allowed;
 - common code seeds the current context and scheduler hook before a
   scheduler-driven switch can run;
@@ -627,7 +687,19 @@ Exact names may change, but ownership should not:
 - port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
 - port code owns SVC first-start mechanics where that port implements them;
+- port code owns direct trampoline first-start mechanics where that port keeps a
+  non-SVC startup fallback;
+- port code owns Thread/Handler mode preconditions that depend on CONTROL,
+  IPSR, PSP, MSP, PRIMASK, BASEPRI, or FAULTMASK;
+- port code owns PendSV/SVC priority programming and vector routing validation;
+- port code owns BASEPRI/PRIMASK critical-section assembly used inside PendSV;
+- port code owns Cortex-M7 r0p0/r0p1 errata policy when BASEPRI writes exist in
+  the handler path;
 - port code owns feature gates that depend on architecture state.
+
+Common code may provide small helpers for hashing, range checks, alignment,
+diagnostics, and user-facing API validation. Those helpers must not hide a CPU
+context layout decision.
 
 `FiberContext.sp` follows the FreeRTOS `pxTopOfStack` invariant: it points to
 the last saved software frame for a context that is not currently running. While
@@ -666,8 +738,16 @@ Required invariants:
 - invalid stack bounds trap before the first switch;
 - no user entry runs on MSP unless a port explicitly documents that policy.
 
-The layout used by `fiber_port_init_stack()` is part of the port ABI. Changing it
-requires updating the port audit note and compile/runtime validation.
+The layout used by `fiber_port_init_context_frame()` is part of the port ABI.
+Changing it requires updating the port audit note and compile/runtime
+validation.
+
+Common validation may use selected-port traits to prove stack bounds, saved-SP
+alignment, and `EXC_RETURN` sanity. It must not hard-code a universal software
+frame size such as 36 bytes. ARMv6-M and ARMv7E-M currently both use a 9-word
+software frame, but ARMv8-M security, PSPLIM, MVE, PAC, or BTI support may need
+different context slots. New ports must publish their own trait header before a
+runtime support claim is made.
 
 ## PendSV Contract
 
@@ -682,6 +762,9 @@ All ports that use PendSV must preserve the FreeRTOS-style invariants:
   them;
 - never allow a real cooperative switch to be silently delayed by interrupt
   masks.
+- prove that the interrupted Thread context used PSP from the active
+  `LR`/`EXC_RETURN` bit 2 before saving the source context. Handler-mode reads
+  of `CONTROL.SPSEL` are not a sufficient proof for SVC-started fibers.
 
 PendSV must not call arbitrary user code directly. A scheduler-driven path may
 call the configured pick-next hook only through the stable scheduler bridge and
@@ -742,7 +825,8 @@ The current ARMv7E-M SVC path:
 - validates the SVC immediate before restoring the first context;
 - validates the seeded current `FiberContext` before PSP is restored;
 - clears BASEPRI in the SVC handler before the first context is restored;
-- sets PSP and verifies `CONTROL.SPSEL` before exception return;
+- sets PSP before exception return; Thread PSP selection comes from the
+  `EXC_RETURN` value, not from writing `CONTROL.SPSEL` in Handler mode;
 - clears and verifies `CONTROL.FPCA` when the target has an FP context and
   `FIBER_BOOT_CLEAR_FPCA` is enabled;
 - panics if the SVC instruction returns to the start helper.
@@ -755,8 +839,8 @@ The SVC path must keep defining:
 
 - the SVC number or dispatch mechanism;
 - whether it requires privileged Thread mode before start;
-- how it sets or preserves `CONTROL.SPSEL`, `CONTROL.nPRIV`, and
-  `CONTROL.FPCA`;
+- how it selects Thread PSP by `EXC_RETURN`, and how it sets or preserves
+  `CONTROL.nPRIV` and `CONTROL.FPCA`;
 - how it selects Secure or Non-secure handler state on ARMv8-M;
 - how it fails when SVC is already owned by another component.
 

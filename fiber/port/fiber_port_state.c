@@ -5,7 +5,8 @@
  */
 
 #include "fiber_port_state.h"
-#include "../fiber_core.h"
+#include "fiber_port_boot_record.h"
+#include "fiber_port_selected.h"
 
 FiberContext *volatile fiber_internal_port_current_context = 0;
 FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next = 0;
@@ -15,6 +16,10 @@ void *volatile fiber_internal_port_scheduler_user = 0;
 # define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #endif
 
+#ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+# define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
+#endif
+
 #define FIBER_PORT_HIGH_FP_FRAME_BYTES (16u * 4u)
 
 void fiber_internal_validate_restore_context(FiberContext *ctx)
@@ -22,11 +27,15 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 #if FIBER_VALIDATE_SCHEDULED_CONTEXT
 	FIBER_REQUIRE(ctx != 0, 'N');
 	FIBER_REQUIRE(ctx->sp != 0, 'P');
-	fiber_boot_simple_check(&ctx->boot);
+#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+	fiber_port_boot_record_check(&ctx->boot);
+#else
+	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
 
 	const uintptr_t sp = (uintptr_t)ctx->sp;
-	/* Saved SW frame is 36 bytes below an 8-byte aligned HW exception frame. */
-	FIBER_REQUIRE((sp & 7u) == 4u, 'A');
+	/* Saved SW frame alignment is selected-port specific. */
+	FIBER_REQUIRE((sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
 	uintptr_t required_bytes = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES
@@ -34,11 +43,7 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 	FIBER_REQUIRE((ctx->boot.stack_top - sp) >= required_bytes, 'X');
 
 	const uint32_t *const words = (const uint32_t *)sp;
-# if FIBER_PORT_IS_BASELINE
-	const uint32_t exc_return = words[0];
-# else
-	const uint32_t exc_return = words[8];
-# endif
+	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
 
 	FIBER_REQUIRE((exc_return & 0xFF000000u) == 0xFF000000u, 'x');
 	FIBER_REQUIRE((exc_return & 0x0Cu) == 0x0Cu, 'x');

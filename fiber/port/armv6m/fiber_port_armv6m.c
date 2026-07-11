@@ -9,7 +9,6 @@
  */
 
 #include "../fiber_port.h"
-#include "../../fiber_core.h"
 
 #if FIBER_PORT_ARMV6M
 
@@ -24,7 +23,7 @@ BT_STATIC_ASSERT(FBR_OFF_STACK_TOP <= 124, "FBR_OFF_STACK_TOP must fit Thumb-1 L
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_boot_check(&ctx->boot);
+	fiber_port_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
 
@@ -84,10 +83,13 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
-			"mrs   r3, control                      \n"
-			"movs  r2, #2                           \n"
-			"tst   r3, r2                           \n" /* Thread mode must already use PSP */
-			"beq   91f                              \n" /* direct-start window or foreign PendSV */
+			/* Thumb-1 safe EXC_RETURN bit-2 check. CONTROL.SPSEL is not a
+			 * reliable Handler-mode proof of the interrupted Thread stack.
+			 */
+			"movs  r2, #4                           \n"
+			"mov   r3, lr                           \n"
+			"tst   r3, r2                           \n" /* interrupted Thread context must use PSP */
+			"beq   91f                              \n" /* foreign/pre-start PendSV used MSP */
 
 			"ldr   r1, =fiber_internal_port_current_context \n"
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
@@ -98,7 +100,7 @@ void fiber_pendsv(void)
 			"cmp   r0, r2                           \n"
 			"blo   92f                              \n" /* PSP is already below stack base */
 			"mov   r3, r0                           \n"
-			"subs  r3, #36                          \n" /* core software frame */
+			"subs  r3, #%c[swbytes]                 \n" /* core software frame */
 			"bcc   92f                              \n"
 			"cmp   r3, r2                           \n"
 			"blo   92f                              \n" /* software frame would cross stack base */
@@ -115,7 +117,7 @@ void fiber_pendsv(void)
 			 * ARMv6-M cannot push high registers directly here, so r8-r11 are staged
 			 * through r4-r7 and stored manually.
 			 * ---------------------------------------------------------------------- */
-			"subs  r0, #36                          \n" /* reserve 9 words */
+			"subs  r0, #%c[swbytes]                 \n" /* reserve software frame */
 			"mov   r2, r0                           \n" /* keep base until publication */
 
 			"mov   r3, lr                           \n"
@@ -148,7 +150,7 @@ void fiber_pendsv(void)
 			"mov   r11, r7                          \n"
 
 			"msr   psp, r0                          \n" /* PSP = target HW frame */
-			"subs  r0, #36                          \n" /* move to saved EXC_RETURN and low regs */
+			"subs  r0, #%c[swbytes]                 \n" /* move to saved EXC_RETURN and low regs */
 			"ldmia r0!, {r3-r7}                     \n" /* r3 = EXC_RETURN; restore low regs */
 			"mov   lr, r3                           \n"
 
@@ -181,7 +183,8 @@ void fiber_pendsv(void)
 			"bl    fiber_panic                      \n"
 			"b     92b                              \n"
 			:
-			: [offsb] "I" (FBR_OFF_STACK_BASE),
+			: [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)
 			: "memory","cc"
 	);

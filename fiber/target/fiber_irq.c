@@ -18,11 +18,10 @@
 #include "fiber_vtor.h"
 #include "fiber_basepri.h"
 #include "fiber_feature_policy.h"
+#include "../port/fiber_port_selected.h"
 
 extern void PendSV_Handler(void);
 extern void SVC_Handler(void);
-extern void fiber_pendsv(void);
-extern void fiber_svc(void);
 
 #ifndef FIBER_FORCE_PRIGROUP
 #  define FIBER_FORCE_PRIGROUP   (-1)

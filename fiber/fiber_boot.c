@@ -18,6 +18,7 @@
  */
 
 #include "fiber_boot.h"
+#include "port/fiber_port_boot_record.h"
 
 #ifndef FIBER_HAS_FAULTMASK
 # if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
@@ -305,45 +306,56 @@ uintptr_t fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx)
 	return 0u;
 }
 
-
-/* -------------------------------------------------------------------------- */
-/* Integrity helpers for FiberBoot                                         */
-/* -------------------------------------------------------------------------- */
-#define FIBER_CTX_MAGIC     (0x46424F54u) /* 'FBOT' */
-#define FIBER_CTX_VERSION   (0x0002u)     /* bumped due to MSP fields */
-#define FIBER_CTX_GUARD_LO  (0xA5A5A5A5u)
-#define FIBER_CTX_GUARD_HI  (0x5A5A5A5Au)
-
-/* Lightweight FNV-1a 32-bit */
-__STATIC_FORCEINLINE uint32_t fiber_hash32_accum(uint32_t h, uint32_t v)
+static uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 {
-	h ^= (uint8_t)(v      ); h *= 16777619u;
-	h ^= (uint8_t)(v >>  8); h *= 16777619u;
-	h ^= (uint8_t)(v >> 16); h *= 16777619u;
-	h ^= (uint8_t)(v >> 24); h *= 16777619u;
+	h ^= (uint8_t)(v);
+	h *= 16777619u;
+	h ^= (uint8_t)(v >> 8);
+	h *= 16777619u;
+	h ^= (uint8_t)(v >> 16);
+	h *= 16777619u;
+	h ^= (uint8_t)(v >> 24);
+	h *= 16777619u;
 	return h;
 }
 
-static uint32_t fiber_boot_ctx_compute_hash(const FiberBoot* const c)
+uint32_t fiber_port_boot_compute_hash(const FiberBoot *c)
 {
-	/* Hash invariant, security-relevant fields (NOT including hash/sealed). */
+	/* Hash invariant fields only. Do not include sealed or hash itself. */
 	uint32_t h = 2166136261u;
 
-	h = fiber_hash32_accum(h, (uint32_t)(uintptr_t)c->begin);
-	h = fiber_hash32_accum(h, (uint32_t)(uintptr_t)c->end);
-	h = fiber_hash32_accum(h, (uint32_t)(c->stack_base));
-	h = fiber_hash32_accum(h, (uint32_t)(c->stack_top));
-	h = fiber_hash32_accum(h, (uint32_t)(c->avail));
-	h = fiber_hash32_accum(h, (uint32_t)(uintptr_t)c->entry);
-	h = fiber_hash32_accum(h, (uint32_t)(uintptr_t)c->arg);
-	h = fiber_hash32_accum(h, (uint32_t)c->msp_policy);
-	h = fiber_hash32_accum(h, (uint32_t)c->msp_top);
-	h = fiber_hash32_accum(h, (uint32_t)c->magic);
-	h = fiber_hash32_accum(h, (uint32_t)c->version);
-	h = fiber_hash32_accum(h, (uint32_t)c->guard_lo);
-	h = fiber_hash32_accum(h, (uint32_t)c->guard_hi);
+	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->begin);
+	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->end);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->stack_base);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->stack_top);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->avail);
+	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->entry);
+	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->arg);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->msp_policy);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->msp_top);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->magic);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->version);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->guard_lo);
+	h = fiber_boot_hash32_accum(h, (uint32_t)c->guard_hi);
 	return h;
 }
+
+void fiber_port_boot_record_fast_check(const FiberBoot *ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'n');
+	FIBER_REQUIRE(ctx->magic == FIBER_BOOT_RECORD_MAGIC, 'm');
+	FIBER_REQUIRE(ctx->version == FIBER_BOOT_RECORD_VERSION, 'v');
+	FIBER_REQUIRE(ctx->guard_lo == FIBER_BOOT_RECORD_GUARD_LO, 'g');
+	FIBER_REQUIRE(ctx->guard_hi == FIBER_BOOT_RECORD_GUARD_HI, 'G');
+	FIBER_REQUIRE(ctx->sealed == 1u, 's');
+}
+
+void fiber_port_boot_record_check(const FiberBoot *ctx)
+{
+	fiber_port_boot_record_fast_check(ctx);
+	FIBER_REQUIRE(ctx->hash == fiber_port_boot_compute_hash(ctx), 'h');
+}
+
 
 /* -------------------------------------------------------------------------- */
 /* MSP planning (called by constructor)                                       */
@@ -474,14 +486,14 @@ FiberBoot fiber_create_boot(void* const begin, void* const end, const entry_t en
 	fiber_plan_msp(&ctx);
 
 	/* Seal with metadata (magic/version/canaries/hash) */
-	ctx.magic    = FIBER_CTX_MAGIC;
-	ctx.version  = FIBER_CTX_VERSION;
+	ctx.magic    = FIBER_BOOT_RECORD_MAGIC;
+	ctx.version  = FIBER_BOOT_RECORD_VERSION;
 	ctx.sealed   = 0u;                /* not sealed until hash is set */
-	ctx.guard_lo = FIBER_CTX_GUARD_LO;
-	ctx.guard_hi = FIBER_CTX_GUARD_HI;
+	ctx.guard_lo = FIBER_BOOT_RECORD_GUARD_LO;
+	ctx.guard_hi = FIBER_BOOT_RECORD_GUARD_HI;
 	ctx.hash     = 0u;
 
-	ctx.hash   = fiber_boot_ctx_compute_hash(&ctx);
+	ctx.hash   = fiber_port_boot_compute_hash(&ctx);
 	ctx.sealed = 1u;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
@@ -587,18 +599,7 @@ void fiber_boot_check(const FiberBoot* const ctx)
 /* -------------------------------------------------------------------------- 	*/
 void fiber_boot_simple_check(const FiberBoot* const ctx)
 {
-	FIBER_REQUIRE(ctx != NULL, 'n');
-
-	/* Integrity header */
-	FIBER_REQUIRE(ctx->magic    == FIBER_CTX_MAGIC,   'm');
-	FIBER_REQUIRE(ctx->version  == FIBER_CTX_VERSION, 'v');
-	FIBER_REQUIRE(ctx->guard_lo == FIBER_CTX_GUARD_LO, 'g');
-	FIBER_REQUIRE(ctx->guard_hi == FIBER_CTX_GUARD_HI, 'G');
-	FIBER_REQUIRE(ctx->sealed   == 1u, 's');
-	{
-		const uint32_t expect = fiber_boot_ctx_compute_hash(ctx);
-		FIBER_REQUIRE(ctx->hash == expect, 'h'); /* tamper/corruption */
-	}
+	fiber_port_boot_record_check(ctx);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -664,10 +665,5 @@ void fiber_boot(const FiberBoot* const ctx)
 	for (;;) { __WFE(); }      /* never returns */
 }
 
-#undef FIBER_CTX_MAGIC
-#undef FIBER_CTX_VERSION
 #undef FIBER_BOOT_CLEAR_FPCA_ASM
 #undef FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
-#undef FIBER_CTX_GUARD_LO
-#undef FIBER_CTX_GUARD_HI
-

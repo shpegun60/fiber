@@ -7,8 +7,11 @@
 #ifndef FIBER_PORT_FIBER_PORT_H_
 #define FIBER_PORT_FIBER_PORT_H_
 
-#include "fiber_port_state.h"
+#include "fiber_port_types.h"
 #include "../target/fiber_target.h"
+#include "fiber_port_boot_record.h"
+#include "fiber_port_selected.h"
+#include "fiber_port_state.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,8 +40,6 @@ __STATIC_FORCEINLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
 
 FIBER_NORETURN
 void fiber_internal_task_return(void);
-
-void fiber_port_init_context_frame(FiberContext *ctx);
 
 __STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)
 {
@@ -69,11 +70,6 @@ __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 {
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 }
-
-#if FIBER_START_USE_SVC
-FIBER_NORETURN
-void fiber_port_start_first_context(uintptr_t msp_top);
-#endif
 
 #ifdef __cplusplus
 } /* extern "C" */
