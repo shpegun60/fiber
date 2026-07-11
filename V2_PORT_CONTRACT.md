@@ -944,6 +944,10 @@ the scheduler raise, restore, and first-start clear paths. The sequence follows
 the FreeRTOS intent but is stricter: it preserves and restores the previous
 `PRIMASK` instead of unconditionally re-enabling IRQs.
 
+The errata-safe asm snippets use `r12` as scratch while preserving `PRIMASK`.
+Any port asm block that uses those snippets must treat `r12` as clobbered and
+must not keep live context state in `r12` across the macro expansion.
+
 This gate is compile-covered by the matrix for Cortex-M7 and Cortex-M7F. Runtime
 startup also checks CPUID and traps on affected Cortex-M7 r0p0/r0p1 cores when
 the gate is not enabled. This is still not a hardware validation claim.

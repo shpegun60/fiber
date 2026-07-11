@@ -112,6 +112,11 @@ __STATIC_FORCEINLINE void fiber_basepri_write(uint32_t value)
 # define FBR_ASM_WRITE_BASEPRI_R2     "msr   " FBR_BASEPRI_SYM ", r2           \n"
 # define FBR_ASM_WRITE_BASEPRI_R3     "msr   " FBR_BASEPRI_SYM ", r3           \n"
 
+/*
+ * Synchronized BASEPRI write snippets are for naked port assembly only.
+ * On the Cortex-M7 r0p1 errata path they clobber r12 to preserve PRIMASK
+ * without unconditionally enabling IRQs. Callers must treat r12 as scratch.
+ */
 # if FIBER_CORTEX_M7_R0P1_ERRATA_837070
 #  define FBR_ASM_WRITE_BASEPRI_R0_SYNC \
 	"mrs   r12, primask                  \n" \
