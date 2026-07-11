@@ -161,10 +161,14 @@ Closed hardening items from the FreeRTOS comparison:
    - ARMv8-M/ARMv8.1-M `FIBER_RUN_NONSECURE=1` compile mode
    - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
      `FIBER_TZ_NS=1` and `-mcmse`
+   - PendSV direct-vector mode with `FIBER_PENDSV_VECTOR_DIRECT=1`
+   - ARMv7E-M PendSV+SVC direct-vector mode with
+     `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
 
    Each target must prove that `FIBER_HAS_BASEPRI` and the PSPLIM/FPU feature
    macros are defined before they are used. This is a compile sanity check only;
-   it does not promote M23/M33/M55/MVE to validated runtime targets.
+   it does not promote M23/M33/M55/MVE or direct-vector wiring to validated
+   runtime targets.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
 

@@ -1,5 +1,19 @@
 # Fiber Decision Log
 
+## 2026-07-11: Direct-Vector Compile Coverage
+
+After the H7 SVC/PendSV validation checkpoint, the next step is intentionally a
+stabilization change, not a port refactor. The compile matrix now covers:
+
+- wrapper vector mode with `FIBER_PENDSV_WIRED=1`;
+- wrapper SVC mode on ARMv7E-M with `FIBER_SVC_WIRED=1`;
+- PendSV direct-vector mode with `FIBER_PENDSV_VECTOR_DIRECT=1`;
+- ARMv7E-M PendSV+SVC direct-vector mode with
+  `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`.
+
+This does not change the validated H7 wrapper-vector runtime path. Direct-vector
+mode is compile-covered only until a board run records that exact wiring.
+
 ## 2026-07-11: H7 SVC/PendSV Runtime Validation Pass
 
 The STM32H7 / Cortex-M7 v2 ARMv7E-M path passed the current scheduler-driven

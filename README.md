@@ -216,6 +216,14 @@ void SVC_Handler(void)
 }
 ```
 
+For wrapper mode, define these after the handlers are wired in the embedding
+application:
+
+```c
+#define FIBER_PENDSV_WIRED 1
+#define FIBER_SVC_WIRED 1
+```
+
 `fiber_pendsv()` is a naked exception handler body. It must see the original
 handler LR value, which is the hardware `EXC_RETURN`. Do not use a normal C
 wrapper that emits `bl fiber_pendsv`; that overwrites LR with a function return
@@ -360,8 +368,10 @@ Run the compile-only Cortex-M matrix after changing target gates or assembly:
 ```
 
 This checks representative M0/M0+/M3/M4/M4F/M7/M7F/M23/M33/M33F/M55/M55F/M55
-MVE-FP builds. It does not replace hardware tests and does not promote
-M23/M33/M55/MVE to validated targets.
+MVE-FP builds. It also compile-covers PendSV direct-vector mode for all
+profiles and PendSV+SVC direct-vector mode for ARMv7E-M. Direct-vector compile
+coverage does not replace hardware tests and does not promote a direct-vector
+configuration to a runtime-validated board claim.
 
 See `DECISIONS.md` for the current context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and

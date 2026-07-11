@@ -558,6 +558,8 @@ void fiber_pendsv(void)
 }
 #endif /* !FIBER_PORT_ARMV7EM */
 
-#ifndef FIBER_PENDSV_WIRED
+#if !FIBER_PENDSV_VECTOR_DIRECT
+# ifndef FIBER_PENDSV_WIRED
 FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to branch to fiber_pendsv without clobbering LR; define FIBER_PENDSV_WIRED=1 after you do it");
-#endif /* FIBER_PENDSV_WIRED */
+# endif /* FIBER_PENDSV_WIRED */
+#endif /* !FIBER_PENDSV_VECTOR_DIRECT */

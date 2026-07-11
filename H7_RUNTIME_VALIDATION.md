@@ -119,6 +119,10 @@ If the vector table points directly to `fiber_svc()` instead of an application
 wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR` defaults
 to active only when `FIBER_START_USE_SVC=1`.
 
+The compile matrix covers both wrapper-vector and direct-vector configurations.
+This is a build guard only. If a board uses direct vectoring to `fiber_pendsv()`
+or `fiber_svc()`, record a separate hardware validation result for that wiring.
+
 Validate these cases:
 
 - `fiber_start(ctx)` without a configured scheduler hook traps with `'K'`.

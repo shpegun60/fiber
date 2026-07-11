@@ -342,4 +342,10 @@ void fiber_pendsv(void)
 #undef FBR_STRINGIFY
 #undef FBR_STRINGIFY2
 
+#if FIBER_START_USE_SVC && !FIBER_SVC_VECTOR_DIRECT
+# ifndef FIBER_SVC_WIRED
+FIBER_DIAG_WARN("[fiber]: user must wire SVC_Handler to branch to fiber_svc without clobbering LR; define FIBER_SVC_WIRED=1 after you do it");
+# endif /* FIBER_SVC_WIRED */
+#endif /* FIBER_START_USE_SVC && !FIBER_SVC_VECTOR_DIRECT */
+
 #endif /* FIBER_PORT_ARMV7EM */
