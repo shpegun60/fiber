@@ -17,13 +17,15 @@
 
 #if FIBER_PORT_ARMV6M
 # include "armv6m/fiber_port_armv6m.h"
+#elif FIBER_PORT_ARMV7M
+# include "armv7m/fiber_port_armv7m.h"
 #elif FIBER_PORT_ARMV7EM
 # include "armv7em/fiber_port_armv7em.h"
 #else
 /*
  * Transitional selected-port interface for profiles whose concrete source split
- * is not finished. ARMv7-M and v8-M profiles must replace this fallback with a
- * real port-owned header before any runtime support claim is made.
+ * is not finished. v8-M profiles must replace this fallback with a real
+ * port-owned header before any runtime support claim is made.
  */
 #ifdef __cplusplus
 extern "C" {

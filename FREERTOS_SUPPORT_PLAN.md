@@ -100,7 +100,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Core family | Current state | Target state |
 | --- | --- | --- |
 | Cortex-M0/M0+ | Dedicated `port/armv6m` Thumb-1 path uses the FreeRTOS CM0 software-frame order and PRIMASK around the scheduler bridge, compile-only | Validate on hardware, document MSP rewind policy |
-| Cortex-M3 | Mainline path works with universal `r4-r11,lr` frame | Compile and smoke-test |
+| Cortex-M3 | Dedicated `port/armv7m` mainline path uses the FreeRTOS-style `r4-r11,lr` frame and BASEPRI around the scheduler bridge, compile-only | Validate on hardware |
 | Cortex-M4F | FPU-aware path matches FreeRTOS pattern | Compile and FP stress-test |
 | Cortex-M7F | Primary validated path for STM32H7 | Keep validated |
 | Cortex-M23 | Compile-covered; runtime-gated by default; generic baseline path has no PSPLIM slot | Add FreeRTOS-style PSPLIM slot/security policy or keep excluded |

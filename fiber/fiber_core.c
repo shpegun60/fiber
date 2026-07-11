@@ -24,10 +24,11 @@ FIBER_NORETURN FIBER_ATTR_SENSITIVE void fiber_internal_task_return(void) { fibe
 
 /*
  * Transitional fallback for ports whose frame builder has not been moved into a
- * concrete port source yet. ARMv7E-M and ARMv6-M already own this in their port
- * files. This block should shrink as v2 ports become real FreeRTOS-style units.
+ * concrete port source yet. ARMv6-M, ARMv7-M, and ARMv7E-M already own this in
+ * their port files. This block should shrink as v2 ports become real
+ * FreeRTOS-style units.
  */
-#if !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M
+#if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
@@ -74,7 +75,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 }
-#endif /* !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M */
+#endif /* FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE */
 
 /* ---------------- Paranoid seed builder ----------------
  * Common code validates inputs and stack bounds. The selected port owns the
@@ -276,7 +277,7 @@ enum {
 BT_STATIC_ASSERT(OFF_TO_PSLIM < 4096, "OFF_TO_PSLIM must fit Thumb-2 LDR imm12");
 BT_STATIC_ASSERT(OFF_TO_STACK_TOP < 4096, "OFF_TO_STACK_TOP must fit Thumb-2 LDR imm12");
 
-#if !FIBER_PORT_ARMV7EM && !FIBER_PORT_ARMV6M
+#if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
 {
@@ -415,7 +416,7 @@ void fiber_pendsv(void)
 			: "memory","cc"
 	);
 #else
-	/* ------------------------ Non-ARMv7E-M Mainline fallback ---------------------- */
+	/* ------------------------ v8-M Mainline transitional fallback ----------------- */
 	__ASM volatile(
 			".syntax unified                         \n"
 
@@ -556,7 +557,7 @@ void fiber_pendsv(void)
 #endif
 
 }
-#endif /* !FIBER_PORT_ARMV7EM */
+#endif /* FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE */
 
 #if !FIBER_PENDSV_VECTOR_DIRECT
 # ifndef FIBER_PENDSV_WIRED

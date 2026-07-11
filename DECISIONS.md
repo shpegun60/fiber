@@ -1,5 +1,24 @@
 # Fiber Decision Log
 
+## 2026-07-11: ARMv7-M Port Split Checkpoint
+
+The Cortex-M3 / ARMv7-M path now lives in
+`fiber/port/armv7m/fiber_port_armv7m.c`.
+
+This is a focused port-layout step:
+
+- ARMv7-M uses the mainline software frame order `[r4..r11][LR]`;
+- the scheduler bridge is protected with the BASEPRI policy used by mainline
+  Cortex-M ports;
+- ARMv7-M has no high-FP, PSPLIM, MVE, PAC, or BTI handling in this port;
+- `fiber_core.c` no longer defines `fiber_pendsv()` or
+  `fiber_port_init_context_frame()` for ARMv7-M;
+- the remaining common fallback is now limited to runtime-gated v8-M
+  transitional profiles.
+
+This does not create a runtime validation claim for STM32F1/Cortex-M3 class
+targets. ARMv7-M remains compile-only until hardware tests exist.
+
 ## 2026-07-11: Direct-Vector Compile Coverage
 
 After the H7 SVC/PendSV validation checkpoint, the next step is intentionally a
@@ -53,8 +72,7 @@ The same defect class was checked in the other current switch implementations:
 
 - ARMv6-M PendSV checks `LR`/`EXC_RETURN` bit 2 and has no SVC first-start path;
 - transitional baseline fallback PendSV checks `LR`/`EXC_RETURN` bit 2;
-- transitional non-ARMv7E-M mainline fallback PendSV checks `LR`/`EXC_RETURN`
-  bit 2;
+- transitional v8-M Mainline fallback PendSV checks `LR`/`EXC_RETURN` bit 2;
 - the direct trampoline fallback still writes `CONTROL.SPSEL`, but only from
   Thread mode. It remains a separate start path and needs a separate validation
   record if enabled.
@@ -114,8 +132,8 @@ This is a mechanical port-layout step:
   profile has no `BASEPRI`.
 - `fiber_core.c` no longer defines `fiber_pendsv()` when `FIBER_PORT_ARMV6M`
   is selected.
-- ARMv8-M Baseline and non-ARMv7E-M Mainline fallback code still remain in
-  `fiber_core.c` until their dedicated port files are split.
+- ARMv8-M Baseline/Mainline fallback code still remains in `fiber_core.c` until
+  those dedicated port files are split.
 - This does not create a runtime validation claim for STM32F0/G0/C0/L0/U0
   class targets. ARMv6-M remains compile-only until hardware tests exist.
 
