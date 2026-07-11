@@ -938,8 +938,10 @@ instead of treating Cortex-M7 as only a generic ARMv7E-M build.
 
 The ARMv7E-M scheduler-driven PendSV path writes `BASEPRI` around the scheduler
 bridge. The write is guarded by `FIBER_CORTEX_M7_R0P1_ERRATA_837070`; when that
-gate is enabled, the port emits the FreeRTOS-style `cpsid i` / `msr BASEPRI` /
-`cpsie i` workaround around the raise operation.
+gate is enabled, the port emits an errata-safe `BASEPRI` write sequence around
+the scheduler raise, restore, and first-start clear paths. The sequence follows
+the FreeRTOS intent but is stricter: it preserves and restores the previous
+`PRIMASK` instead of unconditionally re-enabling IRQs.
 
 This gate is compile-covered by the matrix for Cortex-M7 and Cortex-M7F. Runtime
 startup also checks CPUID and traps on affected Cortex-M7 r0p0/r0p1 cores when

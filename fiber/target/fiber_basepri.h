@@ -82,20 +82,75 @@
 #endif
 
 #if FIBER_HAS_BASEPRI
+__STATIC_FORCEINLINE uint32_t fiber_basepri_read(void)
+{
+	uint32_t value;
+	__ASM volatile("mrs %0, " FBR_BASEPRI_SYM : "=r"(value) :: "memory");
+	return value;
+}
+
+__STATIC_FORCEINLINE void fiber_basepri_write(uint32_t value)
+{
+# if FIBER_CORTEX_M7_R0P1_ERRATA_837070
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	__ASM volatile("msr " FBR_BASEPRI_SYM ", %0" :: "r"(value) : "memory");
+	__DSB();
+	__ISB();
+	__set_PRIMASK(primask);
+	__DSB();
+	__ISB();
+# else
+	__ASM volatile("msr " FBR_BASEPRI_SYM ", %0" :: "r"(value) : "memory");
+	__DSB();
+	__ISB();
+# endif
+}
+
 # define FBR_ASM_SNAP_BASEPRI_R3      "mrs   r3, " FBR_BASEPRI_SYM "           \n"
+# define FBR_ASM_WRITE_BASEPRI_R0     "msr   " FBR_BASEPRI_SYM ", r0           \n"
 # define FBR_ASM_WRITE_BASEPRI_R2     "msr   " FBR_BASEPRI_SYM ", r2           \n"
 # define FBR_ASM_WRITE_BASEPRI_R3     "msr   " FBR_BASEPRI_SYM ", r3           \n"
 
 # if FIBER_CORTEX_M7_R0P1_ERRATA_837070
-#  define FBR_ASM_RAISE_SCHEDULER_BASEPRI \
+#  define FBR_ASM_WRITE_BASEPRI_R0_SYNC \
+	"mrs   r12, primask                  \n" \
+	"cpsid i                              \n" \
+	FBR_ASM_WRITE_BASEPRI_R0 \
+	"dsb                                  \n" \
+	"isb                                  \n" \
+	"msr   primask, r12                  \n" \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#  define FBR_ASM_WRITE_BASEPRI_R2_SYNC \
+	"mrs   r12, primask                  \n" \
 	"cpsid i                              \n" \
 	FBR_ASM_WRITE_BASEPRI_R2 \
 	"dsb                                  \n" \
 	"isb                                  \n" \
-	"cpsie i                              \n"
+	"msr   primask, r12                  \n" \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#  define FBR_ASM_WRITE_BASEPRI_R3_SYNC \
+	"mrs   r12, primask                  \n" \
+	"cpsid i                              \n" \
+	FBR_ASM_WRITE_BASEPRI_R3 \
+	"dsb                                  \n" \
+	"isb                                  \n" \
+	"msr   primask, r12                  \n" \
+	"dsb                                  \n" \
+	"isb                                  \n"
 # else
-#  define FBR_ASM_RAISE_SCHEDULER_BASEPRI \
+#  define FBR_ASM_WRITE_BASEPRI_R0_SYNC \
+	FBR_ASM_WRITE_BASEPRI_R0 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#  define FBR_ASM_WRITE_BASEPRI_R2_SYNC \
 	FBR_ASM_WRITE_BASEPRI_R2 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#  define FBR_ASM_WRITE_BASEPRI_R3_SYNC \
+	FBR_ASM_WRITE_BASEPRI_R3 \
 	"dsb                                  \n" \
 	"isb                                  \n"
 # endif
@@ -104,13 +159,11 @@
 	FBR_ASM_SNAP_BASEPRI_R3 \
 	"movs  r2, %[sched_basepri]           \n" \
 	"stmdb sp!, {r2, r3}                  \n" \
-	FBR_ASM_RAISE_SCHEDULER_BASEPRI
+	FBR_ASM_WRITE_BASEPRI_R2_SYNC
 
 # define FBR_ASM_EXIT_SCHEDULER_BASEPRI \
 	"ldmia sp!, {r2, r3}                  \n" \
-	FBR_ASM_WRITE_BASEPRI_R3 \
-	"dsb                                  \n" \
-	"isb                                  \n"
+	FBR_ASM_WRITE_BASEPRI_R3_SYNC
 
 # define FBR_ASM_ENTER_SCHEDULER_CRITICAL FBR_ASM_ENTER_SCHEDULER_BASEPRI
 # define FBR_ASM_EXIT_SCHEDULER_CRITICAL  FBR_ASM_EXIT_SCHEDULER_BASEPRI

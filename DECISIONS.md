@@ -388,9 +388,10 @@ The ARMv7E-M scheduler path follows the FreeRTOS handler critical-section model:
 - `BASEPRI` is not saved as part of `FiberContext`.
 - Ports without `BASEPRI` wrap the handler-side scheduler bridge with a saved
   `PRIMASK` critical section, matching the FreeRTOS Cortex-M0 PendSV model.
-- `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style
-  `cpsid i` / `msr BASEPRI` / `cpsie i` workaround for affected Cortex-M7 r0p1
-  parts.
+- `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables a FreeRTOS-style errata 837070
+  guard around handler-side `BASEPRI` writes on affected Cortex-M7 r0p1 parts.
+  The fiber helper is stricter than the FreeRTOS minimum: it preserves and
+  restores the previous `PRIMASK` instead of unconditionally re-enabling IRQs.
 - The compile matrix now builds Cortex-M7 and Cortex-M7F with that errata gate
   enabled, but real r0p1 hardware validation is still required before claiming
   FreeRTOS CM7/r0p1 parity.

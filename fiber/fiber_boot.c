@@ -117,10 +117,8 @@ void fiber_platform_bootstrap(void)
 	{ __DSB(); __ISB(); }
 #endif
 
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
- || defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_8_1M_MAIN__)
-    __set_BASEPRI(0);
-    { __DSB(); __ISB(); }
+#if FIBER_HAS_BASEPRI
+	fiber_basepri_write(0u);
 #endif /* BASEPRI */
 
 #if FIBER_HAS_FAULTMASK

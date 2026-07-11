@@ -270,11 +270,14 @@ Closed hardening items from the FreeRTOS comparison:
    before restoring the selected context.
 
    `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style workaround
-   around the `BASEPRI` raise operation. The compile matrix builds Cortex-M7 and
-   Cortex-M7F with this gate enabled. Runtime startup checks CPUID and traps if
-   an affected r0p0/r0p1 core runs without the workaround. Real affected M7
-   hardware validation is still required before claiming parity with the
-   FreeRTOS CM7/r0p1 port.
+   around handler-side `BASEPRI` writes. Unlike the FreeRTOS minimum sequence,
+   the fiber helper preserves and restores the previous `PRIMASK` instead of
+   unconditionally re-enabling IRQs; this keeps SVC/start critical sections
+   closed while still serializing the `BASEPRI` write. The compile matrix builds
+   Cortex-M7 and Cortex-M7F with this gate enabled. Runtime startup checks CPUID
+   and traps if an affected r0p0/r0p1 core runs without the workaround. Real
+   affected M7 hardware validation is still required before claiming parity with
+   the FreeRTOS CM7/r0p1 port.
 
 3. Finish Cortex-M23 support or keep it explicitly excluded.
 

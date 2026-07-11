@@ -133,9 +133,7 @@ void fiber_svc(void)
 			"isb                                    \n"
 #if FIBER_HAS_BASEPRI
 			"movs  r0, #0                           \n"
-			"msr   basepri, r0                      \n"
-			"dsb                                    \n"
-			"isb                                    \n"
+			FBR_ASM_WRITE_BASEPRI_R0_SYNC
 #endif
 
 			"ldr   r0, =fiber_internal_port_current_context \n"

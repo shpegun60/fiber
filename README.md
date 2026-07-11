@@ -334,11 +334,14 @@ Auto selection maps STM32H7/Cortex-M7 to `FIBER_PORT_NAME == "armv7em"`.
 FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The
 ARMv7E-M scheduler-driven PendSV path now raises `BASEPRI` around the scheduler
 bridge, then restores the previous `BASEPRI` value before restoring the selected
-fiber. `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style
-`cpsid i` / `msr BASEPRI` / `cpsie i` workaround for affected Cortex-M7 r0p1
-parts. Runtime startup now checks CPUID and traps on affected r0p0/r0p1 cores if
-the workaround is not enabled. The compile matrix builds this branch, but real
-affected hardware validation is still required before claiming r0p1 parity.
+fiber. `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables a FreeRTOS-style guard
+around handler-side `BASEPRI` writes for affected Cortex-M7 r0p1 parts. The
+fiber helper preserves and restores the previous `PRIMASK` instead of blindly
+executing `cpsie i`, so SVC/start critical sections stay closed while the
+errata-safe `BASEPRI` write is serialized. Runtime startup now checks CPUID and
+traps on affected r0p0/r0p1 cores if the workaround is not enabled. The compile
+matrix builds this branch, but real affected hardware validation is still
+required before claiming r0p1 parity.
 
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.
