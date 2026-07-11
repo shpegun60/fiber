@@ -227,6 +227,53 @@ The long-run pass criteria are:
 Record the exact counter snapshot, settings, board, core revision, compiler
 flags, and commit hash with each successful run.
 
+## Current Partial Recorded Result: 2026-07-11
+
+Commit:
+
+```text
+208be61157ee3f06ba4b4bfc3be700b37d78eea5
+```
+
+This run was recorded after:
+
+- `739469a Harden SVC first-start dispatch checks`;
+- `208be61 Document BASEPRI asm scratch register`.
+
+Board/build:
+
+- STM32H7S3 / Cortex-M7 application build;
+- wrapper-vector SVC/PendSV wiring;
+- debugger stopped the CPU with SIGINT during a normal PendSV switch.
+
+Normal run snapshot:
+
+```text
+validation_flags     = 0x000001FF
+validation_failures  = 0
+last_panic_code      = 0
+validation_mode_seen = 0
+expected_panic_code  = 0
+trigger_count        = 0
+counter1             = 1246134
+counter2             = 1246135
+counter3             = 1246134
+fpu_acc1             = 1246134
+fpu_acc2             = 2492270
+fpu_acc3             = 3738402
+fpu_sink             = 2492270
+```
+
+The one-count skew between counters is acceptable for this snapshot because
+the debugger stopped during `fiber_schedule()` / `fiber_pendsv()`, not at a
+round boundary.
+
+Status:
+
+- `FIBER_VAL_NORMAL_RUN` passed on the board for this commit.
+- Trap modes still need to be rerun after the SVC dispatch hardening before the
+  H7 runtime-validation claim is fully restored for `208be61`.
+
 ## Superseded Recorded Result: 2026-07-11
 
 This result predates the scheduler-selected first-context API. It is retained

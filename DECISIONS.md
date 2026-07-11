@@ -1,5 +1,30 @@
 # Fiber Decision Log
 
+## 2026-07-11: H7 Normal Run After SVC Dispatch Hardening
+
+The STM32H7 / Cortex-M7 board passed `FIBER_VAL_NORMAL_RUN` after the current
+SVC dispatch hardening checkpoint:
+
+```text
+208be61157ee3f06ba4b4bfc3be700b37d78eea5
+```
+
+Observed snapshot:
+
+- `validation_flags = 0x000001FF`;
+- `validation_failures = 0`;
+- `last_panic_code = 0`;
+- `validation_mode_seen = 0`;
+- counters reached `1246134`, `1246135`, and `1246134`;
+- FP accumulator relationships remained valid.
+
+The debugger stopped the CPU during `fiber_schedule()` / `fiber_pendsv()`, so
+the one-count counter skew is expected for that snapshot.
+
+This is a normal-run validation record only. The H7 runtime-validation claim for
+this exact checkpoint remains partial until the trap modes in
+`H7_RUNTIME_VALIDATION.md` are rerun after the SVC dispatch hardening.
+
 ## 2026-07-11: SVC-Only First Start
 
 The direct boot trampoline path was removed.
