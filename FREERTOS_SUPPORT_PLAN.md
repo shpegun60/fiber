@@ -35,9 +35,9 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 - `FIBER_FPU_LAZY = 0` keeps FP stacking deterministic by default.
 - The initial stacked `PC` has bit 0 clear; Thumb state comes from `xPSR.T`.
 - `FIBER_INITIAL_EXC_RETURN` is configurable.
-- The ARMv7E-M first-fiber start uses SVC by default and enters the first fiber
-  by exception return. The direct boot trampoline remains only as an internal
-  fallback for ports without SVC first-start support.
+- First-fiber start uses SVC and enters the first fiber by exception return.
+  The direct boot trampoline has been removed; each selected port must provide
+  an SVC first-start symbol.
 - `fiber_schedule()` rejects calls from Handler mode.
 - `fiber_schedule()` rejects scheduler jumps while `PRIMASK` is already set.
 - `fiber_schedule()` rejects scheduler jumps while `BASEPRI` is already set on cores
@@ -99,13 +99,13 @@ Closed hardening items from the FreeRTOS comparison:
 
 | Core family | Current state | Target state |
 | --- | --- | --- |
-| Cortex-M0/M0+ | Dedicated `port/armv6m` Thumb-1 path uses the FreeRTOS CM0 software-frame order and PRIMASK around the scheduler bridge, compile-only | Validate on hardware, document MSP rewind policy |
-| Cortex-M3 | Dedicated `port/armv7m` mainline path uses the FreeRTOS-style `r4-r11,lr` frame and BASEPRI around the scheduler bridge, compile-only | Validate on hardware |
+| Cortex-M0/M0+ | Dedicated `port/armv6m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware and document MSP rewind policy |
+| Cortex-M3 | Dedicated `port/armv7m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware |
 | Cortex-M4F | FPU-aware path matches FreeRTOS pattern | Compile and FP stress-test |
 | Cortex-M7F | Primary validated path for STM32H7 | Keep validated |
-| Cortex-M23 | Compile-covered; runtime-gated by default; generic baseline path has no PSPLIM slot | Add FreeRTOS-style PSPLIM slot/security policy or keep excluded |
-| Cortex-M33 | Compile-covered; runtime-gated by default; simple PSPLIM register policy exists | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
-| Cortex-M55/MVE | Compile-covered; runtime-gated by default; MVE-FP maps to extended FP context, MVE-only is rejected | Add MVE/PAC/BTI context policy and hardware validation |
+| Cortex-M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
+| Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
+| Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
 
 ## Priority Roadmap
 
@@ -144,7 +144,7 @@ Closed hardening items from the FreeRTOS comparison:
    .\tools\compile_matrix.ps1
    ```
 
-   Current compile-only set:
+   Current matrix set:
 
    - Cortex-M0 or M0+
    - Cortex-M3
@@ -165,10 +165,9 @@ Closed hardening items from the FreeRTOS comparison:
    - ARMv7E-M PendSV+SVC direct-vector mode with
      `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
 
-   Each target must prove that `FIBER_HAS_BASEPRI` and the PSPLIM/FPU feature
-   macros are defined before they are used. This is a compile sanity check only;
-   it does not promote M23/M33/M55/MVE or direct-vector wiring to validated
-   runtime targets.
+   Every selected profile must compile in wrapper and direct-vector SVC/PendSV
+   modes. Passing the matrix is compile coverage only; runtime support still
+   requires profile-specific hardware validation.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
 
@@ -284,7 +283,8 @@ Closed hardening items from the FreeRTOS comparison:
    - implement a v8-M Baseline path with a PSPLIM slot similar to FreeRTOS NTZ;
    - or mark M23 as not supported until hardware/toolchain validation exists.
 
-   Current policy: M23 is compile-covered but runtime-gated by default.
+   Current policy: M23 has compile-covered SVC first-start mechanics, but it is
+   not runtime-supported until it has PSPLIM/security context policy.
    FreeRTOS has a PSPLIM slot in the CM23 NTZ context layout, but it also gates
    actual PSPLIM register access through target/security configuration because
    Non-secure Cortex-M23 does not have a Non-secure PSPLIM register. The fiber
@@ -293,7 +293,7 @@ Closed hardening items from the FreeRTOS comparison:
 
    Future direction: copying the FreeRTOS-style M23 layout is useful if `fiber`
    wants to claim ARMv8-M Baseline/Mainline parity. That work should be done as
-   a dedicated ARMv8-M portability pass after the compile-only matrix exists,
+   a dedicated ARMv8-M portability pass after the unsupported-port gate exists,
    not as part of STM32H7/M7 hardening. The implementation should separate:
 
    - a context slot for PSPLIM;
@@ -314,8 +314,8 @@ Closed hardening items from the FreeRTOS comparison:
      matching a FreeRTOS CM33/CM55-style port.
 
    Current policy: Non-secure and Secure-to-Non-secure bank builds remain
-   compile-covered, but runtime use requires
-   `FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME=1`.
+   unsupported until their selected ports provide the required security-domain
+   context state.
 
 5. Complete MVE/PAC/BTI policy for Cortex-M55 class targets.
 
@@ -349,9 +349,9 @@ Closed hardening items from the FreeRTOS comparison:
    context, and restores only the returned context. The core API does not
    accept `from` or `to` from Thread mode.
 
-   On ARMv7E-M, the current first-start path uses SVC. Other ports may still use
-   the direct trampoline fallback. PendSV must still verify from the active
-   `EXC_RETURN` value that the interrupted Thread context used PSP before
+   Each selected port uses SVC for first start. Ports no longer have a direct
+   trampoline fallback. PendSV must still verify from the
+   active `EXC_RETURN` value that the interrupted Thread context used PSP before
    saving a source context. A pre-start or foreign PendSV now traps with `'j'`
    instead of publishing a bogus saved stack pointer.
 
@@ -362,9 +362,7 @@ Closed hardening items from the FreeRTOS comparison:
    infrastructure.
 
    There is no v2 public API for starting from a caller-provided `FiberBoot`
-   record. Ports without SVC first-start support may still use the internal
-   direct fallback after `fiber_start()` has selected the first context through
-   the scheduler hook.
+   record. Ports without hardware validation are not runtime-supported.
 
 2. Keep vector wiring verification active.
 
@@ -378,8 +376,8 @@ Closed hardening items from the FreeRTOS comparison:
    `fiber_pendsv()` must set `FIBER_PENDSV_VECTOR_DIRECT=1`. The SVC first-start
    path has the same rule: default validation expects an `SVC_Handler()` wrapper,
    and direct vectoring to `fiber_svc()` requires `FIBER_SVC_VECTOR_DIRECT=1`.
-   `FIBER_VALIDATE_SVC_VECTOR` defaults to enabled only when
-   `FIBER_START_USE_SVC=1`.
+   `FIBER_VALIDATE_SVC_VECTOR` defaults to enabled because SVC is mandatory for
+   first start.
 
    This proves vector-table routing. The ARMv7E-M SVC first-start path adds a
    separate dispatch check by decoding the SVC immediate in `fiber_svc()` and
@@ -389,8 +387,8 @@ Closed hardening items from the FreeRTOS comparison:
 3. Keep the ARMv7E-M SVC-based first-fiber start path validated separately.
 
    FreeRTOS starts the first task through an SVC handler and enters the task by
-   exception return. The ARMv7E-M `fiber` default now does the same high-level
-   thing behind `FIBER_START_USE_SVC=1`, while adding extra local checks:
+   exception return. The ARMv7E-M `fiber` path now does the same high-level
+   thing, while adding extra local checks:
    privileged Thread/MSP setup, optional MSP rewind and read-back, pending
    PendSV cleanup before interrupts reopen, SVC immediate validation,
    seeded-current validation, fault exception enable, BASEPRI cleanup, PSP
@@ -398,9 +396,8 @@ Closed hardening items from the FreeRTOS comparison:
    `CONTROL.SPSEL` from Handler mode; the first Thread-mode PSP entry is
    selected by `EXC_RETURN`, as in the FreeRTOS first-task start path.
 
-   The direct trampoline remains available as a fallback and A/B validation
-   path for ports that do not implement SVC start. The SVC and direct paths must
-   keep separate validation records.
+   The direct trampoline is no longer available. New ports must add an SVC
+   first-start path before they can become runtime-supported.
 
 4. Consider moving PendSV assembly into a dedicated assembly source.
 

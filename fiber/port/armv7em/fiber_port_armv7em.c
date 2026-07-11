@@ -58,7 +58,6 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 }
 
-#if FIBER_START_USE_SVC
 FIBER_NORETURN
 FIBER_ATTR_NAKED_ASM
 void fiber_port_start_first_context(uintptr_t msp_top)
@@ -204,7 +203,6 @@ void fiber_svc(void)
 			: "memory","cc"
 	);
 }
-#endif /* FIBER_START_USE_SVC */
 
 /*
  * ARMv7E-M PendSV implementation.
@@ -342,10 +340,10 @@ void fiber_pendsv(void)
 #undef FBR_STRINGIFY
 #undef FBR_STRINGIFY2
 
-#if FIBER_START_USE_SVC && !FIBER_SVC_VECTOR_DIRECT
+#if !FIBER_SVC_VECTOR_DIRECT
 # ifndef FIBER_SVC_WIRED
 FIBER_DIAG_WARN("[fiber]: user must wire SVC_Handler to branch to fiber_svc without clobbering LR; define FIBER_SVC_WIRED=1 after you do it");
 # endif /* FIBER_SVC_WIRED */
-#endif /* FIBER_START_USE_SVC && !FIBER_SVC_VECTOR_DIRECT */
+#endif /* !FIBER_SVC_VECTOR_DIRECT */
 
 #endif /* FIBER_PORT_ARMV7EM */

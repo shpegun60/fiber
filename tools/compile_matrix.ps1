@@ -146,15 +146,8 @@ try {
             throw "No explicit FIBER_PORT_PROFILE mapping for $($cfg.Name)"
         }
 
-        $wrapperDefines = @("-DFIBER_PENDSV_WIRED=1")
-        if ($profile -eq "FIBER_PORT_PROFILE_ARMV7EM") {
-            $wrapperDefines += "-DFIBER_SVC_WIRED=1"
-        }
-
-        $directPendsvDefines = @("-DFIBER_PENDSV_VECTOR_DIRECT=1")
-        if ($profile -eq "FIBER_PORT_PROFILE_ARMV7EM") {
-            $directPendsvDefines += "-DFIBER_SVC_WIRED=1"
-        }
+        $wrapperDefines = @("-DFIBER_PENDSV_WIRED=1", "-DFIBER_SVC_WIRED=1")
+        $directPendsvDefines = @("-DFIBER_PENDSV_VECTOR_DIRECT=1", "-DFIBER_SVC_WIRED=1")
 
         $selectionModes = @(
             [pscustomobject]@{ Name = "auto";                  Defines = $wrapperDefines; ExtraArgs = @() },
@@ -163,24 +156,22 @@ try {
             [pscustomobject]@{ Name = "explicit-direct-pendsv"; Defines = @("-DFIBER_PORT_PROFILE=$profile") + $directPendsvDefines; ExtraArgs = @() }
         )
 
-        if ($profile -eq "FIBER_PORT_PROFILE_ARMV7EM") {
-            $selectionModes += [pscustomobject]@{
-                Name = "auto-direct-vectors"
-                Defines = @(
-                    "-DFIBER_PENDSV_VECTOR_DIRECT=1",
-                    "-DFIBER_SVC_VECTOR_DIRECT=1"
-                )
-                ExtraArgs = @()
-            }
-            $selectionModes += [pscustomobject]@{
-                Name = "explicit-direct-vectors"
-                Defines = @(
-                    "-DFIBER_PORT_PROFILE=$profile",
-                    "-DFIBER_PENDSV_VECTOR_DIRECT=1",
-                    "-DFIBER_SVC_VECTOR_DIRECT=1"
-                )
-                ExtraArgs = @()
-            }
+        $selectionModes += [pscustomobject]@{
+            Name = "auto-direct-vectors"
+            Defines = @(
+                "-DFIBER_PENDSV_VECTOR_DIRECT=1",
+                "-DFIBER_SVC_VECTOR_DIRECT=1"
+            )
+            ExtraArgs = @()
+        }
+        $selectionModes += [pscustomobject]@{
+            Name = "explicit-direct-vectors"
+            Defines = @(
+                "-DFIBER_PORT_PROFILE=$profile",
+                "-DFIBER_PENDSV_VECTOR_DIRECT=1",
+                "-DFIBER_SVC_VECTOR_DIRECT=1"
+            )
+            ExtraArgs = @()
         }
 
         if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
@@ -206,6 +197,7 @@ try {
                 Defines = @(
                     "-DFIBER_PORT_PROFILE=$profile",
                     "-DFIBER_PENDSV_WIRED=1",
+                    "-DFIBER_SVC_WIRED=1",
                     "-DFIBER_RUN_NONSECURE=1"
                 )
                 ExtraArgs = @()
@@ -215,6 +207,7 @@ try {
                 Defines = @(
                     "-DFIBER_PORT_PROFILE=$profile",
                     "-DFIBER_PENDSV_WIRED=1",
+                    "-DFIBER_SVC_WIRED=1",
                     "-DFIBER_RUN_NONSECURE=1",
                     "-DFIBER_TZ_NS=1"
                 )

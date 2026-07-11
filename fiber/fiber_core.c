@@ -107,35 +107,29 @@ void fiber_start(void)
 
 	FiberContext *const first = fiber_internal_scheduler_pick_first_from_start();
 
-#if FIBER_START_USE_SVC
 	fiber_boot_check(&first->boot);
 	fiber_platform_bootstrap();
 
-# if FIBER_USE_PSPLIM_REGISTER
+#if FIBER_USE_PSPLIM_REGISTER
 	fiber_psplim_config((uint32_t)first->boot.stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)first->boot.stack_base, 'L');
-# endif
+#endif
 
 	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&first->boot);
 	fiber_internal_validate_restore_context(first);
 
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-# if FIBER_HAS_BASEPRI
+#if FIBER_HAS_BASEPRI
 	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b');
-# endif
-# if FIBER_HAS_FAULTMASK
+#endif
+#if FIBER_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-# endif
+#endif
 
 	fiber_port_seed_current_context(first);
 	fiber_port_start_first_context(msp_top);
-#else
-	fiber_port_seed_current_context(first);
-
-	fiber_internal_boot_direct(&first->boot);
-#endif
 	FIBER_UNREACHABLE();
 }
 

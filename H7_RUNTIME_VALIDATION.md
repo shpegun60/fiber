@@ -20,7 +20,6 @@ Run the validation first with portable conservative defaults:
 #define FIBER_SWITCH_STRICT_BARRIERS 1
 #define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
 #define FIBER_VALIDATE_EXCEPTION_SETUP 1
-#define FIBER_START_USE_SVC 1
 ```
 
 Performance-mode runs may be recorded separately, but they must not replace the
@@ -43,8 +42,7 @@ validated STM32H7 build.
 The runtime check must cover:
 
 - PendSV priority reads back as the lowest priority.
-- SVCall priority reads back as highest priority when SVC first-start is
-  enabled.
+- SVCall priority reads back as highest priority.
 - PendSV vector routing matches the configured wrapper/direct mode.
 - SVC vector routing matches the configured policy.
 - `FIBER_SCHEDULER_BASEPRI` uses only implemented NVIC priority bits.
@@ -56,7 +54,7 @@ Expected setup panic codes when deliberately misconfigured:
 
 - `'Y'`: PendSV vector mismatch.
 - `'y'`: SVC vector mismatch.
-- `'w'`: SVCall priority is not highest while SVC first-start is enabled.
+- `'w'`: SVCall priority is not highest.
 - `'Q'`: scheduler `BASEPRI` masks no implemented priority bits.
 - `'q'`: scheduler `BASEPRI` contains unimplemented priority bits.
 - `'g'`: priority grouping or priority threshold is incompatible.
@@ -126,8 +124,8 @@ void SVC_Handler(void)
 ```
 
 If the vector table points directly to `fiber_svc()` instead of an application
-wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR` defaults
-to active only when `FIBER_START_USE_SVC=1`.
+wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR`
+defaults to active because SVC is the only first-start path.
 
 The compile matrix covers both wrapper-vector and direct-vector configurations.
 This is a build guard only. If a board uses direct vectoring to `fiber_pendsv()`
@@ -156,9 +154,6 @@ Validate these cases:
 - wrong SVC immediate value traps with `'u'`.
 - failed PSP/CONTROL verification before first exception return traps with
   `'j'`.
-
-The direct trampoline fallback must be validated separately if
-`FIBER_START_USE_SVC=0` is used for A/B testing.
 
 ## Scheduler Jump API
 
@@ -269,13 +264,10 @@ Other active/fallback switch paths were audited for the same class of defect:
   FPCA only as a separate hygiene check;
 - ARMv7E-M PendSV checks active `LR`/`EXC_RETURN` bit 2 before saving the source
   context;
-- ARMv6-M PendSV has no SVC first-start path and checks active `LR`/`EXC_RETURN`
-  bit 2 with a Thumb-1-safe sequence;
-- transitional baseline and non-ARMv7E-M mainline fallback PendSV paths also
-  check active `LR`/`EXC_RETURN` bit 2;
-- the direct trampoline fallback still writes `CONTROL.SPSEL`, but that path is
-  different: it runs in Thread mode and must be validated separately when
-  `FIBER_START_USE_SVC=0` is used.
+- ARMv6-M and non-ARMv7E-M transitional PendSV paths were audited for the same
+  source-stack proof and now have compile-covered SVC first-start paths, but
+  they remain unsupported until profile-specific hardware validation is
+  recorded.
 
 ## Performance Mode
 

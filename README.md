@@ -5,10 +5,9 @@ Small cooperative fiber switcher for STM32/Cortex-M projects.
 The context switch is requested from Thread mode with `fiber_schedule()` and is
 performed by PendSV through an application-provided scheduler hook. The
 application must wire `PendSV_Handler()` so it branches to `fiber_pendsv()`
-without clobbering LR/EXC_RETURN. On ARMv7E-M, the default first-fiber start is
-FreeRTOS-like: `fiber_start()` enters the first context through SVC and an
-exception return, so the application must also wire `SVC_Handler()` to branch to
-`fiber_svc()`.
+without clobbering LR/EXC_RETURN. The active v2 runtime start is FreeRTOS-like:
+`fiber_start()` enters the first context through SVC and an exception return, so
+the application must also wire `SVC_Handler()` to branch to `fiber_svc()`.
 
 ## Project Setup
 
@@ -52,14 +51,17 @@ macros. Production builds may select the profile explicitly, for example:
 #define FIBER_PORT_PROFILE FIBER_PORT_PROFILE_ARMV7EM
 ```
 
-The currently supported profile names are `FIBER_PORT_PROFILE_ARMV6M`,
+The selectable profile names are `FIBER_PORT_PROFILE_ARMV6M`,
 `FIBER_PORT_PROFILE_ARMV7M`, `FIBER_PORT_PROFILE_ARMV7EM`,
 `FIBER_PORT_PROFILE_ARMV8M_BASELINE`, `FIBER_PORT_PROFILE_ARMV8M_MAINLINE`, and
 `FIBER_PORT_PROFILE_ARMV81M_MAINLINE`. Leave `FIBER_PORT_PROFILE` undefined for
 auto-detection. When compiler ARM architecture macros are available, an
 explicit profile must match them. `FIBER_PORT_SELECTION_ALLOW_MISMATCH` is only
 for unusual toolchains or bring-up experiments where the compiler macros are
-missing or known to be wrong.
+missing or known to be wrong. After the direct trampoline removal, every
+selected profile must provide an SVC first-start symbol. ARMv7E-M is the active
+runtime-supported path; other profiles are compile-covered but still require
+hardware validation before support is claimed.
 
 Before starting fibers, initialize PendSV priority:
 
@@ -162,14 +164,13 @@ must return the first initialized `FiberContext`. A missing hook traps with
 context, validates it, seeds the runtime-owned current context, prepares the
 platform, and does not return. The first scheduler hook call is protected with
 the same port scheduler critical-section policy as PendSV: BASEPRI on
-BASEPRI-capable ports, or saved PRIMASK on baseline ports. On ARMv7E-M,
-`FIBER_START_USE_SVC` defaults to `1`: `fiber_start()` resets the first-start
-CPU state to privileged Thread/MSP, optionally rewinds MSP, executes
+BASEPRI-capable ports, or saved PRIMASK on baseline ports. `fiber_start()`
+resets the first-start CPU state to privileged Thread/MSP, optionally rewinds
+MSP, executes
 `svc #FIBER_SVC_START_NUMBER`, and the SVC handler enters the first fiber by
 exception return on PSP. The helper clears any pending PendSV immediately before
 enabling interrupts for SVC, so a stale scheduler exception cannot run before
-the first PSP context exists. Ports without SVC first-start support keep the
-internal direct trampoline fallback.
+the first PSP context exists. There is no direct trampoline fallback.
 
 `fiber_current()` returns the runtime-owned current fiber. `fiber_schedule()`
 does not choose a task by itself. It enters PendSV, saves the current context,
@@ -254,8 +255,7 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_VALIDATE_SCHEDULED_CONTEXT = 1`
 - `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
-- `FIBER_START_USE_SVC = 1` on ARMv7E-M, `0` on ports without SVC first-start
-  support
+- SVC first-start is mandatory for runtime-supported ports
 
 `fiber_schedule()` is a Thread-mode API. Calling it from an interrupt traps
 through `FIBER_REQUIRE`. A real scheduler jump requires `PRIMASK == 0`, so the
@@ -267,10 +267,8 @@ FAULTMASK, `FAULTMASK` must also be clear.
 exception setup check by default. The check verifies:
 
 - PendSV priority reads back as the lowest priority;
-- when SVC first-start is enabled, SVCall priority reads back as highest
-  priority;
-- vector table entries route PendSV and, when SVC first-start is enabled, SVC to
-  the expected handlers;
+- SVCall priority reads back as highest priority;
+- vector table entries route PendSV and SVC to the expected handlers;
 - `FIBER_SCHEDULER_BASEPRI` matches the implemented NVIC priority bits;
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` threshold;
 - affected Cortex-M7 r0p0/r0p1 cores require
@@ -283,11 +281,10 @@ The default vector check expects application wrappers named `PendSV_Handler()`
 and `SVC_Handler()`. Each wrapper must be a naked branch/tail branch that
 preserves LR/EXC_RETURN. If the vector table points directly to
 `fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`. If it points directly
-to `fiber_svc()`, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR`
-defaults to enabled only when `FIBER_START_USE_SVC=1`, so non-SVC ports do not
-need an SVC vector by default. The SVC start path also checks at runtime that
-the SVC immediate is `FIBER_SVC_START_NUMBER`; a wrong SVC dispatch traps with
-`'u'`, and an SVC that returns to
+to `fiber_svc()`, define `FIBER_SVC_VECTOR_DIRECT=1`. SVC vector validation is
+enabled by default because SVC is the only first-start path. The SVC start path
+also checks at runtime that the SVC immediate is `FIBER_SVC_START_NUMBER`; a
+wrong SVC dispatch traps with `'u'`, and an SVC that returns to
 `fiber_port_start_first_context()` traps with `'y'`.
 
 The handler-side scheduler bridge follows FreeRTOS-style critical-section
@@ -295,9 +292,10 @@ discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
 BASEPRI-less ports save `PRIMASK`, disable interrupts, call the hook, and
 restore `PRIMASK`.
 
-The v8-M feature policy is intentionally strict. Compile-only coverage exists
-for M23/M33/M55/MVE-FP, but runtime startup traps by default for profiles whose
-FreeRTOS ports require extra context state not implemented here yet:
+The v8-M feature policy remains intentionally strict for future ports. After the
+direct trampoline removal, M23/M33/M55/MVE-FP profiles have compile-covered SVC
+first-start mechanics, but runtime use remains policy-gated until the extra
+context state their FreeRTOS ports require is implemented and validated:
 
 ```c
 #define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 1
@@ -308,8 +306,9 @@ FreeRTOS ports require extra context state not implemented here yet:
 #define FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME 1
 ```
 
-Use those only for bring-up experiments. They do not add FreeRTOS-level
-PSPLIM/CONTROL/secure-context/PAC-key handling.
+Use those only for bring-up experiments after the selected port policy is
+understood. They do not add FreeRTOS-level PSPLIM/CONTROL/secure-context/PAC-key
+handling.
 
 ## H7 Performance Mode
 
@@ -344,8 +343,8 @@ affected hardware validation is still required before claiming r0p1 parity.
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.
 
-The ARMv7E-M first-start path now enters that synthetic frame through SVC, not a
-direct branch. It is intentionally stricter than the direct fallback: it
+The ARMv7E-M first-start path enters that synthetic frame through SVC, not a
+direct branch. It
 requires a configured scheduler hook, requires no active interrupt masks,
 verifies MSP setup, validates the restore context, checks SVC provenance and
 immediate value, clears pending PendSV before opening interrupts for SVC,
@@ -358,13 +357,11 @@ M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define
 `FIBER_INITIAL_EXC_RETURN` directly.
 
 Cortex-M23, Cortex-M33, Cortex-M55, MVE, TrustZone/Non-secure, and PAC/BTI
-scenarios are compile-covered but runtime-gated until their FreeRTOS-style
-context layout is implemented and hardware-validated. `FIBER_USE_PSPLIM_REGISTER`
+scenarios are unsupported until their FreeRTOS-style context layout is
+implemented and hardware-validated. `FIBER_USE_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank
-PSPLIM register. MVE-only configurations are rejected at runtime unless
-explicitly allowed, and MVE-FP is treated as extended FP/MVE context but still
-requires hardware validation.
+PSPLIM register when those ports are implemented.
 
 On Cortex-M0/M0+, `FIBER_REWIND_MSP` may need to be disabled unless the platform
 provides a reliable initial MSP source.
@@ -377,11 +374,12 @@ Run the compile-only Cortex-M matrix after changing target gates or assembly:
 .\tools\compile_matrix.ps1
 ```
 
-This checks representative M0/M0+/M3/M4/M4F/M7/M7F/M23/M33/M33F/M55/M55F/M55
-MVE-FP builds. It also compile-covers PendSV direct-vector mode for all
-profiles and PendSV+SVC direct-vector mode for ARMv7E-M. Direct-vector compile
-coverage does not replace hardware tests and does not promote a direct-vector
-configuration to a runtime-validated board claim.
+This checks ARMv7E-M supported builds and verifies that profiles without SVC
+first-start fail with the expected unsupported-port gate. It also
+compile-covers PendSV direct-vector mode and PendSV+SVC direct-vector mode for
+ARMv7E-M. Direct-vector compile coverage does not replace hardware tests and
+does not promote a direct-vector configuration to a runtime-validated board
+claim.
 
 See `DECISIONS.md` for the current context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and

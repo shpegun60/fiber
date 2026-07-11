@@ -4,7 +4,7 @@
  * Knobs (optional):
  *   - FIBER_FORCE_PRIGROUP  : [-1..7]  -1 = don't touch grouping (default), otherwise set PRIGROUP
  *   - FIBER_TUNE_SYSTICK    : 0/1      also set SysTick to lowest (default 0)
- *   - FIBER_TUNE_SVCALL     : 0/1      optionally set SVCall to a fixed priority (default 0)
+ *   - FIBER_TUNE_SVCALL     : 0/1      set SVCall to a fixed priority (default 1)
  *   - FIBER_SWITCH_STRICT_BARRIERS : 0/1 add extra DSB/ISB around sensitive writes (you already use it)
  *   - FIBER_VALIDATE_EXCEPTION_SETUP : 0/1 validate vectors and BASEPRI policy
  *   - FIBER_VALIDATE_PRIORITY_GROUPING : 0/1 validate AIRCR.PRIGROUP for BASEPRI policy
@@ -30,7 +30,7 @@ extern void SVC_Handler(void);
 #  define FIBER_TUNE_SYSTICK      0
 #endif
 #ifndef FIBER_TUNE_SVCALL
-#  define FIBER_TUNE_SVCALL       FIBER_START_USE_SVC
+#  define FIBER_TUNE_SVCALL       1
 #endif
 
 #ifndef FIBER_VALIDATE_EXCEPTION_SETUP
@@ -46,7 +46,7 @@ extern void SVC_Handler(void);
 #endif
 
 #ifndef FIBER_VALIDATE_SVC_VECTOR
-#  define FIBER_VALIDATE_SVC_VECTOR (FIBER_VALIDATE_VECTOR_WIRING && FIBER_START_USE_SVC)
+#  define FIBER_VALIDATE_SVC_VECTOR FIBER_VALIDATE_VECTOR_WIRING
 #endif
 
 #ifndef FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
@@ -62,7 +62,7 @@ extern void SVC_Handler(void);
 #endif
 
 #ifndef FIBER_VALIDATE_SVC_PRIORITY
-#  define FIBER_VALIDATE_SVC_PRIORITY FIBER_START_USE_SVC
+#  define FIBER_VALIDATE_SVC_PRIORITY FIBER_VALIDATE_EXCEPTION_SETUP
 #endif
 
 #ifndef __NVIC_PRIO_BITS

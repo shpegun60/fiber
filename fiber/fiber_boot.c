@@ -2,11 +2,9 @@
  * fiber_boot.c
  *
  * Minimal, universal PSP boot helpers for STM32 Cortex-M (bare-metal).
- * - Naked trampoline to switch Thread mode to PSP and tail-call entry.
  * - Paranoid context builder and checker with red-zone & PSPLIM accounting.
  * - Platform bootstrap: faults/STKALIGN/unaligned/div0/FPU/TrustZone.
  * - Environment precondition check (Thread, privileged, MSP selected).
- * - Internal direct fallback from a sealed FiberBoot (never returns).
  *
  * No RTOS coexistence. If you call this under an RTOS, you own the crash.
  *
@@ -45,142 +43,6 @@ FIBER_WEAK int fiber_addr_plausible_code(uintptr_t addr) {
 FIBER_WEAK uintptr_t fiber_fallback_initial_msp(void) {
 	return (uintptr_t)0;              /* default: no usable fallback */
 }
-
-#if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
-# define FIBER_BOOT_CLEAR_FPCA_ASM \
-			"movs  r5, #4              \n"  /* mask for CONTROL.FPCA                  */ \
-			"bics  r3, r5              \n"  /* clear FPCA before first fiber entry    */
-# define FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM \
-			"movs  r5, #4              \n"  /* mask for CONTROL.FPCA                  */ \
-			"tst   r4, r5              \n"  /* FPCA must be clear after CONTROL write */ \
-			"bne   9f                  \n"
-#else
-# define FIBER_BOOT_CLEAR_FPCA_ASM
-# define FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
-#endif
-
-/* -----------------------------------------------------------------------------*/
-/* Naked trampoline: atomically switch Thread to PSP and branch to entry(arg).	*/
-/* Never returns. M0-safe (Thumb-1 only where required).                      	*/
-/*                                                                            	*/
-/* Register contract on entry:                                                	*/
-/*   r0: psp_top  - target PSP top (8-byte aligned by caller)                 	*/
-/*   r1: entry    - entry function (Thumb, must not return)                   	*/
-/*   r2: arg      - argument passed to entry(arg)                              	*/
-/*   r3: msp_top  - optional new MSP top; if 0, MSP is left unchanged         	*/
-/* -----------------------------------------------------------------------------*/
-static FIBER_NORETURN FIBER_ATTR_NAKED_ASM
-void fiber_boot_trampoline(void* psp_top, entry_t entry, void* arg, void* msp_top)
-{
-	__ASM volatile(
-			".syntax unified          \n"
-			/* ---------------------------------------------------------------------- 	*/
-			/* Save & mask IRQs                                                       	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"mrs   r12, PRIMASK        \n"  /* save current IRQ mask into r12         	*/
-			"cpsid i                   \n"  /* mask IRQs (NMI/HardFault stay enabled) 	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Program PSP                                                            	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"lsrs  r0, r0, #3          \n"  /* align psp_top down to 8 bytes: r0 >>= 3 	*/
-			"lsls  r0, r0, #3          \n"  /* restore magnitude with low 3 bits = 0   	*/
-			"msr   psp, r0             \n"  /* PSP = r0 (new process stack pointer)    	*/
-			"isb                       \n"  /* ensure PSP write takes effect before read-back (required before dependent reads) */
-			/* read-back PSP into r4 and verify */
-			"mrs   r4, psp             \n"
-			"cmp   r4, r0              \n"
-			"bne   9f                  \n"  /* if PSP didn't take the value, go to fatal path */
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Optionally set MSP if msp_top != 0                                     	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"cmp   r3, #0              \n"  /* msp_top provided? compare r3 with 0     	*/
-			"beq   1f                  \n"  /* if r3 == 0, skip MSP update             	*/
-			"lsrs  r3, r3, #3          \n"  /* align msp_top down to 8 bytes: r3 >>= 3 	*/
-			"lsls  r3, r3, #3          \n"  /* restore magnitude with low 3 bits = 0   	*/
-			"msr   msp, r3             \n"  /* MSP = r3 (new main stack for handlers)  	*/
-			"isb                       \n"  /* ensure MSP write takes effect before read-back */
-			/* read-back MSP into r4 and verify */
-			"mrs   r4, msp             \n"
-			"cmp   r4, r3              \n"
-			"bne   9f                  \n"  /* mismatch means we refuse to proceed safely */
-			"1:                        \n"  /* label: fall through (no MSP change)     	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Select PSP for Thread mode                                             	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"mrs   r3, control         \n"  /* r3 = CONTROL                             */
-			FIBER_BOOT_CLEAR_FPCA_ASM
-			"movs  r5, #2              \n"  /* mask for SPSEL                           */
-			"orrs  r3, r5              \n"  /* set CONTROL.SPSEL (bit1) -> use PSP (Thumb-1 safe) */
-			"msr   control, r3         \n"  /* write CONTROL with SPSEL=1               */
-			"isb                       \n"  /* make SPSEL change visible before verification (architecturally required) */
-			/* verify SPSEL==1 */
-			"mrs   r4, control         \n"
-			FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM
-			"movs  r5, #2              \n"
-			"tst   r4, r5              \n"
-			"beq   9f                  \n"  /* if SPSEL didn't latch, fail hard         */
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Safety: if entry() ever returns, fault deterministically                	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"movs  r3, #0              \n"  /* M0/M0+: no MOV imm to LR; zero r3 first  */
-			"mov   lr, r3              \n"  /* LR = 0 (Thumb bit cleared) => INVSTATE   */
-			/* returning via BX LR will cause INVSTATE/HardFault */
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* r0 = arg                                    								*/
-			/* ---------------------------------------------------------------------- 	*/
-			"mov   r0, r2              \n"  /* r0 = arg (ABI: first argument in r0)    	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Restore IRQ mask                                                       	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"msr   PRIMASK, r12        \n"  /* restore saved PRIMASK (may unmask IRQs) 	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-
-			/* ---------------------------------------------------------------------- 	*/
-			/* Tail-call entry(arg) - never returns                                    	*/
-			/* ---------------------------------------------------------------------- 	*/
-			"bx    r1                  \n"  /* branch to entry (Thumb), never returns  	*/
-
-			/* Fatal path: make a UsageFault and park */
-			"9:                        \n"
-			/* ---------------------------------------------------------------------- 	*/
-			"dsb                       \n"  /* complete prior explicit memory accesses 	*/
-			"isb                       \n"  /* synchronize pipeline; ultra-conservative here */
-			/* ---------------------------------------------------------------------- 	*/
-			"bkpt  0                   \n"  /* breakpoint; outside the debugger usually HardFault */
-			"b     9b                  \n"  /* spin forever in the fault path (won't return) */
-
-			:
-			:
-			: "r0","r1","r2","r3","r4","r5","r12","lr","cc","memory"
-	);
-}
-
 /* -------------------------------------------------------------------------- */
 /* Fault hygiene: clear "sticky" status where present (v7-M/v7E-M/v8-M Main). */
 /* Use read-then-write (W1C) to avoid leftovers from a previous session.      */
@@ -620,52 +482,3 @@ void fiber_env_check(void)
 	FIBER_REQUIRE((ctl0 & 2u) == 0u, 's'); /* SPSEL==0 => MSP selected in Thread */
 
 }
-
-/* -------------------------------------------------------------------------- */
-/* Internal fallback using a prepared and sealed FiberBoot.                 */
-/* - Re-validates environment and context.                                     */
-/* - Programs PSPLIM (v8-M Mainline) to stack_base.                            */
-/* - Optionally rewinds MSP to ctx->msp_top (REWIND) or validates equality     */
-/*   (VALIDATE).                                                               */
-/* - Switches Thread to PSP and tail-calls entry(arg) via the trampoline.      */
-/* - Never returns.                                                            */
-/* -------------------------------------------------------------------------- */
-FIBER_NORETURN
-FIBER_ATTR_SENSITIVE
-void fiber_internal_boot_direct(const FiberBoot* const ctx)
-{
-	FIBER_REQUIRE(ctx != NULL, 'n');
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* Environment must be clean: Thread mode, privileged, MSP selected. */
-	fiber_env_check();
-
-	/* Context must pass all paranoid invariants. */
-	fiber_boot_check(ctx);
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* Platform hygiene before switching stacks. */
-	fiber_platform_bootstrap();
-
-	/* Program PSPLIM only when the selected security policy allows register access. */
-#if FIBER_USE_PSPLIM_REGISTER
-	fiber_psplim_config((uint32_t)ctx->stack_base);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }							/* ensure PSPLIM is live before using PSP */
-	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)ctx->stack_base, 'L');/* read-back verify */
-#endif /* FIBER_USE_PSPLIM_REGISTER */
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(ctx);
-	fiber_boot_trampoline((void*)ctx->stack_top, ctx->entry, ctx->arg,
-			(void*)msp_top);
-
-	/* If we ever get here, the world is broken. Scream and park forever. */
-	__BKPT(0);                 /* outside a debugger this typically HardFaults */
-	for (;;) { __WFE(); }      /* never returns */
-}
-
-#undef FIBER_BOOT_CLEAR_FPCA_ASM
-#undef FIBER_BOOT_VERIFY_FPCA_CLEAR_ASM

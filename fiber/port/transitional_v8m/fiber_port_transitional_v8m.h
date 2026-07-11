@@ -23,16 +23,14 @@ enum {
 
 void fiber_port_init_context_frame(FiberContext *ctx);
 
-FIBER_ATTR_NAKED_ASM
-void fiber_pendsv(void);
-
-#if FIBER_START_USE_SVC
 FIBER_NORETURN
 void fiber_port_start_first_context(uintptr_t msp_top);
 
 FIBER_ATTR_NAKED_ASM
 void fiber_svc(void);
-#endif
+
+FIBER_ATTR_NAKED_ASM
+void fiber_pendsv(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

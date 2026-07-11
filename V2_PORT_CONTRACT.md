@@ -151,8 +151,8 @@ The target architecture is a FreeRTOS-style port boundary:
 - `fiber_core.c` must not contain a fallback PendSV implementation once the
   v2 split is complete;
 - `fiber_boot.c` owns portable boot-record construction and validation only;
-- first-context CPU startup, SVC startup, direct trampoline startup, CONTROL
-  writes, PSP/MSP programming, and exception-return mechanics are port-owned;
+- first-context CPU startup, SVC startup, CONTROL writes, PSP/MSP programming,
+  and exception-return mechanics are port-owned;
 - exception setup such as PendSV/SVC priority, vector wiring validation,
   implemented-priority-bit probing, and M7 errata policy is port-owned;
 - support helpers such as FPU, PSPLIM, VTOR, BASEPRI, and fault hygiene may be
@@ -264,15 +264,16 @@ Backlog required before stronger parity claims:
 | Area | Current v2 status | Required future work |
 | --- | --- | --- |
 | Cortex-M7 r0p0/r0p1 | ARMv7E-M scheduler-driven PendSV has an explicit `FIBER_CORTEX_M7_R0P1_ERRATA_837070` gate around handler-side `BASEPRI` writes, the compile matrix builds that branch, and runtime startup traps if affected CPUID values run without the gate. Hardware validation is not recorded yet. | Validate on affected Cortex-M7 hardware before claiming parity with the FreeRTOS CM7 r0p1 port. Consider a dedicated CM7/r0p1 source split if the policy grows beyond the current guarded BASEPRI sequence. |
-| ARMv8-M Baseline / M23 | Selection and compile-only coverage exist. Runtime is gated by default. The generic baseline path still has no FreeRTOS-style PSPLIM slot. | Implement a PSPLIM slot/security policy or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
-| ARMv8-M Mainline / M33 | Selection and compile-only coverage exist. Runtime is gated by default. Simple PSPLIM register access is separate from full FreeRTOS CONTROL/PSPLIM/security context. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
-| ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile. Runtime is gated by default. MVE-FP maps to extended FP context; MVE-only and PAC/BTI are not implemented. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
+| ARMv8-M Baseline / M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level. | Implement a PSPLIM slot/security policy, or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
+| ARMv8-M Mainline / M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
+| ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
 | Source layout | Selection gates exist, but the main implementation is still being split from a shared source path. | Move CPU-specific save/restore/start logic into exactly one selected port source path per profile, matching the FreeRTOS discipline where the build includes one concrete port. |
-| Hardware evidence | H7/M7 is the strongest validated path. Other profiles are compile-only unless separately recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
+| Hardware evidence | H7/M7 is the strongest validated path. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
-Do not describe a profile as FreeRTOS-level only because it passes the compile
-matrix. Compile-only proves that selection and syntax are coherent; it does not
-prove exception return, security-domain behavior, FPU/MVE context behavior, or
+Do not describe a profile as FreeRTOS-level only because it has selection logic.
+The matrix now expects non-SVC-start profiles to fail at the unsupported-port
+gate. Passing ARMv7E-M compile checks does not prove exception return,
+security-domain behavior, FPU/MVE context behavior, or
 real interrupt-mask timing on hardware.
 
 ## Common Runtime Contract
@@ -699,9 +700,9 @@ Exact names may change, but ownership should not:
   restore path, but it must follow the common current-context policy;
 - port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
-- port code owns SVC first-start mechanics where that port implements them;
-- port code owns direct trampoline first-start mechanics where that port keeps a
-  non-SVC startup fallback;
+- port code owns SVC first-start mechanics;
+- a runtime-supported port must provide SVC first-start; non-SVC fallback start
+  paths are not part of the active v2 contract;
 - port code owns Thread/Handler mode preconditions that depend on CONTROL,
   IPSR, PSP, MSP, PRIMASK, BASEPRI, or FAULTMASK;
 - port code owns PendSV/SVC priority programming and vector routing validation;
@@ -815,13 +816,9 @@ If another RTOS, bootloader, monitor, or debug framework owns SVC or PendSV,
 
 ## First-Fiber Start Contract
 
-`main` used a direct boot trampoline as the validated STM32H7/Cortex-M7
-first-start path. `v2` keeps the direct trampoline as a fallback/A-B path, but
-ARMv7E-M now defaults to an SVC first-start path:
-
-```c
-#define FIBER_START_USE_SVC 1
-```
+`main` used a direct boot trampoline as an earlier STM32H7/Cortex-M7
+first-start path. Current `v2` intentionally removed that fallback. A
+runtime-supported port must start the first context through SVC.
 
 The current ARMv7E-M SVC path:
 
@@ -832,7 +829,7 @@ The current ARMv7E-M SVC path:
   read-back;
 - clears any pending PendSV while interrupts are still masked before issuing
   SVC;
-- requires SVCall to run at highest priority when SVC first-start is enabled;
+- requires SVCall to run at highest priority;
 - uses `svc #FIBER_SVC_START_NUMBER` as the dispatch key;
 - rejects SVC entry from PSP;
 - validates the SVC immediate before restoring the first context;
@@ -857,8 +854,8 @@ The SVC path must keep defining:
 - how it selects Secure or Non-secure handler state on ARMv8-M;
 - how it fails when SVC is already owned by another component.
 
-The direct trampoline and SVC start paths must have separate validation results.
-Passing one path does not validate the other.
+There is no direct trampoline validation path anymore. Adding a new runtime port
+means adding and validating that port's SVC first-start path.
 
 ## FPU and Extended Context Contract
 
@@ -1053,15 +1050,14 @@ Minimum evidence for stronger labels:
 7. Add vector wiring validation hooks for PendSV and SVC where possible. Done
    for active vector-table routing. ARMv7E-M SVC-start dispatch also validates
    the SVC immediate in the handler.
-8. Add optional SVC first-start behind `FIBER_START_USE_SVC`. Done for
-   ARMv7E-M as the default selected start path; other ports still use the
-   direct fallback unless they implement their own SVC path.
-9. Validate direct start and SVC start separately on STM32H7.
+8. Make SVC first-start mandatory for selected ports. Done for ARMv6-M,
+   ARMv7-M, ARMv7E-M, and transitional v8-M compile-covered paths.
+9. Validate the SVC start path on STM32H7 after every behavior change.
 10. Split ARMv6-M and ARMv7-M support from the transitional fallback path.
-    Done for Cortex-M0/M0+ and Cortex-M3 compile-only source layouts. Remaining
-    transitional fallback code lives under `port/transitional_v8m`, not
-    `fiber_core.c`. ARMv8-M Baseline remains a separate runtime-gated
-    portability task.
+    Done for Cortex-M0/M0+ and Cortex-M3 source layouts, including SVC
+    first-start. Remaining v8-M code lives under `port/transitional_v8m`, not
+    `fiber_core.c`, and must be split into concrete v8-M ports before support
+    claims are upgraded.
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.

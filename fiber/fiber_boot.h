@@ -6,7 +6,6 @@
  * - Integrity sealing (magic, canaries, FNV-1a).
  * - MSP policy (validate current vs. rewind to vector[0]) prepared in the context.
  * - Environment checker (Thread mode, privileged, MSP selected).
- * - Internal direct fallback using a naked trampoline for ports without SVC start.
  *
  * Arch support notes:
  * - ARMv6-M (Cortex-M0/M0+): PSP present; CONTROL.SPSEL works; no PSPLIM; no Mem/Bus/Usage faults; no FPU.
@@ -42,14 +41,9 @@ void   		fiber_boot_check  (const FiberBoot* const ctx);
 /* Environment precondition check (Thread mode, priv., MSP selected). */
 void          fiber_env_check   (void);
 
-/* Shared start hygiene used by direct trampoline and SVC first-start paths. */
+/* Shared start hygiene used by SVC first-start paths. */
 void          fiber_platform_bootstrap(void);
 uintptr_t     fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx);
-
-/* Internal fallback only. Public v2 start must go through fiber_start(). */
-FIBER_NORETURN
-void          fiber_internal_boot_direct(const FiberBoot* const ctx);
-
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-07-11: SVC-Only First Start
+
+The direct boot trampoline path was removed.
+
+Current runtime startup has one path:
+
+- `fiber_start()` asks the scheduler hook for the first context with
+  `current == NULL`;
+- the returned context is validated and seeded as the runtime-owned current
+  context;
+- the selected port enters the first fiber through SVC and exception return.
+
+The old non-SVC start selector was deleted. There is no direct-start
+configuration path left in the runtime.
+
+This intentionally narrows the active support claim:
+
+- ARMv7E-M remains the active runtime-supported port;
+- ARMv6-M, ARMv7-M, and transitional v8-M now have compile-covered SVC
+  first-start symbols, but they are not runtime-supported until hardware
+  validation is recorded for each profile;
+- the compile matrix now builds SVC wrapper and direct-vector modes for every
+  selected profile instead of keeping a fallback-start fence.
+
+This is behavior-affecting. The STM32H7 validation label must stay downgraded
+until the SVC-only build passes `H7_RUNTIME_VALIDATION.md` again on hardware.
+
 ## 2026-07-11: Scheduler-Selected First Context
 
 `fiber_start()` no longer accepts a direct first `FiberContext`.
@@ -143,12 +170,9 @@ port-contract rules:
 
 The same defect class was checked in the other current switch implementations:
 
-- ARMv6-M PendSV checks `LR`/`EXC_RETURN` bit 2 and has no SVC first-start path;
-- transitional baseline fallback PendSV checks `LR`/`EXC_RETURN` bit 2;
-- transitional v8-M Mainline fallback PendSV checks `LR`/`EXC_RETURN` bit 2;
-- the direct trampoline fallback still writes `CONTROL.SPSEL`, but only from
-  Thread mode. It remains a separate start path and needs a separate validation
-  record if enabled.
+- ARMv6-M and transitional v8-M PendSV paths were audited for the same
+  source-stack proof. After the SVC-only first-start decision, those profiles
+  are no longer runtime-startable until they grow their own SVC start path.
 
 This restores the H7 runtime-validation claim for the active ARMv7E-M SVC
 start plus scheduler-driven PendSV path. It does not validate M0/M23/M33/M55
@@ -158,8 +182,8 @@ hardware or ARMv8-M security/MVE/PAC/BTI behavior.
 
 The ARMv7E-M port now starts the first fiber through SVC by default:
 
-- `FIBER_START_USE_SVC` defaults to `1` for `FIBER_PORT_ARMV7EM`.
-- That checkpoint predates the current scheduler-selected first-context API.
+- That checkpoint predates the current scheduler-selected first-context API and
+  the later SVC-only first-start decision.
   The current API selects the first context through the scheduler hook before
   entering the port first-start helper.
 - The first-start helper forces privileged Thread/MSP state, clears FPCA by
@@ -178,8 +202,8 @@ The ARMv7E-M port now starts the first fiber through SVC by default:
 - `fiber_pendsv_init_lowest_priority()` sets SVCall to the highest priority
   when SVC first-start is enabled, and runtime validation traps with `'w'` if
   SVCall does not read back as highest priority.
-- The direct boot trampoline remains only as an internal fallback for ports
-  without SVC first-start support and for A/B validation.
+- The direct boot trampoline existed at this checkpoint, but it has since been
+  removed by the SVC-only first-start decision.
 - The STM32H7 application must wire `SVC_Handler()` as a naked branch to
   `fiber_svc()`. That wrapper lives in the embedding application tree, outside
   this repository.
@@ -265,8 +289,7 @@ The v2 runtime now checks exception setup before the first fiber starts:
 - `fiber_exception_runtime_check()` is called by
   `fiber_pendsv_init_lowest_priority()` and again by `fiber_start()`.
 - PendSV priority must read back as the lowest priority.
-- PendSV and, when SVC first-start is enabled, SVC vector entries must point at
-  the expected handler symbols.
+- PendSV and SVC vector entries must point at the expected handler symbols.
 - The default PendSV model expects an application `PendSV_Handler()` wrapper.
   That wrapper must branch to `fiber_pendsv()` without clobbering
   LR/EXC_RETURN. A normal C wrapper that emits `bl fiber_pendsv` is invalid.
@@ -275,8 +298,8 @@ The v2 runtime now checks exception setup before the first fiber starts:
 - The default ARMv7E-M SVC model expects an application `SVC_Handler()` wrapper
   that branches to `fiber_svc()` without clobbering LR/EXC_RETURN. Direct
   vectoring to `fiber_svc()` is supported with `FIBER_SVC_VECTOR_DIRECT=1`.
-  `FIBER_VALIDATE_SVC_VECTOR` defaults to active only when
-  `FIBER_START_USE_SVC=1`.
+  `FIBER_VALIDATE_SVC_VECTOR` defaults to active because SVC is mandatory for
+  first start.
 - `FIBER_SCHEDULER_BASEPRI` is validated against the hardware-implemented NVIC
   priority bits using a FreeRTOS-style write/readback probe.
 - `AIRCR.PRIGROUP` is validated with the same FreeRTOS-style rule used by the
@@ -445,7 +468,7 @@ Hardening decisions:
   `FAULTMASK` is already set.
 - The first-start path clears `CONTROL.FPCA` before entering the first fiber
   when an FPU context exists. On the current ARMv7E-M v2 path this happens
-  through SVC first-start; the direct trampoline remains a fallback path.
+  through SVC first-start.
 - The preferred low-level runtime API is `fiber_start()` plus
   `fiber_schedule()`. Higher-level yield/sleep/wait APIs should update scheduler
   state and then call `fiber_schedule()`.
@@ -472,9 +495,7 @@ Known limits:
   register file, the build must ensure `FIBER_HAS_FPU` covers that context or
   force saving with `FIBER_FORCE_SAVE_FPU = 1`.
 - There is no v2 public API for starting from a caller-provided `FiberBoot`
-  record. Ports without SVC first-start support may still use the internal
-  direct fallback after `fiber_start()` has selected and seeded the first
-  context through the scheduler hook.
+  record. Ports without hardware validation are not runtime-supported.
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
   not replace hardware tests, but it must stay green before widening support
   claims beyond STM32H7/Cortex-M7.
