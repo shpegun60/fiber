@@ -165,9 +165,9 @@ architecture headers directly and does not branch into architecture-specific
 implementation logic.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
-must be clearly marked, compile-covered, and tracked as debt. A port cannot be
-claimed as FreeRTOS-level while it depends on a common fallback PendSV or common
-fallback frame builder.
+must live under `port/common`, be clearly marked, be compile-covered, and be
+tracked as debt. A port cannot be claimed as FreeRTOS-level while it depends on
+the `port/common` PendSV or frame builder.
 
 ## Port Selection Contract
 
@@ -1045,8 +1045,9 @@ Minimum evidence for stronger labels:
    direct fallback unless they implement their own SVC path.
 9. Validate direct start and SVC start separately on STM32H7.
 10. Split ARMv6-M and ARMv7-M support from the common fallback path.
-    Done for Cortex-M0/M0+ and Cortex-M3 compile-only source layouts. ARMv8-M
-    Baseline remains a separate runtime-gated portability task.
+    Done for Cortex-M0/M0+ and Cortex-M3 compile-only source layouts. Remaining
+    transitional fallback code lives under `port/common`, not `fiber_core.c`.
+    ARMv8-M Baseline remains a separate runtime-gated portability task.
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.

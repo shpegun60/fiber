@@ -1,5 +1,24 @@
 # Fiber Decision Log
 
+## 2026-07-11: Transitional Port Common Split
+
+Architecture fallback code for profiles that are not concrete v2 ports yet now
+lives in `fiber/port/common`.
+
+This is a boundary cleanup:
+
+- `fiber_core.c` no longer owns PendSV assembly or synthetic software-frame
+  construction for any selected port;
+- `fiber_core.c` also delegates PRIMASK save/restore helpers to the port
+  boundary;
+- `fiber_port_selected.h` includes `common/fiber_port_common.h` only for
+  profiles that do not yet have a concrete selected port header;
+- `port/common` remains transitional and runtime-gated. It is not a
+  FreeRTOS-level support claim for v8-M Baseline/Mainline or ARMv8.1-M.
+
+The validated ARMv7E-M/H7 path remains in `port/armv7em` and is not changed by
+this cleanup.
+
 ## 2026-07-11: ARMv7-M Port Split Checkpoint
 
 The Cortex-M3 / ARMv7-M path now lives in

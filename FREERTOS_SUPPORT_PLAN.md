@@ -256,9 +256,9 @@ Closed hardening items from the FreeRTOS comparison:
    - scheduler hook storage and current-context ownership policy;
    - portable diagnostics and app-provided RAM/code plausibility hooks.
 
-   A common fallback may exist only as a clearly marked transitional split aid.
-   A port cannot be claimed as FreeRTOS-level while it depends on common fallback
-   PendSV or common fallback frame layout.
+   A common fallback may exist only under `port/common` as a clearly marked
+   transitional split aid. A port cannot be claimed as FreeRTOS-level while it
+   depends on the `port/common` PendSV or frame layout.
 
 2. Keep Cortex-M7 r0p1 errata policy explicit.
 

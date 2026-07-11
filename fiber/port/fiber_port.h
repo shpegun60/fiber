@@ -71,6 +71,26 @@ __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 }
 
+__STATIC_FORCEINLINE uint32_t fiber_port_primask_save_disable(void)
+{
+	uint32_t pm;
+	__ASM volatile(
+			"mrs %0, primask \n"
+			"cpsid i         \n"
+			: "=r"(pm)
+			:
+			: "memory");
+	{ __DSB(); __ISB(); }
+	return pm;
+}
+
+__STATIC_FORCEINLINE void fiber_port_primask_restore(uint32_t pm)
+{
+	{ __DSB(); __ISB(); }
+	__ASM volatile("msr primask, %0" :: "r"(pm) : "memory");
+	{ __DSB(); __ISB(); }
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

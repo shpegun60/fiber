@@ -22,37 +22,7 @@
 #elif FIBER_PORT_ARMV7EM
 # include "armv7em/fiber_port_armv7em.h"
 #else
-/*
- * Transitional selected-port interface for profiles whose concrete source split
- * is not finished. v8-M profiles must replace this fallback with a real
- * port-owned header before any runtime support claim is made.
- */
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-enum {
-	FIBER_PORT_SOFTWARE_FRAME_WORDS = 9u,
-	FIBER_PORT_SOFTWARE_FRAME_BYTES = FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u,
-	FIBER_PORT_EXC_RETURN_WORD_INDEX = FIBER_PORT_IS_BASELINE ? 0u : 8u
-};
-
-void fiber_port_init_context_frame(FiberContext *ctx);
-
-FIBER_ATTR_NAKED_ASM
-void fiber_pendsv(void);
-
-#if FIBER_START_USE_SVC
-FIBER_NORETURN
-void fiber_port_start_first_context(uintptr_t msp_top);
-
-FIBER_ATTR_NAKED_ASM
-void fiber_svc(void);
-#endif
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
+# include "common/fiber_port_common.h"
 #endif
 
 enum {
