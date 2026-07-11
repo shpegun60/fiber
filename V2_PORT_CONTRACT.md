@@ -76,6 +76,14 @@ contract, known limitations, and validation level that matches the claim.
 The detailed selected-port trait contract lives in
 `V2_PORT_TRAITS_CONTRACT.md`.
 
+The FreeRTOS reference policy lives in
+`V2_FREERTOS_PORT_REFERENCE_POLICY.md`. FreeRTOS `portable/` is treated as the
+CPU-port reference, not as the default compiled backend for `fiber`.
+Every selected port must keep a FreeRTOS parity record: each relevant FreeRTOS
+CPU-port macro, helper, function, assembly label, config gate, and errata policy
+must be adopted, adapted, replaced, excluded with a reason, or deferred with a
+tracked TODO. Nothing relevant may disappear silently during a port rewrite.
+
 Selected ports are the source of CPU facts. Common port helpers consume selected
 traits and must not infer CPU policy globally. During the v2 migration,
 `fiber/target` may keep temporary compatibility forwarding headers, but
@@ -125,31 +133,85 @@ fiber/
     fiber_port_boot_record.h
     fiber_port_select.h
     fiber_port_selected.h
+    fiber_port_traits.h
     fiber_port_types.h
     fiber_port_state.c
     fiber_port_state.h
+    common/
+      fiber_port_primask.h
+      fiber_port_basepri.h
+      fiber_port_vtor.h
+      fiber_port_exception.h
+      fiber_port_exception.c
+      fiber_port_fpu.h
+      fiber_port_fpu.c
+      fiber_port_psplim.h
     armv6m/
-      fiber_port_armv6m.h
-      fiber_port_armv6m.c
+      fiber_portmacro.h
+      fiber_port.c
+      fiber_portasm.h
+      fiber_portasm.c
     armv7m/
-      fiber_port_armv7m.h
-      fiber_port_armv7m.c
+      fiber_portmacro.h
+      fiber_port.c
+      fiber_portasm.h
+      fiber_portasm.c
     armv7em/
-      fiber_port_armv7em.h
-      fiber_port_armv7em.c
+      fiber_portmacro.h
+      fiber_port.c
+      fiber_portasm.h
+      fiber_portasm.c
     armv8m_baseline/
-      fiber_port_armv8m_baseline.h
-      fiber_port_armv8m_baseline.c
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
     armv8m_mainline/
-      fiber_port_armv8m_mainline.h
-      fiber_port_armv8m_mainline.c
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
     armv81m_mainline/
-      fiber_port_armv81m_mainline.h
-      fiber_port_armv81m_mainline.c
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
 ```
 
-The current one-file implementation may be split gradually. Behavior should not
-change during a pure file-layout split.
+This mirrors the FreeRTOS split conceptually:
+
+```text
+FreeRTOS portmacro.h       -> fiber_portmacro.h
+FreeRTOS portmacrocommon.h -> fiber_portmacrocommon.h or port/common helpers
+FreeRTOS port.c            -> fiber_port.c
+FreeRTOS portasm.h/.c      -> fiber_portasm.h/.c
+FreeRTOS secure_context.*  -> fiber_secure_context.*
+FreeRTOS mpu_wrappers*     -> fiber_mpu_wrappers* only if MPU task isolation
+                              becomes an explicit feature
+```
+
+The profile name belongs to the directory. Existing files such as
+`fiber_port_armv7em.c` are transitional names and may be mechanically renamed
+later in a no-behavior-change commit. The current implementation may be split
+gradually. Behavior should not change during a pure file-layout split.
 
 ## FreeRTOS-Style Port Ownership Model
 
@@ -193,12 +255,19 @@ Required rules:
   small-library convenience;
 - support explicit production selection through `FIBER_PORT_PROFILE`, similar
   in purpose to FreeRTOS `FREERTOS_PORT`;
+- support build-system selected production mode through
+  `FIBER_PORT_BUILD_SELECTED=1`, where the build defines exactly one
+  `FIBER_PORT_ARMV*` result macro and includes only the matching source group;
 - verify explicit `FIBER_PORT_PROFILE` against compiler `__ARM_ARCH_*` macros
   when those macros are available;
+- verify build-selected `FIBER_PORT_ARMV*` results against compiler
+  `__ARM_ARCH_*` macros when those macros are available;
 - allow selection mismatch only behind a named opt-in escape hatch for
   nonstandard toolchains;
 - reserve `FIBER_FORCE_PORT_*` for unusual toolchains and compatibility, and do
   not allow it to be mixed with `FIBER_PORT_PROFILE`;
+- do not allow `FIBER_PORT_BUILD_SELECTED` to be mixed with
+  `FIBER_PORT_PROFILE` or `FIBER_FORCE_PORT_*`;
 - produce exactly one internal `FIBER_PORT_*` selection macro;
 - fail the build if no supported port matches;
 - fail the build if more than one port matches;
@@ -237,6 +306,28 @@ separate source path rather than only a policy gate.
 bring-up experiments where compiler architecture macros are missing or known to
 be wrong. Normal production builds should leave it disabled. The older
 `FIBER_PORT_PROFILE_ALLOW_MISMATCH` spelling is kept as a compatibility alias.
+
+`FIBER_PORT_BUILD_SELECTED` is the planned FreeRTOS-like production path. In
+that mode the build chooses the port instead of asking `fiber_port_select.h` to
+auto-detect it:
+
+```text
+compiler/include path:
+  exposes the selected port interface
+
+build defines:
+  FIBER_PORT_BUILD_SELECTED=1
+  exactly one FIBER_PORT_ARMV*=1
+
+build sources:
+  exactly one selected port source group
+```
+
+During the v2 migration, `fiber_port_select.h` still validates and normalizes
+that build-selected result. The long-term goal is that selected
+`fiber_portmacro.h` headers provide the CPU interface directly, so the core can
+consume only the selected port facade and `fiber_port_select.h` can become a
+development convenience rather than a required production dependency.
 
 ## Core Profiles
 

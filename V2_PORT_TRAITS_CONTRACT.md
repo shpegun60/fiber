@@ -194,7 +194,7 @@ Recommended include order:
 #include "../target/fiber_compiler.h"
 #include "mcu_core.h"
 
-#include "fiber_port_select.h"
+#include "fiber_port_select.h"   /* development selector, optional long-term */
 #include "fiber_port_types.h"
 
 #define FIBER_PORT_MASK_PRIMASK 1
@@ -214,6 +214,21 @@ Recommended include order:
 
 #endif
 ```
+
+The production direction is FreeRTOS-like build selection:
+
+```text
+build-selected mode:
+  FIBER_PORT_BUILD_SELECTED=1
+  exactly one FIBER_PORT_ARMV*=1
+  exactly one selected port source group compiled
+  selected fiber_portmacro.h provides the CPU trait interface
+```
+
+In that final shape, `fiber_port_select.h` is allowed to remain as a
+development convenience for AUTO/profile matrix builds, but it must not be a
+hard dependency of the core runtime API. The core should consume the selected
+port facade and trait macros only.
 
 A selected port header may include only:
 

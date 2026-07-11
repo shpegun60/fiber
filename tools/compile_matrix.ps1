@@ -132,6 +132,24 @@ $portProfiles = @{
     "cortex-m55-mve-fp" = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
 }
 
+$portResultMacros = @{
+    "FIBER_PORT_PROFILE_ARMV6M"           = "FIBER_PORT_ARMV6M"
+    "FIBER_PORT_PROFILE_ARMV7M"           = "FIBER_PORT_ARMV7M"
+    "FIBER_PORT_PROFILE_ARMV7EM"          = "FIBER_PORT_ARMV7EM"
+    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = "FIBER_PORT_ARMV8M_BASELINE"
+    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = "FIBER_PORT_ARMV8M_MAINLINE"
+    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = "FIBER_PORT_ARMV81M_MAINLINE"
+}
+
+$portIncludeDirs = @{
+    "FIBER_PORT_PROFILE_ARMV6M"           = "fiber\port\armv6m"
+    "FIBER_PORT_PROFILE_ARMV7M"           = "fiber\port\armv7m"
+    "FIBER_PORT_PROFILE_ARMV7EM"          = "fiber\port\armv7em"
+    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = "fiber\port\transitional_v8m"
+    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = "fiber\port\transitional_v8m"
+    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = "fiber\port\transitional_v8m"
+}
+
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $buildRoot | Out-Null
 
@@ -145,15 +163,27 @@ try {
         if ([string]::IsNullOrWhiteSpace($profile)) {
             throw "No explicit FIBER_PORT_PROFILE mapping for $($cfg.Name)"
         }
+        $portMacro = $portResultMacros[$profile]
+        if ([string]::IsNullOrWhiteSpace($portMacro)) {
+            throw "No build-selected FIBER_PORT_* mapping for $profile"
+        }
+        $portIncludeDir = $portIncludeDirs[$profile]
+        if ([string]::IsNullOrWhiteSpace($portIncludeDir)) {
+            throw "No build-selected include directory mapping for $profile"
+        }
 
         $wrapperDefines = @("-DFIBER_PENDSV_WIRED=1", "-DFIBER_SVC_WIRED=1")
         $directPendsvDefines = @("-DFIBER_PENDSV_VECTOR_DIRECT=1", "-DFIBER_SVC_WIRED=1")
+        $buildSelectedDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-D$portMacro=1")
+        $buildSelectedIncludeArgs = @("-I$(Join-Path $RepoRoot $portIncludeDir)")
 
         $selectionModes = @(
-            [pscustomobject]@{ Name = "auto";                  Defines = $wrapperDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "explicit";              Defines = @("-DFIBER_PORT_PROFILE=$profile") + $wrapperDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "auto-direct-pendsv";    Defines = $directPendsvDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "explicit-direct-pendsv"; Defines = @("-DFIBER_PORT_PROFILE=$profile") + $directPendsvDefines; ExtraArgs = @() }
+            [pscustomobject]@{ Name = "auto";                         Defines = $wrapperDefines; ExtraArgs = @() },
+            [pscustomobject]@{ Name = "explicit";                     Defines = @("-DFIBER_PORT_PROFILE=$profile") + $wrapperDefines; ExtraArgs = @() },
+            [pscustomobject]@{ Name = "build-selected";               Defines = $buildSelectedDefines + $wrapperDefines; ExtraArgs = $buildSelectedIncludeArgs },
+            [pscustomobject]@{ Name = "auto-direct-pendsv";           Defines = $directPendsvDefines; ExtraArgs = @() },
+            [pscustomobject]@{ Name = "explicit-direct-pendsv";       Defines = @("-DFIBER_PORT_PROFILE=$profile") + $directPendsvDefines; ExtraArgs = @() },
+            [pscustomobject]@{ Name = "build-selected-direct-pendsv"; Defines = $buildSelectedDefines + $directPendsvDefines; ExtraArgs = $buildSelectedIncludeArgs }
         )
 
         $selectionModes += [pscustomobject]@{
@@ -172,6 +202,14 @@ try {
                 "-DFIBER_SVC_VECTOR_DIRECT=1"
             )
             ExtraArgs = @()
+        }
+        $selectionModes += [pscustomobject]@{
+            Name = "build-selected-direct-vectors"
+            Defines = $buildSelectedDefines + @(
+                "-DFIBER_PENDSV_VECTOR_DIRECT=1",
+                "-DFIBER_SVC_VECTOR_DIRECT=1"
+            )
+            ExtraArgs = $buildSelectedIncludeArgs
         }
 
         if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
