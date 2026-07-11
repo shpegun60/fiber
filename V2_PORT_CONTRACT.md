@@ -832,7 +832,8 @@ The current ARMv7E-M SVC path:
 - requires SVCall to run at highest priority;
 - uses `svc #FIBER_SVC_START_NUMBER` as the dispatch key;
 - rejects SVC entry from PSP;
-- validates the SVC immediate before restoring the first context;
+- validates the SVC MSP-frame alignment, opcode, and immediate before restoring
+  the first context;
 - validates the seeded current `FiberContext` before PSP is restored;
 - clears BASEPRI in the SVC handler before the first context is restored;
 - sets PSP before exception return; Thread PSP selection comes from the

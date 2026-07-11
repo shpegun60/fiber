@@ -124,8 +124,15 @@ void fiber_svc(void)
 			"tst   r3, r2                           \n"
 			"bne   93f                              \n" /* first-start SVC must arrive from MSP */
 			"mrs   r0, msp                          \n"
+			"movs  r2, #7                           \n"
+			"mov   r3, r0                           \n"
+			"tst   r3, r2                           \n"
+			"bne   93f                              \n" /* first-start MSP frame must be 8-byte aligned */
 			"ldr   r3, [r0, #24]                    \n" /* stacked PC */
 			"subs  r3, #2                           \n"
+			"ldrb  r2, [r3, #1]                     \n"
+			"cmp   r2, #0xDF                        \n"
+			"bne   94f                              \n"
 			"ldrb  r3, [r3]                         \n"
 			"cmp   r3, #" FBR_STRINGIFY(FIBER_SVC_START_NUMBER) " \n"
 			"bne   94f                              \n"

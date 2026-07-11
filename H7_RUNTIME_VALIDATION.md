@@ -151,7 +151,8 @@ Validate these cases:
 - `fiber_port_start_first_context()` does not continue after the `svc`
   instruction. If it does, it traps with `'y'`.
 - SVC entry from PSP or rejected first-start CPU state traps with `'l'`.
-- wrong SVC immediate value traps with `'u'`.
+- an unaligned first-start SVC MSP frame traps with `'l'`.
+- wrong SVC opcode or immediate value traps with `'u'`.
 - failed PSP/CONTROL verification before first exception return traps with
   `'j'`.
 

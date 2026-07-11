@@ -242,9 +242,10 @@ address. Direct vectoring to `fiber_pendsv()` is also valid when
 `FIBER_PENDSV_VECTOR_DIRECT=1` is set.
 
 `fiber_svc()` is also a naked handler body. The ARMv7E-M SVC start path checks
-that SVC arrived from MSP, decodes the configured SVC immediate, validates the
-seeded current context, switches to PSP, and returns through the synthetic
-exception frame. A normal C wrapper is not valid for the same LR/EXC_RETURN
+that SVC arrived from MSP, verifies the MSP frame alignment, decodes the SVC
+opcode plus configured immediate, validates the seeded current context, switches
+to PSP, and returns through the synthetic exception frame. A normal C wrapper is
+not valid for the same LR/EXC_RETURN
 reason. Direct vectoring to `fiber_svc()` is valid when
 `FIBER_SVC_VECTOR_DIRECT=1` is set.
 
@@ -283,9 +284,9 @@ preserves LR/EXC_RETURN. If the vector table points directly to
 `fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`. If it points directly
 to `fiber_svc()`, define `FIBER_SVC_VECTOR_DIRECT=1`. SVC vector validation is
 enabled by default because SVC is the only first-start path. The SVC start path
-also checks at runtime that the SVC immediate is `FIBER_SVC_START_NUMBER`; a
-wrong SVC dispatch traps with `'u'`, and an SVC that returns to
-`fiber_port_start_first_context()` traps with `'y'`.
+also checks at runtime that the instruction is the configured
+`SVC #FIBER_SVC_START_NUMBER`; a wrong SVC dispatch traps with `'u'`, and an
+SVC that returns to `fiber_port_start_first_context()` traps with `'y'`.
 
 The handler-side scheduler bridge follows FreeRTOS-style critical-section
 discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
@@ -349,10 +350,10 @@ is carried by `xPSR.T`.
 The ARMv7E-M first-start path enters that synthetic frame through SVC, not a
 direct branch. It
 requires a configured scheduler hook, requires no active interrupt masks,
-verifies MSP setup, validates the restore context, checks SVC provenance and
-immediate value, clears pending PendSV before opening interrupts for SVC,
-enables IRQ and fault exceptions, clears BASEPRI in the SVC handler, then sets
-PSP/CONTROL immediately before exception return.
+verifies MSP setup, validates the restore context, checks SVC provenance,
+MSP-frame alignment, and opcode/immediate value, clears pending PendSV before
+opening interrupts for SVC, enables IRQ and fault exceptions, clears BASEPRI in
+the SVC handler, then sets PSP/CONTROL immediately before exception return.
 
 `FIBER_INITIAL_EXC_RETURN` defaults to `0xFFFFFFFDu`, which is correct for
 M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define

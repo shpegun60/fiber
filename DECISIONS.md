@@ -192,8 +192,9 @@ The ARMv7E-M port now starts the first fiber through SVC by default:
   masked, enables IRQ and fault exceptions, executes
   `svc #FIBER_SVC_START_NUMBER`, and panics with `'y'` if SVC returns to the
   helper.
-- `fiber_svc()` rejects SVC entry from PSP with `'l'`, validates the SVC
-  immediate and traps with `'u'` on mismatch, clears `BASEPRI` like the
+- `fiber_svc()` rejects SVC entry from PSP or an unaligned SVC MSP frame with
+  `'l'`, validates the SVC opcode and immediate, traps with `'u'` on mismatch,
+  clears `BASEPRI` like the
   FreeRTOS SVC first-task handler, validates the seeded current context,
   restores the synthetic software frame, sets PSP, verifies `CONTROL.FPCA` when
   configured, and enters the first fiber by exception return. The SVC handler

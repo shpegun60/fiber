@@ -70,7 +70,8 @@ Closed hardening items from the FreeRTOS comparison:
   FreeRTOS-style `AIRCR.PRIGROUP` compatibility, and Cortex-M7 r0p0/r0p1 errata
   gating;
 - ARMv7E-M SVC first-start validates privileged Thread/MSP setup, MSP read-back,
-  pending-PendSV cleanup, SVC provenance, SVC immediate value,
+  pending-PendSV cleanup, SVC provenance, SVC MSP-frame alignment, SVC opcode
+  and immediate value,
   restore-context integrity, fault exception enable, BASEPRI cleanup, PSP setup,
   and `CONTROL.FPCA` state before exception return. Thread PSP selection is
   performed by the `EXC_RETURN` value, matching the FreeRTOS first-task start
@@ -383,9 +384,9 @@ Closed hardening items from the FreeRTOS comparison:
    first start.
 
    This proves vector-table routing. The ARMv7E-M SVC first-start path adds a
-   separate dispatch check by decoding the SVC immediate in `fiber_svc()` and
-   trapping with `'u'` when the immediate does not match
-   `FIBER_SVC_START_NUMBER`.
+   separate dispatch check by validating MSP-frame alignment and decoding the
+   SVC opcode plus immediate in `fiber_svc()`. It traps with `'u'` when the
+   instruction is not the configured `SVC #FIBER_SVC_START_NUMBER`.
 
 3. Keep the ARMv7E-M SVC-based first-fiber start path validated separately.
 
@@ -394,8 +395,9 @@ Closed hardening items from the FreeRTOS comparison:
    thing, while adding extra local checks:
    privileged Thread/MSP setup, optional MSP rewind and read-back, pending
    PendSV cleanup before interrupts reopen, SVC immediate validation,
-   seeded-current validation, fault exception enable, BASEPRI cleanup, PSP
-   setup, and `CONTROL.FPCA` verification. The SVC handler does not set
+   seeded-current validation, fault exception enable, BASEPRI cleanup, SVC
+   MSP-frame alignment, SVC opcode/immediate validation, PSP setup, and
+   `CONTROL.FPCA` verification. The SVC handler does not set
    `CONTROL.SPSEL` from Handler mode; the first Thread-mode PSP entry is
    selected by `EXC_RETURN`, as in the FreeRTOS first-task start path.
 
