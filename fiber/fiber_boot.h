@@ -6,7 +6,7 @@
  * - Integrity sealing (magic, canaries, FNV-1a).
  * - MSP policy (validate current vs. rewind to vector[0]) prepared in the context.
  * - Environment checker (Thread mode, privileged, MSP selected).
- * - Final boot using a naked trampoline that switches to PSP and tail-calls entry.
+ * - Internal direct fallback using a naked trampoline for ports without SVC start.
  *
  * Arch support notes:
  * - ARMv6-M (Cortex-M0/M0+): PSP present; CONTROL.SPSEL works; no PSPLIM; no Mem/Bus/Usage faults; no FPU.
@@ -34,22 +34,21 @@ int  		FIBER_WEAK fiber_addr_plausible_code(uintptr_t addr);
 uintptr_t	FIBER_WEAK fiber_fallback_initial_msp(void);
 
 /* -------------------------------------------------------------------------- 	*/
-/* API                                                                         	*/
+/* Internal boot construction API used by fiber_core.c.                        	*/
 /* -------------------------------------------------------------------------- 	*/
 FiberBoot 	fiber_create_boot(void* const begin, void* const end, const entry_t entry, void* const arg);
-void   		fiber_boot_simple_check  (const FiberBoot* const ctx);
 void   		fiber_boot_check  (const FiberBoot* const ctx);
 
-/* NEW: environment precondition check (Thread mode, priv., MSP selected) */
+/* Environment precondition check (Thread mode, priv., MSP selected). */
 void          fiber_env_check   (void);
 
 /* Shared start hygiene used by direct trampoline and SVC first-start paths. */
 void          fiber_platform_bootstrap(void);
 uintptr_t     fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx);
 
-/* NEW: final boot using a prepared and validated context */
+/* Internal fallback only. Public v2 start must go through fiber_start(). */
 FIBER_NORETURN
-void         fiber_boot        (const FiberBoot* const ctx);
+void          fiber_internal_boot_direct(const FiberBoot* const ctx);
 
 
 #ifdef __cplusplus

@@ -1,5 +1,35 @@
 # Fiber Decision Log
 
+## 2026-07-11: Scheduler-Selected First Context
+
+`fiber_start()` no longer accepts a direct first `FiberContext`.
+
+The first context is now selected through the same scheduler ownership model as
+later switches:
+
+- application code installs a scheduler hook before start;
+- `fiber_start()` requires the hook and a clear current-context slot;
+- `fiber_start()` calls the hook once with `current == NULL`;
+- the returned first context must be non-NULL, initialized, sealed, aligned, and
+  valid for restore;
+- only after that validation does the runtime seed the current context and enter
+  the selected port first-start path.
+
+This keeps direct task selection out of the core API. It mirrors the FreeRTOS
+ownership idea that the scheduler owns the current task pointer, while keeping
+the runtime cooperative and user-scheduler-driven.
+
+This is behavior-affecting. The previous H7 validation result remains
+historical until the normal and trap modes are rerun with this API shape.
+
+The H7 validation harness splits first-start scheduler result traps from later
+PendSV scheduler result traps:
+
+- `FIBER_VAL_TRAP_NULL_FIRST` and `FIBER_VAL_TRAP_BAD_FIRST` exercise
+  `pick_next(NULL, user)`;
+- `FIBER_VAL_TRAP_NULL_NEXT` and `FIBER_VAL_TRAP_BAD_NEXT` exercise
+  `pick_next(current, user)` after the first fiber has already entered.
+
 ## 2026-07-11: Start Real Port Common Helpers
 
 The `port/common` name is now reserved for reusable helper code and contains the
@@ -129,9 +159,9 @@ hardware or ARMv8-M security/MVE/PAC/BTI behavior.
 The ARMv7E-M port now starts the first fiber through SVC by default:
 
 - `FIBER_START_USE_SVC` defaults to `1` for `FIBER_PORT_ARMV7EM`.
-- `fiber_start()` seeds the runtime-owned current context, validates the first
-  restore context, verifies interrupt-mask state, and then calls the port
-  first-start helper.
+- That checkpoint predates the current scheduler-selected first-context API.
+  The current API selects the first context through the scheduler hook before
+  entering the port first-start helper.
 - The first-start helper forces privileged Thread/MSP state, clears FPCA by
   clearing `CONTROL`, optionally rewinds MSP through the sealed boot plan,
   verifies MSP read-back, clears any pending PendSV while interrupts are still
@@ -148,8 +178,8 @@ The ARMv7E-M port now starts the first fiber through SVC by default:
 - `fiber_pendsv_init_lowest_priority()` sets SVCall to the highest priority
   when SVC first-start is enabled, and runtime validation traps with `'w'` if
   SVCall does not read back as highest priority.
-- The direct boot trampoline remains available as a fallback for ports without
-  SVC first-start support and for A/B validation.
+- The direct boot trampoline remains only as an internal fallback for ports
+  without SVC first-start support and for A/B validation.
 - The STM32H7 application must wire `SVC_Handler()` as a naked branch to
   `fiber_svc()`. That wrapper lives in the embedding application tree, outside
   this repository.
@@ -419,10 +449,11 @@ Hardening decisions:
 - The preferred low-level runtime API is `fiber_start()` plus
   `fiber_schedule()`. Higher-level yield/sleep/wait APIs should update scheduler
   state and then call `fiber_schedule()`.
-- `fiber_start()` seeds the runtime-owned current context, and the scheduler
-  bridge updates it to the selected context during every scheduler-driven
-  switch. This mirrors the FreeRTOS `pxCurrentTCB` ownership model without
-  exposing direct target selection to the core API.
+- `fiber_start()` asks the scheduler hook for the first context with
+  `current == NULL`, seeds that validated context as runtime-owned current, and
+  the scheduler bridge updates it during every scheduler-driven switch. This
+  mirrors the FreeRTOS `pxCurrentTCB` ownership model without exposing direct
+  target selection to the core API.
 - The scheduler-driven ARMv7E-M branch writes `BASEPRI` around the scheduler
   bridge and has an explicit Cortex-M7 r0p1 errata gate.
 - The validated H7 performance mode is an opt-in policy, not the portable safety
@@ -440,9 +471,10 @@ Known limits:
 - Cortex-M55 / MVE needs validation. If MVE code can use the extended FP
   register file, the build must ensure `FIBER_HAS_FPU` covers that context or
   force saving with `FIBER_FORCE_SAVE_FPU = 1`.
-- `fiber_boot(&ctx->boot)` remains available for advanced/manual integrations,
-  but it cannot seed current ownership before the first switch because a
-  `FiberBoot` record does not point back to its owning `FiberContext`.
+- There is no v2 public API for starting from a caller-provided `FiberBoot`
+  record. Ports without SVC first-start support may still use the internal
+  direct fallback after `fiber_start()` has selected and seeded the first
+  context through the scheduler hook.
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
   not replace hardware tests, but it must stay green before widening support
   claims beyond STM32H7/Cortex-M7.

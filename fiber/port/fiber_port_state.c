@@ -6,11 +6,13 @@
 
 #include "fiber_port_state.h"
 #include "fiber_port_boot_record.h"
+#include "fiber_port.h"
 #include "fiber_port_selected.h"
 
 FiberContext *volatile fiber_internal_port_current_context = 0;
 FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next = 0;
 void *volatile fiber_internal_port_scheduler_user = 0;
+static volatile uint32_t fiber_internal_port_scheduler_selecting = 0;
 
 #ifndef FIBER_VALIDATE_SCHEDULED_CONTEXT
 # define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
@@ -69,6 +71,7 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(fiber_internal_port_current_context == 0, 'k');
+	FIBER_REQUIRE(fiber_internal_port_scheduler_selecting == 0u, 'k');
 	FIBER_REQUIRE(pick_next != 0, 'K');
 
 	__DMB();
@@ -76,6 +79,31 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 	__DMB();
 	fiber_internal_port_scheduler_pick_next = pick_next;
 	__DMB();
+}
+
+FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
+{
+	FiberSchedulerPickNextFn const pick_next = fiber_internal_port_scheduler_pick_next;
+	__DMB();
+	void *const user = fiber_internal_port_scheduler_user;
+
+	FIBER_REQUIRE(pick_next != 0, 'K');
+
+	__DMB();
+	fiber_internal_port_scheduler_selecting = 1u;
+	__DMB();
+
+	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
+	FiberContext *const first = pick_next(0, user);
+
+	fiber_internal_validate_restore_context(first);
+	fiber_port_scheduler_critical_exit(critical_state);
+
+	__DMB();
+	fiber_internal_port_scheduler_selecting = 0u;
+	__DMB();
+
+	return first;
 }
 
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current)

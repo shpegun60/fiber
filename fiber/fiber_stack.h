@@ -1,7 +1,7 @@
 /*
  * fiber_stack.h
  *
- * Helpers to declare stack buffers and pass base/top to fiber_start().
+ * Helpers to declare stack buffers and pass base/top to fiber_init().
  * C11/C++17, no GNU attributes.
  */
 
@@ -21,18 +21,21 @@
     alignas(FIBER_STACK_ALIGN) uint8_t name[(BYTES)];                          \
     static_assert((BYTES) >= FIBER_STACK_MIN_BOOT, "[fiber]: stack too small")
 
-/* Base/top helpers in the format expected by fiber_start(). */
+/* Base/top helpers in the format expected by fiber_init(). */
 #define FIBER_STACK_BASE(buf)  ((void*)(buf))
 #define FIBER_STACK_TOP(buf)   ((void*)((uintptr_t)(buf) + sizeof(buf)))
 #define FIBER_STACK_BYTES(buf) (sizeof(buf))
 
 /* Examples:
    FIBER_STACK_ARRAY_STATIC(psp_stack, 1024);
-   fiber_start(FIBER_STACK_TOP(psp_stack), entry, arg, FIBER_STACK_BASE(psp_stack));
+   FiberContext ctx;
+   fiber_init(&ctx, FIBER_STACK_BASE(psp_stack), FIBER_STACK_TOP(psp_stack),
+              entry, arg);
 
    void spawn(void (*entry)(void*), void* arg) {
        FIBER_STACK_ARRAY_LOCAL(tmp, 1536);
-       fiber_start(FIBER_STACK_TOP(tmp), entry, arg, FIBER_STACK_BASE(tmp));
+       FiberContext ctx;
+       fiber_init(&ctx, FIBER_STACK_BASE(tmp), FIBER_STACK_TOP(tmp), entry, arg);
    }
 */
 

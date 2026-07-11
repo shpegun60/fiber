@@ -6,7 +6,7 @@
  * - Paranoid context builder and checker with red-zone & PSPLIM accounting.
  * - Platform bootstrap: faults/STKALIGN/unaligned/div0/FPU/TrustZone.
  * - Environment precondition check (Thread, privileged, MSP selected).
- * - Final boot from a sealed FiberBoot (never returns).
+ * - Internal direct fallback from a sealed FiberBoot (never returns).
  *
  * No RTOS coexistence. If you call this under an RTOS, you own the crash.
  *
@@ -28,6 +28,8 @@
 #  define FIBER_HAS_FAULTMASK 0
 # endif
 #endif
+
+static void fiber_boot_simple_check(const FiberBoot* const ctx);
 
 /* -------------------------------------------------------------------------- 	*/
 /* Weak defaults for platform hooks (app may override)                         	*/
@@ -597,7 +599,7 @@ void fiber_boot_check(const FiberBoot* const ctx)
 /* -------------------------------------------------------------------------- 	*/
 /* Simple Context Validator (no paranoia)                                		*/
 /* -------------------------------------------------------------------------- 	*/
-void fiber_boot_simple_check(const FiberBoot* const ctx)
+static void fiber_boot_simple_check(const FiberBoot* const ctx)
 {
 	fiber_port_boot_record_check(ctx);
 }
@@ -620,7 +622,7 @@ void fiber_env_check(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* Final boot using a prepared and sealed FiberBoot.                        */
+/* Internal fallback using a prepared and sealed FiberBoot.                 */
 /* - Re-validates environment and context.                                     */
 /* - Programs PSPLIM (v8-M Mainline) to stack_base.                            */
 /* - Optionally rewinds MSP to ctx->msp_top (REWIND) or validates equality     */
@@ -630,7 +632,7 @@ void fiber_env_check(void)
 /* -------------------------------------------------------------------------- */
 FIBER_NORETURN
 FIBER_ATTR_SENSITIVE
-void fiber_boot(const FiberBoot* const ctx)
+void fiber_internal_boot_direct(const FiberBoot* const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
 

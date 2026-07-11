@@ -23,7 +23,7 @@ void fiber_init(FiberContext* const ctx,
 FiberContext* fiber_current(void);
 
 FIBER_NORETURN
-void fiber_start(FiberContext* const ctx);
+void fiber_start(void);
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user);
 

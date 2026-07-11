@@ -67,6 +67,52 @@ __STATIC_FORCEINLINE uint32_t fiber_port_scheduler_is_configured(void)
 	return (fiber_internal_port_scheduler_pick_next != 0) ? 1u : 0u;
 }
 
+__STATIC_FORCEINLINE uint32_t fiber_port_scheduler_critical_enter(void)
+{
+#if FIBER_HAS_BASEPRI
+	uint32_t old_basepri;
+	const uint32_t scheduler_basepri = (uint32_t)FIBER_SCHEDULER_BASEPRI;
+	__ASM volatile("mrs %0, " FBR_BASEPRI_SYM : "=r"(old_basepri) :: "memory");
+# if FIBER_CORTEX_M7_R0P1_ERRATA_837070
+	__ASM volatile(
+			"cpsid i                 \n"
+			"msr " FBR_BASEPRI_SYM ", %0 \n"
+			"dsb                     \n"
+			"isb                     \n"
+			"cpsie i                 \n"
+			:
+			: "r"(scheduler_basepri)
+			: "memory");
+# else
+	__ASM volatile(
+			"msr " FBR_BASEPRI_SYM ", %0 \n"
+			"dsb                     \n"
+			"isb                     \n"
+			:
+			: "r"(scheduler_basepri)
+			: "memory");
+# endif
+	return old_basepri;
+#else
+	return fiber_port_primask_save_disable();
+#endif
+}
+
+__STATIC_FORCEINLINE void fiber_port_scheduler_critical_exit(uint32_t state)
+{
+#if FIBER_HAS_BASEPRI
+	__ASM volatile(
+			"msr " FBR_BASEPRI_SYM ", %0 \n"
+			"dsb                     \n"
+			"isb                     \n"
+			:
+			: "r"(state)
+			: "memory");
+#else
+	fiber_port_primask_restore(state);
+#endif
+}
+
 __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 {
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;

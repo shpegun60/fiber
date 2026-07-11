@@ -59,7 +59,8 @@ fiber_stack_heap_free(fiber_stack_region *s)
 ///* Example:
 //    fiber_stack_region stk;
 //    if (!fiber_stack_heap_alloc(2048, &stk)) { /* panic or custom error * / }
-//    fiber_start(stk.top, entry, arg, stk.base);
+//    FiberContext ctx;
+//    fiber_init(&ctx, stk.base, stk.top, entry, arg);
 //    // ...
 //    fiber_stack_heap_free(&stk);
 //*/

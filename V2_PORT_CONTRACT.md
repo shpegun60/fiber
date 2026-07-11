@@ -305,7 +305,7 @@ FiberContext *fiber_current(void);
 void fiber_yield(void);
 void fiber_sleep_until(uint32_t tick);
 void fiber_schedule(void);
-FIBER_NORETURN void fiber_start(FiberContext *ctx);
+FIBER_NORETURN void fiber_start(void);
 ```
 
 Current low-level user code should call `fiber_start()` and `fiber_schedule()`.
@@ -327,6 +327,10 @@ Common scheduler-jump preconditions:
 - real scheduler jumps require `FAULTMASK == 0` on cores that implement
   FAULTMASK;
 - the scheduler hook must return a real initialized `FiberContext`.
+- `fiber_start()` calls the scheduler hook once with `current == NULL` to select
+  the first context.
+- that first hook call must use the same port scheduler critical-section policy
+  as PendSV scheduler calls.
 
 New examples should prefer `fiber_yield()` and sleep/wait APIs once those are
 implemented. Low-level examples may call `fiber_schedule()` directly to show the
@@ -549,6 +553,10 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 The bridge owns validation around the user hook:
 
 - the hook must be configured before the scheduler starts;
+- `fiber_start()` must select the first context by calling the hook with
+  `current == NULL`;
+- the first-start hook call must be protected with the same port scheduler
+  critical-section policy as handler-side scheduler calls;
 - changing the hook while fibers are running is forbidden unless a future API
   defines a sealed, synchronized replacement protocol;
 - hook installation must be rejected after the runtime-owned current context has
@@ -655,6 +663,7 @@ FiberContext *fiber_port_load_current_context(void);
 void fiber_port_seed_current_context(FiberContext *ctx);
 void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
                                         void *user);
+FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 FIBER_NORETURN void fiber_port_start_first_context(uintptr_t msp_top);
 void fiber_port_init_context_frame(FiberContext *ctx);

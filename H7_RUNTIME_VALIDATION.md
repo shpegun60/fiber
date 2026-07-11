@@ -32,6 +32,8 @@ Before a board run:
 - The STM32H7 application build must pass.
 - `git diff --check` must pass.
 - Source and docs changed by the validation commit must stay ASCII-only.
+- Any behavior-changing first-start or PendSV change must get a fresh board run;
+  earlier recorded results become historical until the new checkpoint passes.
 
 ## Startup Exception Setup
 
@@ -71,8 +73,10 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOT_SWAP
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_PRIMASK
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BASEPRI
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_NULL_FIRST
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_FIRST
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_NULL_NEXT
-#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_CONTEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_FAULTMASK
 ```
 
@@ -101,6 +105,12 @@ The hook must be a bounded scheduler picker. It must not block, allocate, throw
 C++ exceptions across the C ABI, call fiber scheduling APIs recursively, or
 return `NULL`.
 
+The first scheduler call comes from `fiber_start()` with `current == NULL`.
+That call selects the first context. Idle and "no work" states must still be
+represented by a real initialized `FiberContext`; returning `NULL` is always a
+panic condition. The first hook call must run under the same port scheduler
+critical-section policy used for PendSV scheduler calls.
+
 ## First Start
 
 On ARMv7E-M, the default first-start path is SVC-based. The application must
@@ -125,9 +135,14 @@ or `fiber_svc()`, record a separate hardware validation result for that wiring.
 
 Validate these cases:
 
-- `fiber_start(ctx)` without a configured scheduler hook traps with `'K'`.
-- `fiber_start(ctx)` with a valid hook seeds `fiber_current()` and enters the
-  first fiber.
+- `fiber_start()` without a configured scheduler hook traps with `'K'`.
+- `fiber_start()` with a valid hook calls the hook with `current == NULL`,
+  validates the returned context, seeds `fiber_current()`, and enters the first
+  fiber.
+- `fiber_start()` with a hook that returns `NULL` for the first context traps
+  with `'N'`.
+- `fiber_start()` with a hook that returns a context with `sp == NULL` for the
+  first context traps with `'P'`.
 - pre-start floating-point work does not leak `CONTROL.FPCA` into the first
   fiber when an FP context exists.
 - stale pending PendSV is cleared by the start helper before interrupts are
@@ -183,6 +198,15 @@ Validate these scheduler result cases:
 - returned context with an unsealed or corrupted boot record traps before PSP is
   restored.
 
+The harness keeps first-start and later-PendSV result validation separate:
+
+- `FIBER_VAL_TRAP_NULL_FIRST` traps on `pick_next(NULL, user)` with `'N'`.
+- `FIBER_VAL_TRAP_BAD_FIRST` traps on `pick_next(NULL, user)` with `'P'`.
+- `FIBER_VAL_TRAP_NULL_NEXT` lets first-start enter the first fiber, then traps
+  on a later `pick_next(current, user)` with `'N'`.
+- `FIBER_VAL_TRAP_BAD_NEXT` lets first-start enter the first fiber, then traps
+  on a later `pick_next(current, user)` with `'P'`.
+
 ## Long-Run H7 Stress
 
 The validation application currently starts from `f2`, then the scheduler hook
@@ -207,10 +231,15 @@ The long-run pass criteria are:
 Record the exact counter snapshot, settings, board, core revision, compiler
 flags, and commit hash with each successful run.
 
-## Recorded Result: 2026-07-11
+## Superseded Recorded Result: 2026-07-11
 
-The STM32H7 board run passed the current scheduler-driven ARMv7E-M validation
-set after the SVC first-start and PendSV source-save corrections.
+This result predates the scheduler-selected first-context API. It is retained
+only as an archived hardware observation for the SVC/PendSV fixes listed below.
+It is not a validation claim for the current API and must not be used as a pass
+record for new changes.
+
+The STM32H7 board run passed the then-current scheduler-driven ARMv7E-M
+validation set after the SVC first-start and PendSV source-save corrections.
 
 Normal run:
 
@@ -223,21 +252,9 @@ fpu_acc2            = 2 * fpu_acc1
 fpu_acc3            = 3 * fpu_acc1
 ```
 
-Trap modes passed:
-
-```text
-FIBER_VAL_TRAP_NO_HOOK      -> 'K'
-FIBER_VAL_TRAP_NULL_HOOK    -> 'K'
-FIBER_VAL_TRAP_HOT_SWAP     -> 'k'
-FIBER_VAL_TRAP_PRIMASK      -> 'p'
-FIBER_VAL_TRAP_BASEPRI      -> 'b'
-FIBER_VAL_TRAP_NULL_NEXT    -> 'N'
-FIBER_VAL_TRAP_BAD_CONTEXT  -> 'P'
-FIBER_VAL_TRAP_FAULTMASK    -> 'f'
-```
-
-For each trap run, `last_panic_code == expected_panic_code` and
-`validation_failures == 0`.
+Trap modes also passed under the then-current harness, but those mode names and
+startup semantics are superseded by the current first/next split. Do not treat
+that archived trap set as a pass record for the current API.
 
 Two SVC migration defects were found and fixed before this pass:
 

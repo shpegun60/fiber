@@ -88,28 +88,37 @@ FiberContext* fiber_current(void)
 }
 
 FIBER_NORETURN
-void fiber_start(FiberContext* const ctx)
+void fiber_start(void)
 {
-	FIBER_REQUIRE(ctx != NULL, 'C');
-	FIBER_REQUIRE(ctx->boot.sealed != 0u, 's');
 	FIBER_REQUIRE(fiber_port_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == NULL, 'k');
 
 	fiber_exception_runtime_check();
+	fiber_env_check();
+
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+#if FIBER_HAS_BASEPRI
+	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b');
+#endif
+#if FIBER_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+#endif
+
+	FiberContext *const first = fiber_internal_scheduler_pick_first_from_start();
 
 #if FIBER_START_USE_SVC
-	fiber_env_check();
-	fiber_boot_check(&ctx->boot);
+	fiber_boot_check(&first->boot);
 	fiber_platform_bootstrap();
 
 # if FIBER_USE_PSPLIM_REGISTER
-	fiber_psplim_config((uint32_t)ctx->boot.stack_base);
+	fiber_psplim_config((uint32_t)first->boot.stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)ctx->boot.stack_base, 'L');
+	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)first->boot.stack_base, 'L');
 # endif
 
-	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&ctx->boot);
-	fiber_internal_validate_restore_context(ctx);
+	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&first->boot);
+	fiber_internal_validate_restore_context(first);
 
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
@@ -120,12 +129,12 @@ void fiber_start(FiberContext* const ctx)
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 # endif
 
-	fiber_port_seed_current_context(ctx);
+	fiber_port_seed_current_context(first);
 	fiber_port_start_first_context(msp_top);
 #else
-	fiber_port_seed_current_context(ctx);
+	fiber_port_seed_current_context(first);
 
-	fiber_boot(&ctx->boot);
+	fiber_internal_boot_direct(&first->boot);
 #endif
 	FIBER_UNREACHABLE();
 }

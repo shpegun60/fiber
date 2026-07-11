@@ -91,6 +91,10 @@ static uint32_t counter3 = 0;
 
 static FiberContext *pick_next(FiberContext *current, void *)
 {
+	if (current == NULL) {
+		return &f1;
+	}
+
 	if (current == &f1) {
 		return &f2;
 	}
@@ -140,7 +144,7 @@ void app_main(void)
 
 	fiber_scheduler_set_pick_next(pick_next, NULL);
 
-	fiber_start(&f1);
+	fiber_start();
 
 	for (;;) {
 	}
@@ -149,19 +153,23 @@ void app_main(void)
 
 `fiber_scheduler_set_pick_next()` must be called from Thread mode before
 `fiber_start()`. A `NULL` hook traps with `'K'`; changing the hook after the
-runtime-owned current context is seeded traps with `'k'`. `fiber_start()` also
-requires a configured hook and traps with `'K'` before entering the first fiber
-if the hook is missing.
+runtime-owned current context is seeded traps with `'k'`. `fiber_start()`
+requires a configured hook and calls it once with `current == NULL`; the hook
+must return the first initialized `FiberContext`. A missing hook traps with
+`'K'`, and a `NULL` first context traps with `'N'`.
 
-`fiber_start()` seeds the runtime-owned current context, checks the environment,
-prepares the platform, validates the first restore context, and does not return.
-On ARMv7E-M, `FIBER_START_USE_SVC` defaults to `1`: `fiber_start()` resets the
-first-start CPU state to privileged Thread/MSP, optionally rewinds MSP, executes
+`fiber_start()` checks the environment, asks the scheduler for the first
+context, validates it, seeds the runtime-owned current context, prepares the
+platform, and does not return. The first scheduler hook call is protected with
+the same port scheduler critical-section policy as PendSV: BASEPRI on
+BASEPRI-capable ports, or saved PRIMASK on baseline ports. On ARMv7E-M,
+`FIBER_START_USE_SVC` defaults to `1`: `fiber_start()` resets the first-start
+CPU state to privileged Thread/MSP, optionally rewinds MSP, executes
 `svc #FIBER_SVC_START_NUMBER`, and the SVC handler enters the first fiber by
 exception return on PSP. The helper clears any pending PendSV immediately before
 enabling interrupts for SVC, so a stale scheduler exception cannot run before
 the first PSP context exists. Ports without SVC first-start support keep the
-direct boot trampoline fallback.
+internal direct trampoline fallback.
 
 `fiber_current()` returns the runtime-owned current fiber. `fiber_schedule()`
 does not choose a task by itself. It enters PendSV, saves the current context,

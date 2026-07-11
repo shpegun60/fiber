@@ -29,6 +29,8 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 
 void fiber_internal_validate_restore_context(FiberContext *ctx);
 
+FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
+
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 
 #ifdef __cplusplus

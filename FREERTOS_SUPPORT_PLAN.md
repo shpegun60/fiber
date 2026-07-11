@@ -36,7 +36,7 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 - The initial stacked `PC` has bit 0 clear; Thumb state comes from `xPSR.T`.
 - `FIBER_INITIAL_EXC_RETURN` is configurable.
 - The ARMv7E-M first-fiber start uses SVC by default and enters the first fiber
-  by exception return. The direct boot trampoline remains available as a
+  by exception return. The direct boot trampoline remains only as an internal
   fallback for ports without SVC first-start support.
 - `fiber_schedule()` rejects calls from Handler mode.
 - `fiber_schedule()` rejects scheduler jumps while `PRIMASK` is already set.
@@ -340,13 +340,14 @@ Closed hardening items from the FreeRTOS comparison:
    void fiber_schedule(void);
    void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                       void *user);
-   FIBER_NORETURN void fiber_start(FiberContext *ctx);
+   FIBER_NORETURN void fiber_start(void);
    ```
 
-   `fiber_start()` seeds the first current context. PendSV saves that context,
-   asks the scheduler bridge for the next context, and restores only the
-   returned context. The core API does not accept `from` or `to` from Thread
-   mode.
+   `fiber_start()` calls the configured scheduler hook with `current == NULL`,
+   validates the returned first context, and seeds it as the current context.
+   PendSV later saves that context, asks the scheduler bridge for the next
+   context, and restores only the returned context. The core API does not
+   accept `from` or `to` from Thread mode.
 
    On ARMv7E-M, the current first-start path uses SVC. Other ports may still use
    the direct trampoline fallback. PendSV must still verify from the active
@@ -360,10 +361,10 @@ Closed hardening items from the FreeRTOS comparison:
    FreeRTOS PendSV snippets, which rely on the broader RTOS stack-checking
    infrastructure.
 
-   `fiber_boot(&ctx->boot)` remains available for low-level/manual start
-   experiments, but it cannot seed current ownership before the first switch
-   because a `FiberBoot` record does not point back to its owning
-   `FiberContext`.
+   There is no v2 public API for starting from a caller-provided `FiberBoot`
+   record. Ports without SVC first-start support may still use the internal
+   direct fallback after `fiber_start()` has selected the first context through
+   the scheduler hook.
 
 2. Keep vector wiring verification active.
 
