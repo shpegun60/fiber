@@ -71,6 +71,16 @@ contract, known limitations, and validation level that matches the claim.
 11. Never weaken `main` safety defaults as part of a portability refactor. Faster
     settings must stay target-local, documented, and validated before promotion.
 
+## Selected Port Traits
+
+The detailed selected-port trait contract lives in
+`V2_PORT_TRAITS_CONTRACT.md`.
+
+Selected ports are the source of CPU facts. Common port helpers consume selected
+traits and must not infer CPU policy globally. During the v2 migration,
+`fiber/target` may keep temporary compatibility forwarding headers, but
+CPU capability policy must move behind the selected-port contract.
+
 ## Non-Goals
 
 `v2` is not a FreeRTOS clone.
