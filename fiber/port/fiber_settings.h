@@ -170,6 +170,9 @@
 #ifdef FIBER_SWITCH_STRICT_BARRIERS
 # error "[fiber]: FIBER_SWITCH_STRICT_BARRIERS was removed; conservative barriers are mandatory"
 #endif
+#ifdef FIBER_CORTEX_M7_R0P1_ERRATA_837070
+# error "[fiber]: FIBER_CORTEX_M7_R0P1_ERRATA_837070 was removed; the concrete ARM_CM7/r0p1 port always owns the workaround"
+#endif
 #ifdef FIBER_PORT_TRAITS_LEGACY_BRIDGE
 # error "[fiber]: FIBER_PORT_TRAITS_LEGACY_BRIDGE was removed; common code uses canonical FIBER_PORT_* traits"
 #endif

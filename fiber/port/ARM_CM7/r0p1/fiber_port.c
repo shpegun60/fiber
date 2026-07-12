@@ -15,10 +15,6 @@
 #if FIBER_PORT_BUILD_SELECTED || \
 		(FIBER_PORT_ARMV7EM && (__CORTEX_M == 7))
 
-#ifndef FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# define FIBER_CORTEX_M7_R0P1_ERRATA_837070 1
-#endif
-
 #include "../../../fiber_boot.h"
 #include "../../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
@@ -26,10 +22,6 @@
 
 FIBER_NORETURN
 void fiber_internal_task_return(void);
-
-#if !FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# error "[fiber]: ARM_CM7/r0p1 source requires FIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
-#endif
 
 #define fiber_portSTRINGIFY2(x) #x
 #define fiber_portSTRINGIFY(x) fiber_portSTRINGIFY2(x)

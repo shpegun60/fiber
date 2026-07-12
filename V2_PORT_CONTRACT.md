@@ -387,7 +387,6 @@ For Cortex-M7 build-selected matrix runs, the selected group is currently:
 defines:
   FIBER_PORT_BUILD_SELECTED=1
   FIBER_PORT_ARMV7EM=1
-  FIBER_CORTEX_M7_R0P1_ERRATA_837070=1
 
 include path:
   fiber/port/ARM_CM7/r0p1
@@ -433,7 +432,7 @@ Backlog required before stronger parity claims:
 
 | Area | Current v2 status | Required future work |
 | --- | --- | --- |
-| Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics, include the explicit `FIBER_CORTEX_M7_R0P1_ERRATA_837070` gate, and runtime startup rejects affected CPUID values without it. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
+| Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics and always compile the errata workaround. Runtime startup validates the M7 CPUID and immutable port trait. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
 | ARMv8-M Baseline / M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level. | Implement a PSPLIM slot/security policy, or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
 | ARMv8-M Mainline / M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
@@ -498,12 +497,13 @@ Common scheduler-jump preconditions:
 - real scheduler jumps require `BASEPRI == 0` on cores that implement BASEPRI;
 - real scheduler jumps require `FAULTMASK == 0` on cores that implement
   FAULTMASK;
-- the scheduler hook must return a real initialized `FiberContext`.
+- the scheduler hook must return a real initialized `FiberContext`;
 - the scheduler hook is exception-path code and must be declared with
   `FIBER_SCHEDULER_HOOK_ATTR`; it must not use FP, MVE, allocation, blocking,
   exceptions, or recursive fiber scheduling;
+- the scheduler hook must preserve PRIMASK, FAULTMASK, BASEPRI, and CONTROL;
 - `fiber_start()` calls the scheduler hook once with `current == NULL` to select
-  the first context.
+  the first context;
 - that first hook call must use the same port scheduler critical-section policy
   as PendSV scheduler calls.
 
@@ -799,6 +799,8 @@ Hook restrictions:
 - no throwing C++ exceptions across the C ABI boundary;
 - define the callback with `FIBER_SCHEDULER_HOOK_ATTR`;
 - no floating-point, MVE, or other extended-context instructions;
+- return with `PRIMASK`, `FAULTMASK`, `BASEPRI`, and `CONTROL` exactly equal to
+  their entry values. The common bridge validates this after every callback;
 - the complete hook call graph must obey the same register and bounded-runtime
   restrictions;
 - no direct edits to port-owned switch slots or CPU context frames.
@@ -882,6 +884,8 @@ Exact names may change, but ownership should not:
   port's mandatory barriers. It does not mask interrupts around the ICSR write;
 - the selected port owns the PRIMASK or BASEPRI critical section used only
   around the scheduler hook inside first selection and PendSV;
+- common scheduler-bridge code snapshots and validates PRIMASK, FAULTMASK,
+  BASEPRI, and CONTROL around every hook call before accepting its result;
 - port code performs CPU-specific save, restore, and exception return;
 - port code may update `fiber_internal_port_current_context` during the real
   restore path, but it must follow the common current-context policy;
@@ -1127,9 +1131,9 @@ FreeRTOS routes `GCC_ARM_CM7` to a dedicated `portable/GCC/ARM_CM7/r0p1` port
 instead of treating Cortex-M7 as only a generic ARMv7E-M build.
 
 The ARMv7E-M scheduler-driven PendSV path writes `BASEPRI` around the scheduler
-bridge. The write is guarded by `FIBER_CORTEX_M7_R0P1_ERRATA_837070`; when that
-gate is enabled, the port emits an errata-safe `BASEPRI` write sequence around
-the scheduler raise, restore, and first-start clear paths. The sequence follows
+bridge. The concrete `ARM_CM7/r0p1` port always emits an errata-safe `BASEPRI`
+write sequence around the scheduler raise, restore, and first-start clear paths.
+The sequence follows
 the FreeRTOS intent but is stricter: it preserves and restores the previous
 `PRIMASK` instead of unconditionally re-enabling IRQs.
 
@@ -1137,9 +1141,9 @@ The errata-safe asm snippets use `r12` as scratch while preserving `PRIMASK`.
 Any port asm block that uses those snippets must treat `r12` as clobbered and
 must not keep live context state in `r12` across the macro expansion.
 
-This gate is compile-covered by the matrix for Cortex-M7 and Cortex-M7F. Runtime
-startup also checks CPUID and traps on affected Cortex-M7 r0p0/r0p1 cores when
-the gate is not enabled. This is still not a hardware validation claim.
+This port-owned policy is compile-covered by the matrix for Cortex-M7 and
+Cortex-M7F. Runtime startup also checks CPUID and the immutable port trait. This
+is still not a hardware validation claim.
 Affected Cortex-M7 r0p0/r0p1 hardware must pass runtime scheduler-switch
 validation before parity with the FreeRTOS CM7/r0p1 port can be claimed.
 

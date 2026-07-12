@@ -61,7 +61,6 @@ Fiber v2 selected build:
 ```text
 FIBER_PORT_BUILD_SELECTED=1
 FIBER_PORT_ARMV7EM=1
-FIBER_CORTEX_M7_R0P1_ERRATA_837070=1
 include path: fiber/port/ARM_CM7/r0p1
 sources:      fiber/port/ARM_CM7/r0p1/fiber_port.c
               fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
@@ -182,7 +181,7 @@ user/build option      -> FIBER_XXX
 | `vPortEndScheduler()` | none | Excluded. A Cortex-M bare-metal fiber runtime does not implement scheduler shutdown. |
 | `vPortEnterCritical()` / `vPortExitCritical()` | none public; internal scheduler critical helpers only | Excluded from public API. |
 | `xPortPendSVHandler()` | `fiber_pendsv()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. |
-| `vTaskSwitchContext()` call | `fiber_internal_scheduler_pick_next_from_pendsv()` | Replaced. User scheduler hook picks the next context; NULL and invalid contexts panic. |
+| `vTaskSwitchContext()` call | `fiber_internal_scheduler_pick_next_from_pendsv()` | Replaced. User scheduler hook picks the next context; NULL and invalid contexts panic, and PRIMASK/FAULTMASK/BASEPRI/CONTROL must be unchanged on return. |
 | `pxCurrentTCB` first field | `fiber_internal_port_current_context` and `FiberContext.sp` | Adapted. Saved SP is updated only when saving the current context, matching the FreeRTOS invariant. |
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
@@ -204,7 +203,8 @@ Fiber intentionally differs from FreeRTOS in these places:
 FreeRTOS: internal scheduler owns all tasks.
 Fiber: user scheduler hook owns task selection, so every returned context is
        validated before restore. The just-saved current context is validated
-       before the user hook runs as well.
+       before the user hook runs as well. CPU mask and CONTROL registers are
+       snapshotted around the untrusted hook and must be unchanged on return.
 
 FreeRTOS: r0p1 BASEPRI workaround disables IRQs and then enables them.
 Fiber: r0p1 BASEPRI write preserves and restores the previous PRIMASK, so an

@@ -1,5 +1,31 @@
 # Fiber Decision Log
 
+## 2026-07-12: Close Startup and Scheduler-Hook State Gaps
+
+The runtime now fails closed around startup side effects and the user scheduler
+callback:
+
+- `fiber_start()` validates privileged Thread mode on MSP before any SCB/NVIC
+  priority write;
+- every port exception initializer independently enforces privileged Thread/MSP
+  preconditions, so a direct internal call cannot bypass the common check;
+- the concrete `ARM_CM7/r0p1` port always owns and enables errata 837070
+  handling. The old `FIBER_CORTEX_M7_R0P1_ERRATA_837070` integration switch is
+  a compile error;
+- existing CFSR/HFSR/DFSR evidence is preserved by default. Clearing it is an
+  explicit `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START=1` application policy;
+- enabling available configurable faults remains the explicit conservative
+  default through `FIBER_ENABLE_CONFIGURABLE_FAULTS=1`;
+- scheduler callbacks must preserve `PRIMASK`, `FAULTMASK`, `BASEPRI`, and
+  `CONTROL`. The runtime snapshots and validates those registers around both
+  first selection and PendSV selection;
+- the H7 harness has separate first/next mask-mutation trap modes;
+- the compile matrix now runs a complete Cortex-M7F eight-priority-bit build,
+  relocatable link, and six-symbol selected-port ABI audit.
+
+The settings-only matrix passes. These runtime changes still require a fresh H7
+normal run and all documented trap modes before restoring the hardware claim.
+
 ## 2026-07-12: Canonicalize Port Policy and Exact Stack Geometry
 
 The selected-port contract is now the single source of CPU facts across every
@@ -49,9 +75,9 @@ tightened the concrete `ARM_CM7/r0p1` contract without changing its
 - optional startup-validation switches were removed from the production CM7
   contract. Vector routing, priority readback, implemented-priority probing,
   PRIGROUP compatibility, CPUID, and errata checks are mandatory;
-- `fiber_start()` configures PendSV/SVCall priorities before first selection,
-  matching FreeRTOS scheduler-start ownership. Invalid Thread/mask state is
-  rejected before those registers are modified;
+- `fiber_start()` validates privileged Thread/MSP and mask state before
+  configuring PendSV/SVCall priorities, matching FreeRTOS scheduler-start
+  ownership without allowing an uncontrolled privileged-register fault;
 - the default scheduler `BASEPRI` accounts for the unavoidable subpriority bit
   when all eight NVIC priority bits are implemented. Compile-time and runtime
   checks reject incompatible thresholds;
@@ -628,8 +654,8 @@ The v2 runtime now checks exception setup before the first fiber starts:
 - `AIRCR.PRIGROUP` is validated with the same FreeRTOS-style rule used by the
   Cortex-M ports: scheduler `BASEPRI` assumes priority bits are not split into
   an unsafe subpriority configuration.
-- Cortex-M7 r0p0/r0p1 CPUID values trap unless
-  `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` is enabled.
+- Cortex-M7 r0p0/r0p1 CPUID values are accepted only by the concrete port whose
+  errata workaround is always enabled.
 
 New panic codes:
 
@@ -706,7 +732,7 @@ The ARMv7E-M scheduler path follows the FreeRTOS handler critical-section model:
 - `BASEPRI` is not saved as part of `FiberContext`.
 - Ports without `BASEPRI` wrap the handler-side scheduler bridge with a saved
   `PRIMASK` critical section, matching the FreeRTOS Cortex-M0 PendSV model.
-- `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables a FreeRTOS-style errata 837070
+- The concrete `ARM_CM7/r0p1` port always emits a FreeRTOS-style errata 837070
   guard around handler-side `BASEPRI` writes on affected Cortex-M7 r0p1 parts.
   The fiber helper is stricter than the FreeRTOS minimum: it preserves and
   restores the previous `PRIMASK` instead of unconditionally re-enabling IRQs.

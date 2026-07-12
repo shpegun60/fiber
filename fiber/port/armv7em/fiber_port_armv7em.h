@@ -20,11 +20,6 @@
 # error "[fiber]: generic ARMv7E-M port currently supports Cortex-M4/M4F only"
 #endif
 
-#if defined(FIBER_CORTEX_M7_R0P1_ERRATA_837070) && \
-		((FIBER_CORTEX_M7_R0P1_ERRATA_837070 + 0) != 0)
-# error "[fiber]: Cortex-M7 r0p1 errata policy is invalid for the Cortex-M4 port"
-#endif
-
 #ifndef FIBER_PORT_NAME
 # define FIBER_PORT_NAME "armv7em"
 #endif

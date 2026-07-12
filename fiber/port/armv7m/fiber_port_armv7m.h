@@ -62,14 +62,6 @@
 # error "[fiber]: ARMv7-M scheduler BASEPRI threshold must fit in 8 bits"
 #endif
 
-#ifndef FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# define FIBER_CORTEX_M7_R0P1_ERRATA_837070 0
-#endif
-
-#if FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# error "[fiber]: Cortex-M7 r0p1 errata workaround is not valid for ARMv7-M"
-#endif
-
 #define FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND 0
 #define FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND 0
 #ifndef FIBER_PORT_IS_V8M

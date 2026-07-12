@@ -140,19 +140,20 @@ $selectorPortSources = @(
 )
 
 $configs = @(
-    [pscustomobject]@{ Name = "cortex-m0";         CpuArgs = @("-mcpu=cortex-m0");              Core = "core_cm0.h";     VtorPresent = 0; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m0plus";     CpuArgs = @("-mcpu=cortex-m0plus");          Core = "core_cm0plus.h"; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m3";         CpuArgs = @("-mcpu=cortex-m3");              Core = "core_cm3.h";     VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m4";         CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m4f";        CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
-    [pscustomobject]@{ Name = "cortex-m7";         CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m7f";        CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
-    [pscustomobject]@{ Name = "cortex-m23";        CpuArgs = @("-mcpu=cortex-m23");             Core = "core_cm23.h";    VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m33";        CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m33f";       CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
-    [pscustomobject]@{ Name = "cortex-m55";        CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m55f";       CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
-    [pscustomobject]@{ Name = "cortex-m55-mve-fp"; CpuArgs = @("-march=armv8.1-m.main+mve.fp"); Core = "core_cm55.h";    VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfloat-abi=hard") }
+    [pscustomobject]@{ Name = "cortex-m0";          CpuArgs = @("-mcpu=cortex-m0");              Core = "core_cm0.h";     PriorityBits = 4; VtorPresent = 0; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m0plus";      CpuArgs = @("-mcpu=cortex-m0plus");          Core = "core_cm0plus.h"; PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m3";          CpuArgs = @("-mcpu=cortex-m3");              Core = "core_cm3.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m4";          CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m4f";         CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m7";          CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m7f";         CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m7f-prio8";   CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m23";         CpuArgs = @("-mcpu=cortex-m23");             Core = "core_cm23.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m33";         CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m33f";        CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m55";         CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m55f";        CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m55-mve-fp";  CpuArgs = @("-march=armv8.1-m.main+mve.fp"); Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfloat-abi=hard") }
 )
 
 $portProfiles = @{
@@ -163,6 +164,7 @@ $portProfiles = @{
     "cortex-m4f"        = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7"         = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m7f-prio8"  = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
     "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m33f"       = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
@@ -204,11 +206,13 @@ $buildSelectedPortSourcesByProfile = @{
 $buildSelectedPortIncludeDirsByConfig = @{
     "cortex-m7"  = "fiber\port\ARM_CM7\r0p1"
     "cortex-m7f" = "fiber\port\ARM_CM7\r0p1"
+    "cortex-m7f-prio8" = "fiber\port\ARM_CM7\r0p1"
 }
 
 $buildSelectedPortSourcesByConfig = @{
     "cortex-m7"  = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
 }
 
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
@@ -257,9 +261,6 @@ try {
         $wrapperDefines = @("-DFIBER_PENDSV_WIRED=1", "-DFIBER_SVC_WIRED=1")
         $directPendsvDefines = @("-DFIBER_PENDSV_VECTOR_DIRECT=1", "-DFIBER_SVC_WIRED=1")
         $buildSelectedDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-D$portMacro=1")
-        if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
-            $buildSelectedDefines += "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
-        }
         $buildSelectedIncludeArgs = @("-I$(Join-Path $RepoRoot $portIncludeDir)")
 
         $selectionModes = @(
@@ -298,20 +299,6 @@ try {
             )
             ExtraArgs = $buildSelectedIncludeArgs
             PortSources = $buildSelectedPortSources
-        }
-
-        if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
-            $selectionModes += [pscustomobject]@{
-                Name = "explicit-r0p1-errata"
-                Defines = @(
-                    "-DFIBER_PORT_PROFILE=$profile",
-                    "-DFIBER_PENDSV_WIRED=1",
-                    "-DFIBER_SVC_WIRED=1",
-                    "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
-                )
-                ExtraArgs = @()
-                PortSources = $selectorPortSources
-            }
         }
 
         if (($cfg.Name -eq "cortex-m33") -or
@@ -355,7 +342,7 @@ try {
 
 #define __MPU_PRESENT             0U
 #define __VTOR_PRESENT            $($cfg.VtorPresent)U
-#define __NVIC_PRIO_BITS          4U
+#define __NVIC_PRIO_BITS          $($cfg.PriorityBits)U
 #define __Vendor_SysTickConfig    0U
 #define __FPU_PRESENT             $($cfg.FpuPresent)U
 #define __FPU_USED                $($cfg.FpuUsed)U
@@ -580,7 +567,6 @@ void Error_Handler(void);
         "-Werror=return-type",
         "-DFIBER_PORT_BUILD_SELECTED=1",
         "-DFIBER_PORT_ARMV7EM=1",
-        "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1",
         "-DFIBER_PENDSV_WIRED=1",
         "-DFIBER_SVC_WIRED=1"
     )
@@ -605,6 +591,26 @@ void Error_Handler(void);
         throw "8-bit NVIC default BASEPRI probe failed:`n$($positiveResult.Output)"
     }
 
+    Write-Host "== cortex-m7f / settings-contract-alternate-fault-policy =="
+    $alternateFaultPolicyArgs = $probeCommonArgs + @(
+        "-DFIBER_CLEAR_STICKY_FAULT_STATUS_ON_START=1",
+        "-DFIBER_ENABLE_CONFIGURABLE_FAULTS=0",
+        "-I$probe4Dir",
+        "-I$RepoRoot",
+        "-I$(Join-Path $RepoRoot 'fiber')",
+        "-I$cmsis",
+        "-c",
+        $probeBootSource,
+        "-o",
+        (Join-Path $probe4Dir "alternate-fault-policy.o")
+    )
+    $alternateFaultPolicyResult = Invoke-CompilerProbe -Compiler $gcc `
+        -Arguments $alternateFaultPolicyArgs `
+        -LogPath (Join-Path $probe4Dir "alternate-fault-policy.log")
+    if ($alternateFaultPolicyResult.ExitCode -ne 0) {
+        throw "Alternate startup fault-policy probe failed:`n$($alternateFaultPolicyResult.Output)"
+    }
+
     $negativeCases = @(
         [pscustomobject]@{ Name = "invalid-fpu-lazy"; Define = "-DFIBER_FPU_LAZY=2"; Diagnostic = "FIBER_FPU_LAZY must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-rewind-msp"; Define = "-DFIBER_REWIND_MSP=2"; Diagnostic = "FIBER_REWIND_MSP must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
@@ -614,6 +620,8 @@ void Error_Handler(void);
         [pscustomobject]@{ Name = "invalid-redzone-alignment"; Define = "-DFIBER_STACK_REDZONE_BYTES=7"; Diagnostic = "FIBER_STACK_REDZONE_BYTES must be a multiple of selected-port stack alignment"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-unaligned-trap"; Define = "-DFIBER_ENABLE_UNALIGNED_TRAP=2"; Diagnostic = "FIBER_ENABLE_UNALIGNED_TRAP must be 0 or 1"; Dir = $probe4Dir; Source = $probeBootSource },
         [pscustomobject]@{ Name = "invalid-div0-trap"; Define = "-DFIBER_ENABLE_DIV0_TRAP=2"; Diagnostic = "FIBER_ENABLE_DIV0_TRAP must be 0 or 1"; Dir = $probe4Dir; Source = $probeBootSource },
+        [pscustomobject]@{ Name = "invalid-clear-sticky-faults"; Define = "-DFIBER_CLEAR_STICKY_FAULT_STATUS_ON_START=2"; Diagnostic = "FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START must be 0 or 1"; Dir = $probe4Dir; Source = $probeBootSource },
+        [pscustomobject]@{ Name = "invalid-enable-configurable-faults"; Define = "-DFIBER_ENABLE_CONFIGURABLE_FAULTS=2"; Diagnostic = "FIBER_ENABLE_CONFIGURABLE_FAULTS must be 0 or 1"; Dir = $probe4Dir; Source = $probeBootSource },
         [pscustomobject]@{ Name = "invalid-pendsv-direct"; Define = "-DFIBER_PENDSV_VECTOR_DIRECT=2"; Diagnostic = "FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-svc-direct"; Define = "-DFIBER_SVC_VECTOR_DIRECT=2"; Diagnostic = "FIBER_SVC_VECTOR_DIRECT must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-svc-number"; Define = "-DFIBER_SVC_START_NUMBER=256"; Diagnostic = "FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate"; Dir = $probe4Dir; Source = $probeSource },
@@ -643,6 +651,7 @@ void Error_Handler(void);
         [pscustomobject]@{ Name = "obsolete-context-area"; Define = "-DFIBER_BOOT_EXTRA_BYTES=4"; Diagnostic = "FIBER_BOOT_EXTRA_BYTES was removed"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-switch-mask"; Define = "-DFIBER_SWITCH_MASK_IRQS=0"; Diagnostic = "FIBER_SWITCH_MASK_IRQS was removed"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-switch-barriers"; Define = "-DFIBER_SWITCH_STRICT_BARRIERS=0"; Diagnostic = "FIBER_SWITCH_STRICT_BARRIERS was removed"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "obsolete-m7-r0p1-errata-switch"; Define = "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"; Diagnostic = "FIBER_CORTEX_M7_R0P1_ERRATA_837070 was removed"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-legacy-trait-bridge"; Define = "-DFIBER_PORT_TRAITS_LEGACY_BRIDGE=1"; Diagnostic = "FIBER_PORT_TRAITS_LEGACY_BRIDGE was removed"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-basepri-trait"; Define = "-DFIBER_HAS_BASEPRI=1"; Diagnostic = "FIBER_HAS_BASEPRI is obsolete"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-faultmask-trait"; Define = "-DFIBER_HAS_FAULTMASK=1"; Diagnostic = "FIBER_HAS_FAULTMASK is obsolete"; Dir = $probe4Dir; Source = $probeSource },

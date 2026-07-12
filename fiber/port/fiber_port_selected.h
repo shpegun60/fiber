@@ -31,9 +31,6 @@
 # if !defined(__CORTEX_M)
 #  error "[fiber]: ARMv7E-M selection requires CMSIS __CORTEX_M"
 # elif (__CORTEX_M == 7)
-#  ifndef FIBER_CORTEX_M7_R0P1_ERRATA_837070
-#   define FIBER_CORTEX_M7_R0P1_ERRATA_837070 1
-#  endif
 #  include "ARM_CM7/r0p1/fiber_portmacro.h"
 # elif (__CORTEX_M == 4)
 #  include "armv7em/fiber_portmacro.h"

@@ -87,6 +87,8 @@ FiberContext* fiber_current(void)
 FIBER_NORETURN
 void fiber_start(void)
 {
+	fiber_env_check();
+
 	FIBER_REQUIRE(fiber_port_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == NULL, 'k');
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
@@ -100,7 +102,6 @@ void fiber_start(void)
 
 	/* FreeRTOS-style ownership: first start configures and validates its handlers. */
 	fiber_pendsv_init_lowest_priority();
-	fiber_env_check();
 
 	fiber_platform_bootstrap();
 

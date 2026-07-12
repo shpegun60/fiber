@@ -18,6 +18,9 @@ barriers belong to the selected `fiber_portmacro.h`.
 Every user-policy boolean in this file and `fiber_platform_policy.h` is
 compile-time validated. The compile matrix contains a negative probe for each
 one and for the selected-port numeric integration constraints listed below.
+It also performs a complete common-runtime plus concrete CM7 port build,
+relocatable link, and selected-port ABI symbol audit with
+`__NVIC_PRIO_BITS=8`.
 
 ## Platform Policy
 
@@ -28,6 +31,8 @@ application, not only fibers:
 | --- | ---: | --- |
 | `FIBER_ENABLE_UNALIGNED_TRAP` | `0` | Enable `CCR.UNALIGN_TRP` where implemented. |
 | `FIBER_ENABLE_DIV0_TRAP` | `1` | Enable integer divide-by-zero UsageFault trapping where implemented. |
+| `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START` | `0` | Clear existing CFSR/HFSR/DFSR evidence before first start. Keep `0` when prior fault evidence must survive startup. |
+| `FIBER_ENABLE_CONFIGURABLE_FAULTS` | `1` | Enable available MemManage, BusFault, and UsageFault handlers through SHCSR. |
 
 ## Selected-Port Integration
 
@@ -113,6 +118,7 @@ FIBER_EXC_LEVELS_ON_PSP
 FIBER_BOOT_EXTRA_BYTES
 FIBER_SWITCH_MASK_IRQS
 FIBER_SWITCH_STRICT_BARRIERS
+FIBER_CORTEX_M7_R0P1_ERRATA_837070
 FIBER_FORCE_PRIGROUP
 FIBER_TUNE_SYSTICK
 FIBER_TUNE_SVCALL

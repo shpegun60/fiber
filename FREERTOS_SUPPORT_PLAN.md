@@ -92,7 +92,7 @@ Closed hardening items from the FreeRTOS comparison:
   Cortex-M7 source group:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
   matrix compiles this source group for Cortex-M7/Cortex-M7F build-selected
-  modes with `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;
+  modes with its port-owned errata workaround always enabled;
 - scheduled context restore uses mandatory metadata plus structural boot-record
   checks by default; the full `FiberBoot` hash is still checked during
   init/start and is opt-in for every switch through
@@ -177,8 +177,8 @@ Closed hardening items from the FreeRTOS comparison:
      `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
    - build-selected portmacro mode with `FIBER_PORT_BUILD_SELECTED=1`
    - Cortex-M7/Cortex-M7F build-selected source group
-     `fiber/port/ARM_CM7/r0p1/fiber_port.c` with
-     `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`
+     `fiber/port/ARM_CM7/r0p1/fiber_port.c`, including the port-owned errata
+     workaround
 
    Every selected profile must compile in wrapper and direct-vector SVC/PendSV
    modes. Each mode is then relocatably linked and inspected with `nm`; every
@@ -212,6 +212,8 @@ Closed hardening items from the FreeRTOS comparison:
      `'g'`;
    - scheduler hook returning an uninitialized or corrupted context must trap
      before PendSV restores PSP;
+   - scheduler hook mutation of PRIMASK, FAULTMASK, or BASEPRI must trap for
+     both first selection and PendSV selection;
    - damaged software canary must trap with `'c'`;
    - scheduler hook returning a context with an exact-encoding-invalid
      EXC_RETURN must trap with `'x'`;
@@ -286,13 +288,13 @@ Closed hardening items from the FreeRTOS comparison:
    `BASEPRI` around the scheduler bridge, then restores the previous value
    before restoring the selected context.
 
-   `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables the FreeRTOS-style workaround
+   The concrete `ARM_CM7/r0p1` port always enables the FreeRTOS-style workaround
    around handler-side `BASEPRI` writes. Unlike the FreeRTOS minimum sequence,
    the fiber helper preserves and restores the previous `PRIMASK` instead of
    unconditionally re-enabling IRQs; this keeps SVC/start critical sections
    closed while still serializing the `BASEPRI` write. The compile matrix builds
-   Cortex-M7 and Cortex-M7F with this gate enabled. Runtime startup checks CPUID
-   and traps if an affected r0p0/r0p1 core runs without the workaround. Real
+   Cortex-M7 and Cortex-M7F through this concrete source group. Runtime startup
+   checks CPUID and the immutable port trait. Real
    affected M7 hardware validation is still required before claiming parity with
    the FreeRTOS CM7/r0p1 port.
 

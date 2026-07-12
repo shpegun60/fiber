@@ -84,7 +84,8 @@ until its own hardware validation is recorded.
 
 `fiber_start()` initializes and validates PendSV/SVCall priority automatically.
 The setup function remains public and idempotent for integrations that want an
-earlier diagnostic check:
+earlier diagnostic check. A direct call requires privileged Thread mode on MSP
+with PRIMASK, BASEPRI, and FAULTMASK clear:
 
 ```c
 fiber_pendsv_init_lowest_priority();
@@ -186,10 +187,14 @@ SVC; later calls run from PendSV on MSP. A hook must not execute floating-point,
 MVE, or other extended-context instructions, because the indirect function
 pointer cannot make GCC propagate `general-regs-only` automatically. The hook
 must also remain bounded, non-blocking, non-allocating, non-throwing, and must
-not call `fiber_schedule()` recursively. The same restrictions apply to every
-function reachable from the hook, not only to the top-level thunk.
+not call `fiber_schedule()` recursively. It may use a critical section only if
+it restores `PRIMASK`, `FAULTMASK`, `BASEPRI`, and `CONTROL` exactly before
+returning; the runtime snapshots and validates those registers around every
+first and PendSV scheduler call. The same restrictions apply to every function
+reachable from the hook, not only to the top-level thunk.
 
-`fiber_start()` configures and validates PendSV/SVCall, checks the environment,
+`fiber_start()` first verifies privileged Thread mode on MSP, then configures
+and validates PendSV/SVCall,
 asks the scheduler for the first context, validates it, seeds the runtime-owned
 current context, prepares the platform, and does not return. The first scheduler
 hook call is protected with
@@ -296,6 +301,8 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_STACK_CANARY = 1`
 - `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
+- `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START = 0`
+- `FIBER_ENABLE_CONFIGURABLE_FAULTS = 1`
 - SVC first-start is mandatory for runtime-supported ports
 - DSB/ISB context and PendSV-request barriers are mandatory port behavior
 - FPU ports enable and read back CP10/CP11 before first start
@@ -322,7 +329,7 @@ exception setup check by default. The check verifies:
   priority bits;
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` threshold;
 - affected Cortex-M7 r0p0/r0p1 cores require
-  `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;
+  the always-enabled workaround owned by the concrete `ARM_CM7/r0p1` port;
 - unvalidated v8-M Baseline/Mainline, v8.1-M, TrustZone bank targeting, MVE,
   and PAC/BTI scenarios require an explicit `FIBER_ALLOW_UNVALIDATED_*` opt-in
   before runtime use.
@@ -340,7 +347,8 @@ SVC that returns to `fiber_port_start_first_context()` traps with `'y'`.
 The handler-side scheduler bridge follows FreeRTOS-style critical-section
 discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
 BASEPRI-less ports save `PRIMASK`, disable interrupts, call the hook, and
-restore `PRIMASK`.
+restore `PRIMASK`. Returning with changed `PRIMASK`, `FAULTMASK`, `BASEPRI`, or
+`CONTROL` is a panic condition.
 
 The v8-M feature policy remains intentionally strict for future ports. After the
 direct trampoline removal, M23/M33/M55/MVE-FP profiles have compile-covered SVC

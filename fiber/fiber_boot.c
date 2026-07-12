@@ -3,7 +3,7 @@
  *
  * Minimal, universal PSP boot helpers for STM32 Cortex-M (bare-metal).
  * - Paranoid context builder and checker with red-zone & PSPLIM accounting.
- * - Platform bootstrap: faults/STKALIGN/unaligned/div0/FPU/TrustZone.
+ * - Platform bootstrap: fault policy/STKALIGN/unaligned/div0/FPU/TrustZone.
  * - Environment precondition check (Thread, privileged, MSP selected).
  *
  * No RTOS coexistence. If you call this under an RTOS, you own the crash.
@@ -39,6 +39,7 @@ FIBER_WEAK uintptr_t fiber_fallback_initial_msp(void) {
 /* Fault hygiene: clear "sticky" status where present (v7-M/v7E-M/v8-M Main). */
 /* Use read-then-write (W1C) to avoid leftovers from a previous session.      */
 /* -------------------------------------------------------------------------- */
+#if FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START
 static inline void fiber_clear_sticky_faults(void)
 {
 #if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
@@ -65,17 +66,23 @@ static inline void fiber_clear_sticky_faults(void)
 	(void)0;                            	/* v6-M may lack these regs: nothing to do */
 #endif
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
-/* Platform bootstrap: enable faults, enforce STKALIGN, UB traps, FPU policy. */
+/* Platform bootstrap: apply fault policy, STKALIGN, UB traps, and FPU policy. */
 /* Idempotent and safe to call multiple times at boot.                        */
 /* -------------------------------------------------------------------------- */
 void fiber_platform_bootstrap(void)
 {
+#if FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START
 	fiber_clear_sticky_faults();
+#endif
 
 	/* Let Mem/Bus/Usage faults fire (where available) to catch programming errors early. */
-#if defined(SCB_SHCSR_MEMFAULTENA_Msk) || defined(SCB_SHCSR_BUSFAULTENA_Msk) || defined(SCB_SHCSR_USGFAULTENA_Msk)
+#if FIBER_ENABLE_CONFIGURABLE_FAULTS && \
+		(defined(SCB_SHCSR_MEMFAULTENA_Msk) || \
+		 defined(SCB_SHCSR_BUSFAULTENA_Msk) || \
+		 defined(SCB_SHCSR_USGFAULTENA_Msk))
 	const uint32_t required_fault_enables =
 # ifdef SCB_SHCSR_MEMFAULTENA_Msk
 			SCB_SHCSR_MEMFAULTENA_Msk |

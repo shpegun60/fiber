@@ -13,11 +13,6 @@
  * directory and exactly one matching source file. The public macro names remain
  * fiber-owned and are intentionally not FreeRTOS ABI names.
  */
-#if !defined(FIBER_CORTEX_M7_R0P1_ERRATA_837070) || \
-		((FIBER_CORTEX_M7_R0P1_ERRATA_837070 + 0) != 1)
-# error "[fiber]: ARM_CM7/r0p1 requires FIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
-#endif
-
 #include <stdint.h>
 
 #include "mcu_core.h"

@@ -13,6 +13,17 @@ FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next = 0;
 void *volatile fiber_internal_port_scheduler_user = 0;
 static volatile uint32_t fiber_internal_port_scheduler_selecting = 0;
 
+typedef struct FiberSchedulerCpuState {
+	uint32_t primask;
+	uint32_t control;
+#if FIBER_PORT_HAS_BASEPRI
+	uint32_t basepri;
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	uint32_t faultmask;
+#endif
+} FiberSchedulerCpuState;
+
 #ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 # define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
 #endif
@@ -21,6 +32,41 @@ static volatile uint32_t fiber_internal_port_scheduler_selecting = 0;
 		(FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 1)
 # error "[fiber]: FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"
 #endif
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_internal_capture_scheduler_cpu_state(FiberSchedulerCpuState *const state)
+{
+	FIBER_REQUIRE(state != 0, 'C');
+
+	__COMPILER_BARRIER();
+	state->primask = __get_PRIMASK();
+	state->control = __get_CONTROL();
+#if FIBER_PORT_HAS_BASEPRI
+	state->basepri = fiber_port_basepri_read();
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	state->faultmask = __get_FAULTMASK();
+#endif
+	__COMPILER_BARRIER();
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_internal_validate_scheduler_cpu_state(
+		const FiberSchedulerCpuState *const before)
+{
+	FIBER_REQUIRE(before != 0, 'C');
+
+	__COMPILER_BARRIER();
+	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+#endif
+	__COMPILER_BARRIER();
+}
 
 static FIBER_GENERAL_REGS_ONLY
 void fiber_internal_validate_stack_canary(const FiberContext *ctx)
@@ -132,8 +178,11 @@ FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
 	__DMB();
 
 	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
+	FiberSchedulerCpuState cpu_state;
+	fiber_internal_capture_scheduler_cpu_state(&cpu_state);
 	FiberContext *const first = pick_next(0, user);
 
+	fiber_internal_validate_scheduler_cpu_state(&cpu_state);
 	fiber_internal_validate_restore_context(first);
 	fiber_port_scheduler_critical_exit(critical_state);
 
@@ -155,8 +204,11 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 	FIBER_REQUIRE(pick_next != 0, 'K');
 	fiber_internal_validate_restore_context(current);
 
+	FiberSchedulerCpuState cpu_state;
+	fiber_internal_capture_scheduler_cpu_state(&cpu_state);
 	FiberContext *const next = pick_next(current, user);
 
+	fiber_internal_validate_scheduler_cpu_state(&cpu_state);
 	fiber_internal_validate_restore_context(next);
 
 	__DMB();

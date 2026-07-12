@@ -12,10 +12,6 @@
 #if FIBER_PORT_BUILD_SELECTED || \
 		(FIBER_PORT_ARMV7EM && (__CORTEX_M == 7))
 
-#ifndef FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# define FIBER_CORTEX_M7_R0P1_ERRATA_837070 1
-#endif
-
 #include "fiber_portmacro.h"
 
 extern void PendSV_Handler(void);
@@ -26,6 +22,15 @@ extern void SVC_Handler(void);
 #endif /* __NVIC_PRIO_BITS */
 
 _Static_assert(__NVIC_PRIO_BITS >= 2 && __NVIC_PRIO_BITS <= 8, "__NVIC_PRIO_BITS out of sane range");
+
+static void fiber_require_privileged_thread_msp(void)
+{
+    const uint32_t control = __get_CONTROL();
+
+    FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+    FIBER_REQUIRE((control & 1u) == 0u, 'v');
+    FIBER_REQUIRE((control & 2u) == 0u, 's');
+}
 
 /* Small helpers to save/restore PRIMASK while tweaking SCB/NVIC */
 __STATIC_FORCEINLINE uint32_t fiber_primask_save_disable(void) {
@@ -186,7 +191,7 @@ static void fiber_validate_feature_policy(void)
 
 void fiber_exception_runtime_check(void)
 {
-    FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+    fiber_require_privileged_thread_msp();
 
     fiber_validate_feature_policy();
 
@@ -220,7 +225,7 @@ void fiber_exception_runtime_check(void)
  * -------------------------------------------------------------------------- */
 void fiber_pendsv_init_lowest_priority(void)
 {
-    FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+    fiber_require_privileged_thread_msp();
     FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
     FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
     FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');

@@ -55,8 +55,8 @@ The runtime check must cover:
 - the selected port scheduler BASEPRI threshold uses only implemented NVIC
   priority bits.
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` policy.
-- affected Cortex-M7 r0p0/r0p1 CPUID values require
-  `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`.
+- affected Cortex-M7 r0p0/r0p1 CPUID values run only through the concrete port's
+  always-enabled errata workaround.
 
 Expected setup panic codes when deliberately misconfigured:
 
@@ -93,6 +93,12 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_XPSR_IPSR
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_STACKED_PC
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_SHORT_ALIGN_FRAME
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_PRIMASK_FIRST
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_FAULTMASK_FIRST
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_BASEPRI_FIRST
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_PRIMASK_NEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_FAULTMASK_NEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_BASEPRI_NEXT
 ```
 
 `fiber_live.validation_mode_seen` records the selected mode, and
@@ -122,6 +128,12 @@ return `NULL`. Define it with `FIBER_SCHEDULER_HOOK_ATTR`; it must not execute
 floating-point or MVE instructions because later calls execute inside PendSV
 and the indirect function-pointer call cannot enforce the GCC target attribute.
 Apply the same rule to the hook's complete call graph.
+
+The hook must restore `PRIMASK`, `FAULTMASK`, `BASEPRI`, and `CONTROL` exactly
+to their entry values. The runtime checks this after both
+`pick_next(NULL, user)` and `pick_next(current, user)`. The first/next mask
+trap modes deliberately violate this contract and must stop with `'r'`, `'t'`,
+or `'B'` respectively.
 
 The first scheduler call comes from `fiber_start()` with `current == NULL`.
 That call selects the first context. Idle and "no work" states must still be
@@ -165,8 +177,12 @@ Validate these cases:
   fiber when an FP context exists.
 - stale pending PendSV is cleared by the start helper before interrupts are
   reopened for SVC.
-- fault exceptions are enabled before SVC and `BASEPRI` is cleared inside the
-  SVC handler before the first context is restored.
+- configurable fault exceptions are enabled before SVC when
+  `FIBER_ENABLE_CONFIGURABLE_FAULTS=1`, and `BASEPRI` is cleared inside the SVC
+  handler before the first context is restored.
+- existing CFSR/HFSR/DFSR evidence survives startup by default; set
+  `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START=1` only for a run that intentionally
+  clears it.
 - first entry arrives through SVC exception return, not a direct function call.
 - `fiber_port_start_first_context()` does not continue after the `svc`
   instruction. If it does, it traps with `'y'`.
@@ -218,6 +234,9 @@ Validate these scheduler result cases:
   also provide PSPLIM.
 - returned context with an unsealed or corrupted boot record traps before PSP is
   restored.
+- a scheduler hook that returns with changed `PRIMASK`, `FAULTMASK`, or
+  `BASEPRI` traps with `'r'`, `'t'`, or `'B'` before target validation or
+  restore. `CONTROL` is also required to remain unchanged and traps with `'l'`.
 
 The harness keeps first-start and later-PendSV result validation separate:
 
@@ -241,6 +260,12 @@ The harness keeps first-start and later-PendSV result validation separate:
 - `FIBER_VAL_TRAP_SHORT_ALIGN_FRAME` supplies a complete base frame whose xPSR
   claims an additional alignment word that is outside the declared stack, and
   traps with `'X'`.
+- `FIBER_VAL_TRAP_HOOK_PRIMASK_FIRST/NEXT` mutate `PRIMASK` in the first or
+  PendSV scheduler callback and trap with `'r'`.
+- `FIBER_VAL_TRAP_HOOK_FAULTMASK_FIRST/NEXT` mutate `FAULTMASK` in the first or
+  PendSV scheduler callback and trap with `'t'`.
+- `FIBER_VAL_TRAP_HOOK_BASEPRI_FIRST/NEXT` mutate `BASEPRI` in the first or
+  PendSV scheduler callback and trap with `'B'`.
 
 ## Long-Run H7 Stress
 
@@ -322,7 +347,9 @@ state from this older snapshot. Re-run normal mode and all listed trap modes,
 including
 `CANARY`, `BAD_EXC_RETURN`, `SHORT_FRAME`, and `BAD_BOOT`.
 Also run `BAD_XPSR_T`, `BAD_XPSR_IPSR`, `BAD_STACKED_PC`, and
-`SHORT_ALIGN_FRAME` after the saved-frame semantic hardening.
+`SHORT_ALIGN_FRAME` after the saved-frame semantic hardening. The current
+scheduler-state contract additionally requires all six
+`HOOK_*_FIRST`/`HOOK_*_NEXT` mask-mutation modes.
 
 ## Superseded Recorded Result: 2026-07-11
 
