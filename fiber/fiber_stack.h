@@ -13,12 +13,12 @@
 /* Static/global or function-static stack buffer. */
 /* alignas goes before static for strict toolchains. */
 #define FIBER_STACK_ARRAY_STATIC(name, BYTES)                                  \
-    alignas(FIBER_STACK_ALIGN) static uint8_t name[(BYTES)];                   \
+    alignas(FIBER_PORT_STACK_ALIGNMENT) static uint8_t name[(BYTES)];          \
     static_assert((BYTES) >= FIBER_STACK_MIN_BOOT, "[fiber]: stack too small")
 
 /* Automatic local stack buffer on the caller stack. */
 #define FIBER_STACK_ARRAY_LOCAL(name, BYTES)                                   \
-    alignas(FIBER_STACK_ALIGN) uint8_t name[(BYTES)];                          \
+    alignas(FIBER_PORT_STACK_ALIGNMENT) uint8_t name[(BYTES)];                 \
     static_assert((BYTES) >= FIBER_STACK_MIN_BOOT, "[fiber]: stack too small")
 
 /* Base/top helpers in the format expected by fiber_init(). */

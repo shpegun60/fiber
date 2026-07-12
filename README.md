@@ -57,7 +57,8 @@ the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
 exception setup, FPU traits, and architecture-specific critical-section policy.
 Common runtime files should not keep architecture-specific fallback switch
 assembly or CPU capability decisions for ports that are claimed as supported.
-Configuration ownership and every supported CM7 tuning option are documented in
+Configuration ownership, selected-port integration values, and global fault
+policy from `fiber/fiber_platform_policy.h` are documented in
 `FIBER_SETTINGS.md`.
 
 Port selection defaults to automatic detection from compiler ARM architecture
@@ -292,12 +293,14 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 
 ## Safety Defaults
 
-- `FIBER_SWITCH_STRICT_BARRIERS = 1`
-- `FIBER_SWITCH_MASK_IRQS = 1`
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_STACK_CANARY = 1`
 - `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
 - SVC first-start is mandatory for runtime-supported ports
+- DSB/ISB context and PendSV-request barriers are mandatory port behavior
+- FPU ports enable and read back CP10/CP11 before first start
+- stack alignment, EXC_RETURN, FPCA handling, and canary encoding are
+  selected-port/runtime facts, not user settings
 
 `FIBER_VALIDATE_SCHEDULED_CONTEXT` and `FIBER_VALIDATE_CURRENT` were removed.
 Defining either obsolete switch is a compile error because current ownership
@@ -357,19 +360,18 @@ Use those only for bring-up experiments after the selected port policy is
 understood. They do not add FreeRTOS-level PSPLIM/CONTROL/secure-context/PAC-key
 handling.
 
-## H7 Performance Mode
+## H7 Lazy-FPU Mode
 
-The STM32H7 / Cortex-M7 validation app also passed a long-running switch/FPU
-stress run with the faster settings below:
+The STM32H7 / Cortex-M7 validation app previously passed long-running
+switch/FPU stress with lazy stacking enabled:
 
 ```c
 #define FIBER_FPU_LAZY 1
-#define FIBER_SWITCH_MASK_IRQS 0
-#define FIBER_SWITCH_STRICT_BARRIERS 0
 ```
 
-Use these as opt-in performance settings after target validation. The portable
-bring-up defaults remain the conservative safety settings above.
+This remains an opt-in performance policy. Context barriers and PendSV request
+serialization cannot be disabled. Re-run board validation after changing FPU
+policy or compiler FP options.
 
 ## Portability Notes
 
@@ -404,14 +406,14 @@ and opcode/immediate value. It clears pending PendSV before opening interrupts
 for SVC, enables IRQ and fault exceptions, clears BASEPRI in the SVC handler,
 then restores PSP and returns through the selected context's `EXC_RETURN`.
 
-The concrete CM7 port fixes its initial `EXC_RETURN` at `0xFFFFFFFDu` and rejects
-an incompatible override. `FIBER_RUN_NONSECURE` and
-`FIBER_INITIAL_EXC_RETURN` remain only as transitional v8-M bring-up inputs;
-they do not provide production TrustZone or Non-secure support.
+The concrete CM7 port fixes its initial `EXC_RETURN` at `0xFFFFFFFDu`; it is not
+an application override. The non-production v8-M fallback uses explicitly
+scoped `FIBER_TRANSITIONAL_V8M_*` bring-up inputs, which do not provide
+production TrustZone or Non-secure support.
 
 Cortex-M23, Cortex-M33, Cortex-M55, MVE, TrustZone/Non-secure, and PAC/BTI
 scenarios are unsupported until their FreeRTOS-style context layout is
-implemented and hardware-validated. `FIBER_USE_PSPLIM_REGISTER`
+implemented and hardware-validated. `FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank
 PSPLIM register when those ports are implemented.
@@ -427,12 +429,11 @@ Run the compile-only Cortex-M matrix after changing target gates or assembly:
 .\tools\compile_matrix.ps1
 ```
 
-This checks ARMv7E-M supported builds and verifies that profiles without SVC
-first-start fail with the expected unsupported-port gate. It also
-compile-covers PendSV direct-vector mode and PendSV+SVC direct-vector mode for
-ARMv7E-M. Direct-vector compile coverage does not replace hardware tests and
-does not promote a direct-vector configuration to a runtime-validated board
-claim.
+This compiles and relocatable-links every selected profile and verifies exactly
+one definition of each port ABI symbol. It covers selector and build-selected
+modes, wrapper/direct vectors, v8-M bring-up scenarios, and negative settings
+contracts. Compile coverage does not replace hardware tests or promote a
+transitional profile to a runtime-supported port.
 
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,

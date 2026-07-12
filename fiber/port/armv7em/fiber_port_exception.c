@@ -1,13 +1,7 @@
 /* --------------------------------------------------------------------------
  * fiber_port_exception.c - ARMv7E-M exception setup and validation
  *
- * Knobs (optional):
- *   - FIBER_FORCE_PRIGROUP  : [-1..7]  -1 = don't touch grouping (default), otherwise set PRIGROUP
- *   - FIBER_TUNE_SYSTICK    : 0/1      also set SysTick to lowest (default 0)
- *   - FIBER_TUNE_SVCALL     : 0/1      set SVCall to a fixed priority (default 1)
- *   - FIBER_SWITCH_STRICT_BARRIERS : 0/1 add extra DSB/ISB around sensitive writes (you already use it)
- *   - FIBER_VALIDATE_EXCEPTION_SETUP : 0/1 validate vectors and BASEPRI policy
- *   - FIBER_VALIDATE_PRIORITY_GROUPING : 0/1 validate AIRCR.PRIGROUP for BASEPRI policy
+ * Exception routing, priority, and vector checks are mandatory port behavior.
  * -------------------------------------------------------------------------- */
 
 #include "mcu_core.h"
@@ -67,18 +61,12 @@ __STATIC_FORCEINLINE void fiber_pendsv_clear_pending(void) {
 
 static void fiber_validate_vector_entry(uint32_t index, void (*expected)(void), char code)
 {
-#if FIBER_VALIDATE_VECTOR_WIRING
     const uint32_t *const vectors = fiber_port_vectors_base_ptr();
     const uintptr_t actual = (uintptr_t)vectors[index];
     const uintptr_t expect = fiber_handler_addr(expected);
 
     FIBER_REQUIRE((actual & 1u) != 0u, code);
     FIBER_REQUIRE(fiber_strip_thumb_bit(actual) == fiber_strip_thumb_bit(expect), code);
-#else
-    (void)index;
-    (void)expected;
-    (void)code;
-#endif
 }
 
 static void fiber_validate_pendsv_priority(void)
@@ -91,11 +79,9 @@ static void fiber_validate_pendsv_priority(void)
 
 static void fiber_validate_svc_priority(void)
 {
-#if FIBER_VALIDATE_SVC_PRIORITY
     const uint32_t rd = NVIC_GetPriority(SVCall_IRQn);
 
     FIBER_REQUIRE(rd == 0u, 'w');
-#endif
 }
 
 #if FIBER_PORT_HAS_BASEPRI
@@ -112,6 +98,8 @@ static uint8_t fiber_probe_implemented_priority_mask(void)
 
     *first_user_priority = original_priority;
     { __DSB(); __ISB(); __COMPILER_BARRIER(); }
+
+    FIBER_REQUIRE(*first_user_priority == original_priority, 'Q');
 
     fiber_primask_restore(pm);
 
@@ -132,25 +120,23 @@ static uint32_t fiber_count_implemented_priority_bits(uint8_t implemented_mask)
 
 static void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
 {
-#if FIBER_PORT_HAS_BASEPRI && FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
+    const uint8_t cmsis_mask = (uint8_t)(0xFFu << (8u - __NVIC_PRIO_BITS));
 
     FIBER_REQUIRE(implemented_mask != 0u, 'Q');
+    FIBER_REQUIRE(implemented_mask == cmsis_mask, 'Q');
+    FIBER_REQUIRE(implemented_bits == (uint32_t)__NVIC_PRIO_BITS, 'Q');
     FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & (uint32_t)implemented_mask) != 0u, 'Q');
     FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & ~(uint32_t)implemented_mask) == 0u, 'q');
 
     if (implemented_bits == 8u) {
         FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u, 'g');
     }
-#else
-    (void)implemented_mask;
-#endif
 }
 
 static void fiber_validate_priority_grouping(uint8_t implemented_mask)
 {
-#if FIBER_PORT_HAS_BASEPRI && FIBER_VALIDATE_PRIORITY_GROUPING
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
     uint32_t max_prigroup = 0u;
@@ -163,28 +149,8 @@ static void fiber_validate_priority_grouping(uint8_t implemented_mask)
 
     max_prigroup = (max_prigroup << 8u) & (0x07u << 8u);
     FIBER_REQUIRE((SCB->AIRCR & (0x07u << 8u)) <= max_prigroup, 'g');
-#else
-    (void)implemented_mask;
-#endif
 }
 #endif /* FIBER_PORT_HAS_BASEPRI */
-
-static void fiber_validate_m7_r0p1_errata_policy(void)
-{
-#if FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY && defined(__CORTEX_M) && (__CORTEX_M == 7)
-    enum {
-        FIBER_CORTEX_M7_R0P0_CPUID = 0x410FC270u,
-        FIBER_CORTEX_M7_R0P1_CPUID = 0x410FC271u
-    };
-
-    const uint32_t cpuid = SCB->CPUID;
-
-    if ((cpuid == FIBER_CORTEX_M7_R0P0_CPUID) ||
-        (cpuid == FIBER_CORTEX_M7_R0P1_CPUID)) {
-        FIBER_REQUIRE(FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND != 0, '7');
-    }
-#endif
-}
 
 static void fiber_validate_feature_policy(void)
 {
@@ -193,7 +159,6 @@ static void fiber_validate_feature_policy(void)
 
 void fiber_exception_runtime_check(void)
 {
-#if FIBER_VALIDATE_EXCEPTION_SETUP
     FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 
     fiber_validate_feature_policy();
@@ -201,29 +166,23 @@ void fiber_exception_runtime_check(void)
     fiber_validate_pendsv_priority();
     fiber_validate_svc_priority();
 
-#if FIBER_VALIDATE_PENDSV_VECTOR
 # if FIBER_PENDSV_VECTOR_DIRECT
     fiber_validate_vector_entry(14u, fiber_pendsv, 'Y');
 # else
     fiber_validate_vector_entry(14u, PendSV_Handler, 'Y');
 # endif
-#endif
 
-#if FIBER_VALIDATE_SVC_VECTOR
 # if FIBER_SVC_VECTOR_DIRECT
     fiber_validate_vector_entry(11u, fiber_svc, 'y');
 # else
     fiber_validate_vector_entry(11u, SVC_Handler, 'y');
 # endif
-#endif
 
 #if FIBER_PORT_HAS_BASEPRI
     const uint8_t implemented_mask = fiber_probe_implemented_priority_mask();
 
     fiber_validate_basepri_priority_mask(implemented_mask);
     fiber_validate_priority_grouping(implemented_mask);
-#endif
-    fiber_validate_m7_r0p1_errata_policy();
 #endif
 }
 
@@ -233,28 +192,26 @@ void fiber_exception_runtime_check(void)
  * -------------------------------------------------------------------------- */
 void fiber_pendsv_init_lowest_priority(void)
 {
-    const uint32_t pm = fiber_primask_save_disable();
-
-#if FIBER_FORCE_PRIGROUP >= 0
-    /* Optionally force PRIGROUP early. Caller should know what they're doing. */
-    NVIC_SetPriorityGrouping((uint32_t)FIBER_FORCE_PRIGROUP);
-    { __DSB(); __ISB(); __COMPILER_BARRIER(); }
+    FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+    FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+#if FIBER_PORT_HAS_BASEPRI
+    FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
+#if FIBER_PORT_HAS_FAULTMASK
+    FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+#endif
+
+    fiber_validate_feature_policy();
+
+    const uint32_t pm = fiber_primask_save_disable();
 
     const uint32_t lowest = fiber_lowest_prio_val();
 
     /* Set PendSV to the absolute lowest preempt priority */
     NVIC_SetPriority(PendSV_IRQn, lowest);
 
-#if FIBER_TUNE_SYSTICK
-    /* Optional: also drop SysTick to the bottom to never preempt PendSV by accident */
-    NVIC_SetPriority(SysTick_IRQn, lowest);
-#endif
-
-#if FIBER_TUNE_SVCALL
     /* Match the FreeRTOS first-task start policy: SVCall is highest priority. */
     NVIC_SetPriority(SVCall_IRQn, 0u);
-#endif
 
     { __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
@@ -264,15 +221,9 @@ void fiber_pendsv_init_lowest_priority(void)
     /* Read-back verify. CMSIS returns right-justified priority; compare masked. */
     {
         const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
-        FIBER_REQUIRE((rd & lowest) == lowest, 'P');  /* 'P' - PendSV priority not at lowest */
-#if FIBER_TUNE_SYSTICK
-        const uint32_t rd_stk = NVIC_GetPriority(SysTick_IRQn);
-        FIBER_REQUIRE((rd_stk & lowest) == lowest, 'K'); /* 'K' - SysTick priority not at lowest */
-#endif
-#if FIBER_VALIDATE_SVC_PRIORITY
+        FIBER_REQUIRE(rd == lowest, 'P');
         const uint32_t rd_svc = NVIC_GetPriority(SVCall_IRQn);
-        FIBER_REQUIRE(rd_svc == 0u, 'w'); /* 'w' - SVCall priority is not highest */
-#endif
+        FIBER_REQUIRE(rd_svc == 0u, 'w');
     }
 
     fiber_primask_restore(pm);

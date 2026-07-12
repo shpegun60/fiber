@@ -19,16 +19,8 @@
 # define FIBER_PORT_NAME "armv6m"
 #endif
 
-#ifndef FIBER_PORT_TRAITS_LEGACY_BRIDGE
-# define FIBER_PORT_TRAITS_LEGACY_BRIDGE 1
-#endif
-
 #define FIBER_PORT_HAS_BASEPRI 0
 #define FIBER_PORT_HAS_FAULTMASK 0
-
-#ifndef FIBER_HAS_BASEPRI
-# define FIBER_HAS_BASEPRI FIBER_PORT_HAS_BASEPRI
-#endif
 
 #ifndef FIBER_PORT_HAS_VTOR
 # if defined(SCB_VTOR_TBLOFF_Msk) || \
@@ -39,11 +31,7 @@
 # endif
 #endif
 
-#ifndef FIBER_HAS_VTOR
-# define FIBER_HAS_VTOR FIBER_PORT_HAS_VTOR
-#endif
-
-#if !FIBER_PORT_HAS_VTOR && !FIBER_VTOR_USE_NS
+#if !FIBER_PORT_HAS_VTOR
 FIBER_DIAG_WARN("[fiber] Selected ARMv6-M port has no SCB->VTOR; falling back to base table at 0x00000000.")
 #endif
 
@@ -51,23 +39,15 @@ FIBER_DIAG_WARN("[fiber] Selected ARMv6-M port has no SCB->VTOR; falling back to
 #define FIBER_PORT_TOOLCHAIN_HAS_FP 0
 #define FIBER_PORT_SILICON_HAS_FPU 0
 #define FIBER_PORT_CMSIS_FPU_USED 0
-#ifndef FIBER_HAS_FPU
-# define FIBER_HAS_FPU 0
-#endif
-#ifndef FIBER_HAS_EXTENDED_FP_CONTEXT
-# define FIBER_HAS_EXTENDED_FP_CONTEXT 0
-#endif
 #define FIBER_PORT_HAS_FPU 0
 #define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 0
+#define FIBER_PORT_STACK_ALIGNMENT 8u
 #define FIBER_PORT_BOOT_CLEARS_FPCA 0
 #define FIBER_PORT_HAS_MVE 0
 #define FIBER_PORT_HAS_PAC 0
 #define FIBER_PORT_HAS_BTI 0
 #define FIBER_PORT_USES_PSPLIM_REGISTER 0
-#ifndef FIBER_USE_PSPLIM_REGISTER
-# define FIBER_USE_PSPLIM_REGISTER FIBER_PORT_USES_PSPLIM_REGISTER
-#endif
-#define FIBER_PORT_INITIAL_EXC_RETURN FIBER_INITIAL_EXC_RETURN
+#define FIBER_PORT_INITIAL_EXC_RETURN 0xFFFFFFFDu
 #define FIBER_PORT_SCHEDULER_MASK_KIND FIBER_PORT_MASK_PRIMASK
 #define FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND 0
 #define FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND 0
@@ -90,6 +70,15 @@ FIBER_DIAG_WARN("[fiber] Selected ARMv6-M port has no SCB->VTOR; falling back to
 #define FIBER_PORT_SOFTWARE_FRAME_WORDS 9u
 #define FIBER_PORT_SOFTWARE_FRAME_BYTES (FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u)
 #define FIBER_PORT_EXC_RETURN_WORD_INDEX 0u
+#define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES 0u
+#define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES 4u
+#define FIBER_PORT_INITIAL_CONTEXT_BYTES \
+	(FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_SOFTWARE_FRAME_BYTES)
+#define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES \
+	(FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_PORT_EXC_PER_LEVEL_BYTES + \
+	 FIBER_PORT_HIGH_FP_SOFTWARE_BYTES + \
+	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
+#define FIBER_PORT_SAVED_SP_MOD8 4u
 
 #ifndef FIBER_SCHEDULER_BASEPRI
 # define FIBER_SCHEDULER_BASEPRI 0u
@@ -154,16 +143,6 @@ __STATIC_FORCEINLINE void fiber_armv6m_primask_restore(uint32_t primask)
 	{ __DSB(); __ISB(); }
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_switch_mask_enter(void)
-{
-	return fiber_armv6m_primask_save_disable();
-}
-
-__STATIC_FORCEINLINE void fiber_port_switch_mask_exit(uint32_t state)
-{
-	fiber_armv6m_primask_restore(state);
-}
-
 __STATIC_FORCEINLINE uint32_t fiber_port_basepri_read(void)
 {
 	return 0u;
@@ -206,17 +185,7 @@ __STATIC_FORCEINLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
 
 __STATIC_FORCEINLINE uintptr_t fiber_port_vectors_base_addr(void)
 {
-#if FIBER_VTOR_USE_NS
-# ifdef SCB_NS
-	uintptr_t value = (uintptr_t)SCB_NS->VTOR;
-#  if defined(SCB_VTOR_TBLOFF_Msk)
-	value &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
-#  endif
-	return value;
-# else
-#  error "[fiber]: SCB_NS is unavailable; ARMv6-M port cannot read Non-secure VTOR"
-# endif
-#elif FIBER_PORT_HAS_VTOR
+#if FIBER_PORT_HAS_VTOR
 	uintptr_t value = (uintptr_t)SCB->VTOR;
 # if defined(SCB_VTOR_TBLOFF_Msk)
 	value &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
@@ -240,17 +209,7 @@ __STATIC_FORCEINLINE uint32_t fiber_port_read_initial_msp(void)
 
 __STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 {
-#if FIBER_VTOR_USE_NS
-# ifdef SCB_NS
-#  if defined(SCB_VTOR_TBLOFF_Msk)
-	base &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
-#  endif
-	SCB_NS->VTOR = (uint32_t)base;
-	{ __DSB(); __ISB(); }
-# else
-#  error "[fiber]: SCB_NS is unavailable; ARMv6-M port cannot write Non-secure VTOR"
-# endif
-#elif FIBER_PORT_HAS_VTOR
+#if FIBER_PORT_HAS_VTOR
 # if defined(SCB_VTOR_TBLOFF_Msk)
 	base &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
 # endif
@@ -264,6 +223,8 @@ __STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 {
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	__DSB();
+	__ISB();
 }
 
 void fiber_port_init_context_frame(FiberContext *ctx);

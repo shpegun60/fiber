@@ -58,8 +58,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	fiber_boot_record_check(&ctx->boot);
 
-	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
-			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
+	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
 	{
 		fiber_portDATA_SYNC_BARRIER();
@@ -308,11 +307,7 @@ void fiber_pendsv(void)
 			"tst   r0, #7                           \n"
 			"bne   92f                              \n" /* STKALIGN requires an 8-byte hardware-frame base */
 
-#if FIBER_SWITCH_STRICT_BARRIERS
-			"dsb                                    \n"  /* (optional) serialize before branch */
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"dsb                                    \n"  /* serialize before context publication */
 			"isb                                    \n" /* synchronize */
 
 			/* ----------------------------------------------------------------------
@@ -410,11 +405,7 @@ void fiber_pendsv(void)
 			"msr   psp, r0                          \n" /* PSP := start of target HW frame */
 			"isb                                    \n" /* synchronize before exception return */
 
-#if FIBER_SWITCH_STRICT_BARRIERS
-			"dsb                                    \n"  /* (optional) serialize before branch */
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"dsb                                    \n"  /* serialize restored CPU state */
 
 			"isb                                    \n" /* synchronize */
 

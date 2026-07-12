@@ -106,7 +106,7 @@ user/build option      -> FIBER_XXX
 | `TickType_t`, `portMAX_DELAY`, `portTICK_TYPE_IS_ATOMIC` | user scheduler tick policy | Excluded from CPU port. Sleep/time is owned by the scheduler layer, not the context-switch core. |
 | `portSTACK_GROWTH` | `fiber_portSTACK_GROWTH` | Reimplemented as `-1`. |
 | `portTICK_PERIOD_MS` | user scheduler tick policy | Excluded. |
-| `portBYTE_ALIGNMENT` | `fiber_portBYTE_ALIGNMENT` and `FIBER_STACK_ALIGN` | Reimplemented. Fiber validates stack alignment separately. |
+| `portBYTE_ALIGNMENT` | `fiber_portBYTE_ALIGNMENT` and `FIBER_PORT_STACK_ALIGNMENT` | Reimplemented. Alignment is a fixed selected-port trait, not a user setting. |
 | `portDONT_DISCARD` | shared `fiber_compiler.h` attribute helpers | Adapted. The selected port intentionally depends on the shared compiler ABI instead of duplicating toolchain attributes. |
 | `portYIELD()` | `fiber_schedule()` plus `fiber_arm_cm7_r0p1_yield_request()` / `fiber_port_pend_switch()` | Adapted. Fiber rejects ISR/PRIMASK/BASEPRI/FAULTMASK delayed switches before pended PendSV. |
 | `portNVIC_INT_CTRL_REG` | `fiber_portNVIC_INT_CTRL_REG` | Reimplemented. |
@@ -139,7 +139,7 @@ user/build option      -> FIBER_XXX
 
 | FreeRTOS item | Fiber item | Decision |
 | --- | --- | --- |
-| `#ifndef __ARM_FP` hard error | `FIBER_HAS_FPU` / `FIBER_HAS_EXTENDED_FP_CONTEXT` | Changed. Fiber supports CM7 without forcing an FPU build; FP save/restore is gated by target traits. |
+| `#ifndef __ARM_FP` hard error | `FIBER_PORT_HAS_FPU` / `FIBER_PORT_HAS_EXTENDED_FP_CONTEXT` | Changed. Fiber supports CM7 without forcing an FPU build; FP save/restore requires both compiler FP generation and CMSIS silicon FPU support. |
 | `portISR_t` | direct function pointer use in vector validation | Adapted. |
 | `portNVIC_SYSTICK_CTRL_REG`, `portNVIC_SYSTICK_LOAD_REG`, `portNVIC_SYSTICK_CURRENT_VALUE_REG`, and related SysTick constants | user scheduler/platform | Excluded. CPU context switch core does not own ticks. |
 | `portNVIC_SHPR2_REG` / `portNVIC_SHPR3_REG` | `fiber_portNVIC_SHPR2_REG` / `fiber_portNVIC_SHPR3_REG` | Reimplemented as selected-port constants. Fiber validates and configures SVC/PendSV only; SysTick is not owned. |
@@ -174,7 +174,7 @@ user/build option      -> FIBER_XXX
 
 | FreeRTOS function/path | Fiber function/path | Decision |
 | --- | --- | --- |
-| `pxPortInitialiseStack()` | `fiber_port_init_context_frame()` | Adapted and hardened. Fiber validates/seals boot metadata, reserves exception headroom, clears stacked PC bit 0, stores a task-return panic LR, and preserves platform `r9`. |
+| `pxPortInitialiseStack()` | `fiber_port_init_context_frame()` | Adapted and hardened. Fiber validates/seals boot metadata, builds the synthetic frame directly down from `stack_top`, clears stacked PC bit 0, stores a task-return panic LR, and preserves platform `r9`. The selected port exports exact initial/maximum saved-context geometry instead of using a separate top guard. |
 | `prvTaskExitError()` | `fiber_internal_task_return()` | Replaced. A returned fiber panics; there is no task-delete API in the CPU port. |
 | `vPortSVCHandler()` | `fiber_svc()` | Adapted and hardened. Fiber validates SVCall identity, exact incoming EXC_RETURN, MSP origin, 8-byte SVC frame alignment, stacked Thread/Thumb state, stacked PC, SVC opcode/immediate, current context, restore context, FPCA state, and BASEPRI clear through errata-safe macros. |
 | `prvPortStartFirstTask()` | `fiber_port_start_first_context()` | Adapted and hardened. Fiber starts only via SVC, validates Thread/MSP state, optionally rewinds MSP through sealed boot policy, clears pending PendSV, enables faults/IRQs, and panics if SVC returns. |
@@ -187,7 +187,7 @@ user/build option      -> FIBER_XXX
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
 | `vPortSetupTimerInterrupt()` | user scheduler/platform | Excluded. |
-| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, the local `FIBER_ENABLE_CPACR` default, CPACR/FPCCR setup, lazy/eager policy, barriers, and enforced CPACR/FPCCR readback checks. |
+| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, mandatory CPACR enable/readback, FPCCR lazy/eager policy, barriers, and FPCCR readback checks. |
 | `vPortValidateInterruptPriority()` | selected-port constants and `fiber_port_exception.c` validation | Adapted. Startup probing verifies the implemented priority mask against `__NVIC_PRIO_BITS`, confirms priority-register restoration, validates BASEPRI bits and PRIGROUP compatibility, and leaves future ISR-safe API priority checks outside the current API scope. |
 | `WORKAROUND_PMU_CM001` | none | Excluded. This is XMC4000-specific, not STM32 Cortex-M7. |
 
@@ -238,7 +238,8 @@ Done:
 FreeRTOS-referenced ARM_CM7/r0p1 directory exists
 selected fiber_portmacro.h defines CM7/r0p1 CPU traits and helper constants
 selected fiber_port.c owns native first-start and PendSV implementation text
-selected files do not include fiber_target.h or fiber_settings.h
+selected files do not include the removed fiber_target.h; fiber_portmacro.h
+includes shared user policy before defining fixed CPU traits
 selected fiber_portmacro.h includes port/fiber_compiler.h only for compiler ABI
 BASEPRI/FPU/frame/default policy is duplicated in this selected port instead
 of inheriting target-wide helper policy

@@ -1,6 +1,43 @@
 # Fiber Decision Log
 
-## 2026-07-12: Make CM7 Settings and Saved Frames Fail-Closed
+## 2026-07-12: Canonicalize Port Policy and Exact Stack Geometry
+
+The selected-port contract is now the single source of CPU facts across every
+compile-covered profile:
+
+- common runtime code consumes only `FIBER_PORT_*` traits;
+- `FIBER_PORT_TRAITS_LEGACY_BRIDGE`, old `FIBER_HAS_*` aliases, and
+  `FIBER_USE_PSPLIM_REGISTER` are compile errors;
+- CPACR setup, FPCA cleanup, EXC_RETURN, stack alignment, vector-bank choice,
+  canary encoding, PendSV publication, and context-boundary DSB/ISB barriers
+  are mandatory port/runtime behavior rather than application tuning;
+- FPU context support requires agreement between compiler FP generation and
+  CMSIS silicon capability. The library does not synthesize `__FPU_USED` and
+  has no force-save override;
+- the initial synthetic frame is built directly down from `stack_top`. After
+  SVC restore, PSP equals `stack_top`, so the old independent top guard is
+  unnecessary;
+- minimum usable stack is exactly the selected port's maximum saved context,
+  including high FP registers and the architectural alignment word. CM7F uses
+  208 bytes, or 240 bytes including the default low red zone;
+- initial context bytes, high-FP software bytes, exception alignment padding,
+  maximum saved-context bytes, and saved-SP alignment are explicit mandatory
+  selected-port traits rather than common Cortex-M assumptions;
+- global UNALIGN_TRP and DIV_0_TRP choices moved to
+  `fiber_platform_policy.h` because they affect the complete application;
+- obsolete settings fail explicitly instead of being ignored;
+- the compile matrix now contains negative probes for every remaining boolean,
+  every removed setting/alias, vector mode, SVC immediate, red-zone alignment,
+  and BASEPRI priority encoding.
+
+The full compile/link matrix and STM32H7 Debug build pass. This changes initial
+PSP geometry and therefore requires a fresh H7 normal/trap hardware run before
+the current code can inherit an old runtime-validation claim.
+
+## 2026-07-12: Make CM7 Settings and Saved Frames Fail-Closed (Superseded)
+
+The top-guard and configurable-reserve decisions in this entry were superseded
+later on the same date by exact stack geometry and canonical port ownership.
 
 A second line-by-line comparison against local FreeRTOS commit `a50edad`
 tightened the concrete `ARM_CM7/r0p1` contract without changing its
@@ -21,12 +58,12 @@ tightened the concrete `ARM_CM7/r0p1` contract without changing its
 - suspended contexts require an exact selected-port `EXC_RETURN`, complete
   software/hardware/FP frame bounds, valid `xPSR.T`, Thread-mode stacked IPSR,
   an even stacked PC, and any `xPSR.STACKALIGN` word;
-- the minimum context reserve is derived from selected-port frame traits. For
-  CM7 with FP it covers 208 bytes for the maximum saved context, plus one fixed
-  maximum hardware-frame top guard and the low red zone;
-- `FIBER_EXC_LEVELS_ON_PSP` was removed. Nested handlers use MSP, so it was not
-  an honest user setting; a larger reviewed reserve can use
-  `FIBER_BOOT_EXTRA_BYTES`;
+- this superseded checkpoint still used a separate hardware-frame top guard.
+  The current contract removes that guard and derives the minimum directly from
+  the selected port's exact maximum saved context plus the low red zone;
+- `FIBER_EXC_LEVELS_ON_PSP` and `FIBER_BOOT_EXTRA_BYTES` were removed. Nested
+  handlers use MSP, and applications choose an actual stack size above the
+  architectural minimum for their own call depth and local objects;
 - boot-record, canary, scheduler bridge, and panic helpers reachable from
   PendSV use the general-registers-only compiler contract;
 - the compile matrix includes expected-failure probes for invalid settings and
@@ -213,8 +250,8 @@ Ports without PSPLIM expose explicit disabled/no-op definitions. The
 transitional v8-M port owns the temporary `psplim` / `psplim_ns` bank selection
 until concrete v8-M production ports replace it.
 
-Common runtime code only consumes `FIBER_USE_PSPLIM_REGISTER` and the selected
-port API; it no longer includes a target-wide PSPLIM helper.
+Common runtime code only consumes `FIBER_PORT_USES_PSPLIM_REGISTER` and the
+selected port API; it no longer includes a target-wide PSPLIM helper.
 
 ## 2026-07-12: Move FPU Policy Into Selected Ports
 
@@ -328,8 +365,9 @@ code such as compiler, diagnostics, and static-assert ABI headers.
 
 PRIMASK save/restore is intentionally not a root helper. The selected port owns
 its local PRIMASK implementation and exposes only the generic
-`fiber_port_switch_mask_enter()` / `fiber_port_switch_mask_exit()` contract to
-common runtime code.
+`fiber_port_scheduler_critical_enter()` /
+`fiber_port_scheduler_critical_exit()` contract around the scheduler hook.
+PendSV request publication itself is not wrapped in PRIMASK.
 
 ## 2026-07-12: Move BASEPRI Policy Into Selected Ports
 
@@ -537,14 +575,16 @@ The v2 runtime now has explicit policy gates for Cortex-M profiles whose
 FreeRTOS ports carry extra context state that the current generic fiber context
 does not save yet:
 
-- `fiber/port/fiber_feature_policy.h` defines `FIBER_HAS_EXTENDED_FP_CONTEXT`,
-  `FIBER_USE_PSPLIM_REGISTER`, `FIBER_HAS_PAC`, and `FIBER_HAS_BTI`.
+- `fiber/port/fiber_feature_policy.h` consumes the canonical
+  `FIBER_PORT_HAS_EXTENDED_FP_CONTEXT`, `FIBER_PORT_USES_PSPLIM_REGISTER`,
+  `FIBER_PORT_HAS_PAC`, and `FIBER_PORT_HAS_BTI` traits.
 - MVE-FP follows the extended FP save/restore model. MVE without scalar FP is
   rejected by runtime policy validation because the current assembly does not
   implement an MVE-only register save path.
 - PSPLIM register access is no longer implied only by the architecture family.
-  `FIBER_USE_PSPLIM_REGISTER` is the actual access gate, keeping M23/security
-  variants from accidentally writing an unsupported or wrong-bank PSPLIM.
+  `FIBER_PORT_USES_PSPLIM_REGISTER` is the actual access gate, keeping
+  M23/security variants from accidentally writing an unsupported or wrong-bank
+  PSPLIM.
 - ARMv8-M Baseline, ARMv8-M Mainline, ARMv8.1-M, TrustZone/Non-secure bank
   targeting, MVE, and PAC/BTI runtime use all require explicit
   `FIBER_ALLOW_UNVALIDATED_*` opt-in until the matching FreeRTOS-style context
@@ -582,8 +622,7 @@ The v2 runtime now checks exception setup before the first fiber starts:
 - The default ARMv7E-M SVC model expects an application `SVC_Handler()` wrapper
   that branches to `fiber_svc()` without clobbering LR/EXC_RETURN. Direct
   vectoring to `fiber_svc()` is supported with `FIBER_SVC_VECTOR_DIRECT=1`.
-  `FIBER_VALIDATE_SVC_VECTOR` defaults to active because SVC is mandatory for
-  first start.
+  SVC vector validation is mandatory because SVC is mandatory for first start.
 - `FIBER_SCHEDULER_BASEPRI` is validated against the hardware-implemented NVIC
   priority bits using a FreeRTOS-style write/readback probe.
 - `AIRCR.PRIGROUP` is validated with the same FreeRTOS-style rule used by the
@@ -602,14 +641,9 @@ New panic codes:
   the scheduler BASEPRI policy.
 - `'7'`: affected Cortex-M7 r0p0/r0p1 core without the BASEPRI errata gate.
 
-Portable defaults are conservative again:
-
-- `FIBER_FPU_LAZY = 0`;
-- `FIBER_SWITCH_MASK_IRQS = 1`;
-- `FIBER_SWITCH_STRICT_BARRIERS = 1`.
-
-The previously validated H7 performance mode remains an opt-in target policy,
-not the portable default.
+At that checkpoint the portable defaults used conservative switch knobs. Those
+knobs were later removed: PendSV publication is unmasked, matching FreeRTOS
+yield, while the selected port always emits its required DSB/ISB barriers.
 
 ## 2026-07-10: Pure Scheduler Port ABI Checkpoint
 
@@ -710,6 +744,11 @@ claim.
 
 ## 2026-07-04: Context Switch Hardening
 
+Status: historical. The direct-switch API, configurable EXC_RETURN, force-FPU
+mode, and switch mask/barrier knobs described below were removed by the v2
+canonical selected-port contract. Keep the measurements as history only; use
+the 2026-07-12 decisions and `FIBER_SETTINGS.md` for current behavior.
+
 The earlier direct-switch implementation was treated as a FreeRTOS-style
 cooperative PendSV switcher for STM32 Cortex-M projects.
 
@@ -764,23 +803,24 @@ Hardening decisions:
   target selection to the core API.
 - The scheduler-driven ARMv7E-M branch writes `BASEPRI` around the scheduler
   bridge and has an explicit Cortex-M7 r0p1 errata gate.
-- The validated H7 performance mode is an opt-in policy, not the portable safety
-  default. Keep conservative defaults for broad bring-up unless a target has
-  hardware validation for the faster settings.
+- The old H7 performance-mode measurements remain historical evidence only.
+  Lazy FP is the sole surviving performance policy; switch masking and barrier
+  disable knobs no longer exist.
 
 Known limits:
 
 - STM32H7 / Cortex-M7 is the primary validation target and has the strongest
   historical hardware evidence; the latest behavior changes require a fresh
   checklist run.
-- ARMv8-M Non-secure needs explicit `FIBER_RUN_NONSECURE` or an explicit
-  `FIBER_INITIAL_EXC_RETURN`.
+- ARMv8-M Non-secure remains a transitional compile-only scenario selected by
+  `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE`; EXC_RETURN is selected-port-owned and
+  cannot be overridden by common application settings.
 - Cortex-M23 PSPLIM behavior is intentionally not enabled by the generic
   baseline path. FreeRTOS has context slots for PSPLIM, but its Non-secure M23
   port does not program a non-secure PSPLIM register.
-- Cortex-M55 / MVE needs validation. If MVE code can use the extended FP
-  register file, the build must ensure `FIBER_HAS_FPU` covers that context or
-  force saving with `FIBER_FORCE_SAVE_FPU = 1`.
+- Cortex-M55 / MVE needs a concrete port-owned context layout and hardware
+  validation. There is no force-save override; a production port must derive
+  and implement every required FP/MVE context slot from compiler and CPU facts.
 - There is no v2 public API for starting from a caller-provided `FiberBoot`
   record. Ports without hardware validation are not runtime-supported.
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does

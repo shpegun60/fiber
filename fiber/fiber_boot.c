@@ -16,6 +16,7 @@
  */
 
 #include "fiber_boot.h"
+#include "fiber_platform_policy.h"
 #include "port/fiber_port_selected.h"
 
 static void fiber_boot_simple_check(const FiberBoot* const ctx);
@@ -222,9 +223,11 @@ void fiber_boot_record_fast_check(const FiberBoot *ctx)
 	FIBER_REQUIRE(ctx->stack_base >= begin, 'U');
 	FIBER_REQUIRE(ctx->stack_top <= end, 'T');
 	FIBER_REQUIRE(ctx->stack_top > ctx->stack_base, 'S');
-	FIBER_REQUIRE((ctx->stack_base & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+	FIBER_REQUIRE((ctx->stack_base &
+			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
 			'A');
-	FIBER_REQUIRE((ctx->stack_top & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+	FIBER_REQUIRE((ctx->stack_top &
+			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
 			'A');
 	FIBER_REQUIRE(ctx->avail == (size_t)(ctx->stack_top - ctx->stack_base), 'a');
 	FIBER_REQUIRE(ctx->entry != NULL, 'E');
@@ -232,7 +235,8 @@ void fiber_boot_record_fast_check(const FiberBoot *ctx)
 	FIBER_REQUIRE((ctx->msp_policy == FIBER_MSP_POLICY_VALIDATE) ||
 			(ctx->msp_policy == FIBER_MSP_POLICY_REWIND), 'M');
 	FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-	FIBER_REQUIRE((ctx->msp_top & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+	FIBER_REQUIRE((ctx->msp_top &
+			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
 			'M');
 }
 
@@ -345,8 +349,8 @@ FiberBoot fiber_create_boot(void* const begin, void* const end, const entry_t en
 		FIBER_REQUIRE(base_aligned >= base_word, 'w');
 		FIBER_REQUIRE(top_aligned  <= top_raw,   't');
 
-		FIBER_REQUIRE((base_aligned % FIBER_STACK_ALIGN) == 0u, 'A');
-		FIBER_REQUIRE((top_aligned  % FIBER_STACK_ALIGN) == 0u, 'A');
+		FIBER_REQUIRE((base_aligned % FIBER_PORT_STACK_ALIGNMENT) == 0u, 'A');
+		FIBER_REQUIRE((top_aligned % FIBER_PORT_STACK_ALIGNMENT) == 0u, 'A');
 
 		/* ------------------------------------------------------------------ *
 		 * Region plausibility and minimum sizing                             *
@@ -355,7 +359,7 @@ FiberBoot fiber_create_boot(void* const begin, void* const end, const entry_t en
 		/* Application-defined plausibility of the PSP region itself. */
 		FIBER_REQUIRE(fiber_addr_plausible_ram(base_aligned, top_aligned) != 0, 'P');
 
-		/* Exactly one exception frame on PSP + extra prologue margin. */
+		/* Exact selected-port maximum saved context. */
 		const size_t need  = (size_t)FIBER_STACK_WITHOUT_REDZONE;
 		const size_t avail = (size_t)(top_aligned - base_aligned);
 		FIBER_REQUIRE(avail >= need, 'H');
@@ -431,8 +435,10 @@ void fiber_boot_check(const FiberBoot* const ctx)
 		FIBER_REQUIRE(ctx->stack_top  <= top_raw,  'T');
 		FIBER_REQUIRE(ctx->stack_top  >  ctx->stack_base, 'H');
 
-		FIBER_REQUIRE((ctx->stack_base % FIBER_STACK_ALIGN) == 0u, 'A');
-		FIBER_REQUIRE((ctx->stack_top  % FIBER_STACK_ALIGN) == 0u, 'A');
+		FIBER_REQUIRE((ctx->stack_base % FIBER_PORT_STACK_ALIGNMENT) == 0u,
+				'A');
+		FIBER_REQUIRE((ctx->stack_top % FIBER_PORT_STACK_ALIGNMENT) == 0u,
+				'A');
 
 		FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->stack_base, ctx->stack_top) != 0, 'P');
 		FIBER_REQUIRE(ctx->avail == (size_t)(ctx->stack_top - ctx->stack_base), 'S');
@@ -450,7 +456,8 @@ void fiber_boot_check(const FiberBoot* const ctx)
 				(ctx->msp_policy == FIBER_MSP_POLICY_REWIND), 'p');
 
 		FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-		FIBER_REQUIRE((ctx->msp_top % FIBER_STACK_ALIGN) == 0u, 'A');
+		FIBER_REQUIRE((ctx->msp_top % FIBER_PORT_STACK_ALIGNMENT) == 0u,
+				'A');
 
 		const uintptr_t chk = (ctx->msp_top >= 4u) ? (ctx->msp_top - 4u) : ctx->msp_top;
 		FIBER_REQUIRE(fiber_addr_plausible_ram(chk, ctx->msp_top) != 0, 'R');

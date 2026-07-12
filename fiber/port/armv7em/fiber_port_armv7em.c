@@ -32,8 +32,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	fiber_boot_record_check(&ctx->boot);
 
-	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
-			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
+	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
@@ -163,7 +162,7 @@ void fiber_svc(void)
 			"bne   1f                               \n"
 			"vldmia r0!, {s16-s31}                  \n"
 			"1:                                     \n"
-#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
+#endif /* FIBER_PORT_HAS_EXTENDED_FP_CONTEXT */
 
 			"msr   psp, r0                          \n"
 			"isb                                    \n"
@@ -230,11 +229,7 @@ void fiber_pendsv(void)
 			 * ---------------------------------------------------------------------- */
 			"mrs   r0, psp                          \n" /* r0 = PSP */
 
-#if FIBER_SWITCH_STRICT_BARRIERS
-			"dsb                                    \n"  /* (optional) serialize before branch */
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"dsb                                    \n"  /* serialize before context publication */
 			"isb                                    \n" /* synchronize */
 
 			/* ----------------------------------------------------------------------
@@ -263,7 +258,7 @@ void fiber_pendsv(void)
 			"subs  r3, #64                          \n"
 			"bcc   92f                              \n"
 			"8:                                     \n"
-#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
+#endif /* FIBER_PORT_HAS_EXTENDED_FP_CONTEXT */
 			"subs  r3, #%c[swbytes]                 \n" /* core software frame */
 			"bcc   92f                              \n"
 			"cmp   r3, r2                           \n"
@@ -286,7 +281,7 @@ void fiber_pendsv(void)
 			"bne   2f                               \n" /* if bit4==1 then skip FP save */
 			"vstmdb r0!, {s16-s31}                  \n" /* push S16..S31 */
 			"2:                                     \n" /* scheduler skip-fpu-save */
-#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
+#endif /* FIBER_PORT_HAS_EXTENDED_FP_CONTEXT */
 
 			"stmdb r0!, {r4-r11, r14}               \n" /* push r4..r11 and LR(EXC_RETURN) */
 			"str   r0, [r1]                         \n" /* current->sp = r0 */
@@ -310,16 +305,12 @@ void fiber_pendsv(void)
 			"bne   22f                              \n" /* if bit4==1 then skip FP restore */
 			"vldmia r0!, {s16-s31}                  \n" /* pop S16..S31 */
 			"22:                                    \n" /* skip-fpu-restore */
-#endif /* FIBER_HAS_EXTENDED_FP_CONTEXT */
+#endif /* FIBER_PORT_HAS_EXTENDED_FP_CONTEXT */
 
 			"msr   psp, r0                          \n" /* PSP := start of target HW frame */
 			"isb                                    \n" /* synchronize before exception return */
 
-#if FIBER_SWITCH_STRICT_BARRIERS
-			"dsb                                    \n"  /* (optional) serialize before branch */
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
+			"dsb                                    \n"  /* serialize restored CPU state */
 
 			"isb                                    \n" /* synchronize */
 

@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include "mcu_core.h"
+#include "../../fiber_settings.h"
 #include "../../fiber_compiler.h"
 #include "../../../fiber_panic.h"
 
@@ -48,46 +49,6 @@
 	fiber_portASM volatile("dsb" ::: "memory")
 #define fiber_portINST_SYNC_BARRIER() \
 	fiber_portASM volatile("isb" ::: "memory")
-
-/*-----------------------------------------------------------
- * Port local configuration defaults.
- *
- * These defaults are duplicated here intentionally. A selected port should be
- * buildable from its own portmacro contract instead of inheriting CPU policy
- * from a global target layer.
- *----------------------------------------------------------*/
-
-#ifndef FIBER_FPU_LAZY
-# define FIBER_FPU_LAZY 0
-#endif
-
-#ifndef FIBER_ENABLE_CPACR
-# define FIBER_ENABLE_CPACR 1
-#endif
-
-#ifndef FIBER_FORCE_SAVE_FPU
-# define FIBER_FORCE_SAVE_FPU 0
-#endif
-
-#ifndef FIBER_RUN_NONSECURE
-# define FIBER_RUN_NONSECURE 0
-#endif
-
-#ifndef FIBER_INITIAL_EXC_RETURN
-# if FIBER_RUN_NONSECURE
-#  define FIBER_INITIAL_EXC_RETURN 0xFFFFFFBCu
-# else
-#  define FIBER_INITIAL_EXC_RETURN 0xFFFFFFFDu
-# endif
-#endif
-
-#ifndef FIBER_BOOT_CLEAR_FPCA
-# define FIBER_BOOT_CLEAR_FPCA 1
-#endif
-
-#ifndef FIBER_SWITCH_STRICT_BARRIERS
-# define FIBER_SWITCH_STRICT_BARRIERS 1
-#endif
 
 #ifndef FIBER_SVC_START_NUMBER
 # define FIBER_SVC_START_NUMBER 70
@@ -121,19 +82,8 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 		(FIBER_SVC_START_NUMBER <= 255),
 		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
 
-#ifndef FIBER_VTOR_USE_NS
-# define FIBER_VTOR_USE_NS 0
-#endif
-
 #if (FIBER_FPU_LAZY != 0) && (FIBER_FPU_LAZY != 1)
 # error "[fiber]: ARM_CM7/r0p1 FIBER_FPU_LAZY must be 0 or 1"
-#endif
-#if (FIBER_ENABLE_CPACR != 0) && (FIBER_ENABLE_CPACR != 1)
-# error "[fiber]: ARM_CM7/r0p1 FIBER_ENABLE_CPACR must be 0 or 1"
-#endif
-#if (FIBER_SWITCH_STRICT_BARRIERS != 0) && \
-		(FIBER_SWITCH_STRICT_BARRIERS != 1)
-# error "[fiber]: ARM_CM7/r0p1 FIBER_SWITCH_STRICT_BARRIERS must be 0 or 1"
 #endif
 #if (FIBER_PENDSV_VECTOR_DIRECT != 0) && (FIBER_PENDSV_VECTOR_DIRECT != 1)
 # error "[fiber]: ARM_CM7/r0p1 FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1"
@@ -142,26 +92,6 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 # error "[fiber]: ARM_CM7/r0p1 FIBER_SVC_VECTOR_DIRECT must be 0 or 1"
 #endif
 
-/*
- * ARMv7E-M CPU facts are not tuning options. Keeping these checks in the
- * concrete port prevents a build flag from changing the frame contract that
- * naked SVC/PendSV assembly relies on.
- */
-#if FIBER_RUN_NONSECURE != 0
-# error "[fiber]: ARM_CM7/r0p1 cannot run an ARMv8-M Non-secure context"
-#endif
-#if FIBER_INITIAL_EXC_RETURN != 0xFFFFFFFDu
-# error "[fiber]: ARM_CM7/r0p1 requires EXC_RETURN 0xFFFFFFFD"
-#endif
-#if FIBER_BOOT_CLEAR_FPCA != 1
-# error "[fiber]: ARM_CM7/r0p1 requires first-start FPCA clearing"
-#endif
-#if FIBER_FORCE_SAVE_FPU != 0
-# error "[fiber]: ARM_CM7/r0p1 derives FP context support from CMSIS and compiler facts; forced FP save is not supported"
-#endif
-#if FIBER_VTOR_USE_NS != 0
-# error "[fiber]: ARM_CM7/r0p1 has no Non-secure VTOR bank"
-#endif
 #ifndef FIBER_PORT_MASK_PRIMASK
 # define FIBER_PORT_MASK_PRIMASK 1
 #endif
@@ -180,7 +110,8 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 #if defined(FIBER_PORT_TOOLCHAIN_HAS_FP) || \
 		defined(FIBER_PORT_SILICON_HAS_FPU) || \
 		defined(FIBER_PORT_CMSIS_FPU_USED) || \
-		defined(FIBER_HAS_FPU) || defined(FIBER_HAS_EXTENDED_FP_CONTEXT)
+		defined(FIBER_PORT_HAS_FPU) || \
+		defined(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT)
 # error "[fiber]: ARM_CM7/r0p1 FPU facts are selected-port-owned and must not be predefined"
 #endif
 
@@ -190,6 +121,16 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 # define FIBER_PORT_TOOLCHAIN_HAS_FP 1
 #else
 # define FIBER_PORT_TOOLCHAIN_HAS_FP 0
+#endif
+
+#if defined(__FPU_PRESENT) && ((__FPU_PRESENT + 0) != 0) && \
+		((__FPU_PRESENT + 0) != 1)
+# error "[fiber]: ARM_CM7 CMSIS __FPU_PRESENT must be 0 or 1"
+#endif
+
+#if defined(__FPU_USED) && ((__FPU_USED + 0) != 0) && \
+		((__FPU_USED + 0) != 1)
+# error "[fiber]: ARM_CM7 CMSIS __FPU_USED must be 0 or 1"
 #endif
 
 #if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
@@ -213,11 +154,11 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 #endif
 
 #if (FIBER_PORT_SILICON_HAS_FPU == 1) && (FIBER_PORT_TOOLCHAIN_HAS_FP == 1)
-# define FIBER_HAS_FPU 1
-# define FIBER_HAS_EXTENDED_FP_CONTEXT 1
+# define FIBER_PORT_HAS_FPU 1
+# define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1
 #else
-# define FIBER_HAS_FPU 0
-# define FIBER_HAS_EXTENDED_FP_CONTEXT 0
+# define FIBER_PORT_HAS_FPU 0
+# define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 0
 #endif
 
 #if !defined(__CORTEX_M) || (__CORTEX_M != 7)
@@ -267,10 +208,6 @@ FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI & 1u) == 0u,
 # define FIBER_PORT_NAME "ARM_CM7/r0p1"
 #endif
 
-#ifndef FIBER_PORT_TRAITS_LEGACY_BRIDGE
-# define FIBER_PORT_TRAITS_LEGACY_BRIDGE 1
-#endif
-
 #define fiber_portSTACK_GROWTH (-1)
 #define fiber_portBYTE_ALIGNMENT 8u
 #define fiber_portINITIAL_XPSR 0x01000000u
@@ -306,7 +243,7 @@ FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI & 1u) == 0u,
 
 #define fiber_portEXC_BASE_BYTES (8u * 4u)
 #define fiber_portEXC_FP_EXT_BYTES \
-	(FIBER_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)
+	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)
 #define fiber_portEXC_PER_LEVEL \
 	(fiber_portEXC_BASE_BYTES + \
 	 fiber_portEXC_FP_EXT_BYTES)
@@ -325,27 +262,14 @@ FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI & 1u) == 0u,
 
 #define FIBER_PORT_HAS_BASEPRI 1
 #define FIBER_PORT_HAS_FAULTMASK 1
-
-#ifndef FIBER_HAS_BASEPRI
-# define FIBER_HAS_BASEPRI FIBER_PORT_HAS_BASEPRI
-#endif
-
 #define FIBER_PORT_HAS_VTOR 1
-#ifndef FIBER_HAS_VTOR
-# define FIBER_HAS_VTOR FIBER_PORT_HAS_VTOR
-#endif
-
 #define FIBER_PORT_HAS_PSPLIM 0
-#define FIBER_PORT_HAS_FPU FIBER_HAS_FPU
-#define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT FIBER_HAS_EXTENDED_FP_CONTEXT
-#define FIBER_PORT_BOOT_CLEARS_FPCA FIBER_HAS_FPU
+#define FIBER_PORT_STACK_ALIGNMENT fiber_portBYTE_ALIGNMENT
+#define FIBER_PORT_BOOT_CLEARS_FPCA FIBER_PORT_HAS_FPU
 #define FIBER_PORT_HAS_MVE 0
 #define FIBER_PORT_HAS_PAC 0
 #define FIBER_PORT_HAS_BTI 0
 #define FIBER_PORT_USES_PSPLIM_REGISTER 0
-#ifndef FIBER_USE_PSPLIM_REGISTER
-# define FIBER_USE_PSPLIM_REGISTER FIBER_PORT_USES_PSPLIM_REGISTER
-#endif
 #define FIBER_PORT_INITIAL_EXC_RETURN \
 	fiber_portINITIAL_EXC_RETURN
 #define FIBER_PORT_SCHEDULER_MASK_KIND FIBER_PORT_MASK_BASEPRI
@@ -376,6 +300,26 @@ FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI & 1u) == 0u,
 	fiber_portSOFTWARE_FRAME_BYTES
 #define FIBER_PORT_EXC_RETURN_WORD_INDEX \
 	fiber_portEXC_RETURN_WORD_INDEX
+#define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES \
+	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (16u * 4u) : 0u)
+#define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES 4u
+#define FIBER_PORT_INITIAL_CONTEXT_BYTES \
+	(FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_SOFTWARE_FRAME_BYTES)
+#define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES \
+	(FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_PORT_EXC_PER_LEVEL_BYTES + \
+	 FIBER_PORT_HIGH_FP_SOFTWARE_BYTES + \
+	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
+#define FIBER_PORT_SAVED_SP_MOD8 4u
+
+FIBER_STATIC_ASSERT(FIBER_PORT_INITIAL_CONTEXT_BYTES == 68u,
+		"[fiber]: ARM_CM7/r0p1 initial saved context must be 68 bytes");
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+FIBER_STATIC_ASSERT(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 208u,
+		"[fiber]: ARM_CM7/r0p1 FP saved-context maximum must be 208 bytes");
+#else
+FIBER_STATIC_ASSERT(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 72u,
+		"[fiber]: ARM_CM7/r0p1 core-only saved-context maximum must be 72 bytes");
+#endif
 
 /*-----------------------------------------------------------
  * Critical section management.
@@ -523,39 +467,6 @@ fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 	fiber_arm_cm7_r0p1_basepri_write(value);
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_arm_cm7_r0p1_primask_save_disable(void)
-{
-	uint32_t primask;
-	fiber_portASM volatile(
-			"mrs %0, primask \n"
-			"cpsid i         \n"
-			: "=r"(primask)
-			:
-			: "memory");
-	fiber_portDATA_SYNC_BARRIER();
-	fiber_portINST_SYNC_BARRIER();
-	return primask;
-}
-
-fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_primask_restore(uint32_t primask)
-{
-	fiber_portDATA_SYNC_BARRIER();
-	fiber_portINST_SYNC_BARRIER();
-	fiber_portASM volatile("msr primask, %0" :: "r"(primask) : "memory");
-	fiber_portDATA_SYNC_BARRIER();
-	fiber_portINST_SYNC_BARRIER();
-}
-
-fiber_portFORCE_INLINE uint32_t fiber_port_switch_mask_enter(void)
-{
-	return fiber_arm_cm7_r0p1_primask_save_disable();
-}
-
-fiber_portFORCE_INLINE void fiber_port_switch_mask_exit(uint32_t state)
-{
-	fiber_arm_cm7_r0p1_primask_restore(state);
-}
-
 fiber_portFORCE_INLINE uint32_t fiber_port_scheduler_critical_enter(void)
 {
 	const uint32_t old_basepri = fiber_arm_cm7_r0p1_basepri_read();
@@ -587,7 +498,6 @@ fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
 	volatile uint32_t *const cpacr_reg = (uint32_t *)0xE000ED88u;
 #  endif
 
-# if FIBER_ENABLE_CPACR
 	uint32_t value = *cpacr_reg;
 	if ((value & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
 		value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
@@ -595,7 +505,6 @@ fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();
 	}
-# endif
 	FIBER_REQUIRE((*cpacr_reg & cpacr_cp10_cp11_full) ==
 			cpacr_cp10_cp11_full, 'e');
 
@@ -646,13 +555,9 @@ fiber_portFORCE_INLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
 
 fiber_portFORCE_INLINE uintptr_t fiber_arm_cm7_r0p1_vectors_base_addr(void)
 {
-#if FIBER_VTOR_USE_NS
-# error "[fiber]: ARM_CM7/r0p1 port cannot target a Non-secure VTOR bank"
-#else
 	uintptr_t value = (uintptr_t)fiber_portSCB_VTOR_REG;
 	value &= ~((uintptr_t)0x7Fu);
 	return value;
-#endif
 }
 
 fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
@@ -673,14 +578,10 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 
 fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 {
-#if FIBER_VTOR_USE_NS
-# error "[fiber]: ARM_CM7/r0p1 port cannot target a Non-secure VTOR bank"
-#else
 	base &= ~((uintptr_t)0x7Fu);
 	fiber_portSCB_VTOR_REG = (uint32_t)base;
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
-#endif
 }
 
 fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_yield_request(void)

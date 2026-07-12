@@ -61,9 +61,8 @@ Closed hardening items from the FreeRTOS comparison:
 - STM32H7 hardware validation covered a normal long-running switch loop,
   pre-boot FP use, current-fiber tracking, and forced delayed-switch traps for
   `PRIMASK` (`'p'`) and `BASEPRI` (`'b'`);
-- STM32H7 performance-mode validation also covered
-  `FIBER_FPU_LAZY = 1`, `FIBER_SWITCH_MASK_IRQS = 0`, and
-  `FIBER_SWITCH_STRICT_BARRIERS = 0` for a long-running switch loop;
+- STM32H7 validation also covered `FIBER_FPU_LAZY = 1` in a long-running
+  switch loop; switch barriers are now mandatory and have no disable knob;
 - current-fiber ownership is implemented through `fiber_start()`,
   `fiber_current()`, `fiber_schedule()`, and the scheduler bridge;
 - startup mask cleanup no longer emits `FAULTMASK` on baseline cores that do
@@ -98,9 +97,8 @@ Closed hardening items from the FreeRTOS comparison:
   checks by default; the full `FiberBoot` hash is still checked during
   init/start and is opt-in for every switch through
   `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
-- portable defaults are back to conservative settings:
-  `FIBER_FPU_LAZY = 0`, `FIBER_SWITCH_MASK_IRQS = 1`, and
-  `FIBER_SWITCH_STRICT_BARRIERS = 1`;
+- portable FPU policy defaults to `FIBER_FPU_LAZY = 0`; PendSV publication and
+  context-boundary DSB/ISB serialization are mandatory selected-port behavior;
 - source comments no longer claim full "all STM32" validation;
 - M0/M0+ MSP rewind behavior is documented as platform-dependent;
 - M23, M33, M55/MVE, TrustZone/Non-secure, and PAC/BTI runtime use is now
@@ -170,7 +168,8 @@ Closed hardening items from the FreeRTOS comparison:
    - Cortex-M55 without FPU
    - Cortex-M55F
    - Cortex-M55 MVE-FP
-   - ARMv8-M/ARMv8.1-M `FIBER_RUN_NONSECURE=1` compile mode
+   - ARMv8-M/ARMv8.1-M
+     `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` compile mode
    - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
      `FIBER_TZ_NS=1` and `-mcmse`
    - PendSV direct-vector mode with `FIBER_PENDSV_VECTOR_DIRECT=1`
@@ -229,19 +228,17 @@ Closed hardening items from the FreeRTOS comparison:
      leaking into the fiber runtime;
    - run the existing FP switch stress afterward.
 
-4. Keep performance-mode validation separate from portable defaults.
+4. Keep lazy-FPU validation separate from portable defaults.
 
    The H7 path has passed a long run with:
 
    ```c
    #define FIBER_FPU_LAZY 1
-   #define FIBER_SWITCH_MASK_IRQS 0
-   #define FIBER_SWITCH_STRICT_BARRIERS 0
    ```
 
-   Treat these as validated H7 performance settings, not as proof that every
-   Cortex-M target should use them by default. New core families should first
-   pass conservative settings, then opt-in performance settings.
+   Treat this as target-specific evidence, not proof that every Cortex-M target
+   should use lazy stacking. Mandatory barriers are not part of performance
+   tuning. New core families should first pass eager FP policy, then lazy FP.
 
 5. Keep source support claims aligned with README, DECISIONS.md, and this plan
    before every release.
@@ -311,7 +308,8 @@ Closed hardening items from the FreeRTOS comparison:
    FreeRTOS has a PSPLIM slot in the CM23 NTZ context layout, but it also gates
    actual PSPLIM register access through target/security configuration because
    Non-secure Cortex-M23 does not have a Non-secure PSPLIM register. The fiber
-   baseline path still has no PSPLIM slot, and `FIBER_USE_PSPLIM_REGISTER`
+   baseline path still has no PSPLIM slot, and
+   `FIBER_PORT_USES_PSPLIM_REGISTER`
    remains disabled unless a future port explicitly implements that layout.
 
    Future direction: copying the FreeRTOS-style M23 layout is useful if `fiber`
@@ -320,7 +318,7 @@ Closed hardening items from the FreeRTOS comparison:
    not as part of STM32H7/M7 hardening. The implementation should separate:
 
    - a context slot for PSPLIM;
-   - a compile-time `FIBER_USE_PSPLIM_REGISTER` gate;
+   - a compile-time `FIBER_PORT_USES_PSPLIM_REGISTER` trait;
    - M23 Non-secure behavior, where PSPLIM register access must stay disabled;
    - M23 Secure-only behavior, which needs separate validation;
    - M33/M55 Mainline behavior, where PSPLIM register access is expected.
@@ -329,7 +327,7 @@ Closed hardening items from the FreeRTOS comparison:
 
    Required checks:
 
-   - `FIBER_INITIAL_EXC_RETURN = 0xFFFFFFBCu` path;
+   - a port-owned `FIBER_PORT_INITIAL_EXC_RETURN = 0xFFFFFFBCu` path;
    - PSPLIM symbol selection;
    - CPACR/NSACR behavior for FP access;
    - vector table and PendSV wiring in the current security domain.
@@ -399,8 +397,8 @@ Closed hardening items from the FreeRTOS comparison:
    `fiber_pendsv()` must set `FIBER_PENDSV_VECTOR_DIRECT=1`. The SVC first-start
    path has the same rule: default validation expects an `SVC_Handler()` wrapper,
    and direct vectoring to `fiber_svc()` requires `FIBER_SVC_VECTOR_DIRECT=1`.
-   `FIBER_VALIDATE_SVC_VECTOR` defaults to enabled because SVC is mandatory for
-   first start.
+   SVC vector validation is mandatory because SVC is mandatory for first
+   start.
 
    This proves vector-table routing. The ARMv7E-M SVC first-start path adds a
    separate dispatch check by validating MSP-frame alignment and decoding the

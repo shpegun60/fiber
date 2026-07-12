@@ -30,8 +30,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	fiber_boot_record_check(&ctx->boot);
 
-	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
-			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
+	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
@@ -318,11 +317,7 @@ void fiber_pendsv(void)
 			".syntax unified                         \n"
 
 			"mrs   r0, psp                          \n"
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif
 			"isb                                    \n"
 
 			"movs  r2, #4                           \n"
@@ -384,11 +379,7 @@ void fiber_pendsv(void)
 
 			"isb                                    \n"
 
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif
 
 			"isb                                    \n"
 
@@ -420,11 +411,7 @@ void fiber_pendsv(void)
 
 			"mrs   r0, psp                          \n"
 
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif
 			"isb                                    \n"
 
 			"tst   lr, #4                           \n"
@@ -499,11 +486,7 @@ void fiber_pendsv(void)
 			"msr   psp, r0                          \n"
 			"isb                                    \n"
 
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif
 
 			"isb                                    \n"
 

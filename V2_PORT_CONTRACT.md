@@ -56,15 +56,15 @@ contract, known limitations, and validation level that matches the claim.
    layout, stack-limit policy, FPU/MVE policy, and security-domain policy.
 4. Keep unsupported feature profiles explicit. A port that compiles is not
    automatically validated.
-5. Keep safety defaults conservative. Performance settings are opt-in per
-   target after hardware validation.
+5. Keep safety mechanics mandatory. Genuine performance policy, such as lazy
+   FP stacking, is opt-in per target after hardware validation.
 6. Prefer readable, auditable C plus small, isolated assembly blocks.
 7. Do not copy FreeRTOS source code silently. If code is copied or closely
    adapted, keep the required MIT license notice.
 8. Select exactly one active port at compile time. Ambiguous, missing, or
    conflicting port selection must fail with a clear compile-time error.
-9. Normalize every architecture feature gate to `0` or `1` before use. No
-   `#if FIBER_HAS_*` expression may depend on an undefined macro.
+9. Normalize every canonical `FIBER_PORT_*` architecture feature gate to `0`
+   or `1` before use. Legacy feature aliases are compile errors.
 10. Separate mechanical file moves from behavior changes. A refactor commit that
     only changes layout must keep the generated code path equivalent enough to
     pass the same compile matrix and the same H7 runtime validation checklist.
@@ -120,6 +120,7 @@ fiber/
   fiber_core.h
   fiber_boot.c
   fiber_boot.h
+  fiber_platform_policy.h
   fiber_panic.c
   fiber_panic.h
   fiber_runtime_state.c
@@ -134,10 +135,8 @@ fiber/
     fiber_static_assert.h
     fiber_diagnostics.h
     fiber_compiler.h
+    fiber_feature_policy.h
     fiber_port_traits.h
-    fiber_port_fpu.h
-    fiber_port_fpu.c
-    fiber_port_psplim.h
     # Selected ports expose fiber_port_vectors_* helpers directly.
     # Selected ports own fiber_port_exception.c directly.
     armv6m/
@@ -155,12 +154,17 @@ fiber/
       fiber_port.c
       fiber_portasm.h
       fiber_portasm.c
-    GCC/
-      ARM_CM7/
-        r0p1/
-          fiber_portmacro.h
-          fiber_port.c
-          FREERTOS_PARITY.md
+    ARM_CM7/
+      r0p1/
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_port_exception.c
+        FREERTOS_PARITY.md
+    transitional_v8m/
+      fiber_portmacro.h
+      fiber_port_transitional_v8m.h
+      fiber_port_transitional_v8m.c
+      fiber_port_exception.c
     armv8m_baseline/
       non_secure/
         fiber_portmacrocommon.h
@@ -225,18 +229,17 @@ runs. The fiber tree omits the extra `GCC/` directory level because v2 selected
 ports are currently GCC/clang-asm only. Its
 `fiber_portmacro.h` owns the selected-port CPU contract, and its `fiber_port.c`
 owns the native first-start/PendSV implementation for this selected source
-group. The selected `fiber_portmacro.h` should be CPU-contract-only, like a
+group. The selected `fiber_portmacro.h` should be CPU-contract-focused, like a
 FreeRTOS `portmacro.h`: local constants, traits, and low-level inline assembly
-helpers without including the fiber runtime ABI. It may include
+helpers without including scheduler implementation details. It includes
+`port/fiber_settings.h` only for genuine shared user policy and may include
 `port/fiber_compiler.h` directly for compiler attributes, barriers,
 diagnostics, and static-assert ABI. The selected `fiber_port.c` includes the
 normal runtime headers it actually uses, such as `fiber_boot.h` and
 `fiber_runtime_state.h`, when it needs `FiberContext`, boot records, panic, and
-scheduler bridge declarations. Neither selected file should include
-`fiber_target.h` or `fiber_settings.h` directly just to inherit CPU policy;
-duplicating CPU policy and local defaults inside this port is intentional when
-it keeps the port independent and auditable. Its `FREERTOS_PARITY.md` is the
-required audit record for this port.
+scheduler bridge declarations. No selected file may inherit CPU facts from
+shared settings; those facts are defined directly as canonical port traits.
+Its `FREERTOS_PARITY.md` is the required audit record for this port.
 
 Selected ports should use a FreeRTOS-like naming split:
 
@@ -328,8 +331,8 @@ Required rules:
   exposes MVE but still reports only `__ARM_ARCH_8M_MAIN__`;
 - keep STM32 family names out of the low-level switch logic;
 - expose a diagnostic `FIBER_PORT_NAME` for the selected internal port;
-- keep all `FIBER_HAS_*`, `FIBER_USE_*`, and `FIBER_PORT_*` macros normalized to
-  `0` or `1` in one target feature header before any port source uses them.
+- keep all canonical `FIBER_PORT_*` feature traits normalized to `0` or `1` in
+  the selected port before any common runtime source uses them.
 
 STM32 series mapping belongs in documentation and board integration examples.
 CPU context switching belongs to the ARM profile port.
@@ -825,26 +828,28 @@ Each architecture port should provide a small ABI to the common layer:
 #define FIBER_PORT_SOFTWARE_FRAME_WORDS ...
 #define FIBER_PORT_SOFTWARE_FRAME_BYTES ...
 #define FIBER_PORT_EXC_RETURN_WORD_INDEX ...
+#define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES ...
+#define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES ...
+#define FIBER_PORT_INITIAL_CONTEXT_BYTES ...
+#define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES ...
+#define FIBER_PORT_SAVED_SP_MOD8 ...
 
 extern FiberContext *volatile fiber_internal_port_current_context;
 extern FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next;
 extern void *volatile fiber_internal_port_scheduler_user;
 
-void fiber_port_init(void);
-void fiber_port_exception_setup(void);
-void fiber_port_platform_bootstrap(void);
-uintptr_t fiber_port_prepare_msp_for_start(const FiberBoot *boot);
-uint32_t fiber_port_switch_mask_enter(void);
-void fiber_port_switch_mask_exit(uint32_t state);
 void fiber_port_pend_switch(void);
-FiberContext *fiber_port_load_current_context(void);
-void fiber_port_seed_current_context(FiberContext *ctx);
-void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
-                                        void *user);
-FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
-FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
+uint32_t fiber_port_scheduler_critical_enter(void);
+void fiber_port_scheduler_critical_exit(uint32_t state);
+void fiber_port_fpu_enable_early(void);
+void fiber_port_psplim_config(uint32_t stack_low_addr);
+uint32_t fiber_port_psplim_read(void);
+uintptr_t fiber_port_vectors_base_addr(void);
+uint32_t fiber_port_read_initial_msp(void);
 FIBER_NORETURN void fiber_port_start_first_context(uintptr_t msp_top);
 void fiber_port_init_context_frame(FiberContext *ctx);
+void fiber_exception_runtime_check(void);
+void fiber_pendsv_init_lowest_priority(void);
 void fiber_pendsv(void);
 void fiber_svc(void);
 ```
@@ -870,11 +875,13 @@ Exact names may change, but ownership should not:
 - common code seeds the current context and scheduler hook before a
   scheduler-driven switch can run;
 - common code owns the current-context policy;
-- common code calls `fiber_port_pend_switch()` only after the scheduler-visible
-  request state is coherent;
-- common code may call `fiber_port_switch_mask_enter()` and
-  `fiber_port_switch_mask_exit()` around the switch request; the selected port
-  owns whether this is implemented with PRIMASK or another CPU-local mechanism;
+- common code calls `fiber_port_pend_switch()` only after validating Thread
+  mode, current ownership, and that PRIMASK/BASEPRI/FAULTMASK will not defer the
+  request;
+- `fiber_port_pend_switch()` directly publishes PendSV and emits the selected
+  port's mandatory barriers. It does not mask interrupts around the ICSR write;
+- the selected port owns the PRIMASK or BASEPRI critical section used only
+  around the scheduler hook inside first selection and PendSV;
 - port code performs CPU-specific save, restore, and exception return;
 - port code may update `fiber_internal_port_current_context` during the real
   restore path, but it must follow the common current-context policy;
@@ -1020,8 +1027,7 @@ The current ARMv7E-M SVC path:
 - clears BASEPRI in the SVC handler before the first context is restored;
 - sets PSP before exception return; Thread PSP selection comes from the
   `EXC_RETURN` value, not from writing `CONTROL.SPSEL` in Handler mode;
-- clears and verifies `CONTROL.FPCA` when the target has an FP context and
-  `FIBER_BOOT_CLEAR_FPCA` is enabled;
+- clears and verifies `CONTROL.FPCA` when the selected port has an FP context;
 - panics if the SVC instruction returns to the start helper.
 
 This is deliberately more paranoid than the minimum FreeRTOS first-task start.
@@ -1044,8 +1050,7 @@ means adding and validating that port's SVC first-start path.
 
 For FPU-capable ports:
 
-- save `s16-s31` only when the active `EXC_RETURN` reports an extended FP frame,
-  unless a force-save setting is enabled;
+- save `s16-s31` only when the active `EXC_RETURN` reports an extended FP frame;
 - keep `FIBER_FPU_LAZY = 0` as the portable safety default;
 - allow `FIBER_FPU_LAZY = 1` only as an opt-in performance setting after target
   validation;
@@ -1057,14 +1062,16 @@ Each FPU/MVE port must state:
 
 - whether compiler flags use soft, softfp, or hard FP ABI;
 - whether the target exposes classic scalar FP, MVE, or both;
-- whether `FIBER_HAS_EXTENDED_FP_CONTEXT` is enabled for the target;
-- whether `FIBER_FORCE_SAVE_FPU` is required for the target;
+- how `FIBER_PORT_HAS_FPU` and
+  `FIBER_PORT_HAS_EXTENDED_FP_CONTEXT` are derived from compiler and silicon
+  facts;
 - how FPCCR lazy-stacking bits are configured or intentionally left untouched;
 - whether pre-start FP code is part of the validation case.
 
 Current v2 policy:
 
-- `FIBER_HAS_EXTENDED_FP_CONTEXT` follows scalar FP support.
+- `FIBER_PORT_HAS_EXTENDED_FP_CONTEXT` requires both scalar FP compiler
+  generation and a CMSIS silicon FPU declaration.
 - MVE-FP is treated as an extended FP/MVE context candidate, but runtime use is
   gated until hardware validation.
 - MVE without scalar FP is rejected by runtime policy validation because the
@@ -1095,7 +1102,7 @@ Required gates:
 
 Current v2 policy:
 
-- `FIBER_USE_PSPLIM_REGISTER` is the actual PSPLIM access gate.
+- `FIBER_PORT_USES_PSPLIM_REGISTER` is the actual PSPLIM access gate.
 - ARMv8-M Baseline/Mainline, ARMv8.1-M, TrustZone/Non-secure bank targeting,
   MVE, and PAC/BTI runtime use is blocked by default unless the matching
   `FIBER_ALLOW_UNVALIDATED_*` opt-in is set for bring-up.
@@ -1213,9 +1220,10 @@ that feature profile.
 Minimum evidence for stronger labels:
 
 - `compile-only`: compile matrix entry, target flags, and warnings recorded;
-- `security-compile-only`: ARMv8-M/ARMv8.1-M `FIBER_RUN_NONSECURE=1` and
-  Secure-to-Non-secure bank aliases compile with the selected toolchain, without
-  claiming runtime security-domain behavior;
+- `security-compile-only`: ARMv8-M/ARMv8.1-M
+  `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` and Secure-to-Non-secure bank
+  scenarios compile with the selected toolchain, without claiming runtime
+  security-domain behavior;
 - `smoke-tested`: board name, core, clock/config summary, and basic switch proof
   recorded;
 - `runtime-validated`: long run counters, current tracking, scheduler hook

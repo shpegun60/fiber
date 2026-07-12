@@ -21,10 +21,6 @@
 # error "[fiber]: selected port must define FIBER_PORT_HAS_FAULTMASK"
 #endif
 
-#ifdef FIBER_HAS_FAULTMASK
-# error "[fiber]: FIBER_HAS_FAULTMASK is obsolete; use the selected-port FIBER_PORT_HAS_FAULTMASK trait"
-#endif
-
 #ifndef FIBER_PORT_HAS_VTOR
 # error "[fiber]: selected port must define FIBER_PORT_HAS_VTOR"
 #endif
@@ -39,6 +35,10 @@
 
 #ifndef FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 # error "[fiber]: selected port must define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT"
+#endif
+
+#ifndef FIBER_PORT_STACK_ALIGNMENT
+# error "[fiber]: selected port must define FIBER_PORT_STACK_ALIGNMENT"
 #endif
 
 #ifndef FIBER_PORT_BOOT_CLEARS_FPCA
@@ -59,14 +59,6 @@
 
 #ifndef FIBER_PORT_USES_PSPLIM_REGISTER
 # error "[fiber]: selected port must define FIBER_PORT_USES_PSPLIM_REGISTER"
-#endif
-
-#ifndef FIBER_HAS_PSPLIM
-# define FIBER_HAS_PSPLIM FIBER_PORT_HAS_PSPLIM
-#endif
-
-#ifndef FIBER_USE_PSPLIM_REGISTER
-# define FIBER_USE_PSPLIM_REGISTER FIBER_PORT_USES_PSPLIM_REGISTER
 #endif
 
 #ifndef FIBER_PORT_INITIAL_EXC_RETURN
@@ -151,9 +143,24 @@ FIBER_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
 # error "[fiber]: selected port must define FIBER_PORT_EXC_RETURN_WORD_INDEX"
 #endif
 
+#ifndef FIBER_PORT_HIGH_FP_SOFTWARE_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES"
+#endif
+
+#ifndef FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES"
+#endif
+
+#ifndef FIBER_PORT_INITIAL_CONTEXT_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_INITIAL_CONTEXT_BYTES"
+#endif
+
+#ifndef FIBER_PORT_MAX_SAVED_CONTEXT_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES"
+#endif
+
 #ifndef FIBER_PORT_SAVED_SP_MOD8
-# define FIBER_PORT_SAVED_SP_MOD8 \
-	((8u - (FIBER_PORT_SOFTWARE_FRAME_BYTES & 7u)) & 7u)
+# error "[fiber]: selected port must define FIBER_PORT_SAVED_SP_MOD8"
 #endif
 
 FIBER_STATIC_ASSERT((FIBER_PORT_HAS_BASEPRI == 0) ||
@@ -179,6 +186,13 @@ FIBER_STATIC_ASSERT((FIBER_PORT_HAS_FPU == 0) ||
 FIBER_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
 		(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 1),
 		"[fiber]: FIBER_PORT_HAS_EXTENDED_FP_CONTEXT must be 0 or 1");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_STACK_ALIGNMENT &
+		(FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+		"[fiber]: FIBER_PORT_STACK_ALIGNMENT must be a power of two");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_STACK_ALIGNMENT >= 8u,
+		"[fiber]: FIBER_PORT_STACK_ALIGNMENT must be at least 8");
 
 FIBER_STATIC_ASSERT((FIBER_PORT_BOOT_CLEARS_FPCA == 0) ||
 		(FIBER_PORT_BOOT_CLEARS_FPCA == 1),
@@ -296,6 +310,31 @@ FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_BYTES ==
 
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX < FIBER_PORT_SOFTWARE_FRAME_WORDS,
 		"[fiber]: port EXC_RETURN index must point inside the software frame");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_HIGH_FP_SOFTWARE_BYTES % 4u) == 0u,
+		"[fiber]: high FP software frame must be word aligned");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT != 0) ||
+		(FIBER_PORT_HIGH_FP_SOFTWARE_BYTES == 0u),
+		"[fiber]: a port without extended FP context cannot reserve high FP registers");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES % 4u) == 0u,
+		"[fiber]: exception alignment pad must be word aligned");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_INITIAL_CONTEXT_BYTES ==
+		(FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_PORT_EXC_BASE_BYTES),
+		"[fiber]: initial saved-context geometry mismatch");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES ==
+		(FIBER_PORT_SOFTWARE_FRAME_BYTES +
+		 FIBER_PORT_HIGH_FP_SOFTWARE_BYTES +
+		 FIBER_PORT_EXC_PER_LEVEL_BYTES +
+		 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
+		"[fiber]: maximum saved-context geometry mismatch");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES >=
+		FIBER_PORT_INITIAL_CONTEXT_BYTES,
+		"[fiber]: maximum saved context must cover the initial context");
 
 FIBER_STATIC_ASSERT(FIBER_PORT_SAVED_SP_MOD8 < 8u,
 		"[fiber]: saved SP modulo must be a byte offset inside 8-byte alignment");

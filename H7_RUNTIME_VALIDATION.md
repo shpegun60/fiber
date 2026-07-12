@@ -16,11 +16,13 @@ Run the validation first with portable conservative defaults:
 
 ```c
 #define FIBER_FPU_LAZY 0
-#define FIBER_SWITCH_MASK_IRQS 1
-#define FIBER_SWITCH_STRICT_BARRIERS 1
 #define FIBER_STACK_CANARY 1
 #define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
 ```
+
+Context barriers, PendSV request serialization, CPACR enable/readback, FPCA
+cleanup, stack alignment, EXC_RETURN, and canary encoding are mandatory. They
+have no performance-mode disable switch.
 
 The concrete CM7 port has no startup-validation enable switch. Vector,
 priority, CPUID, errata, and frame validation are mandatory; defining obsolete
@@ -142,8 +144,8 @@ void SVC_Handler(void)
 ```
 
 If the vector table points directly to `fiber_svc()` instead of an application
-wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. `FIBER_VALIDATE_SVC_VECTOR`
-defaults to active because SVC is the only first-start path.
+wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. SVC vector validation is mandatory
+because SVC is the only first-start path.
 
 The compile matrix covers both wrapper-vector and direct-vector configurations.
 This is a build guard only. If a board uses direct vectoring to `fiber_pendsv()`
@@ -314,8 +316,10 @@ Status:
 This record is now historical for the later mandatory-restore-validation
 hardening. The current code additionally changes exact `EXC_RETURN` checks,
 software-canary checks, full live hardware-frame bounds, FPU register readback,
-and exact CM7 source selection. Do not promote the current working state from
-this older snapshot. Re-run normal mode and all listed trap modes, including
+exact CM7 source selection, and initial-frame construction directly from
+`stack_top` with no separate top guard. Do not promote the current working
+state from this older snapshot. Re-run normal mode and all listed trap modes,
+including
 `CANARY`, `BAD_EXC_RETURN`, `SHORT_FRAME`, and `BAD_BOOT`.
 Also run `BAD_XPSR_T`, `BAD_XPSR_IPSR`, `BAD_STACKED_PC`, and
 `SHORT_ALIGN_FRAME` after the saved-frame semantic hardening.
@@ -363,18 +367,16 @@ Other active/fallback switch paths were audited for the same class of defect:
   they remain unsupported until profile-specific hardware validation is
   recorded.
 
-## Performance Mode
+## Lazy-FPU Mode
 
-After the conservative run passes, STM32H7 performance mode may be tested with:
+After the eager-FPU run passes, lazy stacking may be tested with:
 
 ```c
 #define FIBER_FPU_LAZY 1
-#define FIBER_SWITCH_MASK_IRQS 0
-#define FIBER_SWITCH_STRICT_BARRIERS 0
 ```
 
-Performance-mode success is target-specific evidence for STM32H7. It does not
-change the portable defaults and does not validate M0/M23/M33/M55/MVE paths.
+Lazy-FPU success is target-specific evidence for STM32H7. It does not change
+the default and does not validate M0/M23/M33/M55/MVE paths.
 
 ## Claim Rule
 

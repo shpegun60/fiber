@@ -21,16 +21,8 @@
 # define FIBER_PORT_NAME "transitional_v8m"
 #endif
 
-#ifndef FIBER_PORT_TRAITS_LEGACY_BRIDGE
-# define FIBER_PORT_TRAITS_LEGACY_BRIDGE 1
-#endif
-
 #define FIBER_PORT_HAS_BASEPRI (FIBER_PORT_IS_MAINLINE ? 1 : 0)
 #define FIBER_PORT_HAS_FAULTMASK FIBER_PORT_IS_MAINLINE
-
-#ifndef FIBER_HAS_BASEPRI
-# define FIBER_HAS_BASEPRI FIBER_PORT_HAS_BASEPRI
-#endif
 
 #ifndef FIBER_PORT_HAS_VTOR
 # if FIBER_PORT_IS_MAINLINE
@@ -43,44 +35,79 @@
 # endif
 #endif
 
-#ifndef FIBER_HAS_VTOR
-# define FIBER_HAS_VTOR FIBER_PORT_HAS_VTOR
+#ifndef FIBER_TRANSITIONAL_V8M_RUN_NONSECURE
+# define FIBER_TRANSITIONAL_V8M_RUN_NONSECURE 0
 #endif
 
-#if !FIBER_PORT_HAS_VTOR && !FIBER_VTOR_USE_NS
+#ifndef FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK
+# if defined(FIBER_TZ_NS) && ((FIBER_TZ_NS + 0) != 0)
+#  define FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK 1
+# else
+#  define FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK 0
+# endif
+#endif
+
+#if (FIBER_TRANSITIONAL_V8M_RUN_NONSECURE != 0) && \
+		(FIBER_TRANSITIONAL_V8M_RUN_NONSECURE != 1)
+# error "[fiber]: FIBER_TRANSITIONAL_V8M_RUN_NONSECURE must be 0 or 1"
+#endif
+
+#if (FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK != 0) && \
+		(FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK != 1)
+# error "[fiber]: FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK must be 0 or 1"
+#endif
+
+#if FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK
+# if defined(__ARM_FEATURE_CMSE) && ((__ARM_FEATURE_CMSE + 0) >= 3)
+#  define FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK_VALIDATED 1
+# else
+#  define FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK_VALIDATED 0
+#  error "[fiber]: targeting the Non-secure register bank requires a Secure CMSE level 3 build"
+# endif
+#else
+# define FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK_VALIDATED 0
+#endif
+
+#if !FIBER_PORT_HAS_VTOR && !FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK_VALIDATED
 FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falling back to base table at 0x00000000.")
 #endif
 
-#ifndef FIBER_PORT_HAS_PSPLIM
-# ifdef FIBER_HAS_PSPLIM
-#  define FIBER_PORT_HAS_PSPLIM FIBER_HAS_PSPLIM
-# elif FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
-#  define FIBER_PORT_HAS_PSPLIM 1
-# else
-#  define FIBER_PORT_HAS_PSPLIM 0
-# endif
+#if FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+# define FIBER_PORT_HAS_PSPLIM 1
+#else
+# define FIBER_PORT_HAS_PSPLIM 0
 #endif
 
-#ifndef FIBER_HAS_PSPLIM
-# define FIBER_HAS_PSPLIM FIBER_PORT_HAS_PSPLIM
+#if defined(FIBER_PORT_TOOLCHAIN_HAS_FP) || \
+		defined(FIBER_PORT_SILICON_HAS_FPU) || \
+		defined(FIBER_PORT_CMSIS_FPU_USED) || \
+		defined(FIBER_PORT_HAS_FPU) || \
+		defined(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT)
+# error "[fiber]: transitional v8-M FPU facts are selected-port-owned and must not be predefined"
 #endif
 
-#ifndef FIBER_PORT_TOOLCHAIN_HAS_FP
-# if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 1
-# elif defined(__VFP_FP__) && !defined(__SOFTFP__)
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 1
-# else
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 0
-# endif
+#if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 1
+#elif defined(__VFP_FP__) && !defined(__SOFTFP__)
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 1
+#else
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 0
 #endif
 
-#ifndef FIBER_PORT_SILICON_HAS_FPU
-# if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
-#  define FIBER_PORT_SILICON_HAS_FPU 1
-# else
-#  define FIBER_PORT_SILICON_HAS_FPU 0
-# endif
+#if defined(__FPU_PRESENT) && ((__FPU_PRESENT + 0) != 0) && \
+		((__FPU_PRESENT + 0) != 1)
+# error "[fiber]: transitional v8-M CMSIS __FPU_PRESENT must be 0 or 1"
+#endif
+
+#if defined(__FPU_USED) && ((__FPU_USED + 0) != 0) && \
+		((__FPU_USED + 0) != 1)
+# error "[fiber]: transitional v8-M CMSIS __FPU_USED must be 0 or 1"
+#endif
+
+#if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
+# define FIBER_PORT_SILICON_HAS_FPU 1
+#else
+# define FIBER_PORT_SILICON_HAS_FPU 0
 #endif
 
 #if defined(__FPU_USED)
@@ -89,37 +116,31 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 # define FIBER_PORT_CMSIS_FPU_USED 0
 #endif
 
-#ifndef FIBER_HAS_FPU
-# if FIBER_FORCE_SAVE_FPU
-#  define FIBER_HAS_FPU 1
-# elif (FIBER_PORT_SILICON_HAS_FPU == 1) && \
-		((FIBER_PORT_TOOLCHAIN_HAS_FP == 1) || (FIBER_PORT_CMSIS_FPU_USED == 1))
-#  define FIBER_HAS_FPU 1
-# else
-#  define FIBER_HAS_FPU 0
-# endif
+#if (FIBER_PORT_TOOLCHAIN_HAS_FP == 1) && (FIBER_PORT_SILICON_HAS_FPU == 0)
+# error "[fiber]: transitional v8-M compiler emits FP instructions but CMSIS reports no silicon FPU"
+#endif
+#if defined(__FPU_USED) && \
+		(FIBER_PORT_CMSIS_FPU_USED != FIBER_PORT_TOOLCHAIN_HAS_FP)
+# error "[fiber]: transitional v8-M CMSIS __FPU_USED disagrees with compiler FP code generation"
 #endif
 
-#ifndef __FPU_USED
-# if FIBER_HAS_FPU
-#  define __FPU_USED 1U
-# else
-#  define __FPU_USED 0U
-# endif
+#if (FIBER_PORT_SILICON_HAS_FPU == 1) && \
+		(FIBER_PORT_TOOLCHAIN_HAS_FP == 1)
+# define FIBER_PORT_HAS_FPU 1
+# define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1
+#else
+# define FIBER_PORT_HAS_FPU 0
+# define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 0
 #endif
 
-#ifndef FIBER_HAS_EXTENDED_FP_CONTEXT
-# if FIBER_HAS_FPU
-#  define FIBER_HAS_EXTENDED_FP_CONTEXT 1
-# else
-#  define FIBER_HAS_EXTENDED_FP_CONTEXT 0
-# endif
-#endif
+#define FIBER_PORT_STACK_ALIGNMENT 8u
+#define FIBER_PORT_BOOT_CLEARS_FPCA FIBER_PORT_HAS_FPU
 
-#define FIBER_PORT_HAS_FPU FIBER_HAS_FPU
-#define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT FIBER_HAS_EXTENDED_FP_CONTEXT
-#define FIBER_PORT_BOOT_CLEARS_FPCA (FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA)
-#define FIBER_PORT_HAS_MVE FIBER_HAS_MVE
+#if defined(__ARM_FEATURE_MVE) && ((__ARM_FEATURE_MVE + 0) > 0)
+# define FIBER_PORT_HAS_MVE 1
+#else
+# define FIBER_PORT_HAS_MVE 0
+#endif
 
 #ifndef FIBER_PORT_HAS_PAC
 # if defined(__ARM_FEATURE_PAC_DEFAULT) || defined(__ARM_FEATURE_PAUTH) || \
@@ -138,14 +159,6 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 # endif
 #endif
 
-#ifndef FIBER_HAS_PAC
-# define FIBER_HAS_PAC FIBER_PORT_HAS_PAC
-#endif
-
-#ifndef FIBER_HAS_BTI
-# define FIBER_HAS_BTI FIBER_PORT_HAS_BTI
-#endif
-
 #ifndef FIBER_PORT_USES_PSPLIM_REGISTER
 # if FIBER_PORT_HAS_PSPLIM
 #  define FIBER_PORT_USES_PSPLIM_REGISTER 1
@@ -154,11 +167,11 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 # endif
 #endif
 
-#ifndef FIBER_USE_PSPLIM_REGISTER
-# define FIBER_USE_PSPLIM_REGISTER FIBER_PORT_USES_PSPLIM_REGISTER
+#if FIBER_TRANSITIONAL_V8M_RUN_NONSECURE
+# define FIBER_PORT_INITIAL_EXC_RETURN 0xFFFFFFBCu
+#else
+# define FIBER_PORT_INITIAL_EXC_RETURN 0xFFFFFFFDu
 #endif
-
-#define FIBER_PORT_INITIAL_EXC_RETURN FIBER_INITIAL_EXC_RETURN
 #define FIBER_PORT_SCHEDULER_MASK_KIND \
 	(FIBER_PORT_IS_BASELINE ? FIBER_PORT_MASK_PRIMASK : FIBER_PORT_MASK_BASEPRI)
 
@@ -202,15 +215,9 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 # endif
 #endif
 
-#define FIBER_PORT_RUNS_NONSECURE FIBER_RUN_NONSECURE
+#define FIBER_PORT_RUNS_NONSECURE FIBER_TRANSITIONAL_V8M_RUN_NONSECURE
 
-#ifndef FIBER_PORT_TARGETS_NS_BANK
-# if defined(FIBER_TZ_NS) && (FIBER_TZ_NS + 0)
-#  define FIBER_PORT_TARGETS_NS_BANK 1
-# else
-#  define FIBER_PORT_TARGETS_NS_BANK 0
-# endif
-#endif
+#define FIBER_PORT_TARGETS_NS_BANK FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK_VALIDATED
 
 #define FIBER_PORT_HAS_CONTROL_SLOT 0
 #define FIBER_PORT_HAS_PSPLIM_SLOT 0
@@ -226,10 +233,19 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 #define FIBER_PORT_SOFTWARE_FRAME_WORDS 9u
 #define FIBER_PORT_SOFTWARE_FRAME_BYTES (FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u)
 #define FIBER_PORT_EXC_RETURN_WORD_INDEX (FIBER_PORT_IS_BASELINE ? 0u : 8u)
+#define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES \
+	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (16u * 4u) : 0u)
+#define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES 4u
+#define FIBER_PORT_INITIAL_CONTEXT_BYTES \
+	(FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_SOFTWARE_FRAME_BYTES)
+#define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES \
+	(FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_PORT_EXC_PER_LEVEL_BYTES + \
+	 FIBER_PORT_HIGH_FP_SOFTWARE_BYTES + \
+	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
+#define FIBER_PORT_SAVED_SP_MOD8 4u
 
 #if FIBER_PORT_SCHEDULER_MASK_KIND == FIBER_PORT_MASK_BASEPRI
-# if defined(__ARM_FEATURE_CMSE) && ((__ARM_FEATURE_CMSE + 0) >= 3) && \
-		defined(FIBER_TZ_NS) && ((FIBER_TZ_NS + 0) != 0)
+# if FIBER_PORT_HAS_SECURITY_EXT && FIBER_PORT_TARGETS_NS_BANK
 #  define FBR_BASEPRI_SYM "BASEPRI_NS"
 # else
 #  define FBR_BASEPRI_SYM "BASEPRI"
@@ -344,16 +360,6 @@ __STATIC_FORCEINLINE void fiber_transitional_v8m_primask_restore(uint32_t primas
 	{ __DSB(); __ISB(); }
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_switch_mask_enter(void)
-{
-	return fiber_transitional_v8m_primask_save_disable();
-}
-
-__STATIC_FORCEINLINE void fiber_port_switch_mask_exit(uint32_t state)
-{
-	fiber_transitional_v8m_primask_restore(state);
-}
-
 __STATIC_FORCEINLINE uint32_t fiber_port_basepri_read(void)
 {
 #if FIBER_PORT_SCHEDULER_MASK_KIND == FIBER_PORT_MASK_BASEPRI
@@ -410,14 +416,12 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 	volatile uint32_t *const cpacr_reg = (uint32_t *)0xE000ED88u;
 #  endif
 
-# if FIBER_ENABLE_CPACR
 	uint32_t value = *cpacr_reg;
 	if ((value & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
 		value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
 		*cpacr_reg = value;
 		{ __DSB(); __ISB(); }
 	}
-# endif
 	FIBER_REQUIRE((*cpacr_reg & cpacr_cp10_cp11_full) ==
 			cpacr_cp10_cp11_full, 'e');
 
@@ -519,7 +523,7 @@ __STATIC_FORCEINLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
 
 __STATIC_FORCEINLINE uintptr_t fiber_port_vectors_base_addr(void)
 {
-#if FIBER_VTOR_USE_NS
+#if FIBER_PORT_TARGETS_NS_BANK
 # ifdef SCB_NS
 	uintptr_t value = (uintptr_t)SCB_NS->VTOR;
 #  if defined(SCB_VTOR_TBLOFF_Msk)
@@ -553,7 +557,7 @@ __STATIC_FORCEINLINE uint32_t fiber_port_read_initial_msp(void)
 
 __STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 {
-#if FIBER_VTOR_USE_NS
+#if FIBER_PORT_TARGETS_NS_BANK
 # ifdef SCB_NS
 #  if defined(SCB_VTOR_TBLOFF_Msk)
 	base &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
@@ -577,6 +581,8 @@ __STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 __STATIC_FORCEINLINE void fiber_port_pend_switch(void)
 {
 	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	__DSB();
+	__ISB();
 }
 
 void fiber_port_init_context_frame(FiberContext *ctx);

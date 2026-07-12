@@ -543,16 +543,4 @@ FIBER_STATIC_ASSERT((FIBER_PORT_IS_BASELINE + FIBER_PORT_IS_MAINLINE) == 1,
 # endif
 #endif
 
-/* MVE detection remains transitional until the v8.1-M port owns the policy. */
-#ifndef FIBER_HAS_MVE
-# if defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0)
-#  define FIBER_HAS_MVE 1
-# else
-#  define FIBER_HAS_MVE 0
-# endif
-#endif
-
-FIBER_STATIC_ASSERT((FIBER_HAS_MVE == 0) || (FIBER_HAS_MVE == 1),
-                 "[fiber]: FIBER_HAS_MVE must be 0 or 1");
-
 #endif /* FIBER_FIBER_PORT_SELECT_H_ */

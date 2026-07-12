@@ -225,6 +225,8 @@ void fiber_pendsv_init_lowest_priority(void)
     FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
     FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 
+    fiber_validate_feature_policy();
+
     const uint32_t pm = fiber_primask_save_disable();
 
     const uint32_t lowest = fiber_lowest_prio_val();

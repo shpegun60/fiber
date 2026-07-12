@@ -43,18 +43,13 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
-	/* -------- top must be 8-byte aligned (AAPCS) -------- */
-	FIBER_REQUIRE((((uintptr_t)ctx->boot.stack_top) & 7u) == 0u, 'a');
+	/* -------- top must satisfy the selected port and AAPCS alignment -------- */
+	FIBER_REQUIRE((((uintptr_t)ctx->boot.stack_top) &
+			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'a');
 
-	/* -------- ensure enough space for seed frames --------
-	 * We require:
-	 *   - selected-port top guard bytes
-	 *   - one synthetic base hardware frame
-	 *   - port-owned software frame
-	 */
+	/* -------- ensure enough space for the synthetic initial context -------- */
 	{
-		const size_t need_seed = (size_t)FIBER_STACK_TOP_GUARD_BYTES
-				+ (size_t)FIBER_PORT_INITIAL_CONTEXT_BYTES;
+		const size_t need_seed = (size_t)FIBER_PORT_INITIAL_CONTEXT_BYTES;
 		FIBER_REQUIRE(ctx->boot.avail >= need_seed, 'Z');
 	}
 
@@ -62,7 +57,8 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	/* Keep the software canary as an independent check even when PSPLIM exists. */
 	{
 		const uintptr_t canary_cell = fiber_word_align_up((uintptr_t)ctx->boot.begin);
-		((volatile uint32_t*)canary_cell)[0] = FIBER_CANARY_VALUE;
+		((volatile uint32_t*)canary_cell)[0] =
+				FIBER_INTERNAL_STACK_CANARY_VALUE;
 		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	}
 #endif
@@ -75,9 +71,10 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	 * After removing SW area in PendSV, PSP will be 8-byte aligned exactly at HW frame. */
 	FIBER_REQUIRE((((uintptr_t)ctx->sp) & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 
-	/* Ensure PSP is inside declared PSP region [stack_base, stack_top - HW_headroom] */
+	/* The initial saved context includes one basic hardware exception frame. */
 	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');
-	FIBER_REQUIRE((uintptr_t)ctx->sp <= ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL, 'S');
+	FIBER_REQUIRE((uintptr_t)ctx->sp <=
+			ctx->boot.stack_top - (uintptr_t)FIBER_EXC_BASE_BYTES, 'S');
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 }
@@ -111,7 +108,7 @@ void fiber_start(void)
 
 	fiber_boot_check(&first->boot);
 
-#if FIBER_USE_PSPLIM_REGISTER
+#if FIBER_PORT_USES_PSPLIM_REGISTER
 	fiber_port_psplim_config((uint32_t)first->boot.stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(fiber_port_psplim_read() == (uint32_t)first->boot.stack_base, 'L');
@@ -150,11 +147,6 @@ void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *use
  *  - Keep barriers conservative to avoid reordering surprises
  * -------------------------------------------------------------------------- */
 
-#ifndef FIBER_SWITCH_MASK_IRQS
-/* 0 = do not touch PRIMASK; 1 = mask IRQs during slot update */
-# define FIBER_SWITCH_MASK_IRQS 1
-#endif
-
 void fiber_schedule(void)
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');  /* fiber_schedule is a Thread-mode API */
@@ -167,17 +159,7 @@ void fiber_schedule(void)
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f'); /* do not defer PendSV behind FAULTMASK */
 #endif
 
-#if FIBER_SWITCH_MASK_IRQS
-	const uint32_t mask_state = fiber_port_switch_mask_enter();
-#endif
-
 	fiber_port_pend_switch();
-
-#if FIBER_SWITCH_MASK_IRQS
-	fiber_port_switch_mask_exit(mask_state);
-#else
-	{ __DSB(); __ISB(); }
-#endif
 }
 #if !FIBER_PENDSV_VECTOR_DIRECT
 # ifndef FIBER_PENDSV_WIRED

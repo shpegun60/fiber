@@ -29,8 +29,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	fiber_boot_record_check(&ctx->boot);
 
-	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
-			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
+	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
@@ -204,11 +203,7 @@ void fiber_pendsv(void)
 			 * ---------------------------------------------------------------------- */
 			"mrs   r0, psp                          \n" /* r0 = PSP */
 
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
 			"isb                                    \n"
 
 			/* ----------------------------------------------------------------------
@@ -261,11 +256,7 @@ void fiber_pendsv(void)
 			"msr   psp, r0                          \n" /* PSP = target HW frame */
 			"isb                                    \n"
 
-#if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"
-#else
-			"dmb                                    \n"
-#endif /* FIBER_SWITCH_STRICT_BARRIERS */
 			"isb                                    \n"
 
 			"bx    r14                              \n" /* exception return */

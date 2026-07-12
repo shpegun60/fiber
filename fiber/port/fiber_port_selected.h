@@ -50,10 +50,6 @@
 /* -------------------------------------------------------------------------- */
 /* Common post-port sanity                                                     */
 /* -------------------------------------------------------------------------- */
-#ifndef FIBER_STACK_ALIGN
-# error "[fiber]: FIBER_STACK_ALIGN is not defined. Provide it in fiber_settings.h or selected fiber_portmacro.h."
-#endif
-
 FIBER_STATIC_ASSERT((FIBER_PENDSV_VECTOR_DIRECT == 0) ||
 		(FIBER_PENDSV_VECTOR_DIRECT == 1),
 		"[fiber]: FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1");
@@ -61,20 +57,19 @@ FIBER_STATIC_ASSERT((FIBER_SVC_VECTOR_DIRECT == 0) ||
 		(FIBER_SVC_VECTOR_DIRECT == 1),
 		"[fiber]: FIBER_SVC_VECTOR_DIRECT must be 0 or 1");
 
-FIBER_STATIC_ASSERT((FIBER_STACK_ALIGN & (FIBER_STACK_ALIGN - 1u)) == 0u,
-		"[fiber]: FIBER_STACK_ALIGN must be power of two.");
-FIBER_STATIC_ASSERT(FIBER_STACK_ALIGN >= 8u,
-		"[fiber]: FIBER_STACK_ALIGN must be at least 8.");
-FIBER_STATIC_ASSERT((FIBER_STACK_ALIGN % 8u) == 0u,
+FIBER_STATIC_ASSERT((FIBER_PORT_STACK_ALIGNMENT &
+		(FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+		"[fiber]: selected-port stack alignment must be a power of two");
+FIBER_STATIC_ASSERT(FIBER_PORT_STACK_ALIGNMENT >= 8u,
+		"[fiber]: selected-port stack alignment must be at least 8");
+FIBER_STATIC_ASSERT((FIBER_PORT_STACK_ALIGNMENT % 8u) == 0u,
 		"[fiber]: stack alignment must be a multiple of 8");
-FIBER_STATIC_ASSERT((FIBER_STACK_REDZONE_BYTES % 8u) == 0u,
-		"[fiber]: FIBER_STACK_REDZONE_BYTES must be a multiple of 8");
+FIBER_STATIC_ASSERT((FIBER_STACK_REDZONE_BYTES %
+		FIBER_PORT_STACK_ALIGNMENT) == 0u,
+		"[fiber]: FIBER_STACK_REDZONE_BYTES must be a multiple of selected-port stack alignment");
 FIBER_STATIC_ASSERT((FIBER_STACK_CANARY == 0) ||
 		(FIBER_STACK_REDZONE_BYTES >= 8u),
 		"[fiber]: enabled stack canary requires at least 8 bytes of red zone");
-
-FIBER_STATIC_ASSERT((FIBER_BOOT_EXTRA_BYTES % 4u) == 0u,
-		"[fiber]: FIBER_BOOT_EXTRA_BYTES must be 4-byte aligned");
 
 FIBER_STATIC_ASSERT(sizeof(void*) == 4,
 		"[fiber]: 32-bit pointers expected");
@@ -96,30 +91,35 @@ enum {
 	FIBER_EXC_FP_EXT_BYTES = FIBER_PORT_EXC_FP_EXT_BYTES,
 	FIBER_EXC_PER_LEVEL = FIBER_PORT_EXC_PER_LEVEL_BYTES,
 	FIBER_HIGH_FP_SOFTWARE_BYTES =
-			FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (16u * 4u) : 0u,
-	FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES = 4u,
-	FIBER_PORT_INITIAL_CONTEXT_BYTES =
-			FIBER_EXC_BASE_BYTES + FIBER_PORT_SOFTWARE_FRAME_BYTES,
-	FIBER_PORT_MAX_SAVED_CONTEXT_BYTES =
-			FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_EXC_PER_LEVEL +
-			FIBER_HIGH_FP_SOFTWARE_BYTES + FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES,
-	/* One non-configurable maximum hardware frame is retained above PSP. */
-	FIBER_STACK_TOP_GUARD_BYTES = FIBER_EXC_PER_LEVEL,
+			FIBER_PORT_HIGH_FP_SOFTWARE_BYTES,
+	FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES =
+			FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES,
 	FIBER_STACK_WITHOUT_REDZONE =
-			FIBER_STACK_TOP_GUARD_BYTES +
-			FIBER_BOOT_EXTRA_BYTES,
+			(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES +
+			 FIBER_PORT_STACK_ALIGNMENT - 1u) &
+			~(FIBER_PORT_STACK_ALIGNMENT - 1u),
 	FIBER_STACK_MIN_BOOT =
 			FIBER_STACK_REDZONE_BYTES + FIBER_STACK_WITHOUT_REDZONE
 };
 
-FIBER_STATIC_ASSERT(FIBER_BOOT_EXTRA_BYTES >= FIBER_PORT_MAX_SAVED_CONTEXT_BYTES,
-		"[fiber]: FIBER_BOOT_EXTRA_BYTES must cover the selected port maximum saved context");
 FIBER_STATIC_ASSERT(FIBER_STACK_WITHOUT_REDZONE >=
-		(FIBER_STACK_TOP_GUARD_BYTES + FIBER_PORT_INITIAL_CONTEXT_BYTES),
-		"[fiber]: stack minimum must cover top guard and initial context");
+		FIBER_PORT_MAX_SAVED_CONTEXT_BYTES,
+		"[fiber]: aligned stack minimum must cover the maximum saved context");
+FIBER_STATIC_ASSERT((FIBER_STACK_WITHOUT_REDZONE %
+		FIBER_PORT_STACK_ALIGNMENT) == 0u,
+		"[fiber]: usable stack minimum must satisfy selected-port alignment");
+FIBER_STATIC_ASSERT((((8u - (FIBER_PORT_INITIAL_CONTEXT_BYTES & 7u)) & 7u)) ==
+		FIBER_PORT_SAVED_SP_MOD8,
+		"[fiber]: initial frame layout disagrees with saved-SP alignment trait");
 
-static const uintptr_t FIBER_STACK_MASK = (uintptr_t)FIBER_STACK_ALIGN - 1u;
+static const uintptr_t FIBER_STACK_MASK =
+		(uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u;
 static const uintptr_t FIBER_WORD_MASK = (uintptr_t)sizeof(uintptr_t) - 1u;
+
+#ifdef FIBER_INTERNAL_STACK_CANARY_VALUE
+# error "[fiber]: FIBER_INTERNAL_STACK_CANARY_VALUE is runtime-owned"
+#endif
+#define FIBER_INTERNAL_STACK_CANARY_VALUE UINT32_C(0xDEADBEEF)
 
 __STATIC_FORCEINLINE uintptr_t fiber_stack_align_down(const uintptr_t x)
 {
@@ -144,6 +144,6 @@ __STATIC_FORCEINLINE uintptr_t fiber_word_align_up(const uintptr_t x)
 }
 
 FIBER_STATIC_ASSERT(FIBER_STACK_WITHOUT_REDZONE >= FIBER_EXC_PER_LEVEL,
-		"[fiber]: >= one exc level");
+		"[fiber]: saved-context area must cover one hardware exception frame");
 
 #endif /* FIBER_FIBER_PORT_SELECTED_H_ */

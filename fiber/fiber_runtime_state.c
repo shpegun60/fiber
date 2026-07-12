@@ -32,7 +32,8 @@ void fiber_internal_validate_stack_canary(const FiberContext *ctx)
 	FIBER_REQUIRE(canary_cell >= begin, 'c');
 	FIBER_REQUIRE(canary_cell <= (UINTPTR_MAX - sizeof(uint32_t)), 'c');
 	FIBER_REQUIRE((canary_cell + sizeof(uint32_t)) <= ctx->boot.stack_base, 'c');
-	FIBER_REQUIRE(*(const volatile uint32_t *)canary_cell == FIBER_CANARY_VALUE, 'c');
+	FIBER_REQUIRE(*(const volatile uint32_t *)canary_cell ==
+			FIBER_INTERNAL_STACK_CANARY_VALUE, 'c');
 #else
 	(void)ctx;
 #endif
@@ -68,7 +69,7 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 
 	uintptr_t hardware_frame_offset =
 			(uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 	if ((exc_return & 0x10u) == 0u) {
 		hardware_frame_offset += (uintptr_t)FIBER_HIGH_FP_SOFTWARE_BYTES;
 	}
