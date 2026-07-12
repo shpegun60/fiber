@@ -8,9 +8,10 @@
  * CPU-specific path behind the v2 port boundary.
  */
 
-#include "../fiber_port.h"
+#if 0
 
-#if FIBER_PORT_ARMV7EM
+#include "../../fiber_boot.h"
+#include "fiber_portmacro.h"
 
 #define FBR_STRINGIFY2(x) #x
 #define FBR_STRINGIFY(x) FBR_STRINGIFY2(x)
@@ -20,13 +21,13 @@ enum {
 	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
 };
 
-BT_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
-BT_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
 
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_port_boot_record_check(&ctx->boot);
+	fiber_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
 
@@ -136,7 +137,7 @@ void fiber_svc(void)
 			"cpsid i                                \n"
 			"dsb                                    \n"
 			"isb                                    \n"
-#if FIBER_HAS_BASEPRI
+#if FIBER_PORT_HAS_BASEPRI
 			"movs  r0, #0                           \n"
 			FBR_ASM_WRITE_BASEPRI_R0_SYNC
 #endif
@@ -153,7 +154,7 @@ void fiber_svc(void)
 			"ldr   r0, [r2]                         \n" /* r0 = current->sp */
 			"ldmia r0!, {r4-r11, r14}               \n" /* restore core SW frame */
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   r14, #0x10                       \n"
 			"bne   1f                               \n"
 			"vldmia r0!, {s16-s31}                  \n"
@@ -169,7 +170,7 @@ void fiber_svc(void)
 			 * pre-SVC path already cleared CONTROL.FPCA and verified privileged
 			 * Thread/MSP state before entering SVC.
 			 */
-#if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
+#if FIBER_PORT_BOOT_CLEARS_FPCA
 			"mrs   r3, control                      \n"
 			"tst   r3, #4                           \n"
 			"bne   95f                              \n"
@@ -252,7 +253,7 @@ void fiber_pendsv(void)
 			"cmp   r0, r2                           \n"
 			"blo   92f                              \n" /* PSP is already below stack base */
 			"mov   r3, r0                           \n"
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n" /* extended FP save needs 64 more bytes */
 			"bne   8f                               \n"
 			"subs  r3, #64                          \n"
@@ -267,7 +268,7 @@ void fiber_pendsv(void)
 			"cmp   r0, r2                           \n"
 			"bhi   92f                              \n" /* PSP above declared stack top */
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n" /* 1 => base frame only, 0 => extended present */
 			"bne   2f                               \n" /* if bit4==1 then skip FP save */
 			"vstmdb r0!, {s16-s31}                  \n" /* push S16..S31 */
@@ -291,7 +292,7 @@ void fiber_pendsv(void)
 			"ldr   r0, [r2]                         \n" /* r0 = target->sp */
 			"ldmia r0!, {r4-r11, r14}               \n" /* pop r4..r11 and LR(EXC_RETURN) */
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   r14, #0x10                       \n" /* 1 => base frame only, 0 => extended present */
 			"bne   22f                              \n" /* if bit4==1 then skip FP restore */
 			"vldmia r0!, {s16-s31}                  \n" /* pop S16..S31 */
@@ -332,7 +333,7 @@ void fiber_pendsv(void)
 			"bl    fiber_panic                      \n"
 			"b     92b                              \n"
 			:
-			: [sched_basepri] "i" (FIBER_SCHEDULER_BASEPRI),
+			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)

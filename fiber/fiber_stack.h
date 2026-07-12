@@ -8,7 +8,7 @@
 #ifndef FIBER_FIBER_STACK_H_
 #define FIBER_FIBER_STACK_H_
 
-#include "target/fiber_target.h"
+#include "port/fiber_port_selected.h"
 #include <stdint.h>
 /* Static/global or function-static stack buffer. */
 /* alignas goes before static for strict toolchains. */

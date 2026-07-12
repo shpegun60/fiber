@@ -1,13 +1,14 @@
 /*
- * fiber_port_state.h
+ * fiber_runtime_state.h
  *
  * Internal runtime state shared by common runtime and port code.
  */
 
-#ifndef FIBER_PORT_FIBER_PORT_STATE_H_
-#define FIBER_PORT_FIBER_PORT_STATE_H_
+#ifndef FIBER_FIBER_RUNTIME_STATE_H_
+#define FIBER_FIBER_RUNTIME_STATE_H_
 
-#include "fiber_port_types.h"
+#include "fiber_types.h"
+#include "port/fiber_compiler.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,8 +34,33 @@ FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
 
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 
+__STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)
+{
+	__COMPILER_BARRIER();
+	return fiber_internal_port_current_context;
+}
+
+__STATIC_FORCEINLINE void fiber_port_seed_current_context(FiberContext *ctx)
+{
+	__DMB();
+	fiber_internal_port_current_context = ctx;
+	__DMB();
+}
+
+__STATIC_FORCEINLINE void fiber_port_set_scheduler_pick_next(FiberSchedulerPickNextFn pick_next,
+                                                             void *user)
+{
+	fiber_internal_port_scheduler_set_pick_next(pick_next, user);
+}
+
+__STATIC_FORCEINLINE uint32_t fiber_port_scheduler_is_configured(void)
+{
+	__COMPILER_BARRIER();
+	return (fiber_internal_port_scheduler_pick_next != 0) ? 1u : 0u;
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_FIBER_PORT_STATE_H_ */
+#endif /* FIBER_FIBER_RUNTIME_STATE_H_ */

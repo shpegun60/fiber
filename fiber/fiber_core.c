@@ -7,9 +7,10 @@
 
 #include "fiber_core.h"
 #include "fiber_boot.h"
-#include "port/fiber_port.h"
+#include "fiber_runtime_state.h"
+#include "port/fiber_port_selected.h"
 
-BT_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
+FIBER_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
 
 /* Safety net if a task ever returns from its entry function */
 FIBER_NORETURN FIBER_ATTR_SENSITIVE void fiber_internal_task_return(void) { fiber_panic('R'); }
@@ -98,8 +99,8 @@ void fiber_start(void)
 
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-#if FIBER_HAS_BASEPRI
-	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
 #if FIBER_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
@@ -111,9 +112,9 @@ void fiber_start(void)
 	fiber_platform_bootstrap();
 
 #if FIBER_USE_PSPLIM_REGISTER
-	fiber_psplim_config((uint32_t)first->boot.stack_base);
+	fiber_port_psplim_config((uint32_t)first->boot.stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-	FIBER_REQUIRE(fiber_get_psplim() == (uint32_t)first->boot.stack_base, 'L');
+	FIBER_REQUIRE(fiber_port_psplim_read() == (uint32_t)first->boot.stack_base, 'L');
 #endif
 
 	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&first->boot);
@@ -121,8 +122,8 @@ void fiber_start(void)
 
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-#if FIBER_HAS_BASEPRI
-	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
 #if FIBER_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
@@ -159,21 +160,21 @@ void fiber_schedule(void)
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');  /* fiber_schedule is a Thread-mode API */
 	FIBER_REQUIRE(fiber_current() != NULL, 'G');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p'); /* do not defer the scheduler jump */
-#if FIBER_HAS_BASEPRI
-	FIBER_REQUIRE(__get_BASEPRI() == 0u, 'b'); /* do not defer PendSV behind BASEPRI */
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b'); /* do not defer PendSV behind BASEPRI */
 #endif
 #if FIBER_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f'); /* do not defer PendSV behind FAULTMASK */
 #endif
 
 #if FIBER_SWITCH_MASK_IRQS
-	const uint32_t pm = fiber_port_primask_save_disable();
+	const uint32_t mask_state = fiber_port_switch_mask_enter();
 #endif
 
 	fiber_port_pend_switch();
 
 #if FIBER_SWITCH_MASK_IRQS
-	fiber_port_primask_restore(pm);
+	fiber_port_switch_mask_exit(mask_state);
 #else
 	{ __DSB(); __ISB(); }
 #endif

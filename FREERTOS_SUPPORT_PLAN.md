@@ -84,9 +84,14 @@ Closed hardening items from the FreeRTOS comparison:
 - initial software-frame sizing, saved-SP modulo validation, and saved
   `EXC_RETURN` word selection now come from selected port traits instead of a
   common hard-coded 36-byte assumption;
-- port sources use the shared `fiber_port_types.h` type ABI and no longer
+- port sources use the shared `fiber_types.h` type ABI and no longer
   depend on the public `fiber_core.h` API header or on `fiber_boot.h` for data
   layout definitions;
+- build-selected portmacro workflow exists for the first FreeRTOS-referenced
+  Cortex-M7 source group:
+  `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
+  matrix compiles this source group for Cortex-M7/Cortex-M7F build-selected
+  modes with `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;
 - scheduled context restore uses a fast sealed-record check by default; the
   full `FiberBoot` hash is still checked during init/start and is opt-in for
   every switch through `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
@@ -106,7 +111,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M0/M0+ | Dedicated `port/armv6m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware and document MSP rewind policy |
 | Cortex-M3 | Dedicated `port/armv7m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware |
 | Cortex-M4F | FPU-aware path matches FreeRTOS pattern | Compile and FP stress-test |
-| Cortex-M7F | Primary validated path for STM32H7 | Keep validated |
+| Cortex-M7F | Primary validated path for STM32H7; first FreeRTOS-referenced `ARM_CM7/r0p1` build-selected source group exists and is compile-covered with native source text, no direct `fiber_target.h` or `fiber_settings.h` dependency, and only direct `port/fiber_compiler.h` dependency for compiler ABI in the selected portmacro | Re-run H7 validation through the selected source group before promoting it to the active H7 runtime-validated path |
 | Cortex-M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
 | Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
@@ -168,6 +173,10 @@ Closed hardening items from the FreeRTOS comparison:
    - PendSV direct-vector mode with `FIBER_PENDSV_VECTOR_DIRECT=1`
    - ARMv7E-M PendSV+SVC direct-vector mode with
      `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
+   - build-selected portmacro mode with `FIBER_PORT_BUILD_SELECTED=1`
+   - Cortex-M7/Cortex-M7F build-selected source group
+     `fiber/port/ARM_CM7/r0p1/fiber_port.c` with
+     `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`
 
    Every selected profile must compile in wrapper and direct-vector SVC/PendSV
    modes. Passing the matrix is compile coverage only; runtime support still
@@ -236,7 +245,7 @@ Closed hardening items from the FreeRTOS comparison:
 
    Target rule: each selected `port/arm*/fiber_port_*.h` exports the whole
    architecture interface for that profile. Common runtime files include only
-   `fiber_port_selected.h` or `fiber_port.h` and must not contain
+   `fiber_port_selected.h` and must not contain
    architecture-specific switch assembly.
 
    Move out of common code:
@@ -263,7 +272,7 @@ Closed hardening items from the FreeRTOS comparison:
    directory such as `port/transitional_v8m`. A port cannot be claimed as
    FreeRTOS-level while it depends on transitional PendSV or frame layout.
 
-   The `port/common` name is reserved for reusable helper code, not
+   The `fiber/port` helper-root convention is reserved for reusable helper code, not
    selected-port fallback behavior.
 
 2. Keep Cortex-M7 r0p1 errata policy explicit.

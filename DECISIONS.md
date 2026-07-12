@@ -1,5 +1,164 @@
 # Fiber Decision Log
 
+## 2026-07-12: Remove target Directory
+
+The `fiber/target` source directory was removed.
+
+The remaining target-level files moved out of `fiber/target`:
+
+```text
+fiber/target/fiber_panic.c    -> fiber/fiber_panic.c
+fiber/target/fiber_panic.h    -> fiber/fiber_panic.h
+fiber/target/fiber_settings.h -> fiber/port/fiber_settings.h
+```
+
+`fiber_panic` is a runtime-level fallback hook, not CPU-port policy.
+`fiber_settings.h` is now a port-root configuration header because selected
+ports consume those defaults while exporting the CPU contract.
+
+## 2026-07-12: Remove fiber_target.h Facade
+
+`fiber/target/fiber_target.h` was removed. The selected-port facade is now:
+
+```text
+fiber/port/fiber_port_selected.h
+```
+
+Public runtime headers include `port/fiber_port_selected.h` directly. The
+selected port provides the CPU contract through its `fiber_portmacro.h`; the
+facade then applies common post-port checks, stack alignment helpers,
+exception-frame headroom constants, and feature-policy gates.
+
+Important ownership rule:
+
+```text
+selected port owns CPU facts and low-level mechanics;
+fiber_port_selected.h validates and exports the selected contract;
+fiber_target.h must not be recreated as a CPU-policy layer.
+```
+
+`FIBER_SVC_START_NUMBER` is also port-owned now. Each selected
+`fiber_portmacro.h` provides the default and checks that the value fits the
+8-bit SVC immediate field.
+
+## 2026-07-12: Move Exception Setup Into Selected Ports
+
+PendSV/SVC exception setup is no longer owned by `fiber/target/fiber_irq.c`
+and `fiber/target/fiber_irq.h`. It is also no longer a shared root
+`fiber/port/fiber_port_exception.*` implementation.
+
+Each concrete port source group now owns its exception setup file:
+
+```text
+fiber/port/armv6m/fiber_port_exception.c
+fiber/port/armv7m/fiber_port_exception.c
+fiber/port/armv7em/fiber_port_exception.c
+fiber/port/transitional_v8m/fiber_port_exception.c
+fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
+```
+
+The selected-port exception setup owns:
+
+- PendSV priority programming and read-back validation;
+- SVCall priority programming and read-back validation;
+- direct/wrapper vector routing validation for SVC and PendSV;
+- pending PendSV cleanup before first start;
+- implemented NVIC priority-bit probing;
+- scheduler BASEPRI threshold validation;
+- AIRCR.PRIGROUP validation for BASEPRI ports;
+- Cortex-M7 r0p0/r0p1 errata policy validation.
+
+The public API names remain stable for now:
+
+```c
+void fiber_pendsv_init_lowest_priority(void);
+void fiber_exception_runtime_check(void);
+```
+
+This is an ownership move, not a behavior change. The implementation consumes
+selected-port traits and helpers, including `fiber_port_vectors_base_ptr()` and
+`FIBER_PORT_SCHEDULER_BASEPRI`.
+
+`fiber_port_exception.c` includes the selector guard first, then consumes the
+selected CPU/platform contract through `fiber_portmacro.h`. It must not include
+`fiber_target.h`, `fiber_compiler.h`, `fiber_panic.h`, FPU/PSPLIM/VTOR helpers,
+or unvalidated feature-policy headers directly. If exception setup needs a CPU
+fact, validation knob, compiler helper, CMSIS view, or diagnostic contract, the
+selected port must expose it from `fiber_portmacro.h`.
+
+## 2026-07-12: Move VTOR/Vector Policy Into Selected Ports
+
+VTOR and vector-table access are no longer owned by
+`fiber/target/fiber_vtor.h`. That target helper was removed.
+
+The selected port now owns:
+
+- whether the CPU/profile exposes `SCB->VTOR`;
+- whether vector-table access targets the current bank or the Non-secure bank;
+- the fallback vector base for profiles without VTOR;
+- vector-table base masking/alignment before reads and writes;
+- the initial MSP read used by boot/MSP rewind policy.
+
+Common runtime code now calls:
+
+```c
+uintptr_t fiber_port_vectors_base_addr(void);
+const uint32_t *fiber_port_vectors_base_ptr(void);
+uint32_t fiber_port_read_initial_msp(void);
+void fiber_port_set_vectors_base_addr(uintptr_t base);
+```
+
+Ports without VTOR expose an explicit `0x00000000` vector-base fallback.
+ARMv7-M, ARMv7E-M, ARM_CM7/r0p1, and v8-M mainline-capable ports read/write
+the selected VTOR bank inside their own port header.
+
+## 2026-07-12: Move PSPLIM Policy Into Selected Ports
+
+PSPLIM register policy is no longer owned by `fiber/target/fiber_pslim.h`.
+That target helper was removed.
+
+The selected port now owns:
+
+- whether the CPU/security state has a PSPLIM register;
+- whether this selected runtime is allowed to write that register;
+- whether the saved context layout has a PSPLIM slot;
+- whether PSPLIM access targets the current security bank or the Non-secure
+  bank;
+- the C API used by common startup code:
+  `fiber_port_psplim_read()`, `fiber_port_psplim_write()`, and
+  `fiber_port_psplim_config()`;
+- the asm restore macro used by port code: `FBR_ASM_MSR_PSPLIM()`.
+
+Ports without PSPLIM expose explicit disabled/no-op definitions. The
+transitional v8-M port owns the temporary `psplim` / `psplim_ns` bank selection
+until concrete v8-M production ports replace it.
+
+Common runtime code only consumes `FIBER_USE_PSPLIM_REGISTER` and the selected
+port API; it no longer includes a target-wide PSPLIM helper.
+
+## 2026-07-12: Move FPU Policy Into Selected Ports
+
+FPU capability detection and FP-context policy are no longer owned by
+`fiber/target/fiber_fpu.h`.
+
+The selected port now owns:
+
+- whether the toolchain is building FP instructions;
+- whether the silicon exposes an FPU;
+- whether CMSIS reports `__FPU_USED`;
+- whether the port supports scalar FPU use;
+- whether the port saves/restores extended FP context;
+- whether first start must clear or validate `CONTROL.FPCA`;
+- how early FPU enable is applied through `fiber_port_fpu_enable_early()`.
+
+The root `fiber_fpu.h` / `fiber_fpu.c` pair was removed. Common runtime code
+now calls the selected-port API `fiber_port_fpu_enable_early()`. Ports without
+FPU provide a no-op implementation; FPU-capable ports own CPACR/FPCCR setup,
+lazy/eager policy application, barriers, and read-back checks.
+
+This matches the v2 direction: selected ports export the CPU interface, while
+common runtime code only consumes that interface.
+
 ## 2026-07-11: H7 Normal Run After SVC Dispatch Hardening
 
 The STM32H7 / Cortex-M7 board passed `FIBER_VAL_NORMAL_RUN` after the current
@@ -84,17 +243,35 @@ PendSV scheduler result traps:
 
 ## 2026-07-11: Start Real Port Common Helpers
 
-The `port/common` name is now reserved for reusable helper code and contains the
-shared PRIMASK helper header.
+The `fiber/port` helper-root convention is now reserved for reusable helper
+code such as compiler, diagnostics, and static-assert ABI headers.
 
-This layer may provide low-level reusable operations, but selected ports still
-own policy: when to mask, which scheduler critical section to use, and which
-architecture errata rules apply.
+PRIMASK save/restore is intentionally not a root helper. The selected port owns
+its local PRIMASK implementation and exposes only the generic
+`fiber_port_switch_mask_enter()` / `fiber_port_switch_mask_exit()` contract to
+common runtime code.
+
+## 2026-07-12: Move BASEPRI Policy Into Selected Ports
+
+`fiber/target/fiber_basepri.h` is removed. BASEPRI is no longer a target-wide
+helper or selector-inferred CPU policy.
+
+Each selected port now owns:
+
+- whether BASEPRI exists;
+- the scheduler BASEPRI threshold;
+- C read/write helpers exposed as `fiber_port_basepri_read()` and
+  `fiber_port_basepri_write()`;
+- naked-asm scheduler critical-section snippets;
+- Cortex-M7 r0p0/r0p1 errata handling when applicable.
+
+Ports without BASEPRI provide no-op BASEPRI helpers and use saved PRIMASK for
+the scheduler bridge. Common runtime code may only call the selected-port API.
 
 ## 2026-07-11: Rename Transitional v8-M Fallback
 
-The temporary v8-M fallback directory was renamed from `port/common` to
-`port/transitional_v8m`.
+The temporary v8-M fallback directory was moved out of the `fiber/port` helper
+root into `port/transitional_v8m`.
 
 This is intentionally a naming-only boundary cleanup:
 
@@ -102,8 +279,8 @@ This is intentionally a naming-only boundary cleanup:
 - it remains compile-covered and runtime-gated;
 - it must be split into concrete v8-M ports before any FreeRTOS-level runtime
   support claim is made;
-- the future `port/common` name is reserved for reusable helper code, not
-  selected-port fallback behavior.
+- the future `fiber/port` helper-root convention is reserved for reusable
+  helper code, not selected-port fallback behavior.
 
 ## 2026-07-11: Transitional v8-M Port Split
 
@@ -114,9 +291,9 @@ This is a boundary cleanup:
 
 - `fiber_core.c` no longer owns PendSV assembly or synthetic software-frame
   construction for any selected port;
-- `fiber_core.c` also delegates PRIMASK save/restore helpers to the port
-  boundary;
-- `fiber_port_selected.h` includes
+- `fiber_core.c` also delegates switch-publication masking to the selected
+  port boundary;
+- `fiber/port/fiber_port_selected.h` includes
   `transitional_v8m/fiber_port_transitional_v8m.h` only for profiles that do
   not yet have a concrete selected port header;
 - `port/transitional_v8m` remains transitional and runtime-gated. It is not a
@@ -279,7 +456,7 @@ The v2 runtime now has explicit policy gates for Cortex-M profiles whose
 FreeRTOS ports carry extra context state that the current generic fiber context
 does not save yet:
 
-- `fiber_feature_policy.h` defines `FIBER_HAS_EXTENDED_FP_CONTEXT`,
+- `fiber/port/fiber_feature_policy.h` defines `FIBER_HAS_EXTENDED_FP_CONTEXT`,
   `FIBER_USE_PSPLIM_REGISTER`, `FIBER_HAS_PAC`, and `FIBER_HAS_BTI`.
 - MVE-FP follows the extended FP save/restore model. MVE without scalar FP is
   rejected by runtime policy validation because the current assembly does not
@@ -426,7 +603,7 @@ The ARMv7E-M scheduler path follows the FreeRTOS handler critical-section model:
 
 Commit `cf610cc` prepares the v2 scheduler-driven port boundary:
 
-- `fiber_port_state.h` now owns the internal scheduler hook state:
+- `fiber_runtime_state.h` now owns the internal scheduler hook state:
   current context, pick-next function pointer, and user context pointer.
 - The port state layer provides a stable C bridge for future PendSV/SVC
   scheduler selection.

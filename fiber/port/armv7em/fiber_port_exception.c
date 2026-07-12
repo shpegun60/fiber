@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * fiber_irq.c - configure PendSV priority for STM32/Cortex-M targets
+ * fiber_port_exception.c - ARMv7E-M exception setup and validation
  *
  * Knobs (optional):
  *   - FIBER_FORCE_PRIGROUP  : [-1..7]  -1 = don't touch grouping (default), otherwise set PRIGROUP
@@ -10,60 +10,14 @@
  *   - FIBER_VALIDATE_PRIORITY_GROUPING : 0/1 validate AIRCR.PRIGROUP for BASEPRI policy
  * -------------------------------------------------------------------------- */
 
-#include "mcu_core.h"
-#include "fiber_target.h"
-#include "fiber_irq.h"
-#include "fiber_compiler.h"
-#include "fiber_panic.h"
-#include "fiber_vtor.h"
-#include "fiber_basepri.h"
-#include "fiber_feature_policy.h"
-#include "../port/fiber_port_selected.h"
+#if 0
+
+#include "../fiber_port_select.h"
+
+#include "fiber_portmacro.h"
 
 extern void PendSV_Handler(void);
 extern void SVC_Handler(void);
-
-#ifndef FIBER_FORCE_PRIGROUP
-#  define FIBER_FORCE_PRIGROUP   (-1)
-#endif
-#ifndef FIBER_TUNE_SYSTICK
-#  define FIBER_TUNE_SYSTICK      0
-#endif
-#ifndef FIBER_TUNE_SVCALL
-#  define FIBER_TUNE_SVCALL       1
-#endif
-
-#ifndef FIBER_VALIDATE_EXCEPTION_SETUP
-#  define FIBER_VALIDATE_EXCEPTION_SETUP 1
-#endif
-
-#ifndef FIBER_VALIDATE_VECTOR_WIRING
-#  define FIBER_VALIDATE_VECTOR_WIRING FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-
-#ifndef FIBER_VALIDATE_PENDSV_VECTOR
-#  define FIBER_VALIDATE_PENDSV_VECTOR FIBER_VALIDATE_VECTOR_WIRING
-#endif
-
-#ifndef FIBER_VALIDATE_SVC_VECTOR
-#  define FIBER_VALIDATE_SVC_VECTOR FIBER_VALIDATE_VECTOR_WIRING
-#endif
-
-#ifndef FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
-#  define FIBER_VALIDATE_BASEPRI_PRIORITY_MASK FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-
-#ifndef FIBER_VALIDATE_PRIORITY_GROUPING
-#  define FIBER_VALIDATE_PRIORITY_GROUPING FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-
-#ifndef FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY
-#  define FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-
-#ifndef FIBER_VALIDATE_SVC_PRIORITY
-#  define FIBER_VALIDATE_SVC_PRIORITY FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
 
 #ifndef __NVIC_PRIO_BITS
 #  error "__NVIC_PRIO_BITS must be defined by the CMSIS device header"
@@ -113,7 +67,7 @@ __STATIC_FORCEINLINE void fiber_pendsv_clear_pending(void) {
 static void fiber_validate_vector_entry(uint32_t index, void (*expected)(void), char code)
 {
 #if FIBER_VALIDATE_VECTOR_WIRING
-    const uint32_t *const vectors = fiber_vectors_base_ptr();
+    const uint32_t *const vectors = fiber_port_vectors_base_ptr();
     const uintptr_t actual = (uintptr_t)vectors[index];
     const uintptr_t expect = fiber_handler_addr(expected);
 
@@ -143,7 +97,7 @@ static void fiber_validate_svc_priority(void)
 #endif
 }
 
-#if FIBER_HAS_BASEPRI
+#if FIBER_PORT_HAS_BASEPRI
 static uint8_t fiber_probe_implemented_priority_mask(void)
 {
     volatile uint8_t *const first_user_priority = (volatile uint8_t *)0xE000E400u;
@@ -177,16 +131,16 @@ static uint32_t fiber_count_implemented_priority_bits(uint8_t implemented_mask)
 
 static void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
 {
-#if FIBER_HAS_BASEPRI && FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
+#if FIBER_PORT_HAS_BASEPRI && FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
 
     FIBER_REQUIRE(implemented_mask != 0u, 'Q');
-    FIBER_REQUIRE(((uint32_t)FIBER_SCHEDULER_BASEPRI & (uint32_t)implemented_mask) != 0u, 'Q');
-    FIBER_REQUIRE(((uint32_t)FIBER_SCHEDULER_BASEPRI & ~(uint32_t)implemented_mask) == 0u, 'q');
+    FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & (uint32_t)implemented_mask) != 0u, 'Q');
+    FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & ~(uint32_t)implemented_mask) == 0u, 'q');
 
     if (implemented_bits == 8u) {
-        FIBER_REQUIRE(((uint32_t)FIBER_SCHEDULER_BASEPRI & 1u) == 0u, 'g');
+        FIBER_REQUIRE(((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u, 'g');
     }
 #else
     (void)implemented_mask;
@@ -195,7 +149,7 @@ static void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
 
 static void fiber_validate_priority_grouping(uint8_t implemented_mask)
 {
-#if FIBER_HAS_BASEPRI && FIBER_VALIDATE_PRIORITY_GROUPING
+#if FIBER_PORT_HAS_BASEPRI && FIBER_VALIDATE_PRIORITY_GROUPING
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
     uint32_t max_prigroup = 0u;
@@ -212,7 +166,7 @@ static void fiber_validate_priority_grouping(uint8_t implemented_mask)
     (void)implemented_mask;
 #endif
 }
-#endif /* FIBER_HAS_BASEPRI */
+#endif /* FIBER_PORT_HAS_BASEPRI */
 
 static void fiber_validate_m7_r0p1_errata_policy(void)
 {
@@ -226,39 +180,14 @@ static void fiber_validate_m7_r0p1_errata_policy(void)
 
     if ((cpuid == FIBER_CORTEX_M7_R0P0_CPUID) ||
         (cpuid == FIBER_CORTEX_M7_R0P1_CPUID)) {
-        FIBER_REQUIRE(FIBER_CORTEX_M7_R0P1_ERRATA_837070 != 0, '7');
+        FIBER_REQUIRE(FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND != 0, '7');
     }
 #endif
 }
 
 static void fiber_validate_feature_policy(void)
 {
-#if FIBER_VALIDATE_EXCEPTION_SETUP
-# if FIBER_PORT_ARMV8M_BASELINE && !FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME
-    FIBER_REQUIRE(0, '2');
-# endif
-
-# if FIBER_PORT_ARMV8M_MAINLINE && !FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME
-    FIBER_REQUIRE(0, '3');
-# endif
-
-# if FIBER_PORT_ARMV81M_MAINLINE && !FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME
-    FIBER_REQUIRE(0, '8');
-# endif
-
-# if FIBER_HAS_MVE
-    FIBER_REQUIRE(FIBER_HAS_FPU != 0, 'v');
-    FIBER_REQUIRE(FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME != 0, 'V');
-# endif
-
-# if FIBER_RUN_NONSECURE || (defined(FIBER_TZ_NS) && (FIBER_TZ_NS+0))
-    FIBER_REQUIRE(FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME != 0, 'z');
-# endif
-
-# if FIBER_HAS_PAC || FIBER_HAS_BTI
-    FIBER_REQUIRE(FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME != 0, 'J');
-# endif
-#endif
+    (void)0;
 }
 
 void fiber_exception_runtime_check(void)
@@ -287,7 +216,7 @@ void fiber_exception_runtime_check(void)
 # endif
 #endif
 
-#if FIBER_HAS_BASEPRI
+#if FIBER_PORT_HAS_BASEPRI
     const uint8_t implemented_mask = fiber_probe_implemented_priority_mask();
 
     fiber_validate_basepri_priority_mask(implemented_mask);
@@ -350,5 +279,4 @@ void fiber_pendsv_init_lowest_priority(void)
     fiber_exception_runtime_check();
 }
 
-
-
+#endif /* FIBER_PORT_ARMV7EM */

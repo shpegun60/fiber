@@ -8,7 +8,7 @@
 #ifndef FIBER_FIBER_PANIC_H_
 #define FIBER_FIBER_PANIC_H_
 
-#include "fiber_compiler.h"
+#include "port/fiber_compiler.h"
 
 #ifdef __cplusplus
 extern "C" {

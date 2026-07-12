@@ -8,7 +8,8 @@
  * required before claiming runtime support on a specific STM32 ARMv6-M target.
  */
 
-#include "../fiber_port.h"
+#include "../../fiber_boot.h"
+#include "fiber_portmacro.h"
 
 #if FIBER_PORT_ARMV6M
 
@@ -20,13 +21,13 @@ enum {
 	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
 };
 
-BT_STATIC_ASSERT(FBR_OFF_STACK_BASE <= 124, "FBR_OFF_STACK_BASE must fit Thumb-1 LDR word offset");
-BT_STATIC_ASSERT(FBR_OFF_STACK_TOP <= 124, "FBR_OFF_STACK_TOP must fit Thumb-1 LDR word offset");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE <= 124, "FBR_OFF_STACK_BASE must fit Thumb-1 LDR word offset");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP <= 124, "FBR_OFF_STACK_TOP must fit Thumb-1 LDR word offset");
 
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_port_boot_record_check(&ctx->boot);
+	fiber_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
 

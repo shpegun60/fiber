@@ -16,7 +16,7 @@
  */
 
 #include "fiber_boot.h"
-#include "port/fiber_port_boot_record.h"
+#include "port/fiber_port_selected.h"
 
 #ifndef FIBER_HAS_FAULTMASK
 # if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
@@ -117,8 +117,8 @@ void fiber_platform_bootstrap(void)
 	{ __DSB(); __ISB(); }
 #endif
 
-#if FIBER_HAS_BASEPRI
-	fiber_basepri_write(0u);
+#if FIBER_PORT_HAS_BASEPRI
+	fiber_port_basepri_write(0u);
 #endif /* BASEPRI */
 
 #if FIBER_HAS_FAULTMASK
@@ -126,8 +126,8 @@ void fiber_platform_bootstrap(void)
 	{ __DSB(); __ISB(); }
 #endif /* FAULTMASK */
 
-	/* Optionally enable FPU access (CP10/CP11) if an FPU exists and the build may emit FP instructions.	 */
-	fiber_fpu_enable_early();
+	/* Let the selected port apply its FPU policy, if any. */
+	fiber_port_fpu_enable_early();
 }
 
 uintptr_t fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx)
@@ -136,9 +136,9 @@ uintptr_t fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx)
 	fiber_boot_check(ctx);
 
 	if (ctx->msp_policy == FIBER_MSP_POLICY_REWIND) {
-		uint32_t ra = fiber_read_initial_msp();
+		uint32_t ra = fiber_port_read_initial_msp();
 		__ISB();
-		uint32_t rb = fiber_read_initial_msp();
+		uint32_t rb = fiber_port_read_initial_msp();
 
 		if ((ra == 0u) || (ra != rb)) {
 			const uintptr_t fb = fiber_fallback_initial_msp();
@@ -181,7 +181,7 @@ static uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 	return h;
 }
 
-uint32_t fiber_port_boot_compute_hash(const FiberBoot *c)
+uint32_t fiber_boot_record_compute_hash(const FiberBoot *c)
 {
 	/* Hash invariant fields only. Do not include sealed or hash itself. */
 	uint32_t h = 2166136261u;
@@ -202,7 +202,7 @@ uint32_t fiber_port_boot_compute_hash(const FiberBoot *c)
 	return h;
 }
 
-void fiber_port_boot_record_fast_check(const FiberBoot *ctx)
+void fiber_boot_record_fast_check(const FiberBoot *ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
 	FIBER_REQUIRE(ctx->magic == FIBER_BOOT_RECORD_MAGIC, 'm');
@@ -212,10 +212,10 @@ void fiber_port_boot_record_fast_check(const FiberBoot *ctx)
 	FIBER_REQUIRE(ctx->sealed == 1u, 's');
 }
 
-void fiber_port_boot_record_check(const FiberBoot *ctx)
+void fiber_boot_record_check(const FiberBoot *ctx)
 {
-	fiber_port_boot_record_fast_check(ctx);
-	FIBER_REQUIRE(ctx->hash == fiber_port_boot_compute_hash(ctx), 'h');
+	fiber_boot_record_fast_check(ctx);
+	FIBER_REQUIRE(ctx->hash == fiber_boot_record_compute_hash(ctx), 'h');
 }
 
 
@@ -230,9 +230,9 @@ static void fiber_plan_msp(FiberBoot* const ctx)
 #if FIBER_REWIND_MSP
 	ctx->msp_policy = FIBER_MSP_POLICY_REWIND;
 
-	uint32_t msp0a = fiber_read_initial_msp();
+	uint32_t msp0a = fiber_port_read_initial_msp();
 	__ISB();
-	uint32_t msp0b = fiber_read_initial_msp();
+	uint32_t msp0b = fiber_port_read_initial_msp();
 
 	if ((msp0a == 0u) || (msp0a != msp0b)) {
 		const uintptr_t fb = fiber_fallback_initial_msp();  /* fallback must provide non-zero MSP */
@@ -355,7 +355,7 @@ FiberBoot fiber_create_boot(void* const begin, void* const end, const entry_t en
 	ctx.guard_hi = FIBER_BOOT_RECORD_GUARD_HI;
 	ctx.hash     = 0u;
 
-	ctx.hash   = fiber_port_boot_compute_hash(&ctx);
+	ctx.hash   = fiber_boot_record_compute_hash(&ctx);
 	ctx.sealed = 1u;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
@@ -441,9 +441,9 @@ void fiber_boot_check(const FiberBoot* const ctx)
 
 #if FIBER_REWIND_MSP
 		/* Extra paranoia: if we plan to rewind, verify VTOR still points to same MSP. */
-		uint32_t ra = fiber_read_initial_msp();
+		uint32_t ra = fiber_port_read_initial_msp();
 		__ISB();
-		uint32_t rb = fiber_read_initial_msp();
+		uint32_t rb = fiber_port_read_initial_msp();
 		if ((ra == 0u) || (ra != rb)) {
 			const uintptr_t fb = fiber_fallback_initial_msp();
 			FIBER_REQUIRE(fb != 0u, 'f');
@@ -461,7 +461,7 @@ void fiber_boot_check(const FiberBoot* const ctx)
 /* -------------------------------------------------------------------------- 	*/
 static void fiber_boot_simple_check(const FiberBoot* const ctx)
 {
-	fiber_port_boot_record_check(ctx);
+	fiber_boot_record_check(ctx);
 }
 
 /* -------------------------------------------------------------------------- */

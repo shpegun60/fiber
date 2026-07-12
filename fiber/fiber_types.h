@@ -1,5 +1,5 @@
 /*
- * fiber_port_types.h
+ * fiber_types.h
  *
  * Shared type ABI for the common runtime and selected CPU port.
  *
@@ -8,8 +8,8 @@
  * public runtime API headers.
  */
 
-#ifndef FIBER_PORT_FIBER_PORT_TYPES_H_
-#define FIBER_PORT_FIBER_PORT_TYPES_H_
+#ifndef FIBER_FIBER_TYPES_H_
+#define FIBER_FIBER_TYPES_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -69,4 +69,4 @@ typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *u
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_FIBER_PORT_TYPES_H_ */
+#endif /* FIBER_FIBER_TYPES_H_ */

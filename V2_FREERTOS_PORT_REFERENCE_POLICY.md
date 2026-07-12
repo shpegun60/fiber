@@ -258,7 +258,7 @@ An item may be excluded only with a reason. "Not copied" is not a reason.
 The port audit must preserve the CPU behavior that matters even when symbol
 names differ. For example, a FreeRTOS macro does not need to keep its FreeRTOS
 name in `fiber`, but its role must be represented by a selected-port trait,
-`port/common` helper, selected-port private macro, or an explicit exclusion.
+`fiber/port` root helper, selected-port private macro, or an explicit exclusion.
 
 Examples of FreeRTOS mechanisms that must be audited per relevant port:
 
@@ -388,7 +388,7 @@ FreeRTOS portmacro.h:
   selected-port traits and selected-port interface
 
 FreeRTOS portmacrocommon.h:
-  fiber_portmacrocommon.h or port/common helpers
+  fiber_portmacrocommon.h or fiber/port root helpers
   only for facts shared by several selected ports
 
 FreeRTOS port.c:
@@ -434,123 +434,173 @@ may be mechanically renamed later in a no-behavior-change commit.
 Long-term target layout:
 
 ```text
-fiber/port/
-  fiber_port_select.h
-  fiber_port_selected.h
-  fiber_port_traits.h
-  fiber_port_types.h
-  fiber_port_state.h
-  fiber_port_state.c
-  common/
-    fiber_port_primask.h
-    fiber_port_basepri.h
-    fiber_port_vtor.h
-    fiber_port_exception.h
-    fiber_port_exception.c
+fiber/
+  fiber_types.h
+  fiber_runtime_state.h
+  fiber_runtime_state.c
+  port/
+    fiber_settings.h
+    fiber_port_select.h
+    fiber_port_selected.h
+    fiber_port_traits.h
     fiber_port_fpu.h
     fiber_port_fpu.c
     fiber_port_psplim.h
-  armv6m/
-    fiber_portmacro.h
-    fiber_port.c
-    fiber_portasm.h
-    fiber_portasm.c
-  armv7m/
-    fiber_portmacro.h
-    fiber_port.c
-    fiber_portasm.h
-    fiber_portasm.c
-  armv7em/
-    fiber_portmacro.h
-    fiber_port.c
-    fiber_portasm.h
-    fiber_portasm.c
-  armv7em_m7_r0p1/
-    optional split only if errata policy needs a separate source path
-  armv8m_baseline/
-    non_secure/
-      fiber_portmacrocommon.h
+    # Selected ports expose fiber_port_vectors_* helpers directly.
+    # Selected ports own fiber_port_exception.c directly.
+    armv6m/
       fiber_portmacro.h
       fiber_port.c
       fiber_portasm.h
       fiber_portasm.c
-    secure/
-      fiber_secure_context.h
-      fiber_secure_context.c
-      fiber_secure_context_port.c
-  armv8m_mainline/
-    non_secure/
-      fiber_portmacrocommon.h
+    armv7m/
       fiber_portmacro.h
       fiber_port.c
       fiber_portasm.h
       fiber_portasm.c
-    secure/
-      fiber_secure_context.h
-      fiber_secure_context.c
-      fiber_secure_context_port.c
-  armv81m_mainline/
-    non_secure/
-      fiber_portmacrocommon.h
+    armv7em/
       fiber_portmacro.h
       fiber_port.c
       fiber_portasm.h
       fiber_portasm.c
-    secure/
-      fiber_secure_context.h
-      fiber_secure_context.c
-      fiber_secure_context_port.c
+    GCC/
+      ARM_CM7/
+        r0p1/
+          fiber_portmacro.h
+          fiber_port.c
+          FREERTOS_PARITY.md
+    armv7em_m7_r0p1/
+      optional split only if errata policy needs a separate source path
+    armv8m_baseline/
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
+    armv8m_mainline/
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
+    armv81m_mainline/
+      non_secure/
+        fiber_portmacrocommon.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_portasm.h
+        fiber_portasm.c
+      secure/
+        fiber_secure_context.h
+        fiber_secure_context.c
+        fiber_secure_context_port.c
 ```
 
 This is a direction, not a requirement to split every current file immediately.
 Pure file-layout changes must be separate from behavior changes.
 
+Current first workflow checkpoint:
+
+```text
+fiber/port/ARM_CM7/r0p1
+```
+
+This directory intentionally maps to the local FreeRTOS reference path while
+omitting the extra `GCC/` directory level in the fiber tree:
+
+```text
+_reference/FreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1
+```
+
+It is the first build-selected source group for Cortex-M7. Its selected
+`fiber_portmacro.h` and `fiber_port.c` are native fiber files, not wrapper
+includes around the generic ARMv7E-M path. The selected `fiber_portmacro.h`
+should stay close to FreeRTOS `portmacro.h`: CPU constants, selected-port
+traits, and low-level helpers without including the fiber runtime ABI. It may
+include `port/fiber_compiler.h` directly for compiler attributes, barriers,
+diagnostics, and static-assert ABI. The selected `fiber_port.c` may include the
+normal runtime headers it actually uses, such as `fiber_boot.h` and
+`fiber_runtime_state.h`, when it needs runtime types and bridge declarations.
+Neither selected file should include `fiber_target.h` or `fiber_settings.h`
+directly just to inherit CPU policy; CPU policy such as
+BASEPRI, M7 errata, FPU context, frame sizing, exception constants, and local
+defaults belongs to the selected port even when that creates duplication. Its
+parity record must list every relevant FreeRTOS port macro, helper, function,
+assembly path, errata gate, and excluded scheduler feature before behavior is
+claimed as FreeRTOS-level.
+
 Important rule:
 
 ```text
-port/common contains tools, not policy.
+fiber/port root helper headers contain tools, not policy.
 selected ports contain policy.
+duplicated selected-port policy is preferred over hidden common macro policy.
 ```
 
-For example, `port/common/fiber_port_basepri.h` may provide synchronized
-BASEPRI read/write primitives, but `armv7m`, `armv7em`, or v8-M selected ports
-decide whether BASEPRI is the scheduler mask mechanism and which threshold is
-valid.
+For example, BASEPRI read/write and the M7 r0p1 errata sequence are selected
+port details. `armv7m`, `armv7em`, `ARM_CM7/r0p1`, and v8-M selected ports own
+their own BASEPRI helpers, scheduler threshold, and naked-asm snippets.
 
 ## Helper Reimplementation Backlog
 
-The following current `fiber/target` helpers should migrate toward
-`fiber/port/common` plus selected-port traits:
+The former `fiber/target` helpers have either moved to root runtime files or
+selected ports. Remaining migration work should continue toward `fiber/port`
+root helpers plus selected-port traits:
 
 ```text
-fiber_basepri.h:
-  move to port/common/fiber_port_basepri.h
-  selected port owns BASEPRI policy and M7 errata enablement
+BASEPRI policy:
+  done: target-level helper deleted
+  selected ports own BASEPRI read/write, scheduler threshold, asm snippets,
+  and M7 errata enablement
 
-fiber_vtor.h:
-  move to port/common/fiber_port_vtor.h
-  selected port owns whether VTOR exists and whether direct vectors are valid
+VTOR/vector policy:
+  done: target-level VTOR helper removed
+  selected ports own VTOR presence, current/Non-secure vector bank selection,
+  vector-base masking, fallback base for no-VTOR profiles, and initial MSP
+  reads
+  common runtime uses fiber_port_vectors_base_addr(),
+  fiber_port_vectors_base_ptr(), fiber_port_read_initial_msp(), and
+  fiber_port_set_vectors_base_addr()
 
-fiber_irq.h / fiber_irq.c:
-  split into port/common/fiber_port_exception.*
+fiber_port_exception.c:
+  done: moved from target/fiber_irq.* into each selected port source group
   selected port owns PendSV/SVC priority, vector validation, PRIGROUP policy,
   implemented-priority-bit validation, and direct/wrapper vector expectations
 
-fiber_fpu.h / fiber_fpu.c:
-  move to port/common/fiber_port_fpu.*
-  selected port owns FPU presence, lazy/eager policy, FPCA clearing, and
+FPU policy:
+  done: target-level FPU policy removed
+  selected ports own FPU presence, toolchain FP detection, CMSIS FPU-use
+  detection, extended FP context support, FPCA clearing, lazy/eager policy, and
   high-FP save/restore policy
+  selected ports implement fiber_port_fpu_enable_early()
+  root fiber_fpu.h / fiber_fpu.c removed
 
-fiber_pslim.h:
-  move to port/common/fiber_port_psplim.h
-  selected port owns PSPLIM access gates, context slots, secure/non-secure bank
+PSPLIM policy:
+  done: target-level PSPLIM helper removed
+  selected ports own PSPLIM access gates, context slots, secure/non-secure bank
   selection, and runtime support claim
+  selected ports implement fiber_port_psplim_read(), fiber_port_psplim_write(),
+  fiber_port_psplim_config(), and FBR_ASM_MSR_PSPLIM()
+  ports without PSPLIM expose explicit disabled/no-op definitions
 
 fiber_feature_policy.h:
-  replace gradually with selected-port traits
+  done: port-root policy during migration
+  replace remaining per-port claims gradually with selected-port traits
 
 fiber_target.h:
-  shrink to a compatibility facade during migration
+  done: deleted
+  fiber/port/fiber_port_selected.h is the selected-port facade and owns common
+  post-port sanity checks, stack/exc-frame constants, and feature-policy entry
 ```
 
 Do not move these helpers all at once. The migration order should be:
@@ -560,8 +610,8 @@ Do not move these helpers all at once. The migration order should be:
 2. BASEPRI helper
 3. VTOR/vector helper
 4. exception priority and vector validation
-5. FPU helper
-6. PSPLIM helper
+5. FPU policy
+6. PSPLIM policy
 7. v8-M secure/non-secure context helpers
 ```
 
@@ -714,6 +764,17 @@ Validation status:
   unsupported or explicitly gated features
 ```
 
+Selected-port naming rule:
+
+```text
+FreeRTOS portXXX item  -> fiber_portXXX item
+generic fiber trait    -> FIBER_PORT_XXX
+user/build option      -> FIBER_XXX
+```
+
+This keeps the port readable beside FreeRTOS without exporting FreeRTOS ABI
+names or hiding CPU policy behind common target macros.
+
 ## Current v2 Direction
 
 Do not replace the current `fiber/port` design with a FreeRTOS ABI adapter.
@@ -725,7 +786,7 @@ Continue in this order:
 3. For each port, create or update the FreeRTOS parity record before behavior
    is claimed.
 4. Move feature policy from `fiber/target` into selected-port traits and
-   `port/common` helpers gradually.
+   `fiber/port` helper headers gradually.
 5. Compare each selected port against the matching FreeRTOS port files.
 6. Document every intentional difference and every excluded FreeRTOS symbol.
 7. Hardware-validate a port before claiming runtime support.

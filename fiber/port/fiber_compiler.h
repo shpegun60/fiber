@@ -9,6 +9,7 @@
 #define FIBER_FIBER_COMPILER_H_
 
 /* Pull compiler/device traits (brings __WEAK, __NO_RETURN, etc.) */
+#include "fiber_static_assert.h"
 #include "fiber_diagnostics.h"
 #include "mcu_core.h"
 

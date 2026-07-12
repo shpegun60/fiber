@@ -86,18 +86,23 @@ function Find-CmsisCore {
 $gcc = Find-ArmGcc
 $cmsis = Find-CmsisCore
 
-$sources = @(
+$commonSources = @(
     "fiber\fiber_core.c",
     "fiber\fiber_boot.c",
+    "fiber\fiber_runtime_state.c",
     "fiber\fiber_stack.c",
-    "fiber\port\fiber_port_state.c",
+    "fiber\fiber_panic.c"
+)
+
+$selectorPortSources = @(
     "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+    "fiber\port\transitional_v8m\fiber_port_exception.c",
     "fiber\port\armv6m\fiber_port_armv6m.c",
+    "fiber\port\armv6m\fiber_port_exception.c",
     "fiber\port\armv7m\fiber_port_armv7m.c",
+    "fiber\port\armv7m\fiber_port_exception.c",
     "fiber\port\armv7em\fiber_port_armv7em.c",
-    "fiber\target\fiber_fpu.c",
-    "fiber\target\fiber_irq.c",
-    "fiber\target\fiber_panic.c"
+    "fiber\port\armv7em\fiber_port_exception.c"
 )
 
 $configs = @(
@@ -150,6 +155,25 @@ $portIncludeDirs = @{
     "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = "fiber\port\transitional_v8m"
 }
 
+$buildSelectedPortSourcesByProfile = @{
+    "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\armv6m\fiber_port_armv6m.c", "fiber\port\armv6m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\armv7m\fiber_port_armv7m.c", "fiber\port\armv7m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\armv7em\fiber_port_armv7em.c", "fiber\port\armv7em\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+}
+
+$buildSelectedPortIncludeDirsByConfig = @{
+    "cortex-m7"  = "fiber\port\ARM_CM7\r0p1"
+    "cortex-m7f" = "fiber\port\ARM_CM7\r0p1"
+}
+
+$buildSelectedPortSourcesByConfig = @{
+    "cortex-m7"  = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+}
+
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $buildRoot | Out-Null
 
@@ -171,19 +195,33 @@ try {
         if ([string]::IsNullOrWhiteSpace($portIncludeDir)) {
             throw "No build-selected include directory mapping for $profile"
         }
+        if ($buildSelectedPortIncludeDirsByConfig.ContainsKey($cfg.Name)) {
+            $portIncludeDir = $buildSelectedPortIncludeDirsByConfig[$cfg.Name]
+        }
+
+        $buildSelectedPortSources = $buildSelectedPortSourcesByProfile[$profile]
+        if (($null -eq $buildSelectedPortSources) -or ($buildSelectedPortSources.Count -eq 0)) {
+            throw "No build-selected source group mapping for $profile"
+        }
+        if ($buildSelectedPortSourcesByConfig.ContainsKey($cfg.Name)) {
+            $buildSelectedPortSources = $buildSelectedPortSourcesByConfig[$cfg.Name]
+        }
 
         $wrapperDefines = @("-DFIBER_PENDSV_WIRED=1", "-DFIBER_SVC_WIRED=1")
         $directPendsvDefines = @("-DFIBER_PENDSV_VECTOR_DIRECT=1", "-DFIBER_SVC_WIRED=1")
         $buildSelectedDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-D$portMacro=1")
+        if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
+            $buildSelectedDefines += "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
+        }
         $buildSelectedIncludeArgs = @("-I$(Join-Path $RepoRoot $portIncludeDir)")
 
         $selectionModes = @(
-            [pscustomobject]@{ Name = "auto";                         Defines = $wrapperDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "explicit";                     Defines = @("-DFIBER_PORT_PROFILE=$profile") + $wrapperDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "build-selected";               Defines = $buildSelectedDefines + $wrapperDefines; ExtraArgs = $buildSelectedIncludeArgs },
-            [pscustomobject]@{ Name = "auto-direct-pendsv";           Defines = $directPendsvDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "explicit-direct-pendsv";       Defines = @("-DFIBER_PORT_PROFILE=$profile") + $directPendsvDefines; ExtraArgs = @() },
-            [pscustomobject]@{ Name = "build-selected-direct-pendsv"; Defines = $buildSelectedDefines + $directPendsvDefines; ExtraArgs = $buildSelectedIncludeArgs }
+            [pscustomobject]@{ Name = "auto";                         Defines = $wrapperDefines; ExtraArgs = @(); PortSources = $selectorPortSources },
+            [pscustomobject]@{ Name = "explicit";                     Defines = @("-DFIBER_PORT_PROFILE=$profile") + $wrapperDefines; ExtraArgs = @(); PortSources = $selectorPortSources },
+            [pscustomobject]@{ Name = "build-selected";               Defines = $buildSelectedDefines + $wrapperDefines; ExtraArgs = $buildSelectedIncludeArgs; PortSources = $buildSelectedPortSources },
+            [pscustomobject]@{ Name = "auto-direct-pendsv";           Defines = $directPendsvDefines; ExtraArgs = @(); PortSources = $selectorPortSources },
+            [pscustomobject]@{ Name = "explicit-direct-pendsv";       Defines = @("-DFIBER_PORT_PROFILE=$profile") + $directPendsvDefines; ExtraArgs = @(); PortSources = $selectorPortSources },
+            [pscustomobject]@{ Name = "build-selected-direct-pendsv"; Defines = $buildSelectedDefines + $directPendsvDefines; ExtraArgs = $buildSelectedIncludeArgs; PortSources = $buildSelectedPortSources }
         )
 
         $selectionModes += [pscustomobject]@{
@@ -193,6 +231,7 @@ try {
                 "-DFIBER_SVC_VECTOR_DIRECT=1"
             )
             ExtraArgs = @()
+            PortSources = $selectorPortSources
         }
         $selectionModes += [pscustomobject]@{
             Name = "explicit-direct-vectors"
@@ -202,6 +241,7 @@ try {
                 "-DFIBER_SVC_VECTOR_DIRECT=1"
             )
             ExtraArgs = @()
+            PortSources = $selectorPortSources
         }
         $selectionModes += [pscustomobject]@{
             Name = "build-selected-direct-vectors"
@@ -210,6 +250,7 @@ try {
                 "-DFIBER_SVC_VECTOR_DIRECT=1"
             )
             ExtraArgs = $buildSelectedIncludeArgs
+            PortSources = $buildSelectedPortSources
         }
 
         if (($cfg.Name -eq "cortex-m7") -or ($cfg.Name -eq "cortex-m7f")) {
@@ -222,6 +263,7 @@ try {
                     "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1"
                 )
                 ExtraArgs = @()
+                PortSources = $selectorPortSources
             }
         }
 
@@ -239,6 +281,7 @@ try {
                     "-DFIBER_RUN_NONSECURE=1"
                 )
                 ExtraArgs = @()
+                PortSources = $selectorPortSources
             }
             $selectionModes += [pscustomobject]@{
                 Name = "explicit-secure-target-ns-bank"
@@ -250,6 +293,7 @@ try {
                     "-DFIBER_TZ_NS=1"
                 )
                 ExtraArgs = @("-mcmse")
+                PortSources = $selectorPortSources
             }
         }
 
@@ -297,6 +341,8 @@ void Error_Handler(void);
             Write-Host ""
             Write-Host "== $($cfg.Name) / $($mode.Name) =="
 
+            $sources = $commonSources + $mode.PortSources
+
             foreach ($source in $sources) {
                 $srcPath = Join-Path $RepoRoot $source
                 $objName = ($source -replace '[\\/]', '_') + ".o"
@@ -317,7 +363,6 @@ void Error_Handler(void);
                     "-I$cfgDir",
                     "-I$RepoRoot",
                     "-I$(Join-Path $RepoRoot 'fiber')",
-                    "-I$(Join-Path $RepoRoot 'fiber\target')",
                     "-I$cmsis",
                     "-c",
                     $srcPath,

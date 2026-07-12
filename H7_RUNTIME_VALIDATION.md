@@ -45,7 +45,8 @@ The runtime check must cover:
 - SVCall priority reads back as highest priority.
 - PendSV vector routing matches the configured wrapper/direct mode.
 - SVC vector routing matches the configured policy.
-- `FIBER_SCHEDULER_BASEPRI` uses only implemented NVIC priority bits.
+- the selected port scheduler BASEPRI threshold uses only implemented NVIC
+  priority bits.
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` policy.
 - affected Cortex-M7 r0p0/r0p1 CPUID values require
   `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`.
@@ -332,7 +333,7 @@ change the portable defaults and does not validate M0/M23/M33/M55/MVE paths.
 
 ## Claim Rule
 
-After any behavior-affecting change to `fiber_core.c`, `fiber_port_state.c`,
+After any behavior-affecting change to `fiber_core.c`, `fiber_runtime_state.c`,
 `fiber_port_armv7em.c`, exception setup validation, feature policy gates, stack
 layout, scheduler hook semantics, or startup code, the STM32H7 validation label
 must be downgraded until this checklist passes again on hardware.

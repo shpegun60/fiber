@@ -23,26 +23,29 @@ Compile the runtime sources into the application:
 fiber/fiber_core.c
 fiber/fiber_boot.c
 fiber/fiber_stack.c
-fiber/port/fiber_port_state.c
+fiber/fiber_runtime_state.c
 fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
+fiber/port/transitional_v8m/fiber_port_exception.c
 fiber/port/armv6m/fiber_port_armv6m.c
+fiber/port/armv6m/fiber_port_exception.c
 fiber/port/armv7m/fiber_port_armv7m.c
+fiber/port/armv7m/fiber_port_exception.c
 fiber/port/armv7em/fiber_port_armv7em.c
-fiber/target/fiber_fpu.c
-fiber/target/fiber_irq.c
-fiber/target/fiber_panic.c
+fiber/port/armv7em/fiber_port_exception.c
+fiber/fiber_panic.c
 ```
 
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
 only selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h`
 includes the concrete selected `arm*/fiber_port_*.h` interface and its
 port-owned frame traits. Public runtime code should use `fiber/fiber_core.h`;
-exception wiring or low-level port integration may include `fiber/port/fiber_port.h`.
+exception wiring or low-level port integration should include the selected
+port-specific header or `fiber/port/fiber_port_selected.h`.
 The v2 target is FreeRTOS-style ownership: each concrete `arm*` port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
-exception setup, and architecture-specific critical-section policy. Common
-runtime files should not keep architecture-specific fallback switch assembly for
-ports that are claimed as supported.
+exception setup, FPU traits, and architecture-specific critical-section policy.
+Common runtime files should not keep architecture-specific fallback switch
+assembly or CPU capability decisions for ports that are claimed as supported.
 
 Port selection defaults to automatic detection from compiler ARM architecture
 macros. Production builds may select the profile explicitly, for example:
@@ -270,7 +273,8 @@ exception setup check by default. The check verifies:
 - PendSV priority reads back as the lowest priority;
 - SVCall priority reads back as highest priority;
 - vector table entries route PendSV and SVC to the expected handlers;
-- `FIBER_SCHEDULER_BASEPRI` matches the implemented NVIC priority bits;
+- the selected port scheduler BASEPRI threshold matches the implemented NVIC
+  priority bits;
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` threshold;
 - affected Cortex-M7 r0p0/r0p1 cores require
   `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;

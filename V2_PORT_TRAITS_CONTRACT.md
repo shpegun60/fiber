@@ -6,7 +6,7 @@ This document defines the selected-port traits contract for the v2 fiber
 runtime.
 
 The selected port must be the source of truth for CPU facts and port policy.
-Common runtime and common port code must consume selected-port traits instead
+Common runtime and port helper code must consume selected-port traits instead
 of guessing CPU behavior from global `__ARM_ARCH_*`, `__CORTEX_M`, toolchain,
 or CMSIS macros.
 
@@ -19,8 +19,8 @@ selected port:
   defines exception-start policy
   defines scheduler critical-section policy
 
-port/common:
-  provides reusable Cortex-M helper primitives
+fiber/port root helpers:
+  provides compiler/static-assert/diagnostics ABI and tightly scoped helpers
   consumes selected-port traits
 
 fiber core:
@@ -28,11 +28,11 @@ fiber core:
   does not know CPU mechanics
 
 target:
-  owns compiler/config/diagnostic/platform glue only
+  owns configuration, panic fallback, and platform glue only
 ```
 
 This follows the same boundary idea used by FreeRTOS ports: a concrete port
-defines the architecture facts first, and shared/common code consumes those
+defines the architecture facts first, and shared helper code consumes those
 facts later.
 
 The v2 fiber runtime is not a FreeRTOS clone. It only uses FreeRTOS-style port
@@ -93,14 +93,11 @@ MVE/PAC/BTI policy
 
 ### Target Layer
 
-The target layer is limited to compiler, diagnostics, panic, CMSIS glue, and
-project configuration.
+The target layer is limited to panic, CMSIS glue, and project configuration.
 
 Allowed long-term:
 
 ```text
-fiber_compiler.h
-fiber_diagnostics.h
 fiber_panic.h/.c
 mcu_core.h
 fiber_settings.h
@@ -109,7 +106,7 @@ fiber_settings.h
 Allowed temporarily:
 
 ```text
-thin compatibility forwarding headers during migration
+thin compatibility forwarding headers that do not own CPU policy
 ```
 
 Not allowed long-term:
@@ -125,35 +122,59 @@ SVC/PendSV vector policy
 ARMv8-M/MVE/PAC/BTI runtime gates
 ```
 
-`fiber_target.h` must become a thin compatibility facade. It must not be the
-source of CPU policy.
+`fiber_target.h` was removed. `fiber_port_selected.h` is the selected-port
+facade and must not be replaced by a new target-level CPU-policy layer.
 
-### Port Common Layer
+### Port Helper Layer
 
-The common port layer owns reusable Cortex-M helper primitives.
+The port helper layer owns reusable Cortex-M helper primitives at the root of fiber/port.
 
 It may provide helpers for:
 
 ```text
-PRIMASK save/restore
-BASEPRI read/write
+fiber_static_assert.h compile-time assert ABI
+fiber_diagnostics.h compile-time diagnostics ABI
+fiber_compiler.h compiler/attribute ABI
 VTOR/vector access
 NVIC priority helpers
 exception setup helpers
 PSPLIM register access helpers
-FPU enable helpers
+trait-neutral FPU register helpers, only if a later port needs them
 fault-status hygiene helpers
 ```
 
-The common port layer must not decide whether a selected port supports a
+The port helper layer must not decide whether a selected port supports a
 feature.
 
 Rule:
 
 ```text
-port/common provides tools;
+fiber/port root helper headers provide tools;
 the selected port decides whether those tools are valid.
 ```
+
+PRIMASK save/restore is port-private. Common runtime code calls only the
+selected-port switch mask contract:
+
+```c
+uint32_t fiber_port_switch_mask_enter(void);
+void fiber_port_switch_mask_exit(uint32_t state);
+```
+
+The selected port decides whether those functions use PRIMASK directly, wrap a
+different CPU-local mechanism, or are later replaced by a port-specific
+specialization. The root helper layer must not be required for this path.
+
+BASEPRI read/write is also port-private. Common runtime code calls only:
+
+```c
+uint32_t fiber_port_basepri_read(void);
+void fiber_port_basepri_write(uint32_t value);
+```
+
+Ports without BASEPRI provide no-op implementations returning zero. Ports with
+BASEPRI own the register spelling, scheduler threshold, naked-asm snippets, and
+Cortex-M7 r0p0/r0p1 errata sequence.
 
 ### Selected Port Layer
 
@@ -168,6 +189,7 @@ SVC first-start implementation
 PendSV save/restore implementation
 scheduler critical-section policy
 BASEPRI/PRIMASK selection
+switch-publication mask implementation
 FPU enable and FPCA policy
 FPU high-register save/restore policy
 PSPLIM policy
@@ -179,23 +201,24 @@ runtime support claim level
 
 ## Include-order Contract
 
-The selected-port traits must be available before port/common helpers and
-before any legacy `fiber_target.h` facade.
+The selected-port traits must be available before fiber/port root helpers and
+before common runtime code consumes CPU policy.
 
-Long-term `fiber_port_selected.h` must not include `fiber_target.h`.
+`fiber_port_selected.h` must not include `fiber_target.h`; that facade no
+longer exists.
 
 Recommended include order:
 
 ```c
-#ifndef FIBER_PORT_FIBER_PORT_SELECTED_H_
-#define FIBER_PORT_FIBER_PORT_SELECTED_H_
+#ifndef FIBER_FIBER_PORT_SELECTED_H_
+#define FIBER_FIBER_PORT_SELECTED_H_
 
-#include "../target/fiber_settings.h"
-#include "../target/fiber_compiler.h"
+#include "fiber_settings.h"
+#include "fiber_compiler.h"
 #include "mcu_core.h"
 
 #include "fiber_port_select.h"   /* development selector, optional long-term */
-#include "fiber_port_types.h"
+#include "../fiber_types.h"
 
 #define FIBER_PORT_MASK_PRIMASK 1
 #define FIBER_PORT_MASK_BASEPRI 2
@@ -211,6 +234,7 @@ Recommended include order:
 #endif
 
 #include "fiber_port_traits.h"
+#include "fiber_feature_policy.h"
 
 #endif
 ```
@@ -234,9 +258,11 @@ A selected port header may include only:
 
 ```text
 fiber_settings.h
-fiber_compiler.h
+port/fiber_static_assert.h
+port/fiber_diagnostics.h
+port/fiber_compiler.h
 mcu_core.h
-fiber_port_types.h
+fiber_types.h
 local selected-port headers
 strictly trait-neutral helper probe headers
 ```
@@ -249,7 +275,7 @@ A selected port header must not include:
 
 ```text
 fiber_target.h
-port/common helpers that already require validated traits
+fiber/port root helpers that already require validated traits
 global feature policy headers that decide selected-port behavior
 ```
 
@@ -340,6 +366,19 @@ need FPU setup or FPCA hygiene.
 context state, such as `s16-s31`, when required by the exception frame.
 
 These are different policies and must not be collapsed into one trait.
+
+Selected ports that support FPU-aware builds also own the detection bridge used
+by their port-local early-enable implementation:
+
+```c
+#define FIBER_PORT_TOOLCHAIN_HAS_FP 1
+#define FIBER_PORT_SILICON_HAS_FPU 1
+#define FIBER_PORT_CMSIS_FPU_USED 1
+```
+
+Those macros are port facts. `fiber_port_fpu_enable_early()` consumes them to
+enable CPACR/FPCCR early when the selected port supports FPU. No root
+`fiber_fpu.*` implementation may decide whether a CPU profile has FPU support.
 
 ### Boot and FP Policy Traits
 
@@ -491,21 +530,32 @@ enabled trait, not only the support trait.
 Frame layout traits must be macros:
 
 ```c
+#define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
+#define FIBER_PORT_EXC_FP_EXT_BYTES \
+    (FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)
+#define FIBER_PORT_EXC_PER_LEVEL_BYTES \
+    (FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_EXC_FP_EXT_BYTES)
+
 #define FIBER_PORT_SOFTWARE_FRAME_WORDS 9u
 #define FIBER_PORT_SOFTWARE_FRAME_BYTES (FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u)
 #define FIBER_PORT_EXC_RETURN_WORD_INDEX 8u
 ```
 
-These values define the saved software frame expected by:
+These values define the hardware exception-frame headroom and saved software
+frame expected by:
 
 ```text
 fiber_port_init_context_frame()
 fiber_svc()
 fiber_pendsv()
 fiber_internal_validate_restore_context()
+fiber_init()
+fiber_boot_prepare_msp_for_start()
 ```
 
-The core must not derive these values from architecture macros.
+The selected port is the source of truth. The common core may expose legacy
+aliases such as `FIBER_EXC_BASE_BYTES`, but it must not derive these values
+directly from architecture macros.
 
 ## Trait Validation Header
 
@@ -583,9 +633,9 @@ Recommended structure:
 # ifndef FIBER_PORT_SCHEDULER_BASEPRI
 #  error "[fiber]: BASEPRI scheduler ports must define FIBER_PORT_SCHEDULER_BASEPRI"
 # endif
-BT_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI != 0u,
+FIBER_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI != 0u,
                  "[fiber]: scheduler BASEPRI threshold must be non-zero");
-BT_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
+FIBER_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
                  "[fiber]: scheduler BASEPRI threshold must fit in 8 bits");
 #endif
 
@@ -629,6 +679,18 @@ BT_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
 # error "[fiber]: selected port must define FIBER_PORT_HAS_PAC_KEY_SLOT"
 #endif
 
+#ifndef FIBER_PORT_EXC_BASE_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_EXC_BASE_BYTES"
+#endif
+
+#ifndef FIBER_PORT_EXC_FP_EXT_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_EXC_FP_EXT_BYTES"
+#endif
+
+#ifndef FIBER_PORT_EXC_PER_LEVEL_BYTES
+# error "[fiber]: selected port must define FIBER_PORT_EXC_PER_LEVEL_BYTES"
+#endif
+
 #ifndef FIBER_PORT_SOFTWARE_FRAME_WORDS
 # error "[fiber]: selected port must define FIBER_PORT_SOFTWARE_FRAME_WORDS"
 #endif
@@ -641,123 +703,136 @@ BT_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
 # error "[fiber]: selected port must define FIBER_PORT_EXC_RETURN_WORD_INDEX"
 #endif
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_BASEPRI == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_BASEPRI == 0) ||
                  (FIBER_PORT_HAS_BASEPRI == 1),
                  "[fiber]: FIBER_PORT_HAS_BASEPRI must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_FAULTMASK == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_FAULTMASK == 0) ||
                  (FIBER_PORT_HAS_FAULTMASK == 1),
                  "[fiber]: FIBER_PORT_HAS_FAULTMASK must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_VTOR == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_VTOR == 0) ||
                  (FIBER_PORT_HAS_VTOR == 1),
                  "[fiber]: FIBER_PORT_HAS_VTOR must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_PSPLIM == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PSPLIM == 0) ||
                  (FIBER_PORT_HAS_PSPLIM == 1),
                  "[fiber]: FIBER_PORT_HAS_PSPLIM must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_FPU == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_FPU == 0) ||
                  (FIBER_PORT_HAS_FPU == 1),
                  "[fiber]: FIBER_PORT_HAS_FPU must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
                  (FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 1),
                  "[fiber]: FIBER_PORT_HAS_EXTENDED_FP_CONTEXT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_BOOT_CLEARS_FPCA == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_BOOT_CLEARS_FPCA == 0) ||
                  (FIBER_PORT_BOOT_CLEARS_FPCA == 1),
                  "[fiber]: FIBER_PORT_BOOT_CLEARS_FPCA must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_MVE == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_MVE == 0) ||
                  (FIBER_PORT_HAS_MVE == 1),
                  "[fiber]: FIBER_PORT_HAS_MVE must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_PAC == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PAC == 0) ||
                  (FIBER_PORT_HAS_PAC == 1),
                  "[fiber]: FIBER_PORT_HAS_PAC must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_BTI == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_BTI == 0) ||
                  (FIBER_PORT_HAS_BTI == 1),
                  "[fiber]: FIBER_PORT_HAS_BTI must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
                  (FIBER_PORT_USES_PSPLIM_REGISTER == 1),
                  "[fiber]: FIBER_PORT_USES_PSPLIM_REGISTER must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND == 0) ||
                  (FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND == 1),
                  "[fiber]: M7 r0p1 workaround support trait must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND == 0) ||
                  (FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND == 1),
                  "[fiber]: M7 r0p1 workaround enable trait must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_IS_V8M == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_IS_V8M == 0) ||
                  (FIBER_PORT_IS_V8M == 1),
                  "[fiber]: FIBER_PORT_IS_V8M must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_SECURITY_EXT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_SECURITY_EXT == 0) ||
                  (FIBER_PORT_HAS_SECURITY_EXT == 1),
                  "[fiber]: FIBER_PORT_HAS_SECURITY_EXT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_RUNS_NONSECURE == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_RUNS_NONSECURE == 0) ||
                  (FIBER_PORT_RUNS_NONSECURE == 1),
                  "[fiber]: FIBER_PORT_RUNS_NONSECURE must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_TARGETS_NS_BANK == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_TARGETS_NS_BANK == 0) ||
                  (FIBER_PORT_TARGETS_NS_BANK == 1),
                  "[fiber]: FIBER_PORT_TARGETS_NS_BANK must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_CONTROL_SLOT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_CONTROL_SLOT == 0) ||
                  (FIBER_PORT_HAS_CONTROL_SLOT == 1),
                  "[fiber]: FIBER_PORT_HAS_CONTROL_SLOT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_PSPLIM_SLOT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PSPLIM_SLOT == 0) ||
                  (FIBER_PORT_HAS_PSPLIM_SLOT == 1),
                  "[fiber]: FIBER_PORT_HAS_PSPLIM_SLOT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 0) ||
                  (FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 1),
                  "[fiber]: FIBER_PORT_HAS_SECURE_CONTEXT_SLOT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_PAC_KEY_SLOT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PAC_KEY_SLOT == 0) ||
                  (FIBER_PORT_HAS_PAC_KEY_SLOT == 1),
                  "[fiber]: FIBER_PORT_HAS_PAC_KEY_SLOT must be 0 or 1");
 
-BT_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
                  (FIBER_PORT_HAS_PSPLIM == 1),
                  "[fiber]: PSPLIM register use requires PSPLIM support");
 
-BT_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
                  (FIBER_PORT_HAS_FPU == 1),
                  "[fiber]: extended FP context requires FPU support");
 
-BT_STATIC_ASSERT((FIBER_PORT_BOOT_CLEARS_FPCA == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_BOOT_CLEARS_FPCA == 0) ||
                  (FIBER_PORT_HAS_FPU == 1),
                  "[fiber]: FPCA clearing requires FPU support");
 
-BT_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND == FIBER_PORT_MASK_PRIMASK) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND == FIBER_PORT_MASK_PRIMASK) ||
                  (FIBER_PORT_SCHEDULER_MASK_KIND == FIBER_PORT_MASK_BASEPRI),
                  "[fiber]: invalid scheduler mask kind");
 
-BT_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND != FIBER_PORT_MASK_BASEPRI) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND != FIBER_PORT_MASK_BASEPRI) ||
                  (FIBER_PORT_HAS_BASEPRI == 1),
                  "[fiber]: BASEPRI scheduler mask requires BASEPRI support");
 
-BT_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND != FIBER_PORT_MASK_PRIMASK) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_MASK_KIND != FIBER_PORT_MASK_PRIMASK) ||
                  (FIBER_PORT_HAS_BASEPRI == 0),
                  "[fiber]: PRIMASK scheduler mask is expected only on ports without BASEPRI");
 
-BT_STATIC_ASSERT((FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND == 0) ||
+FIBER_STATIC_ASSERT((FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND == 0) ||
                  (FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND == 1),
                  "[fiber]: M7 r0p1 workaround cannot be enabled unless the port supports it");
 
-BT_STATIC_ASSERT((FIBER_PORT_SOFTWARE_FRAME_BYTES ==
+FIBER_STATIC_ASSERT((FIBER_PORT_EXC_BASE_BYTES % 8u) == 0u,
+                 "[fiber]: port base exception frame must be 8-byte aligned");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_EXC_FP_EXT_BYTES % 8u) == 0u,
+                 "[fiber]: port extended FP exception frame must be 8-byte aligned");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_EXC_PER_LEVEL_BYTES ==
+                 (FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_EXC_FP_EXT_BYTES),
+                 "[fiber]: port per-level exception frame size mismatch");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_EXC_PER_LEVEL_BYTES % 8u) == 0u,
+                 "[fiber]: port per-level exception headroom must be 8-byte aligned");
+
+FIBER_STATIC_ASSERT((FIBER_PORT_SOFTWARE_FRAME_BYTES ==
                  (FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u)),
                  "[fiber]: software frame words/bytes mismatch");
 
-BT_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX < FIBER_PORT_SOFTWARE_FRAME_WORDS,
+FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX < FIBER_PORT_SOFTWARE_FRAME_WORDS,
                  "[fiber]: EXC_RETURN index must point inside software frame");
 
 #endif
@@ -1089,7 +1164,7 @@ The transitional v8-M port must eventually split into real selected ports:
 armv8m_baseline
 armv8m_mainline
 armv81m_mainline
-armv8m_common
+armv8m_shared
 ```
 
 ### ARMv8-M Baseline
@@ -1140,27 +1215,19 @@ policy.
 
 ### BASEPRI
 
-Move:
+BASEPRI is selected-port-private. Do not create a root helper that hides CPU
+policy behind common macros.
 
-```text
-fiber/target/fiber_basepri.h
-```
-
-to:
-
-```text
-fiber/port/common/fiber_port_basepri.h
-```
-
-Long-term, this helper must consume:
+Each selected port must provide:
 
 ```text
 FIBER_PORT_HAS_BASEPRI
-FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND
-FIBER_PORT_SCHEDULER_BASEPRI or equivalent
+FIBER_PORT_SCHEDULER_BASEPRI when BASEPRI is used
+FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND when applicable
+fiber_port_basepri_read()
+fiber_port_basepri_write()
+port-local naked-asm scheduler critical-section snippets
 ```
-
-It must not infer BASEPRI support globally.
 
 The synchronized BASEPRI ASM snippets use `r12` as scratch on the M7 r0p1
 errata path. Any naked port assembly that expands those snippets must treat
@@ -1168,17 +1235,9 @@ errata path. Any naked port assembly that expands those snippets must treat
 
 ### VTOR and Vectors
 
-Move:
-
-```text
-fiber/target/fiber_vtor.h
-```
-
-to:
-
-```text
-fiber/port/common/fiber_port_vectors.h
-```
+VTOR and vector-table helpers are selected-port-owned. They must not live in a
+global target helper because VTOR availability and security-bank selection are
+CPU/profile-specific.
 
 The selected port must own:
 
@@ -1189,21 +1248,33 @@ direct-vector policy
 SVC/PendSV wiring expectations
 ```
 
+The selected port must expose:
+
+```c
+uintptr_t fiber_port_vectors_base_addr(void);
+const uint32_t *fiber_port_vectors_base_ptr(void);
+uint32_t fiber_port_read_initial_msp(void);
+void fiber_port_set_vectors_base_addr(uintptr_t base);
+```
+
+Ports without VTOR must return the architectural fallback base `0x00000000`
+from `fiber_port_vectors_base_addr()` and ignore vector-base writes.
+
 Common vector helpers may validate vector entries, but only according to
 selected-port traits.
 
 ### Exception Setup
 
-Split:
+Moved from:
 
 ```text
 fiber/target/fiber_irq.c/.h
 ```
 
-into:
+to each selected port source group:
 
 ```text
-fiber/port/common/fiber_port_exception.c/.h
+fiber/port/<profile>/fiber_port_exception.c
 ```
 
 Common exception setup may provide:
@@ -1220,6 +1291,14 @@ pending PendSV cleanup
 
 But rules must come from selected-port traits.
 
+`fiber_port_exception.c` is selected-port implementation code. Its active
+implementation must enter through the selected `fiber_portmacro.h`; it must not
+pull `fiber_target.h`, compiler helpers, panic/require headers, or FPU/PSPLIM/
+VTOR helpers directly. Those are part of the selected port contract. A
+transitional v8-M port may include the root feature-policy defaults after
+including its selected `fiber_portmacro.h`, until concrete v8-M ports replace
+it.
+
 The public facade may remain:
 
 ```c
@@ -1227,23 +1306,14 @@ void fiber_pendsv_init_lowest_priority(void);
 void fiber_exception_runtime_check(void);
 ```
 
-The implementation should become port-layer code.
+The implementation is selected-port code. There is no shared root
+`fiber/port/fiber_port_exception.*` implementation.
 
 ### PSPLIM
 
-Move PSPLIM register helpers out of global target policy.
-
-Candidate destination:
-
-```text
-fiber/port/armv8m_common/fiber_port_psplim.h
-```
-
-or during migration:
-
-```text
-fiber/port/common/fiber_port_psplim.h
-```
+PSPLIM register helpers are selected-port-owned. They must not live in a
+global target helper because register availability, security bank selection,
+and context-slot ownership are port-specific.
 
 The selected v8-M port must own:
 
@@ -1256,34 +1326,62 @@ PSPLIM bank/security policy
 whether PSPLIM is part of saved/restored context
 ```
 
+The selected port must expose:
+
+```c
+uint32_t fiber_port_psplim_read(void);
+void fiber_port_psplim_write(uint32_t limit);
+void fiber_port_psplim_config(uint32_t stack_low_addr);
+```
+
+and the port-asm restore macro:
+
+```c
+FBR_ASM_MSR_PSPLIM(reg)
+```
+
+Ports without PSPLIM must still provide explicit disabled/no-op definitions so
+common runtime code never needs to know which CPU class is active.
+
 ### FPU
 
-Move generic FPU enable helpers toward:
+FPU policy and early FPU enable are selected-port-owned.
 
-```text
-fiber/port/common/fiber_port_fpu.h/.c
+The root `fiber_fpu.h` / `fiber_fpu.c` files are removed. Common runtime code
+calls:
+
+```c
+void fiber_port_fpu_enable_early(void);
 ```
+
+The selected port decides whether that function is a no-op or programs
+CPACR/FPCCR and TrustZone FP access registers.
 
 The selected port must own:
 
 ```text
+FIBER_PORT_TOOLCHAIN_HAS_FP
+FIBER_PORT_SILICON_HAS_FPU
+FIBER_PORT_CMSIS_FPU_USED
 FIBER_PORT_HAS_FPU
 FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 FIBER_PORT_BOOT_CLEARS_FPCA
+fiber_port_fpu_enable_early()
 whether high FP context is saved/restored
 whether lazy stacking is allowed
 whether MVE changes context requirements
 ```
 
-Toolchain/silicon detection may remain a helper, but final context policy
-belongs to the selected port.
+Toolchain/silicon detection may be duplicated per selected port. Hidden common
+macro policy is not preferred here; an explicit selected-port decision is easier
+to audit against the matching FreeRTOS port.
 
 ### Feature Policy
 
 The global file:
 
 ```text
-fiber/target/fiber_feature_policy.h
+fiber/port/fiber_feature_policy.h
 ```
 
 must disappear long-term.
@@ -1356,55 +1454,57 @@ avoid macro cycles
 
 No runtime behavior should change.
 
-### Step 3: Move BASEPRI helpers into port common
+### Step 3: Move BASEPRI helpers into selected ports
 
 Commit name:
 
 ```text
-Move BASEPRI helpers into port common
+Move BASEPRI policy into selected ports
 ```
 
 Scope:
 
 ```text
-fiber/target/fiber_basepri.h -> fiber/port/common/fiber_port_basepri.h
-update direct includes
-leave optional compatibility wrapper temporarily
-consume selected-port traits instead of global architecture guessing
+delete fiber/target/fiber_basepri.h
+move BASEPRI read/write helpers into selected port headers
+move BASEPRI/PRIMASK naked-asm scheduler snippets into selected port headers
+common code uses fiber_port_basepri_read/write only
+exception validation consumes FIBER_PORT_SCHEDULER_BASEPRI
 ```
 
 No runtime behavior should change.
 
-### Step 4: Move vector helpers into port common
+### Step 4: Move vector helpers into port root helpers
 
 Commit name:
 
 ```text
-Move vector helpers into port common
+Move vector helpers into selected ports
 ```
 
 Scope:
 
 ```text
-fiber_vtor.h -> fiber_port_vectors.h
+fiber_vtor.h removed
+selected ports expose fiber_port_vectors_* helpers
 common vector entry validation consumes port traits
 selected port owns VTOR/vector policy
 ```
 
 No runtime behavior should change.
 
-### Step 5: Move exception setup into port common
+### Step 5: Move exception setup into port root helpers
 
 Commit name:
 
 ```text
-Move exception setup into port common
+Move exception setup into selected ports
 ```
 
 Scope:
 
 ```text
-fiber_irq.c/h -> fiber_port_exception.c/h
+fiber_irq.c/h -> per-port fiber_port_exception.c
 priority/vector validation consumes port traits
 feature/runtime validation stops living in target
 ```
@@ -1418,7 +1518,7 @@ Commit names:
 
 ```text
 Move PSPLIM policy into v8-M port layer
-Move FPU helpers into port common
+Move FPU policy into selected ports
 Move v8-M feature gates into transitional policy
 ```
 
@@ -1540,7 +1640,7 @@ must be split before support claim
 
 Selected port is the source of CPU truth.
 
-Common port code consumes selected-port traits.
+port helper code consumes selected-port traits.
 
 Target code does not decide CPU capability.
 

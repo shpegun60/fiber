@@ -1,13 +1,12 @@
 /*
- * fiber_port_state.c
+ * fiber_runtime_state.c
  *
  * Runtime-owned port/scheduler state used by PendSV ports.
  */
 
-#include "fiber_port_state.h"
-#include "fiber_port_boot_record.h"
-#include "fiber_port.h"
-#include "fiber_port_selected.h"
+#include "fiber_runtime_state.h"
+#include "fiber_boot.h"
+#include "port/fiber_port_selected.h"
 
 FiberContext *volatile fiber_internal_port_current_context = 0;
 FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next = 0;
@@ -30,9 +29,9 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 	FIBER_REQUIRE(ctx != 0, 'N');
 	FIBER_REQUIRE(ctx->sp != 0, 'P');
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
-	fiber_port_boot_record_check(&ctx->boot);
+	fiber_boot_record_check(&ctx->boot);
 #else
-	fiber_port_boot_record_fast_check(&ctx->boot);
+	fiber_boot_record_fast_check(&ctx->boot);
 #endif
 
 	const uintptr_t sp = (uintptr_t)ctx->sp;

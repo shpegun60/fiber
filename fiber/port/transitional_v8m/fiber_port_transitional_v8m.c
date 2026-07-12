@@ -9,7 +9,8 @@
  * into concrete profile-owned sources.
  */
 
-#include "../fiber_port.h"
+#include "../../fiber_boot.h"
+#include "fiber_portmacro.h"
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 
@@ -21,13 +22,13 @@ enum {
 	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
 };
 
-BT_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
-BT_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
 
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_port_boot_record_check(&ctx->boot);
+	fiber_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
 
@@ -231,7 +232,7 @@ void fiber_svc(void)
 			"cpsid i                                \n"
 			"dsb                                    \n"
 			"isb                                    \n"
-#if FIBER_HAS_BASEPRI
+#if FIBER_PORT_HAS_BASEPRI
 			"movs  r0, #0                           \n"
 			FBR_ASM_WRITE_BASEPRI_R0_SYNC
 #endif
@@ -245,7 +246,7 @@ void fiber_svc(void)
 			"bl    fiber_internal_validate_restore_context \n"
 			"pop   {r2, lr}                         \n" /* r2 = current context */
 
-#if FIBER_USE_PSPLIM_REGISTER
+#if FIBER_PORT_USES_PSPLIM_REGISTER
 			"ldr   r3, [r2, %c[offsb]]              \n"
 			FBR_ASM_MSR_PSPLIM("r3")
 			"dsb                                    \n"
@@ -255,7 +256,7 @@ void fiber_svc(void)
 			"ldr   r0, [r2]                         \n" /* r0 = current->sp */
 			"ldmia r0!, {r4-r11, r14}               \n"
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   r14, #0x10                       \n"
 			"bne   1f                               \n"
 			"vldmia r0!, {s16-s31}                  \n"
@@ -265,7 +266,7 @@ void fiber_svc(void)
 			"msr   psp, r0                          \n"
 			"isb                                    \n"
 
-#if FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA
+#if FIBER_PORT_BOOT_CLEARS_FPCA
 			"mrs   r3, control                      \n"
 			"tst   r3, #4                           \n"
 			"bne   95f                              \n"
@@ -298,7 +299,7 @@ void fiber_svc(void)
 			"bl    fiber_panic                      \n"
 			"b     95b                              \n"
 			:
-#if FIBER_USE_PSPLIM_REGISTER
+#if FIBER_PORT_USES_PSPLIM_REGISTER
 			: [offsb] "I" (FBR_OFF_STACK_BASE)
 #else
 			:
@@ -434,7 +435,7 @@ void fiber_pendsv(void)
 			"cmp   r0, r2                           \n"
 			"blo   7f                               \n"
 			"mov   r3, r0                           \n"
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n"
 			"bne   8f                               \n"
 			"subs  r3, #64                          \n"
@@ -449,7 +450,7 @@ void fiber_pendsv(void)
 			"cmp   r0, r2                           \n"
 			"bhi   7f                               \n"
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n"
 			"bne   2f                               \n"
 			"vstmdb r0!, {s16-s31}                  \n"
@@ -468,14 +469,14 @@ void fiber_pendsv(void)
 			"ldr   r0, [r2]                         \n"
 			"ldmia r0!, {r4-r11, r14}               \n"
 
-#if FIBER_USE_PSPLIM_REGISTER
+#if FIBER_PORT_USES_PSPLIM_REGISTER
 			"ldr   r3, [r2, %c[offsb]]              \n"
 			FBR_ASM_MSR_PSPLIM("r3")
 			"dsb                                    \n"
 			"isb                                    \n"
 #endif
 
-#if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   r14, #0x10                       \n"
 			"bne   3f                               \n"
 			"vldmia r0!, {s16-s31}                  \n"
@@ -512,7 +513,7 @@ void fiber_pendsv(void)
 			:
 			: [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP),
-			  [sched_basepri] "i" (FIBER_SCHEDULER_BASEPRI)
+			  [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI)
 			  : "memory","cc"
 	);
 #endif

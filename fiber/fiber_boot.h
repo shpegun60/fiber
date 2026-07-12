@@ -17,8 +17,8 @@
 #ifndef FIBER_TARGET_FIBER_BOOT_H_
 #define FIBER_TARGET_FIBER_BOOT_H_
 
-#include "target/fiber_target.h"
-#include "port/fiber_port_types.h"
+#include "port/fiber_port_selected.h"
+#include "fiber_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +37,25 @@ uintptr_t	FIBER_WEAK fiber_fallback_initial_msp(void);
 /* -------------------------------------------------------------------------- 	*/
 FiberBoot 	fiber_create_boot(void* const begin, void* const end, const entry_t entry, void* const arg);
 void   		fiber_boot_check  (const FiberBoot* const ctx);
+
+/* Internal sealed boot-record integrity API used by runtime and ports. */
+enum {
+	FIBER_BOOT_RECORD_MAGIC = 0x46424F54u,    /* 'FBOT' */
+	FIBER_BOOT_RECORD_VERSION = 0x0002u,
+	FIBER_BOOT_RECORD_GUARD_LO = 0xA5A5A5A5u,
+	FIBER_BOOT_RECORD_GUARD_HI = 0x5A5A5A5Au
+};
+
+uint32_t fiber_boot_record_compute_hash(const FiberBoot *ctx);
+void fiber_boot_record_check(const FiberBoot *ctx);
+void fiber_boot_record_fast_check(const FiberBoot *ctx);
+
+/*
+ * Synthetic frame return target used by selected ports. If a fiber entry
+ * returns, the runtime treats it as a hard programming error.
+ */
+FIBER_NORETURN
+void fiber_internal_task_return(void);
 
 /* Environment precondition check (Thread mode, priv., MSP selected). */
 void          fiber_env_check   (void);
