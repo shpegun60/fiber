@@ -18,15 +18,6 @@
 #include "fiber_boot.h"
 #include "port/fiber_port_selected.h"
 
-#ifndef FIBER_HAS_FAULTMASK
-# if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
-		|| defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_8_1M_MAIN__)
-#  define FIBER_HAS_FAULTMASK 1
-# else
-#  define FIBER_HAS_FAULTMASK 0
-# endif
-#endif
-
 static void fiber_boot_simple_check(const FiberBoot* const ctx);
 
 /* -------------------------------------------------------------------------- 	*/
@@ -121,7 +112,7 @@ void fiber_platform_bootstrap(void)
 	fiber_port_basepri_write(0u);
 #endif /* BASEPRI */
 
-#if FIBER_HAS_FAULTMASK
+#if FIBER_PORT_HAS_FAULTMASK
 	__set_FAULTMASK(0);
 	{ __DSB(); __ISB(); }
 #endif /* FAULTMASK */

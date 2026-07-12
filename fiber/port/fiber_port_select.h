@@ -543,19 +543,7 @@ FIBER_STATIC_ASSERT((FIBER_PORT_IS_BASELINE + FIBER_PORT_IS_MAINLINE) == 1,
 # endif
 #endif
 
-/*
- * Architecture feature gates still used before selected-port traits are fully
- * centralized. BASEPRI and PSPLIM policy are selected-port-owned and are
- * intentionally not inferred here.
- */
-#ifndef FIBER_HAS_FAULTMASK
-# if FIBER_PORT_IS_MAINLINE
-#  define FIBER_HAS_FAULTMASK 1
-# else
-#  define FIBER_HAS_FAULTMASK 0
-# endif
-#endif
-
+/* MVE detection remains transitional until the v8.1-M port owns the policy. */
 #ifndef FIBER_HAS_MVE
 # if defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0)
 #  define FIBER_HAS_MVE 1
@@ -564,8 +552,6 @@ FIBER_STATIC_ASSERT((FIBER_PORT_IS_BASELINE + FIBER_PORT_IS_MAINLINE) == 1,
 # endif
 #endif
 
-FIBER_STATIC_ASSERT((FIBER_HAS_FAULTMASK == 0) || (FIBER_HAS_FAULTMASK == 1),
-                 "[fiber]: FIBER_HAS_FAULTMASK must be 0 or 1");
 FIBER_STATIC_ASSERT((FIBER_HAS_MVE == 0) || (FIBER_HAS_MVE == 1),
                  "[fiber]: FIBER_HAS_MVE must be 0 or 1");
 

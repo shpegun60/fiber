@@ -187,7 +187,7 @@ user/build option      -> FIBER_XXX
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
 | `vPortSetupTimerInterrupt()` | user scheduler/platform | Excluded. |
-| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, CPACR/FPCCR setup, lazy/eager policy, barriers, and enforced CPACR/FPCCR readback checks. |
+| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, the local `FIBER_ENABLE_CPACR` default, CPACR/FPCCR setup, lazy/eager policy, barriers, and enforced CPACR/FPCCR readback checks. |
 | `vPortValidateInterruptPriority()` | selected-port constants and `fiber_port_exception.c` validation | Adapted. Runtime validation now lives in the port layer and consumes selected-port traits/constants. |
 | `WORKAROUND_PMU_CM001` | none | Excluded. This is XMC4000-specific, not STM32 Cortex-M7. |
 

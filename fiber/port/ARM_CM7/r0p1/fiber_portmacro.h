@@ -61,6 +61,10 @@
 # define FIBER_FPU_LAZY 0
 #endif
 
+#ifndef FIBER_ENABLE_CPACR
+# define FIBER_ENABLE_CPACR 1
+#endif
+
 #ifndef FIBER_FORCE_SAVE_FPU
 # define FIBER_FORCE_SAVE_FPU 0
 #endif

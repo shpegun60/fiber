@@ -94,7 +94,7 @@ void fiber_port_start_first_context(uintptr_t msp_top)
 			"dsb                                    \n"
 			"isb                                    \n"
 			"cpsie i                                \n"
-#if FIBER_HAS_FAULTMASK
+#if FIBER_PORT_HAS_FAULTMASK
 			"cpsie f                                \n"
 #endif
 			"dsb                                    \n"

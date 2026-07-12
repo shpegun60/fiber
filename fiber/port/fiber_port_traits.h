@@ -21,6 +21,10 @@
 # error "[fiber]: selected port must define FIBER_PORT_HAS_FAULTMASK"
 #endif
 
+#ifdef FIBER_HAS_FAULTMASK
+# error "[fiber]: FIBER_HAS_FAULTMASK is obsolete; use the selected-port FIBER_PORT_HAS_FAULTMASK trait"
+#endif
+
 #ifndef FIBER_PORT_HAS_VTOR
 # error "[fiber]: selected port must define FIBER_PORT_HAS_VTOR"
 #endif

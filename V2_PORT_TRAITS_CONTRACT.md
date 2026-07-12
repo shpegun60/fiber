@@ -872,10 +872,6 @@ Allowed long-term alias direction:
 # define FIBER_HAS_BASEPRI FIBER_PORT_HAS_BASEPRI
 #endif
 
-#ifndef FIBER_HAS_FAULTMASK
-# define FIBER_HAS_FAULTMASK FIBER_PORT_HAS_FAULTMASK
-#endif
-
 #ifndef FIBER_HAS_PSPLIM
 # define FIBER_HAS_PSPLIM FIBER_PORT_HAS_PSPLIM
 #endif
@@ -905,6 +901,12 @@ Allowed long-term alias direction:
          FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND
 #endif
 ```
+
+Common runtime code must consume `FIBER_PORT_HAS_FAULTMASK` directly. The
+selector must not infer FAULTMASK support and must not export a legacy
+`FIBER_HAS_FAULTMASK` alias; the selected port is the single source of truth.
+Defining the obsolete alias is a compile-time error so a stale integration
+setting cannot be silently ignored.
 
 ### Transitional Exception
 

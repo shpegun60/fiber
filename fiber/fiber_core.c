@@ -102,7 +102,7 @@ void fiber_start(void)
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
-#if FIBER_HAS_FAULTMASK
+#if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
 
@@ -126,7 +126,7 @@ void fiber_start(void)
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
-#if FIBER_HAS_FAULTMASK
+#if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
 
@@ -164,7 +164,7 @@ void fiber_schedule(void)
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b'); /* do not defer PendSV behind BASEPRI */
 #endif
-#if FIBER_HAS_FAULTMASK
+#if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f'); /* do not defer PendSV behind FAULTMASK */
 #endif
 

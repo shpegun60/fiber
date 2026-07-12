@@ -375,7 +375,9 @@ void Error_Handler(void);
                     "-fno-common",
                     "-Wall",
                     "-Wextra",
+                    "-Wundef",
                     "-Wno-unused-parameter",
+                    "-Werror=undef",
                     "-Werror=implicit-function-declaration",
                     "-Werror=return-type"
                 ) + $mode.Defines + @(
