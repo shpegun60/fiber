@@ -296,4 +296,27 @@ FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX < FIBER_PORT_SOFTWARE_FRAME
 FIBER_STATIC_ASSERT(FIBER_PORT_SAVED_SP_MOD8 < 8u,
 		"[fiber]: saved SP modulo must be a byte offset inside 8-byte alignment");
 
+/*
+ * A fiber stays in one selected security and stack domain. The only
+ * EXC_RETURN bit allowed to vary between saved contexts is the basic/extended
+ * FP-frame selector. Reject every reserved encoding before naked assembly
+ * reaches BX LR.
+ */
+__STATIC_FORCEINLINE uint32_t fiber_port_exc_return_is_valid(uint32_t value)
+{
+	const uint32_t basic = ((uint32_t)FIBER_PORT_INITIAL_EXC_RETURN | 0x10u);
+
+	if (value == basic) {
+		return 1u;
+	}
+
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+	if (value == (basic & ~0x10u)) {
+		return 1u;
+	}
+#endif
+
+	return 0u;
+}
+
 #endif /* FIBER_PORT_FIBER_PORT_TRAITS_H_ */

@@ -58,18 +58,11 @@
 # define FIBER_SWITCH_MASK_IRQS 1        /* mask IRQs while pending a scheduler switch */
 #endif
 
-/* Validate real switches against the runtime-owned current context when known. */
-#ifndef FIBER_VALIDATE_CURRENT
-# define FIBER_VALIDATE_CURRENT 1
-#endif
-
-/* Validate the scheduler-selected context before PendSV restores it. */
-#ifndef FIBER_VALIDATE_SCHEDULED_CONTEXT
-# define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
-#endif
-
-/* 1 = recompute the sealed FiberBoot hash on every scheduled restore.
- * Leave 0 for normal validation; full hash checks still run during init/start. */
+/* Current ownership and restore-target checks are always active.
+ * Set this to 1 to additionally recompute the sealed FiberBoot hash on every
+ * scheduled restore. Leave 0 to use mandatory metadata and structural checks;
+ * full hash checks still run during init/start.
+ */
 #ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 # define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
 #endif
@@ -105,8 +98,26 @@
 # define FIBER_STACK_CANARY 1
 #endif
 
-#ifdef FIBER_STACK_CANARY
-# define FIBER_CANARY_VALUE 0xDEADBEEFu
+#if (FIBER_STACK_CANARY != 0) && (FIBER_STACK_CANARY != 1)
+# error "[fiber]: FIBER_STACK_CANARY must be 0 or 1"
+#endif
+
+#if FIBER_STACK_CANARY
+# ifndef FIBER_CANARY_VALUE
+#  define FIBER_CANARY_VALUE 0xDEADBEEFu
+# endif
+#endif
+
+/* Restore-target validation is a runtime invariant, not a tuning option.
+ * Reject obsolete knobs so an old build cannot appear to disable checks that
+ * are now mandatory in the scheduler bridge and SVC path.
+ */
+#ifdef FIBER_VALIDATE_SCHEDULED_CONTEXT
+# error "[fiber]: FIBER_VALIDATE_SCHEDULED_CONTEXT was removed; restore-context validation is mandatory"
+#endif
+
+#ifdef FIBER_VALIDATE_CURRENT
+# error "[fiber]: FIBER_VALIDATE_CURRENT was removed; runtime current-context ownership is always enforced"
 #endif
 
 /* Exception-frame headroom reserved on the process stack. */

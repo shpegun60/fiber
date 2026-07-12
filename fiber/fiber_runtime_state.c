@@ -13,26 +13,45 @@ FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next = 0;
 void *volatile fiber_internal_port_scheduler_user = 0;
 static volatile uint32_t fiber_internal_port_scheduler_selecting = 0;
 
-#ifndef FIBER_VALIDATE_SCHEDULED_CONTEXT
-# define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
-#endif
-
 #ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 # define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
 #endif
 
+#if (FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 0) && \
+		(FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 1)
+# error "[fiber]: FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"
+#endif
+
 #define FIBER_PORT_HIGH_FP_FRAME_BYTES (16u * 4u)
 
+static void fiber_internal_validate_stack_canary(const FiberContext *ctx)
+{
+#if FIBER_STACK_CANARY
+	const uintptr_t begin = (uintptr_t)ctx->boot.begin;
+	const uintptr_t canary_cell = fiber_word_align_up(begin);
+
+	FIBER_REQUIRE(canary_cell >= begin, 'c');
+	FIBER_REQUIRE(canary_cell <= (UINTPTR_MAX - sizeof(uint32_t)), 'c');
+	FIBER_REQUIRE((canary_cell + sizeof(uint32_t)) <= ctx->boot.stack_base, 'c');
+	FIBER_REQUIRE(*(const volatile uint32_t *)canary_cell == FIBER_CANARY_VALUE, 'c');
+#else
+	(void)ctx;
+#endif
+}
+
+FIBER_GENERAL_REGS_ONLY
 void fiber_internal_validate_restore_context(FiberContext *ctx)
 {
-#if FIBER_VALIDATE_SCHEDULED_CONTEXT
 	FIBER_REQUIRE(ctx != 0, 'N');
+	FIBER_REQUIRE(((uintptr_t)ctx & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u,
+			'A');
 	FIBER_REQUIRE(ctx->sp != 0, 'P');
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 	fiber_boot_record_check(&ctx->boot);
 #else
 	fiber_boot_record_fast_check(&ctx->boot);
 #endif
+	fiber_internal_validate_stack_canary(ctx);
 
 	const uintptr_t sp = (uintptr_t)ctx->sp;
 	/* Saved SW frame alignment is selected-port specific. */
@@ -46,23 +65,16 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 	const uint32_t *const words = (const uint32_t *)sp;
 	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
 
-	FIBER_REQUIRE((exc_return & 0xFF000000u) == 0xFF000000u, 'x');
-	FIBER_REQUIRE((exc_return & 0x0Cu) == 0x0Cu, 'x');
-# if !FIBER_HAS_EXTENDED_FP_CONTEXT
-	FIBER_REQUIRE((exc_return & 0x10u) != 0u, 'x');
-# endif
+	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
 
-# if FIBER_HAS_EXTENDED_FP_CONTEXT
+#if FIBER_HAS_EXTENDED_FP_CONTEXT
 	if ((exc_return & 0x10u) == 0u) {
 		required_bytes += (uintptr_t)FIBER_PORT_HIGH_FP_FRAME_BYTES
 				+ (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
 	}
-# endif
+#endif
 
 	FIBER_REQUIRE((ctx->boot.stack_top - sp) >= required_bytes, 'X');
-#else
-	(void)ctx;
-#endif
 }
 
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
@@ -80,6 +92,7 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 	__DMB();
 }
 
+FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
 {
 	FiberSchedulerPickNextFn const pick_next = fiber_internal_port_scheduler_pick_next;
@@ -105,6 +118,7 @@ FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
 	return first;
 }
 
+FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current)
 {
 	FiberSchedulerPickNextFn const pick_next = fiber_internal_port_scheduler_pick_next;
@@ -113,6 +127,7 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 
 	FIBER_REQUIRE(current != 0, 'C');
 	FIBER_REQUIRE(pick_next != 0, 'K');
+	fiber_internal_validate_restore_context(current);
 
 	FiberContext *const next = pick_next(current, user);
 

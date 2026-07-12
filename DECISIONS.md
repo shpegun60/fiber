@@ -1,5 +1,49 @@
 # Fiber Decision Log
 
+## 2026-07-12: Make Port ABI and Restore Validation Non-Optional
+
+The paranoid FreeRTOS comparison found several cases where object-only compile
+coverage could pass while the selected runtime port was incomplete or safety
+checks could be compiled away. The v2 contract is tightened as follows:
+
+- Cortex-M4/M4F selects the generic `armv7em` implementation; Cortex-M7 selects
+  the concrete `ARM_CM7/r0p1` implementation. They no longer share an
+  ambiguous source guard.
+- the STM32H7 embedding build includes the concrete CM7 source group and
+  excludes all non-selected port source directories;
+- `tools/compile_matrix.ps1` performs a relocatable link for every mode and
+  uses `nm` to require exactly one definition of each mandatory port ABI
+  symbol. Compiling unrelated source objects is no longer considered proof of
+  a complete selected port;
+- restore-context and current-context ownership checks are mandatory.
+  `FIBER_VALIDATE_SCHEDULED_CONTEXT` and `FIBER_VALIDATE_CURRENT` are obsolete
+  and now produce compile errors if defined;
+- every just-saved current context and every selected restore target is checked
+  before the scheduler bridge permits restore;
+- saved `EXC_RETURN` accepts only the exact basic/extended encodings exported
+  by the selected port. Broad signature or Thread/PSP-bit checks are not enough;
+- the low-stack canary is written and checked even when PSPLIM is available, so
+  the two mechanisms remain independent defenses;
+- the fast boot-record path checks pointer ordering, stack alignment, available
+  size, entry state, and MSP policy before canary or saved-frame dereferences;
+- PendSV verifies that the complete live hardware exception frame, including
+  an extended FP frame when active, remains below the declared `stack_top`;
+- FPU enable policy now validates CPACR and FPCCR readback instead of merely
+  reading and discarding those registers;
+- transitional v8-M unsupported-feature gates run regardless of optional
+  exception wiring diagnostics. Disabling diagnostics cannot turn an
+  unvalidated profile into runtime support;
+- the first scheduler call happens after common FPU/platform bootstrap. Every
+  scheduler hook must use `FIBER_SCHEDULER_HOOK_ATTR` and must not execute FP or
+  MVE instructions, because later calls execute in PendSV.
+
+These changes affect runtime validation behavior. The previous H7 record stays
+historical until normal mode and all trap modes, including canary, exact
+`EXC_RETURN`, and short-frame traps, pass on the board again.
+
+The heuristic device-header selection in the embedding `mcu_core.h` is outside
+this checkpoint and is intentionally unchanged.
+
 ## 2026-07-12: Remove target Directory
 
 The `fiber/target` source directory was removed.
@@ -299,8 +343,9 @@ This is a boundary cleanup:
 - `port/transitional_v8m` remains transitional and runtime-gated. It is not a
   FreeRTOS-level support claim for v8-M Baseline/Mainline or ARMv8.1-M.
 
-The validated ARMv7E-M/H7 path remains in `port/armv7em` and is not changed by
-this cleanup.
+Historical note: at this checkpoint the H7 path still lived in
+`port/armv7em`. The 2026-07-12 selected-port decision above supersedes that
+layout: H7 now uses `port/ARM_CM7/r0p1`, while generic `armv7em` serves M4/M4F.
 
 ## 2026-07-11: ARMv7-M Port Split Checkpoint
 
@@ -689,7 +734,9 @@ Hardening decisions:
 
 Known limits:
 
-- STM32H7 / Cortex-M7 is the primary validated target.
+- STM32H7 / Cortex-M7 is the primary validation target and has the strongest
+  historical hardware evidence; the latest behavior changes require a fresh
+  checklist run.
 - ARMv8-M Non-secure needs explicit `FIBER_RUN_NONSECURE` or an explicit
   `FIBER_INITIAL_EXC_RETURN`.
 - Cortex-M23 PSPLIM behavior is intentionally not enabled by the generic

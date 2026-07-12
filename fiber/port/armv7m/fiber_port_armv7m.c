@@ -233,8 +233,10 @@ void fiber_pendsv(void)
 			"cmp   r3, r2                           \n"
 			"blo   92f                              \n" /* software frame would cross stack base */
 			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
+			"subs  r2, #%c[hwbase]                  \n" /* complete HW frame must fit below stack_top */
+			"bcc   92f                              \n"
 			"cmp   r0, r2                           \n"
-			"bhi   92f                              \n" /* PSP above declared stack top */
+			"bhi   92f                              \n" /* HW frame crosses declared stack top */
 
 			/* ----------------------------------------------------------------------
 			 * Save current context: [r4..r11][LR(EXC_RETURN)].
@@ -287,6 +289,7 @@ void fiber_pendsv(void)
 			:
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
 			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)
 			: "memory","cc"

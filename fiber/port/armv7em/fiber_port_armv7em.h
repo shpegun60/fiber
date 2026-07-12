@@ -12,8 +12,18 @@
 #include "../fiber_port_select.h"
 #include "mcu_core.h"
 #include "../../fiber_types.h"
+#include "../../fiber_panic.h"
 
 #if FIBER_PORT_ARMV7EM
+
+#if !defined(__CORTEX_M) || (__CORTEX_M != 4)
+# error "[fiber]: generic ARMv7E-M port currently supports Cortex-M4/M4F only"
+#endif
+
+#if defined(FIBER_CORTEX_M7_R0P1_ERRATA_837070) && \
+		((FIBER_CORTEX_M7_R0P1_ERRATA_837070 + 0) != 0)
+# error "[fiber]: Cortex-M7 r0p1 errata policy is invalid for the Cortex-M4 port"
+#endif
 
 #ifndef FIBER_PORT_NAME
 # define FIBER_PORT_NAME "armv7em"
@@ -124,19 +134,8 @@
 # error "[fiber]: ARMv7E-M scheduler BASEPRI threshold must fit in 8 bits"
 #endif
 
-#ifndef FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# define FIBER_CORTEX_M7_R0P1_ERRATA_837070 0
-#endif
-
-#if FIBER_CORTEX_M7_R0P1_ERRATA_837070
-# if !defined(__CORTEX_M) || (__CORTEX_M != 7)
-#  error "[fiber]: FIBER_CORTEX_M7_R0P1_ERRATA_837070 is only valid for Cortex-M7"
-# endif
-#endif
-
-#define FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND 1
-#define FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND \
-	FIBER_CORTEX_M7_R0P1_ERRATA_837070
+#define FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND 0
+#define FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND 0
 #ifndef FIBER_PORT_IS_V8M
 # define FIBER_PORT_IS_V8M 0
 #endif
@@ -313,41 +312,38 @@ __STATIC_FORCEINLINE void fiber_port_scheduler_critical_exit(uint32_t state)
 __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 {
 #if FIBER_PORT_HAS_FPU
+# if !defined(FPU) || !defined(FPU_FPCCR_ASPEN_Msk) || \
+		!defined(FPU_FPCCR_LSPEN_Msk)
+#  error "[fiber]: ARMv7E-M FPU port requires CMSIS FPU/FPCCR definitions"
+# endif
 	const uint32_t cpacr_cp10_cp11_full = (0xFu << 20);
+#  ifdef SCB
+	volatile uint32_t *const cpacr_reg = &SCB->CPACR;
+#  else
+	volatile uint32_t *const cpacr_reg = (uint32_t *)0xE000ED88u;
+#  endif
 
 # if FIBER_ENABLE_CPACR
-#  ifdef SCB
-	volatile uint32_t cpacr = SCB->CPACR;
-	if ((cpacr & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
-		cpacr = (cpacr & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		SCB->CPACR = cpacr;
-		{ __DSB(); __ISB(); }
-		volatile uint32_t cpacr_rb = SCB->CPACR;
-		(void)cpacr_rb;
-	}
-#  else
-	volatile uint32_t * const cpacr = (uint32_t *)0xE000ED88u;
-	volatile uint32_t value = *cpacr;
+	uint32_t value = *cpacr_reg;
 	if ((value & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
 		value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		*cpacr = value;
+		*cpacr_reg = value;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t cpacr_rb = *cpacr;
-		(void)cpacr_rb;
 	}
-#  endif
-# else
-	(void)cpacr_cp10_cp11_full;
 # endif
+	FIBER_REQUIRE((*cpacr_reg & cpacr_cp10_cp11_full) ==
+			cpacr_cp10_cp11_full, 'e');
 
-# ifdef FPU
 	volatile uint32_t fpccr = FPU->FPCCR;
+	uint32_t fpccr_policy_mask = 0u;
 
 #  ifdef FPU_FPCCR_ASPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_ASPEN_Msk;
 	fpccr |= FPU_FPCCR_ASPEN_Msk;
 #  endif
 
 #  ifdef FPU_FPCCR_LSPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_LSPEN_Msk;
 #   if FIBER_FPU_LAZY
 	fpccr |= FPU_FPCCR_LSPEN_Msk;
 #   else
@@ -358,10 +354,10 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 	if (fpccr != FPU->FPCCR) {
 		FPU->FPCCR = fpccr;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t fpccr_rb = FPU->FPCCR;
-		(void)fpccr_rb;
 	}
-# endif
+	FIBER_REQUIRE(fpccr_policy_mask != 0u, 'E');
+	FIBER_REQUIRE((FPU->FPCCR & fpccr_policy_mask) ==
+			(fpccr & fpccr_policy_mask), 'E');
 #else
 	(void)0;
 #endif

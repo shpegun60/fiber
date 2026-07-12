@@ -28,10 +28,13 @@ extern void *volatile fiber_internal_port_scheduler_user;
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                                  void *user);
 
+FIBER_GENERAL_REGS_ONLY
 void fiber_internal_validate_restore_context(FiberContext *ctx);
 
+FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
 
+FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 
 __STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)

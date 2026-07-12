@@ -85,6 +85,10 @@ function Find-CmsisCore {
 
 $gcc = Find-ArmGcc
 $cmsis = Find-CmsisCore
+$nm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-nm.exe"
+if (-not (Test-Path $nm)) {
+    throw "arm-none-eabi-nm.exe not found next to compiler: $gcc"
+}
 
 $commonSources = @(
     "fiber\fiber_core.c",
@@ -95,6 +99,8 @@ $commonSources = @(
 )
 
 $selectorPortSources = @(
+    "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+    "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c",
     "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
     "fiber\port\transitional_v8m\fiber_port_exception.c",
     "fiber\port\armv6m\fiber_port_armv6m.c",
@@ -132,6 +138,9 @@ $portProfiles = @{
     "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
     "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m33f"       = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
+    # GCC 14 reports plain -mcpu=cortex-m55 as ARMv8-M Mainline until an
+    # ARMv8.1-M feature is explicitly enabled. Its M55 FP configuration also
+    # defines __ARM_FEATURE_MVE, so that mode must select the v8.1-M profile.
     "cortex-m55"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m55f"       = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
     "cortex-m55-mve-fp" = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
@@ -176,6 +185,15 @@ $buildSelectedPortSourcesByConfig = @{
 
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $buildRoot | Out-Null
+
+$requiredPortSymbols = @(
+    "fiber_port_init_context_frame",
+    "fiber_port_start_first_context",
+    "fiber_svc",
+    "fiber_pendsv",
+    "fiber_exception_runtime_check",
+    "fiber_pendsv_init_lowest_priority"
+)
 
 try {
     Write-Host "Compiler: $gcc"
@@ -342,6 +360,7 @@ void Error_Handler(void);
             Write-Host "== $($cfg.Name) / $($mode.Name) =="
 
             $sources = $commonSources + $mode.PortSources
+            $objects = @()
 
             foreach ($source in $sources) {
                 $srcPath = Join-Path $RepoRoot $source
@@ -373,6 +392,37 @@ void Error_Handler(void);
                 & $gcc @args
                 if ($LASTEXITCODE -ne 0) {
                     throw "Compile failed for $($cfg.Name) / $($mode.Name): $source"
+                }
+
+                $objects += $objPath
+            }
+
+            # A relocatable link catches duplicate port implementations while
+            # allowing application-owned wrapper symbols to remain unresolved.
+            $linkedObject = Join-Path $cfgDir "fiber-matrix-linked.o"
+            $linkArgs = $cfg.CpuArgs + @("-mthumb") + $cfg.Extra + @(
+                "-nostdlib",
+                "-r",
+                "-o",
+                $linkedObject
+            ) + $objects
+
+            & $gcc @linkArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "Relocatable link failed for $($cfg.Name) / $($mode.Name)"
+            }
+
+            $definedSymbols = & $nm -g --defined-only $linkedObject
+            if ($LASTEXITCODE -ne 0) {
+                throw "Symbol scan failed for $($cfg.Name) / $($mode.Name)"
+            }
+
+            foreach ($symbol in $requiredPortSymbols) {
+                $definitions = @($definedSymbols | Where-Object {
+                    $_ -match "\s[TW]\s+$([regex]::Escape($symbol))$"
+                })
+                if ($definitions.Count -ne 1) {
+                    throw "Expected exactly one $symbol definition for $($cfg.Name) / $($mode.Name); found $($definitions.Count)"
                 }
             }
         }

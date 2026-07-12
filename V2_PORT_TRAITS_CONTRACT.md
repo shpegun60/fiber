@@ -51,6 +51,17 @@ This contract does not make ARMv8-M, TrustZone, MVE, PAC, BTI, or PSPLIM
 production-supported. Those require selected-port-owned context policy and
 hardware validation.
 
+Runtime restore validation consumes these traits unconditionally. The selected
+port's initial `EXC_RETURN` is an exact domain/stack/mode encoding; the common
+validator may permit only that basic-frame value and, when the port declares an
+extended FP context, the corresponding value with only the frame-type bit
+changed. A profile may not weaken this to a broad signature test.
+
+The build must also select exactly one source group. Compile coverage is not
+sufficient: the validation matrix relocatably links every configuration and
+requires one global definition for each mandatory SVC/PendSV/frame/exception
+port ABI symbol.
+
 ## Layer Ownership
 
 ### Root Runtime

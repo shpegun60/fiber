@@ -69,8 +69,8 @@ sources:      fiber/port/ARM_CM7/r0p1/fiber_port.c
 
 The current H7 application tree also routes selector-driven ARMv7E-M builds
 directly to this concrete `ARM_CM7/r0p1` port through `fiber_port_selected.h`.
-The old generic `armv7em` implementation is disabled until a separate concrete
-ARM_CM4/ARM_CM4F port is added.
+The generic `armv7em` implementation is active only for Cortex-M4/M4F; its
+source guard rejects Cortex-M7 so the two implementations cannot collide.
 
 This directory is now a native selected source group. It no longer includes the
 generic `armv7em` `.c` implementation, and the selected files do not include
@@ -81,7 +81,7 @@ paranoid checks from the previous ARMv7E-M path.
 
 | FreeRTOS file role | Fiber file role | Decision |
 | --- | --- | --- |
-| `portmacro.h` | `fiber_portmacro.h` | Reimplemented with fiber names. Owns selected CPU traits, CM7 r0p1 constants, frame size traits, helper macros, and public port prototypes. It includes only minimal standard types, not the fiber runtime ABI. |
+| `portmacro.h` | `fiber_portmacro.h` | Reimplemented with fiber names. Owns selected CPU traits, CM7 r0p1 constants, frame size traits, helper macros, and public port prototypes. It includes `mcu_core.h`, the shared compiler ABI, and panic contract, but only forward-declares `FiberContext` and does not consume its layout. |
 | `port.c` | `fiber_port.c` | Reimplemented with fiber scheduler semantics. Owns seed frame, SVC first start, and PendSV switch for this selected source group. It includes the runtime headers it directly uses because this source file needs `FiberContext`, boot validation, panic, and scheduler bridge declarations. |
 | `portasm.h` / `portasm.c` | none for this port | Excluded for this selected port. The FreeRTOS GCC ARM_CM7 r0p1 port keeps assembly in `port.c`; fiber follows that shape here. |
 | `secure_context.*` | none | Excluded. Cortex-M7 has no ARMv8-M TrustZone context in this port. |
@@ -107,7 +107,7 @@ user/build option      -> FIBER_XXX
 | `portSTACK_GROWTH` | `fiber_portSTACK_GROWTH` | Reimplemented as `-1`. |
 | `portTICK_PERIOD_MS` | user scheduler tick policy | Excluded. |
 | `portBYTE_ALIGNMENT` | `fiber_portBYTE_ALIGNMENT` and `FIBER_STACK_ALIGN` | Reimplemented. Fiber validates stack alignment separately. |
-| `portDONT_DISCARD` | compiler attribute helpers from the normal runtime compiler layer for source definitions | Adapted only when needed. `fiber_portmacro.h` does not include compiler/runtime headers just to expose this helper. |
+| `portDONT_DISCARD` | shared `fiber_compiler.h` attribute helpers | Adapted. The selected port intentionally depends on the shared compiler ABI instead of duplicating toolchain attributes. |
 | `portYIELD()` | `fiber_schedule()` plus `fiber_arm_cm7_r0p1_yield_request()` / `fiber_port_pend_switch()` | Adapted. Fiber rejects ISR/PRIMASK/BASEPRI/FAULTMASK delayed switches before pended PendSV. |
 | `portNVIC_INT_CTRL_REG` | `fiber_portNVIC_INT_CTRL_REG` | Reimplemented. |
 | `portNVIC_PENDSVSET_BIT` | `fiber_portNVIC_PENDSVSET_BIT` | Reimplemented. |
@@ -126,7 +126,7 @@ user/build option      -> FIBER_XXX
 | `portRECORD_READY_PRIORITY()` | user scheduler | Excluded. |
 | `portRESET_READY_PRIORITY()` | user scheduler | Excluded. |
 | `portGET_HIGHEST_PRIORITY()` | user scheduler, optional CLZ helper available | Excluded from core. |
-| `portASSERT_IF_INTERRUPT_PRIORITY_INVALID()` | CM7 r0p1 priority constants and validation policy tracked in this port record; legacy runtime validation still exists outside the selected source group until H7 build routing moves fully to this port | Adapted, with selected-port ownership as the target direction. |
+| `portASSERT_IF_INTERRUPT_PRIORITY_INVALID()` | CM7 r0p1 selected-port priority setup and runtime readback validation | Adapted. The selected exception source validates implemented priority bits, grouping, SVC/PendSV priorities, vector routing, and the M7 revision gate. ISR-callable scheduler APIs remain intentionally excluded. |
 | `portNOP()` | none | Excluded. |
 | `portINLINE` / `portFORCE_INLINE` | `fiber_portFORCE_INLINE` | Reimplemented locally in `fiber_portmacro.h`; no CMSIS inline macro dependency. |
 | `xPortIsInsideInterrupt()` | `fiber_arm_cm7_r0p1_is_inside_interrupt()` and direct `__get_IPSR()` guards | Reimplemented. |
@@ -141,9 +141,9 @@ user/build option      -> FIBER_XXX
 | --- | --- | --- |
 | `#ifndef __ARM_FP` hard error | `FIBER_HAS_FPU` / `FIBER_HAS_EXTENDED_FP_CONTEXT` | Changed. Fiber supports CM7 without forcing an FPU build; FP save/restore is gated by target traits. |
 | `portISR_t` | direct function pointer use in vector validation | Adapted. |
-| SysTick register constants | user scheduler/platform | Excluded. CPU context switch core does not own ticks. |
+| `portNVIC_SYSTICK_CTRL_REG`, `portNVIC_SYSTICK_LOAD_REG`, `portNVIC_SYSTICK_CURRENT_VALUE_REG`, and related SysTick constants | user scheduler/platform | Excluded. CPU context switch core does not own ticks. |
 | `portNVIC_SHPR2_REG` / `portNVIC_SHPR3_REG` | `fiber_portNVIC_SHPR2_REG` / `fiber_portNVIC_SHPR3_REG` | Reimplemented as selected-port constants. Fiber validates and configures SVC/PendSV only; SysTick is not owned. |
-| SysTick bit constants | user scheduler/platform | Excluded. |
+| `portNVIC_SYSTICK_CLK_BIT`, `portNVIC_SYSTICK_INT_BIT`, `portNVIC_SYSTICK_ENABLE_BIT`, and count/pend bits | user scheduler/platform | Excluded. |
 | `portNVIC_PENDSVCLEAR_BIT` | `fiber_portNVIC_PENDSVCLEAR_BIT` | Reimplemented and used by first-start cleanup. |
 | `portNVIC_PEND_SYSTICK_SET_BIT` / clear bit | CM7 constants only | Reimplemented as reference constants; not used by core until a tick policy exists. |
 | `portMIN_INTERRUPT_PRIORITY` | `fiber_portMIN_INTERRUPT_PRIORITY` | Reimplemented. |
@@ -187,7 +187,7 @@ user/build option      -> FIBER_XXX
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
 | `vPortSetupTimerInterrupt()` | user scheduler/platform | Excluded. |
-| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted. This port owns FPU detection, CPACR/FPCCR setup, lazy/eager policy, barriers, and read-back checks. |
+| `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, CPACR/FPCCR setup, lazy/eager policy, barriers, and enforced CPACR/FPCCR readback checks. |
 | `vPortValidateInterruptPriority()` | selected-port constants and `fiber_port_exception.c` validation | Adapted. Runtime validation now lives in the port layer and consumes selected-port traits/constants. |
 | `WORKAROUND_PMU_CM001` | none | Excluded. This is XMC4000-specific, not STM32 Cortex-M7. |
 
@@ -198,7 +198,8 @@ Fiber intentionally differs from FreeRTOS in these places:
 ```text
 FreeRTOS: internal scheduler owns all tasks.
 Fiber: user scheduler hook owns task selection, so every returned context is
-       validated before restore.
+       validated before restore. The just-saved current context is validated
+       before the user hook runs as well.
 
 FreeRTOS: r0p1 BASEPRI workaround disables IRQs and then enables them.
 Fiber: r0p1 BASEPRI write preserves and restores the previous PRIMASK, so an
@@ -214,6 +215,10 @@ Fiber: tick, sleep, wake, and ready-list policy are outside the CPU port.
 FreeRTOS: lazy FP is the normal CM7 path.
 Fiber: lazy FP can be enabled, but conservative validation uses eager FP
        behavior for deterministic bring-up.
+
+FreeRTOS: kernel scheduler code is built as part of the controlled port/kernel.
+Fiber: an indirect user scheduler hook crosses the PendSV ABI, so its definition
+       must use FIBER_SCHEDULER_HOOK_ATTR and must not execute FP/MVE code.
 ```
 
 ## Current Status
@@ -228,15 +233,16 @@ selected files do not include fiber_target.h or fiber_settings.h
 selected fiber_portmacro.h includes port/fiber_compiler.h only for compiler ABI
 BASEPRI/FPU/frame/default policy is duplicated in this selected port instead
 of inheriting target-wide helper policy
-build-selected matrix uses this include directory and source file for M7/M7F
+build-selected matrix uses this include directory and source files for M7/M7F
 M7 r0p1 errata gate is forced for selected CM7/r0p1 builds
+matrix relocatably links every mode and requires exactly one mandatory port ABI
+symbol definition
 parity record documents adopted/adapted/replaced/excluded port mechanisms
 ```
 
 Required before claiming this directory as the production H7 runtime path:
 
 ```text
-make CubeIDE H7 build select this source group explicitly
 run H7 normal and trap validation through this selected source group
 validate on affected Cortex-M7 r0p0/r0p1 hardware before claiming errata parity
 ```

@@ -13,6 +13,7 @@
 #include "../fiber_port_select.h"
 #include "mcu_core.h"
 #include "../../fiber_types.h"
+#include "../../fiber_panic.h"
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 
@@ -398,30 +399,27 @@ __STATIC_FORCEINLINE void fiber_port_scheduler_critical_exit(uint32_t state)
 __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 {
 #if FIBER_PORT_HAS_FPU
+# if !defined(FPU) || !defined(FPU_FPCCR_ASPEN_Msk) || \
+		!defined(FPU_FPCCR_LSPEN_Msk)
+#  error "[fiber]: transitional v8-M FPU path requires CMSIS FPU/FPCCR definitions"
+# endif
 	const uint32_t cpacr_cp10_cp11_full = (0xFu << 20);
+#  ifdef SCB
+	volatile uint32_t *const cpacr_reg = &SCB->CPACR;
+#  else
+	volatile uint32_t *const cpacr_reg = (uint32_t *)0xE000ED88u;
+#  endif
 
 # if FIBER_ENABLE_CPACR
-#  ifdef SCB
-	volatile uint32_t cpacr = SCB->CPACR;
-	if ((cpacr & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
-		cpacr = (cpacr & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		SCB->CPACR = cpacr;
-		{ __DSB(); __ISB(); }
-		volatile uint32_t cpacr_rb = SCB->CPACR;
-		(void)cpacr_rb;
-	}
-#  else
-	volatile uint32_t * const cpacr = (uint32_t *)0xE000ED88u;
-	volatile uint32_t value = *cpacr;
+	uint32_t value = *cpacr_reg;
 	if ((value & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
 		value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		*cpacr = value;
+		*cpacr_reg = value;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t cpacr_rb = *cpacr;
-		(void)cpacr_rb;
 	}
-#  endif
 # endif
+	FIBER_REQUIRE((*cpacr_reg & cpacr_cp10_cp11_full) ==
+			cpacr_cp10_cp11_full, 'e');
 
 # if defined(__ARM_ARCH_8M_MAIN__) && defined(__ARM_FEATURE_CMSE) && \
 		(__ARM_FEATURE_CMSE == 3U)
@@ -438,9 +436,9 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 		nsacr |= nsacr_cp10_cp11_full;
 		SCB->NSACR = nsacr;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t nsacr_rb = SCB->NSACR;
-		(void)nsacr_rb;
 	}
+	FIBER_REQUIRE((SCB->NSACR & nsacr_cp10_cp11_full) ==
+			nsacr_cp10_cp11_full, 'e');
 #  endif
 
 #  ifdef SCB_NS
@@ -449,20 +447,22 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 		nscpacr = (nscpacr & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
 		SCB_NS->CPACR = nscpacr;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t nscpacr_rb = SCB_NS->CPACR;
-		(void)nscpacr_rb;
 	}
+	FIBER_REQUIRE((SCB_NS->CPACR & cpacr_cp10_cp11_full) ==
+			cpacr_cp10_cp11_full, 'e');
 #  endif
 # endif
 
-# ifdef FPU
 	volatile uint32_t fpccr = FPU->FPCCR;
+	uint32_t fpccr_policy_mask = 0u;
 
 #  ifdef FPU_FPCCR_ASPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_ASPEN_Msk;
 	fpccr |= FPU_FPCCR_ASPEN_Msk;
 #  endif
 
 #  ifdef FPU_FPCCR_LSPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_LSPEN_Msk;
 #   if FIBER_FPU_LAZY
 	fpccr |= FPU_FPCCR_LSPEN_Msk;
 #   else
@@ -473,10 +473,10 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 	if (fpccr != FPU->FPCCR) {
 		FPU->FPCCR = fpccr;
 		{ __DSB(); __ISB(); }
-		volatile uint32_t fpccr_rb = FPU->FPCCR;
-		(void)fpccr_rb;
 	}
-# endif
+	FIBER_REQUIRE(fpccr_policy_mask != 0u, 'E');
+	FIBER_REQUIRE((FPU->FPCCR & fpccr_policy_mask) ==
+			(fpccr & fpccr_policy_mask), 'E');
 #else
 	(void)0;
 #endif

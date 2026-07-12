@@ -343,6 +343,8 @@ void fiber_pendsv(void)
 			"cmp   r3, r2                           \n"
 			"blo   7f                               \n"
 			"ldr   r2, [r1, %c[offtop]]             \n"
+			"subs  r2, #%c[hwbase]                  \n"
+			"bcc   7f                               \n"
 			"cmp   r0, r2                           \n"
 			"bhi   7f                               \n"
 
@@ -406,7 +408,8 @@ void fiber_pendsv(void)
 			"bl    fiber_panic                      \n"
 			"b     7b                               \n"
 			:
-			: [offsb] "I" (FBR_OFF_STACK_BASE),
+			: [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)
 			: "memory","cc"
 	);
@@ -447,6 +450,15 @@ void fiber_pendsv(void)
 			"cmp   r3, r2                           \n"
 			"blo   7f                               \n"
 			"ldr   r2, [r1, %c[offtop]]             \n"
+			"subs  r2, #%c[hwbase]                  \n"
+			"bcc   7f                               \n"
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+			"tst   lr, #0x10                        \n"
+			"bne   81f                              \n"
+			"subs  r2, #%c[hwfp]                    \n"
+			"bcc   7f                               \n"
+			"81:                                    \n"
+#endif
 			"cmp   r0, r2                           \n"
 			"bhi   7f                               \n"
 
@@ -511,7 +523,11 @@ void fiber_pendsv(void)
 			"bl    fiber_panic                      \n"
 			"b     7b                               \n"
 			:
-			: [offsb] "I" (FBR_OFF_STACK_BASE),
+			: [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),
+#endif
+			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP),
 			  [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI)
 			  : "memory","cc"

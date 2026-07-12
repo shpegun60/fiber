@@ -18,7 +18,8 @@ Run the validation first with portable conservative defaults:
 #define FIBER_FPU_LAZY 0
 #define FIBER_SWITCH_MASK_IRQS 1
 #define FIBER_SWITCH_STRICT_BARRIERS 1
-#define FIBER_VALIDATE_SCHEDULED_CONTEXT 1
+#define FIBER_STACK_CANARY 1
+#define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
 #define FIBER_VALIDATE_EXCEPTION_SETUP 1
 ```
 
@@ -77,6 +78,10 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_NULL_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_FAULTMASK
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_CANARY
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_EXC_RETURN
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_SHORT_FRAME
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_BOOT
 ```
 
 `fiber_live.validation_mode_seen` records the selected mode, and
@@ -102,7 +107,10 @@ Validate these cases from Thread mode:
 
 The hook must be a bounded scheduler picker. It must not block, allocate, throw
 C++ exceptions across the C ABI, call fiber scheduling APIs recursively, or
-return `NULL`.
+return `NULL`. Define it with `FIBER_SCHEDULER_HOOK_ATTR`; it must not execute
+floating-point or MVE instructions because later calls execute inside PendSV
+and the indirect function-pointer call cannot enforce the GCC target attribute.
+Apply the same rule to the hook's complete call graph.
 
 The first scheduler call comes from `fiber_start()` with `current == NULL`.
 That call selects the first context. Idle and "no work" states must still be
@@ -188,10 +196,12 @@ Validate these scheduler result cases:
 - returned context with invalid saved-frame alignment traps with `'A'`.
 - returned context with out-of-bounds saved stack pointer traps with `'U'` or a
   related stack-bound panic code.
-- returned context with invalid `EXC_RETURN` signature or wrong Thread/PSP bits
-  traps with `'X'` or `'x'`.
+- returned context with an `EXC_RETURN` value outside the exact selected-port
+  encoding set traps with `'x'`.
 - returned context with insufficient software, hardware, or extended-FP frame
-  headroom traps before exception return.
+  headroom traps with `'X'` before exception return.
+- a damaged low-stack software canary traps with `'c'`, including on ports that
+  also provide PSPLIM.
 - returned context with an unsealed or corrupted boot record traps before PSP is
   restored.
 
@@ -203,6 +213,14 @@ The harness keeps first-start and later-PendSV result validation separate:
   on a later `pick_next(current, user)` with `'N'`.
 - `FIBER_VAL_TRAP_BAD_NEXT` lets first-start enter the first fiber, then traps
   on a later `pick_next(current, user)` with `'P'`.
+- `FIBER_VAL_TRAP_CANARY` damages the running fiber canary and traps with `'c'`
+  when PendSV validates the just-saved current context.
+- `FIBER_VAL_TRAP_BAD_EXC_RETURN` damages the next saved exception-return word
+  and traps with `'x'` before restore.
+- `FIBER_VAL_TRAP_SHORT_FRAME` moves the next saved SP too close to `stack_top`
+  and traps with `'X'` before reading or restoring an incomplete frame.
+- `FIBER_VAL_TRAP_BAD_BOOT` corrupts the next context's `avail` relationship
+  and traps with `'a'` in the mandatory fast structural boot-record check.
 
 ## Long-Run H7 Stress
 
@@ -275,6 +293,13 @@ Status:
 - Trap modes still need to be rerun after the SVC dispatch hardening before the
   H7 runtime-validation claim is fully restored for `208be61`.
 
+This record is now historical for the later mandatory-restore-validation
+hardening. The current code additionally changes exact `EXC_RETURN` checks,
+software-canary checks, full live hardware-frame bounds, FPU register readback,
+and exact CM7 source selection. Do not promote the current working state from
+this older snapshot. Re-run normal mode and all listed trap modes, including
+`CANARY`, `BAD_EXC_RETURN`, `SHORT_FRAME`, and `BAD_BOOT`.
+
 ## Superseded Recorded Result: 2026-07-11
 
 This result predates the scheduler-selected first-context API. It is retained
@@ -334,6 +359,7 @@ change the portable defaults and does not validate M0/M23/M33/M55/MVE paths.
 ## Claim Rule
 
 After any behavior-affecting change to `fiber_core.c`, `fiber_runtime_state.c`,
-`fiber_port_armv7em.c`, exception setup validation, feature policy gates, stack
-layout, scheduler hook semantics, or startup code, the STM32H7 validation label
-must be downgraded until this checklist passes again on hardware.
+the selected `ARM_CM7/r0p1` sources, exception setup validation, feature policy
+gates, stack layout, scheduler hook semantics, or startup code, the STM32H7
+validation label must be downgraded until this checklist passes again on
+hardware.

@@ -210,6 +210,28 @@ void fiber_boot_record_fast_check(const FiberBoot *ctx)
 	FIBER_REQUIRE(ctx->guard_lo == FIBER_BOOT_RECORD_GUARD_LO, 'g');
 	FIBER_REQUIRE(ctx->guard_hi == FIBER_BOOT_RECORD_GUARD_HI, 'G');
 	FIBER_REQUIRE(ctx->sealed == 1u, 's');
+
+	/* Cheap structural checks remain active when per-switch hashing is off. */
+	const uintptr_t begin = (uintptr_t)ctx->begin;
+	const uintptr_t end = (uintptr_t)ctx->end;
+	FIBER_REQUIRE(begin != 0u, 'B');
+	FIBER_REQUIRE(end != 0u, 'T');
+	FIBER_REQUIRE(end > begin, 'N');
+	FIBER_REQUIRE(ctx->stack_base >= begin, 'U');
+	FIBER_REQUIRE(ctx->stack_top <= end, 'T');
+	FIBER_REQUIRE(ctx->stack_top > ctx->stack_base, 'S');
+	FIBER_REQUIRE((ctx->stack_base & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE((ctx->stack_top & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE(ctx->avail == (size_t)(ctx->stack_top - ctx->stack_base), 'a');
+	FIBER_REQUIRE(ctx->entry != NULL, 'E');
+	FIBER_REQUIRE((((uintptr_t)ctx->entry) & 1u) != 0u, 'e');
+	FIBER_REQUIRE((ctx->msp_policy == FIBER_MSP_POLICY_VALIDATE) ||
+			(ctx->msp_policy == FIBER_MSP_POLICY_REWIND), 'M');
+	FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
+	FIBER_REQUIRE((ctx->msp_top & ((uintptr_t)FIBER_STACK_ALIGN - 1u)) == 0u,
+			'M');
 }
 
 void fiber_boot_record_check(const FiberBoot *ctx)

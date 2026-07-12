@@ -1,14 +1,17 @@
 /*
  * fiber_port_armv7em.c
  *
- * ARMv7E-M PendSV port.
+ * Cortex-M4/M4F ARMv7E-M port.
  *
- * This file owns the moved STM32H7/Cortex-M7 PendSV implementation. The move is
- * intended to preserve the validated save/restore behavior while putting the
- * CPU-specific path behind the v2 port boundary.
+ * Cortex-M7 uses the concrete ARM_CM7/r0p1 source group. This implementation
+ * owns the generic M4/M4F frame, SVC, and PendSV path and remains
+ * compile/link-covered until profile-specific hardware validation is recorded.
  */
 
-#if 0
+#include "mcu_core.h"
+#include "../fiber_port_select.h"
+
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
 
 #include "../../fiber_boot.h"
 #include "fiber_portmacro.h"
@@ -265,8 +268,17 @@ void fiber_pendsv(void)
 			"cmp   r3, r2                           \n"
 			"blo   92f                              \n" /* software frame would cross stack base */
 			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
+			"subs  r2, #%c[hwbase]                  \n" /* account for the core HW frame */
+			"bcc   92f                              \n"
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+			"tst   lr, #0x10                        \n"
+			"bne   81f                              \n"
+			"subs  r2, #%c[hwfp]                    \n" /* extended FP HW frame */
+			"bcc   92f                              \n"
+			"81:                                    \n"
+#endif
 			"cmp   r0, r2                           \n"
-			"bhi   92f                              \n" /* PSP above declared stack top */
+			"bhi   92f                              \n" /* HW frame crosses declared stack top */
 
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			"tst   lr, #0x10                        \n" /* 1 => base frame only, 0 => extended present */
@@ -335,6 +347,10 @@ void fiber_pendsv(void)
 			:
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),
+#endif
 			  [offsb] "I" (FBR_OFF_STACK_BASE),
 			  [offtop] "I" (FBR_OFF_STACK_TOP)
 			: "memory","cc"
@@ -350,4 +366,4 @@ FIBER_DIAG_WARN("[fiber]: user must wire SVC_Handler to branch to fiber_svc with
 # endif /* FIBER_SVC_WIRED */
 #endif /* !FIBER_SVC_VECTOR_DIRECT */
 
-#endif /* FIBER_PORT_ARMV7EM */
+#endif /* FIBER_PORT_ARMV7EM && Cortex-M4 */

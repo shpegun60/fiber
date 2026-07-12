@@ -544,43 +544,39 @@ fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_memory_barrier(void)
 fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
 {
 #if FIBER_PORT_HAS_FPU
+# if !defined(FPU) || !defined(FPU_FPCCR_ASPEN_Msk) || \
+		!defined(FPU_FPCCR_LSPEN_Msk)
+#  error "[fiber]: CM7 FPU port requires CMSIS FPU/FPCCR definitions"
+# endif
 	const uint32_t cpacr_cp10_cp11_full = (0xFu << 20);
+#  ifdef SCB
+	volatile uint32_t *const cpacr_reg = &SCB->CPACR;
+#  else
+	volatile uint32_t *const cpacr_reg = (uint32_t *)0xE000ED88u;
+#  endif
 
 # if FIBER_ENABLE_CPACR
-#  ifdef SCB
-	volatile uint32_t cpacr = SCB->CPACR;
-	if ((cpacr & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
-		cpacr = (cpacr & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		SCB->CPACR = cpacr;
-		fiber_portDATA_SYNC_BARRIER();
-		fiber_portINST_SYNC_BARRIER();
-		volatile uint32_t cpacr_rb = SCB->CPACR;
-		(void)cpacr_rb;
-	}
-#  else
-	volatile uint32_t * const cpacr = (uint32_t *)0xE000ED88u;
-	volatile uint32_t value = *cpacr;
+	uint32_t value = *cpacr_reg;
 	if ((value & cpacr_cp10_cp11_full) != cpacr_cp10_cp11_full) {
 		value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;
-		*cpacr = value;
+		*cpacr_reg = value;
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();
-		volatile uint32_t cpacr_rb = *cpacr;
-		(void)cpacr_rb;
 	}
-#  endif
-# else
-	(void)cpacr_cp10_cp11_full;
 # endif
+	FIBER_REQUIRE((*cpacr_reg & cpacr_cp10_cp11_full) ==
+			cpacr_cp10_cp11_full, 'e');
 
-# ifdef FPU
 	volatile uint32_t fpccr = FPU->FPCCR;
+	uint32_t fpccr_policy_mask = 0u;
 
 #  ifdef FPU_FPCCR_ASPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_ASPEN_Msk;
 	fpccr |= FPU_FPCCR_ASPEN_Msk;
 #  endif
 
 #  ifdef FPU_FPCCR_LSPEN_Msk
+	fpccr_policy_mask |= FPU_FPCCR_LSPEN_Msk;
 #   if FIBER_FPU_LAZY
 	fpccr |= FPU_FPCCR_LSPEN_Msk;
 #   else
@@ -592,10 +588,10 @@ fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
 		FPU->FPCCR = fpccr;
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();
-		volatile uint32_t fpccr_rb = FPU->FPCCR;
-		(void)fpccr_rb;
 	}
-# endif
+	FIBER_REQUIRE(fpccr_policy_mask != 0u, 'E');
+	FIBER_REQUIRE((FPU->FPCCR & fpccr_policy_mask) ==
+			(fpccr & fpccr_policy_mask), 'E');
 #else
 	(void)0;
 #endif

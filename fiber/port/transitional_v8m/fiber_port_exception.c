@@ -188,7 +188,6 @@ static void fiber_validate_m7_r0p1_errata_policy(void)
 
 static void fiber_validate_feature_policy(void)
 {
-#if FIBER_VALIDATE_EXCEPTION_SETUP
 # if FIBER_PORT_ARMV8M_BASELINE && !FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME
     FIBER_REQUIRE(0, '2');
 # endif
@@ -213,15 +212,14 @@ static void fiber_validate_feature_policy(void)
 # if FIBER_HAS_PAC || FIBER_HAS_BTI
     FIBER_REQUIRE(FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME != 0, 'J');
 # endif
-#endif
 }
 
 void fiber_exception_runtime_check(void)
 {
+	fiber_validate_feature_policy();
+
 #if FIBER_VALIDATE_EXCEPTION_SETUP
     FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-
-    fiber_validate_feature_policy();
 
     fiber_validate_pendsv_priority();
     fiber_validate_svc_priority();

@@ -349,4 +349,23 @@
 
 #endif
 
+/*
+ * Scheduler and restore bridges run from SVC/PendSV and must never acquire an
+ * implicit floating-point ABI dependency. GCC can enforce this for the bridge
+ * body. User scheduler callbacks should use FIBER_SCHEDULER_HOOK_ATTR as well;
+ * an indirect function-pointer call cannot propagate the target attribute.
+ */
+#ifndef FIBER_GENERAL_REGS_ONLY
+# if defined(__GNUC__) && !defined(__clang__) && \
+		(defined(__arm__) || defined(__thumb__))
+#  define FIBER_GENERAL_REGS_ONLY __attribute__((target("general-regs-only")))
+# else
+#  define FIBER_GENERAL_REGS_ONLY
+# endif
+#endif
+
+#ifndef FIBER_SCHEDULER_HOOK_ATTR
+# define FIBER_SCHEDULER_HOOK_ATTR FIBER_GENERAL_REGS_ONLY
+#endif
+
 #endif /* FIBER_FIBER_COMPILER_H_ */

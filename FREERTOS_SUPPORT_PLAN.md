@@ -92,9 +92,10 @@ Closed hardening items from the FreeRTOS comparison:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
   matrix compiles this source group for Cortex-M7/Cortex-M7F build-selected
   modes with `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`;
-- scheduled context restore uses a fast sealed-record check by default; the
-  full `FiberBoot` hash is still checked during init/start and is opt-in for
-  every switch through `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
+- scheduled context restore uses mandatory metadata plus structural boot-record
+  checks by default; the full `FiberBoot` hash is still checked during
+  init/start and is opt-in for every switch through
+  `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
 - portable defaults are back to conservative settings:
   `FIBER_FPU_LAZY = 0`, `FIBER_SWITCH_MASK_IRQS = 1`, and
   `FIBER_SWITCH_STRICT_BARRIERS = 1`;
@@ -110,8 +111,8 @@ Closed hardening items from the FreeRTOS comparison:
 | --- | --- | --- |
 | Cortex-M0/M0+ | Dedicated `port/armv6m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware and document MSP rewind policy |
 | Cortex-M3 | Dedicated `port/armv7m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware |
-| Cortex-M4F | FPU-aware path matches FreeRTOS pattern | Compile and FP stress-test |
-| Cortex-M7F | Primary validated path for STM32H7; first FreeRTOS-referenced `ARM_CM7/r0p1` build-selected source group exists and is compile-covered with native source text, no direct `fiber_target.h` or `fiber_settings.h` dependency, and only direct `port/fiber_compiler.h` dependency for compiler ABI in the selected portmacro | Re-run H7 validation through the selected source group before promoting it to the active H7 runtime-validated path |
+| Cortex-M4F | Dedicated generic ARMv7E-M source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
+| Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
 | Cortex-M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
 | Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
@@ -145,7 +146,7 @@ Closed hardening items from the FreeRTOS comparison:
    startup, PendSV, scheduler bridge state, saved stack layout, exception setup,
    interrupt-mask policy, or selected-port traits.
 
-1. Add a compile-only matrix for representative Cortex-M targets.
+1. Maintain a compile/link matrix for representative Cortex-M targets.
 
    Tooling:
 
@@ -179,8 +180,10 @@ Closed hardening items from the FreeRTOS comparison:
      `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1`
 
    Every selected profile must compile in wrapper and direct-vector SVC/PendSV
-   modes. Passing the matrix is compile coverage only; runtime support still
-   requires profile-specific hardware validation.
+   modes. Each mode is then relocatably linked and inspected with `nm`; every
+   mandatory port ABI symbol must have exactly one global definition. Passing
+   the matrix is compile/link coverage only; runtime support still requires
+   profile-specific hardware validation.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
 
@@ -208,8 +211,10 @@ Closed hardening items from the FreeRTOS comparison:
      `'g'`;
    - scheduler hook returning an uninitialized or corrupted context must trap
      before PendSV restores PSP;
-   - scheduler hook returning a context with a bad EXC_RETURN or insufficient
-     restore-frame headroom must trap before exception return;
+   - damaged software canary must trap with `'c'`;
+   - scheduler hook returning a context with an exact-encoding-invalid
+     EXC_RETURN must trap with `'x'`;
+   - insufficient restore-frame headroom must trap with `'X'`;
    - package the manual checks into a repeatable board validation mode.
 
 3. Keep the FPU startup hygiene stress test active.

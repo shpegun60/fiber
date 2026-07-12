@@ -63,6 +63,11 @@ typedef struct FiberContext {
 	FiberBoot boot;
 } FiberContext;
 
+/* The callback definition must use FIBER_SCHEDULER_HOOK_ATTR from
+ * fiber_compiler.h. GCC does not propagate target("general-regs-only") through
+ * an indirect function-pointer type, so this requirement cannot be encoded in
+ * this standalone type ABI header.
+ */
 typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *user);
 
 #ifdef __cplusplus

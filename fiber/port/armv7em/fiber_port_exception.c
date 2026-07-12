@@ -10,9 +10,10 @@
  *   - FIBER_VALIDATE_PRIORITY_GROUPING : 0/1 validate AIRCR.PRIGROUP for BASEPRI policy
  * -------------------------------------------------------------------------- */
 
-#if 0
-
+#include "mcu_core.h"
 #include "../fiber_port_select.h"
+
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
 
 #include "fiber_portmacro.h"
 
@@ -279,4 +280,4 @@ void fiber_pendsv_init_lowest_priority(void)
     fiber_exception_runtime_check();
 }
 
-#endif /* FIBER_PORT_ARMV7EM */
+#endif /* FIBER_PORT_ARMV7EM && Cortex-M4 */

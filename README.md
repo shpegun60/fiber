@@ -17,27 +17,38 @@ Add the repository root to the include path, then include the public API:
 #include "fiber/fiber_core.h"
 ```
 
-Compile the runtime sources into the application:
+Compile the common runtime sources into the application:
 
 ```text
 fiber/fiber_core.c
 fiber/fiber_boot.c
 fiber/fiber_stack.c
 fiber/fiber_runtime_state.c
-fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
-fiber/port/transitional_v8m/fiber_port_exception.c
-fiber/port/armv6m/fiber_port_armv6m.c
-fiber/port/armv6m/fiber_port_exception.c
-fiber/port/armv7m/fiber_port_armv7m.c
-fiber/port/armv7m/fiber_port_exception.c
-fiber/port/armv7em/fiber_port_armv7em.c
-fiber/port/armv7em/fiber_port_exception.c
 fiber/fiber_panic.c
 ```
 
+Then compile exactly one matching port source pair:
+
+```text
+Cortex-M0/M0+: fiber/port/armv6m/fiber_port_armv6m.c
+               fiber/port/armv6m/fiber_port_exception.c
+Cortex-M3:     fiber/port/armv7m/fiber_port_armv7m.c
+               fiber/port/armv7m/fiber_port_exception.c
+Cortex-M4/F:   fiber/port/armv7em/fiber_port_armv7em.c
+               fiber/port/armv7em/fiber_port_exception.c
+Cortex-M7/F:   fiber/port/ARM_CM7/r0p1/fiber_port.c
+               fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
+v8-M bring-up: fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
+               fiber/port/transitional_v8m/fiber_port_exception.c
+```
+
+Do not add every port source directory to a production target. The compile
+matrix deliberately compiles selector-guarded alternatives to audit selection,
+then relocatably links the result to prove a single complete port ABI.
+
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
 only selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h`
-includes the concrete selected `arm*/fiber_port_*.h` interface and its
+includes the concrete selected `fiber_portmacro.h` interface and its
 port-owned frame traits. Public runtime code should use `fiber/fiber_core.h`;
 exception wiring or low-level port integration should include the selected
 port-specific header or `fiber/port/fiber_port_selected.h`.
@@ -62,9 +73,11 @@ auto-detection. When compiler ARM architecture macros are available, an
 explicit profile must match them. `FIBER_PORT_SELECTION_ALLOW_MISMATCH` is only
 for unusual toolchains or bring-up experiments where the compiler macros are
 missing or known to be wrong. After the direct trampoline removal, every
-selected profile must provide an SVC first-start symbol. ARMv7E-M is the active
-runtime-supported path; other profiles are compile-covered but still require
-hardware validation before support is claimed.
+selected profile must provide an SVC first-start symbol. STM32H7/Cortex-M7 is
+the primary hardware-observed path and now builds through the concrete
+`ARM_CM7/r0p1` source group. The current hardening changes still require the
+documented board rerun; every other profile remains compile/link-covered only
+until its own hardware validation is recorded.
 
 Before starting fibers, initialize PendSV priority:
 
@@ -94,7 +107,8 @@ static uint32_t counter1 = 0;
 static uint32_t counter2 = 0;
 static uint32_t counter3 = 0;
 
-static FiberContext *pick_next(FiberContext *current, void *)
+static FIBER_SCHEDULER_HOOK_ATTR
+FiberContext *pick_next(FiberContext *current, void *)
 {
 	if (current == NULL) {
 		return &f1;
@@ -163,6 +177,15 @@ requires a configured hook and calls it once with `current == NULL`; the hook
 must return the first initialized `FiberContext`. A missing hook traps with
 `'K'`, and a `NULL` first context traps with `'N'`.
 
+The scheduler callback is part of the exception-handler ABI. Define every hook
+with `FIBER_SCHEDULER_HOOK_ATTR`. The first call runs from Thread mode before
+SVC; later calls run from PendSV on MSP. A hook must not execute floating-point,
+MVE, or other extended-context instructions, because the indirect function
+pointer cannot make GCC propagate `general-regs-only` automatically. The hook
+must also remain bounded, non-blocking, non-allocating, non-throwing, and must
+not call `fiber_schedule()` recursively. The same restrictions apply to every
+function reachable from the hook, not only to the top-level thunk.
+
 `fiber_start()` checks the environment, asks the scheduler for the first
 context, validates it, seeds the runtime-owned current context, prepares the
 platform, and does not return. The first scheduler hook call is protected with
@@ -183,6 +206,15 @@ uninitialized context, corrupted boot seal, out-of-bounds saved stack pointer,
 invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
 traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 `FiberContext`, not by returning `NULL`.
+
+Restore-target validation is mandatory and has no performance-disable switch.
+It checks the current context after save and every scheduler-selected target
+before restore. `EXC_RETURN` must match one of the exact encodings allowed by
+the selected port; checking only the Thread/PSP bits is not sufficient. When
+`FIBER_STACK_CANARY=1`, the low-stack canary is checked on every scheduler
+selection independently of PSPLIM availability. Even when full per-switch boot
+hashing is disabled, the fast check validates boot-record guards and structural
+relationships before any canary or saved-frame memory is read.
 
 PendSV verifies the active `EXC_RETURN` value before saving a source context.
 If the interrupted Thread context used MSP instead of PSP, a pre-start or
@@ -257,9 +289,13 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - `FIBER_SWITCH_STRICT_BARRIERS = 1`
 - `FIBER_SWITCH_MASK_IRQS = 1`
 - `FIBER_FPU_LAZY = 0`
-- `FIBER_VALIDATE_SCHEDULED_CONTEXT = 1`
+- `FIBER_STACK_CANARY = 1`
 - `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
 - SVC first-start is mandatory for runtime-supported ports
+
+`FIBER_VALIDATE_SCHEDULED_CONTEXT` and `FIBER_VALIDATE_CURRENT` were removed.
+Defining either obsolete switch is a compile error because current ownership
+and restore-context validation are mandatory invariants.
 
 `fiber_schedule()` is a Thread-mode API. Calling it from an interrupt traps
 through `FIBER_REQUIRE`. A real scheduler jump requires `PRIMASK == 0`, so the
@@ -331,13 +367,15 @@ bring-up defaults remain the conservative safety settings above.
 
 ## Portability Notes
 
-The STM32H7 / Cortex-M7 path is the primary validated target. The core switch
+The STM32H7 / Cortex-M7 path is the primary validation target. The core switch
 matches the FreeRTOS PendSV pattern: save `r4-r11`, preserve `EXC_RETURN`, run
 on PSP, and conditionally save `s16-s31` when an extended FP frame is active.
-Auto selection maps STM32H7/Cortex-M7 to `FIBER_PORT_NAME == "armv7em"`.
+Auto selection maps STM32H7/Cortex-M7 to
+`FIBER_PORT_NAME == "ARM_CM7/r0p1"`; Cortex-M4/M4F uses the separate generic
+`armv7em` source group.
 
-FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The
-ARMv7E-M scheduler-driven PendSV path now raises `BASEPRI` around the scheduler
+FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The concrete
+fiber CM7 scheduler-driven PendSV path raises `BASEPRI` around the scheduler
 bridge, then restores the previous `BASEPRI` value before restoring the selected
 fiber. `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables a FreeRTOS-style guard
 around handler-side `BASEPRI` writes for affected Cortex-M7 r0p1 parts. The

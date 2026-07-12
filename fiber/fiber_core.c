@@ -59,8 +59,8 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 		FIBER_REQUIRE(ctx->boot.avail >= need_seed, 'Z');
 	}
 
-#if defined(FIBER_STACK_CANARY) && !FIBER_USE_PSPLIM_REGISTER
-	/* Write a canary at the low PSP bound if PSPLIM is unavailable on this core. */
+#if FIBER_STACK_CANARY
+	/* Keep the software canary as an independent check even when PSPLIM exists. */
 	{
 		const uintptr_t canary_cell = fiber_word_align_up((uintptr_t)ctx->boot.begin);
 		((volatile uint32_t*)canary_cell)[0] = FIBER_CANARY_VALUE;
@@ -106,10 +106,11 @@ void fiber_start(void)
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
 
+	fiber_platform_bootstrap();
+
 	FiberContext *const first = fiber_internal_scheduler_pick_first_from_start();
 
 	fiber_boot_check(&first->boot);
-	fiber_platform_bootstrap();
 
 #if FIBER_USE_PSPLIM_REGISTER
 	fiber_port_psplim_config((uint32_t)first->boot.stack_base);
