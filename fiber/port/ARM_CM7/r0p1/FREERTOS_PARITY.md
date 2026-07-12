@@ -163,7 +163,7 @@ user/build option      -> FIBER_XXX
 | `portFPCCR` | `fiber_portFPCCR` | Reimplemented as selected-port constant. |
 | `portASPEN_AND_LSPEN_BITS` | `fiber_portASPEN_AND_LSPEN_BITS` plus `FIBER_FPU_LAZY` | Adapted. Fiber can run eager validation mode. |
 | `portINITIAL_XPSR` | `fiber_portINITIAL_XPSR` | Reimplemented and used by the CM7 frame builder. |
-| `portINITIAL_EXC_RETURN` | `fiber_portINITIAL_EXC_RETURN` / `FIBER_INITIAL_EXC_RETURN` | Adapted and configurable. |
+| `portINITIAL_EXC_RETURN` | `fiber_portINITIAL_EXC_RETURN` / `FIBER_PORT_INITIAL_EXC_RETURN` | Reimplemented as fixed `0xFFFFFFFD`; the concrete CM7 frame ABI rejects incompatible overrides. |
 | `portMAX_24_BIT_NUMBER` | none | Excluded. SysTick/tickless only. |
 | `portSTART_ADDRESS_MASK` | `fiber_portSTART_ADDRESS_MASK` and `fiber_arm_cm7_r0p1_stacked_pc()` | Adapted. Stacked PC bit 0 is cleared. |
 | `portMISSED_COUNTS_FACTOR` | none | Excluded. Tickless only. |
@@ -176,20 +176,25 @@ user/build option      -> FIBER_XXX
 | --- | --- | --- |
 | `pxPortInitialiseStack()` | `fiber_port_init_context_frame()` | Adapted and hardened. Fiber validates/seals boot metadata, reserves exception headroom, clears stacked PC bit 0, stores a task-return panic LR, and preserves platform `r9`. |
 | `prvTaskExitError()` | `fiber_internal_task_return()` | Replaced. A returned fiber panics; there is no task-delete API in the CPU port. |
-| `vPortSVCHandler()` | `fiber_svc()` | Adapted and hardened. Fiber validates MSP-origin SVC, 8-byte SVC frame alignment, SVC opcode, immediate, current context, restore context, FPCA state, and BASEPRI clear through errata-safe macros. |
+| `vPortSVCHandler()` | `fiber_svc()` | Adapted and hardened. Fiber validates SVCall identity, exact incoming EXC_RETURN, MSP origin, 8-byte SVC frame alignment, stacked Thread/Thumb state, stacked PC, SVC opcode/immediate, current context, restore context, FPCA state, and BASEPRI clear through errata-safe macros. |
 | `prvPortStartFirstTask()` | `fiber_port_start_first_context()` | Adapted and hardened. Fiber starts only via SVC, validates Thread/MSP state, optionally rewinds MSP through sealed boot policy, clears pending PendSV, enables faults/IRQs, and panics if SVC returns. |
-| `xPortStartScheduler()` | `fiber_start()` plus port start helper and exception validation | Split. Fiber has no tick setup, no internal priority scheduler, and no critical nesting setup. The scheduler hook selects the first context. |
+| `xPortStartScheduler()` | `fiber_start()` plus port start helper and exception validation | Split. `fiber_start()` now owns idempotent PendSV/SVCall setup and validation, matching the FreeRTOS startup responsibility. Fiber has no tick setup, internal priority scheduler, or critical nesting setup; the user hook selects the first context. |
 | `vPortEndScheduler()` | none | Excluded. A Cortex-M bare-metal fiber runtime does not implement scheduler shutdown. |
 | `vPortEnterCritical()` / `vPortExitCritical()` | none public; internal scheduler critical helpers only | Excluded from public API. |
-| `xPortPendSVHandler()` | `fiber_pendsv()` | Adapted. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. |
+| `xPortPendSVHandler()` | `fiber_pendsv()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. |
 | `vTaskSwitchContext()` call | `fiber_internal_scheduler_pick_next_from_pendsv()` | Replaced. User scheduler hook picks the next context; NULL and invalid contexts panic. |
 | `pxCurrentTCB` first field | `fiber_internal_port_current_context` and `FiberContext.sp` | Adapted. Saved SP is updated only when saving the current context, matching the FreeRTOS invariant. |
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
 | `vPortSetupTimerInterrupt()` | user scheduler/platform | Excluded. |
 | `vPortEnableVFP()` | `fiber_port_fpu_enable_early()` | Adapted and hardened. This port owns FPU detection, the local `FIBER_ENABLE_CPACR` default, CPACR/FPCCR setup, lazy/eager policy, barriers, and enforced CPACR/FPCCR readback checks. |
-| `vPortValidateInterruptPriority()` | selected-port constants and `fiber_port_exception.c` validation | Adapted. Runtime validation now lives in the port layer and consumes selected-port traits/constants. |
+| `vPortValidateInterruptPriority()` | selected-port constants and `fiber_port_exception.c` validation | Adapted. Startup probing verifies the implemented priority mask against `__NVIC_PRIO_BITS`, confirms priority-register restoration, validates BASEPRI bits and PRIGROUP compatibility, and leaves future ISR-safe API priority checks outside the current API scope. |
 | `WORKAROUND_PMU_CM001` | none | Excluded. This is XMC4000-specific, not STM32 Cortex-M7. |
+
+Like the reference port, an implementation with eight NVIC priority bits
+requires scheduler BASEPRI bit 0 to remain clear because that bit is
+necessarily subpriority. The fiber default is `2` for that case, and both
+compile-time and startup checks enforce the rule.
 
 ## Paranoid Differences
 
@@ -215,6 +220,10 @@ Fiber: tick, sleep, wake, and ready-list policy are outside the CPU port.
 FreeRTOS: lazy FP is the normal CM7 path.
 Fiber: lazy FP can be enabled, but conservative validation uses eager FP
        behavior for deterministic bring-up.
+
+FreeRTOS: handler/vector/priority assertions depend on configASSERT options.
+Fiber: the production CM7 port always performs startup vector, priority-mask,
+       PRIGROUP, CPUID, SVC-priority, and errata-policy validation.
 
 FreeRTOS: kernel scheduler code is built as part of the controlled port/kernel.
 Fiber: an indirect user scheduler hook crosses the PendSV ABI, so its definition

@@ -69,9 +69,10 @@ FIBER_STATIC_ASSERT((FIBER_STACK_ALIGN % 8u) == 0u,
 		"[fiber]: stack alignment must be a multiple of 8");
 FIBER_STATIC_ASSERT((FIBER_STACK_REDZONE_BYTES % 8u) == 0u,
 		"[fiber]: FIBER_STACK_REDZONE_BYTES must be a multiple of 8");
+FIBER_STATIC_ASSERT((FIBER_STACK_CANARY == 0) ||
+		(FIBER_STACK_REDZONE_BYTES >= 8u),
+		"[fiber]: enabled stack canary requires at least 8 bytes of red zone");
 
-FIBER_STATIC_ASSERT(FIBER_EXC_LEVELS_ON_PSP >= 1u,
-		"[fiber]: FIBER_EXC_LEVELS_ON_PSP must be >= 1");
 FIBER_STATIC_ASSERT((FIBER_BOOT_EXTRA_BYTES % 4u) == 0u,
 		"[fiber]: FIBER_BOOT_EXTRA_BYTES must be 4-byte aligned");
 
@@ -82,9 +83,9 @@ FIBER_STATIC_ASSERT(sizeof(uintptr_t) == 4,
 FIBER_STATIC_ASSERT(sizeof(size_t) >= 4,
 		"[fiber]: size_t must be at least 32-bit.");
 
-FIBER_STATIC_ASSERT((FIBER_INITIAL_EXC_RETURN & 0x0Cu) == 0x0Cu,
+FIBER_STATIC_ASSERT((FIBER_PORT_INITIAL_EXC_RETURN & 0x0Cu) == 0x0Cu,
 		"[fiber]: initial EXC_RETURN must use Thread mode with PSP");
-FIBER_STATIC_ASSERT((FIBER_INITIAL_EXC_RETURN & 0x10u) != 0u,
+FIBER_STATIC_ASSERT((FIBER_PORT_INITIAL_EXC_RETURN & 0x10u) != 0u,
 		"[fiber]: initial EXC_RETURN must use a basic frame");
 
 /* -------------------------------------------------------------------------- */
@@ -94,12 +95,28 @@ enum {
 	FIBER_EXC_BASE_BYTES = FIBER_PORT_EXC_BASE_BYTES,
 	FIBER_EXC_FP_EXT_BYTES = FIBER_PORT_EXC_FP_EXT_BYTES,
 	FIBER_EXC_PER_LEVEL = FIBER_PORT_EXC_PER_LEVEL_BYTES,
+	FIBER_HIGH_FP_SOFTWARE_BYTES =
+			FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (16u * 4u) : 0u,
+	FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES = 4u,
+	FIBER_PORT_INITIAL_CONTEXT_BYTES =
+			FIBER_EXC_BASE_BYTES + FIBER_PORT_SOFTWARE_FRAME_BYTES,
+	FIBER_PORT_MAX_SAVED_CONTEXT_BYTES =
+			FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_EXC_PER_LEVEL +
+			FIBER_HIGH_FP_SOFTWARE_BYTES + FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES,
+	/* One non-configurable maximum hardware frame is retained above PSP. */
+	FIBER_STACK_TOP_GUARD_BYTES = FIBER_EXC_PER_LEVEL,
 	FIBER_STACK_WITHOUT_REDZONE =
-			FIBER_EXC_PER_LEVEL * FIBER_EXC_LEVELS_ON_PSP +
+			FIBER_STACK_TOP_GUARD_BYTES +
 			FIBER_BOOT_EXTRA_BYTES,
 	FIBER_STACK_MIN_BOOT =
 			FIBER_STACK_REDZONE_BYTES + FIBER_STACK_WITHOUT_REDZONE
 };
+
+FIBER_STATIC_ASSERT(FIBER_BOOT_EXTRA_BYTES >= FIBER_PORT_MAX_SAVED_CONTEXT_BYTES,
+		"[fiber]: FIBER_BOOT_EXTRA_BYTES must cover the selected port maximum saved context");
+FIBER_STATIC_ASSERT(FIBER_STACK_WITHOUT_REDZONE >=
+		(FIBER_STACK_TOP_GUARD_BYTES + FIBER_PORT_INITIAL_CONTEXT_BYTES),
+		"[fiber]: stack minimum must cover top guard and initial context");
 
 static const uintptr_t FIBER_STACK_MASK = (uintptr_t)FIBER_STACK_ALIGN - 1u;
 static const uintptr_t FIBER_WORD_MASK = (uintptr_t)sizeof(uintptr_t) - 1u;

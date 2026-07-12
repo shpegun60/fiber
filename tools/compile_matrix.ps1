@@ -1,6 +1,7 @@
 param(
     [string]$ArmGcc = $env:ARM_NONE_EABI_GCC,
     [string]$CmsisCore = $env:CMSIS_CORE_INCLUDE,
+    [switch]$SettingsOnly,
     [switch]$KeepBuild
 )
 
@@ -81,6 +82,33 @@ function Find-CmsisCore {
     }
 
     throw "CMSIS core headers not found. Set CMSIS_CORE_INCLUDE to a folder containing cmsis_compiler.h and core_cm*.h."
+}
+
+function Invoke-CompilerProbe {
+    param(
+        [string]$Compiler,
+        [string[]]$Arguments,
+        [string]$LogPath
+    )
+
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $Compiler @Arguments *> $LogPath
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    $output = ""
+    if (Test-Path $LogPath) {
+        $output = Get-Content -LiteralPath $LogPath -Raw
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = $output
+    }
 }
 
 $gcc = Find-ArmGcc
@@ -200,7 +228,8 @@ try {
     Write-Host "CMSIS:    $cmsis"
     Write-Host "Build:    $buildRoot"
 
-    foreach ($cfg in $configs) {
+    if (-not $SettingsOnly) {
+        foreach ($cfg in $configs) {
         $profile = $portProfiles[$cfg.Name]
         if ([string]::IsNullOrWhiteSpace($profile)) {
             throw "No explicit FIBER_PORT_PROFILE mapping for $($cfg.Name)"
@@ -427,6 +456,141 @@ void Error_Handler(void);
                     throw "Expected exactly one $symbol definition for $($cfg.Name) / $($mode.Name); found $($definitions.Count)"
                 }
             }
+        }
+        }
+    }
+
+    # Compile-time policy probes prove that the concrete CM7 port fails closed
+    # for invalid settings. These compile one common source because the selected
+    # port facade evaluates the complete settings and trait contract there.
+    $probeCfg = $configs | Where-Object { $_.Name -eq "cortex-m7f" }
+    if ($null -eq $probeCfg) {
+        throw "cortex-m7f configuration is required for settings probes"
+    }
+
+    $probeRoot = Join-Path $buildRoot "cm7-settings-contract"
+    $probe4Dir = Join-Path $probeRoot "prio4"
+    $probe8Dir = Join-Path $probeRoot "prio8"
+    New-Item -ItemType Directory -Path $probe4Dir | Out-Null
+    New-Item -ItemType Directory -Path $probe8Dir | Out-Null
+
+    $probeHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+
+#define __MPU_PRESENT             0U
+#define __VTOR_PRESENT            1U
+#define __NVIC_PRIO_BITS          __PROBE_NVIC_PRIO_BITS
+#define __Vendor_SysTickConfig    0U
+#define __FPU_PRESENT             1U
+#define __FPU_USED                1U
+#define __DSP_PRESENT             1U
+#define __SAUREGION_PRESENT       0U
+#define __ICACHE_PRESENT          0U
+#define __DCACHE_PRESENT          0U
+
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14,
+    HardFault_IRQn      = -13,
+    MemoryManagement_IRQn = -12,
+    BusFault_IRQn       = -11,
+    UsageFault_IRQn     = -10,
+    SecureFault_IRQn    = -9,
+    SVCall_IRQn         = -5,
+    DebugMonitor_IRQn   = -4,
+    PendSV_IRQn         = -2,
+    SysTick_IRQn        = -1,
+    DummyDevice_IRQn    = 0
+} IRQn_Type;
+
+void Error_Handler(void);
+
+#include "core_cm7.h"
+
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probe4Dir "main.h") `
+        -Value ($probeHeader.Replace("__PROBE_NVIC_PRIO_BITS", "4U")) -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $probe8Dir "main.h") `
+        -Value ($probeHeader.Replace("__PROBE_NVIC_PRIO_BITS", "8U")) -Encoding ASCII
+
+    $probeCommonArgs = $probeCfg.CpuArgs + @(
+        "-I$(Join-Path $RepoRoot 'fiber\port\ARM_CM7\r0p1')",
+        "-mthumb"
+    ) + $probeCfg.Extra + @(
+        "-std=gnu11",
+        "-ffreestanding",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type",
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV7EM=1",
+        "-DFIBER_CORTEX_M7_R0P1_ERRATA_837070=1",
+        "-DFIBER_PENDSV_WIRED=1",
+        "-DFIBER_SVC_WIRED=1"
+    )
+    $probeSource = Join-Path $RepoRoot "fiber\fiber_core.c"
+
+    Write-Host ""
+    Write-Host "== cortex-m7f / settings-contract-prio8-default =="
+    $positiveArgs = $probeCommonArgs + @(
+        "-I$probe8Dir",
+        "-I$RepoRoot",
+        "-I$(Join-Path $RepoRoot 'fiber')",
+        "-I$cmsis",
+        "-c",
+        $probeSource,
+        "-o",
+        (Join-Path $probe8Dir "default-basepri.o")
+    )
+    $positiveResult = Invoke-CompilerProbe -Compiler $gcc -Arguments $positiveArgs `
+        -LogPath (Join-Path $probe8Dir "default-basepri.log")
+    if ($positiveResult.ExitCode -ne 0) {
+        throw "8-bit NVIC default BASEPRI probe failed:`n$($positiveResult.Output)"
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{ Name = "invalid-fpu-lazy"; Define = "-DFIBER_FPU_LAZY=2"; Diagnostic = "FIBER_FPU_LAZY must be 0 or 1"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "invalid-exc-return"; Define = "-DFIBER_INITIAL_EXC_RETURN=0xFFFFFFFFu"; Diagnostic = "requires EXC_RETURN 0xFFFFFFFD"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "obsolete-validation-switch"; Define = "-DFIBER_VALIDATE_EXCEPTION_SETUP=0"; Diagnostic = "startup validation is mandatory"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "undersized-context-area"; Define = "-DFIBER_BOOT_EXTRA_BYTES=4"; Diagnostic = "must cover the selected port maximum saved context"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "unimplemented-basepri-bits"; Define = "-DFIBER_SCHEDULER_BASEPRI=1"; Diagnostic = "uses unimplemented priority bits"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "eight-bit-basepri-subpriority"; Define = "-DFIBER_SCHEDULER_BASEPRI=1"; Diagnostic = "bit 0 is subpriority"; Dir = $probe8Dir },
+        [pscustomobject]@{ Name = "obsolete-faultmask-trait"; Define = "-DFIBER_HAS_FAULTMASK=1"; Diagnostic = "FIBER_HAS_FAULTMASK is obsolete"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "obsolete-psp-levels"; Define = "-DFIBER_EXC_LEVELS_ON_PSP=2"; Diagnostic = "FIBER_EXC_LEVELS_ON_PSP was removed"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "invalid-nonsecure-cm7"; Define = "-DFIBER_RUN_NONSECURE=1"; Diagnostic = "cannot run an ARMv8-M Non-secure context"; Dir = $probe4Dir },
+        [pscustomobject]@{ Name = "invalid-canary-boolean"; Define = "-DFIBER_STACK_CANARY=2"; Diagnostic = "FIBER_STACK_CANARY must be 0 or 1"; Dir = $probe4Dir }
+    )
+
+    foreach ($case in $negativeCases) {
+        Write-Host "== cortex-m7f / settings-contract-$($case.Name) =="
+        $objectPath = Join-Path $case.Dir ($case.Name + ".o")
+        $logPath = Join-Path $case.Dir ($case.Name + ".log")
+        $negativeArgs = $probeCommonArgs + @(
+            $case.Define,
+            "-I$($case.Dir)",
+            "-I$RepoRoot",
+            "-I$(Join-Path $RepoRoot 'fiber')",
+            "-I$cmsis",
+            "-c",
+            $probeSource,
+            "-o",
+            $objectPath
+        )
+        $negativeResult = Invoke-CompilerProbe -Compiler $gcc -Arguments $negativeArgs `
+            -LogPath $logPath
+
+        if ($negativeResult.ExitCode -eq 0) {
+            throw "Invalid setting unexpectedly compiled: $($case.Name)"
+        }
+        $normalizedOutput = $negativeResult.Output -replace '\s+', ' '
+        $normalizedDiagnostic = $case.Diagnostic -replace '\s+', ' '
+        if ($normalizedOutput -notmatch [regex]::Escape($normalizedDiagnostic)) {
+            throw "Invalid setting failed for the wrong reason: $($case.Name)`n$($negativeResult.Output)"
         }
     }
 

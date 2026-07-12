@@ -29,7 +29,8 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	fiber_boot_record_check(&ctx->boot);
 
-	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top - (uintptr_t)FIBER_EXC_PER_LEVEL);
+	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
+			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 
@@ -44,7 +45,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	*(--sp) = (uint32_t)(uintptr_t)ctx->boot.arg;
 
 	/* ARMv7-M software frame, low to high: [r4..r11][LR(EXC_RETURN)]. */
-	*(--sp) = FIBER_INITIAL_EXC_RETURN;
+	*(--sp) = FIBER_PORT_INITIAL_EXC_RETURN;
 	*(--sp) = 0u;                    /* r11 */
 	*(--sp) = 0u;                    /* r10 */
 	*(--sp) = fiber_port_read_r9();  /* r9  */

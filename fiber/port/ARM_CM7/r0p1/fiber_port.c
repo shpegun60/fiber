@@ -42,7 +42,10 @@ enum {
 	fiber_portOFFSET_STACK_BASE =
 		offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base),
 	fiber_portOFFSET_STACK_TOP =
-		offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
+		offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top),
+	fiber_portOFFSET_BASIC_STACKED_XPSR = 7u * 4u,
+	fiber_portOFFSET_EXTENDED_STACKED_XPSR =
+		FIBER_PORT_EXC_FP_EXT_BYTES + (7u * 4u)
 };
 
 FIBER_STATIC_ASSERT(fiber_portOFFSET_STACK_BASE < 4096,
@@ -56,7 +59,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	fiber_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)(ctx->boot.stack_top -
-			(uintptr_t)fiber_portEXC_PER_LEVEL);
+			(uintptr_t)FIBER_STACK_TOP_GUARD_BYTES);
 
 	{
 		fiber_portDATA_SYNC_BARRIER();
@@ -166,12 +169,30 @@ void fiber_svc(void)
 	__ASM volatile(
 			".syntax unified                         \n"
 
+			"mrs   r3, ipsr                         \n"
+			"cmp   r3, #11                          \n"
+			"bne   93f                              \n" /* must execute as SVCall */
+			"mvn   r3, #6                           \n" /* 0xFFFFFFF9: Thread/MSP/basic */
+			"cmp   lr, r3                           \n"
+			"bne   93f                              \n"
 			"tst   lr, #4                           \n"
 			"bne   93f                              \n" /* first-start SVC must arrive from MSP */
 			"mrs   r0, msp                          \n" /* r0 = SVC stacked frame */
 			"tst   r0, #7                           \n"
 			"bne   93f                              \n" /* first-start MSP frame must be 8-byte aligned */
+			"ldr   r2, [r0, #28]                    \n" /* stacked xPSR */
+			"tst   r2, #0x01000000                  \n"
+			"beq   93f                              \n" /* stacked Thread state must be Thumb */
+			"tst   r2, #0x200                       \n"
+			"bne   93f                              \n" /* validated pre-SVC MSP cannot require padding */
+			"ubfx  r2, r2, #0, #9                   \n"
+			"cmp   r2, #0                           \n"
+			"bne   93f                              \n" /* stacked IPSR must describe Thread mode */
 			"ldr   r3, [r0, #24]                    \n" /* stacked PC */
+			"cmp   r3, #2                           \n"
+			"blo   94f                              \n"
+			"tst   r3, #1                           \n"
+			"bne   93f                              \n" /* Thumb state belongs in xPSR, not PC bit 0 */
 			"subs  r3, #2                           \n" /* SVC instruction address */
 			"ldrb  r2, [r3, #1]                     \n" /* SVC opcode high byte */
 			"cmp   r2, #0xDF                        \n"
@@ -267,10 +288,25 @@ void fiber_pendsv(void)
 	__ASM volatile(
 			".syntax unified                         \n"
 
+			"mrs   r3, ipsr                         \n"
+			"cmp   r3, #14                          \n"
+			"bne   91f                              \n" /* must execute as PendSV */
+			"mvn   r3, #2                           \n" /* 0xFFFFFFFD: Thread/PSP/basic */
+			"cmp   lr, r3                           \n"
+			"beq   7f                               \n"
+#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
+			"bic   r3, r3, #0x10                    \n" /* 0xFFFFFFED: Thread/PSP/extended */
+			"cmp   lr, r3                           \n"
+#endif
+			"bne   91f                              \n" /* reject every other EXC_RETURN encoding */
+			"7:                                     \n"
+
 			/* ----------------------------------------------------------------------
 			 * Prologue: get PSP and sync pipeline
 			 * ---------------------------------------------------------------------- */
 			"mrs   r0, psp                          \n" /* r0 = PSP */
+			"tst   r0, #7                           \n"
+			"bne   92f                              \n" /* STKALIGN requires an 8-byte hardware-frame base */
 
 #if FIBER_SWITCH_STRICT_BARRIERS
 			"dsb                                    \n"  /* (optional) serialize before branch */
@@ -318,8 +354,25 @@ void fiber_pendsv(void)
 			"bne   81f                              \n"
 			"subs  r2, #%c[hwfp]                    \n" /* extended FP HW frame */
 			"bcc   92f                              \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			"ldr   r3, [r0, %c[xpsrext]]            \n"
+			"b     82f                              \n"
 			"81:                                    \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			"ldr   r3, [r0, %c[xpsrbasic]]          \n"
+#else
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			"ldr   r3, [r0, %c[xpsrbasic]]          \n"
 #endif
+			"82:                                    \n"
+			"tst   r3, #0x200                       \n" /* xPSR.STACKALIGN */
+			"beq   83f                              \n"
+			"subs  r2, #%c[alignpad]                \n"
+			"bcc   92f                              \n"
+			"83:                                    \n"
 			"cmp   r0, r2                           \n"
 			"bhi   92f                              \n" /* HW frame crosses declared stack top */
 
@@ -391,8 +444,11 @@ void fiber_pendsv(void)
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+			  [alignpad] "I" (FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES),
+			  [xpsrbasic] "I" (fiber_portOFFSET_BASIC_STACKED_XPSR),
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),
+			  [xpsrext] "I" (fiber_portOFFSET_EXTENDED_STACKED_XPSR),
 #endif
 			  [offsb] "I" (fiber_portOFFSET_STACK_BASE),
 			  [offtop] "I" (fiber_portOFFSET_STACK_TOP)

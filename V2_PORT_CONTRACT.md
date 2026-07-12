@@ -926,7 +926,9 @@ Required invariants:
 - the synthetic frame sets `xPSR.T`;
 - the synthetic stacked `PC` stores the entry address with bit 0 clear;
 - Thumb state comes from `xPSR.T`, not from stacked `PC` bit 0;
-- the initial `LR`/`EXC_RETURN` value is target-aware and configurable;
+- the initial `LR`/`EXC_RETURN` value is selected-port-owned. A production port
+  fixes or validates it as part of its ABI; transitional bring-up inputs do not
+  make it an application tuning option;
 - stack growth direction is explicit;
 - stack limit metadata is either implemented for the port or explicitly unused;
 - invalid stack bounds trap before the first switch;
@@ -1085,7 +1087,7 @@ contains ARMv8-M.
 
 Required gates:
 
-- explicit `FIBER_INITIAL_EXC_RETURN` policy;
+- an explicit selected-port initial `EXC_RETURN` policy;
 - explicit Non-secure EXC_RETURN policy;
 - explicit PSPLIM register-access policy;
 - explicit vector-domain policy for SVC and PendSV;

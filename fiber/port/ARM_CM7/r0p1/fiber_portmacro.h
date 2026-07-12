@@ -101,38 +101,20 @@
 # define FIBER_SVC_VECTOR_DIRECT 0
 #endif
 
-#ifndef FIBER_FORCE_PRIGROUP
-# define FIBER_FORCE_PRIGROUP (-1)
+#if defined(FIBER_FORCE_PRIGROUP) || defined(FIBER_TUNE_SYSTICK) || \
+		defined(FIBER_TUNE_SVCALL)
+# error "[fiber]: ARM_CM7/r0p1 owns neither PRIGROUP nor SysTick; SVCall priority setup is mandatory"
 #endif
-#ifndef FIBER_TUNE_SYSTICK
-# define FIBER_TUNE_SYSTICK 0
-#endif
-#ifndef FIBER_TUNE_SVCALL
-# define FIBER_TUNE_SVCALL 1
-#endif
-#ifndef FIBER_VALIDATE_EXCEPTION_SETUP
-# define FIBER_VALIDATE_EXCEPTION_SETUP 1
-#endif
-#ifndef FIBER_VALIDATE_VECTOR_WIRING
-# define FIBER_VALIDATE_VECTOR_WIRING FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-#ifndef FIBER_VALIDATE_PENDSV_VECTOR
-# define FIBER_VALIDATE_PENDSV_VECTOR FIBER_VALIDATE_VECTOR_WIRING
-#endif
-#ifndef FIBER_VALIDATE_SVC_VECTOR
-# define FIBER_VALIDATE_SVC_VECTOR FIBER_VALIDATE_VECTOR_WIRING
-#endif
-#ifndef FIBER_VALIDATE_BASEPRI_PRIORITY_MASK
-# define FIBER_VALIDATE_BASEPRI_PRIORITY_MASK FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-#ifndef FIBER_VALIDATE_PRIORITY_GROUPING
-# define FIBER_VALIDATE_PRIORITY_GROUPING FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-#ifndef FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY
-# define FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY FIBER_VALIDATE_EXCEPTION_SETUP
-#endif
-#ifndef FIBER_VALIDATE_SVC_PRIORITY
-# define FIBER_VALIDATE_SVC_PRIORITY FIBER_VALIDATE_EXCEPTION_SETUP
+
+#if defined(FIBER_VALIDATE_EXCEPTION_SETUP) || \
+		defined(FIBER_VALIDATE_VECTOR_WIRING) || \
+		defined(FIBER_VALIDATE_PENDSV_VECTOR) || \
+		defined(FIBER_VALIDATE_SVC_VECTOR) || \
+		defined(FIBER_VALIDATE_BASEPRI_PRIORITY_MASK) || \
+		defined(FIBER_VALIDATE_PRIORITY_GROUPING) || \
+		defined(FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY) || \
+		defined(FIBER_VALIDATE_SVC_PRIORITY)
+# error "[fiber]: ARM_CM7/r0p1 startup validation is mandatory and has no user switch"
 #endif
 
 FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
@@ -143,6 +125,43 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 # define FIBER_VTOR_USE_NS 0
 #endif
 
+#if (FIBER_FPU_LAZY != 0) && (FIBER_FPU_LAZY != 1)
+# error "[fiber]: ARM_CM7/r0p1 FIBER_FPU_LAZY must be 0 or 1"
+#endif
+#if (FIBER_ENABLE_CPACR != 0) && (FIBER_ENABLE_CPACR != 1)
+# error "[fiber]: ARM_CM7/r0p1 FIBER_ENABLE_CPACR must be 0 or 1"
+#endif
+#if (FIBER_SWITCH_STRICT_BARRIERS != 0) && \
+		(FIBER_SWITCH_STRICT_BARRIERS != 1)
+# error "[fiber]: ARM_CM7/r0p1 FIBER_SWITCH_STRICT_BARRIERS must be 0 or 1"
+#endif
+#if (FIBER_PENDSV_VECTOR_DIRECT != 0) && (FIBER_PENDSV_VECTOR_DIRECT != 1)
+# error "[fiber]: ARM_CM7/r0p1 FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1"
+#endif
+#if (FIBER_SVC_VECTOR_DIRECT != 0) && (FIBER_SVC_VECTOR_DIRECT != 1)
+# error "[fiber]: ARM_CM7/r0p1 FIBER_SVC_VECTOR_DIRECT must be 0 or 1"
+#endif
+
+/*
+ * ARMv7E-M CPU facts are not tuning options. Keeping these checks in the
+ * concrete port prevents a build flag from changing the frame contract that
+ * naked SVC/PendSV assembly relies on.
+ */
+#if FIBER_RUN_NONSECURE != 0
+# error "[fiber]: ARM_CM7/r0p1 cannot run an ARMv8-M Non-secure context"
+#endif
+#if FIBER_INITIAL_EXC_RETURN != 0xFFFFFFFDu
+# error "[fiber]: ARM_CM7/r0p1 requires EXC_RETURN 0xFFFFFFFD"
+#endif
+#if FIBER_BOOT_CLEAR_FPCA != 1
+# error "[fiber]: ARM_CM7/r0p1 requires first-start FPCA clearing"
+#endif
+#if FIBER_FORCE_SAVE_FPU != 0
+# error "[fiber]: ARM_CM7/r0p1 derives FP context support from CMSIS and compiler facts; forced FP save is not supported"
+#endif
+#if FIBER_VTOR_USE_NS != 0
+# error "[fiber]: ARM_CM7/r0p1 has no Non-secure VTOR bank"
+#endif
 #ifndef FIBER_PORT_MASK_PRIMASK
 # define FIBER_PORT_MASK_PRIMASK 1
 #endif
@@ -158,22 +177,25 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
  * only the resulting traits.
  *----------------------------------------------------------*/
 
-#ifndef FIBER_PORT_TOOLCHAIN_HAS_FP
-# if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 1
-# elif defined(__VFP_FP__) && !defined(__SOFTFP__)
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 1
-# else
-#  define FIBER_PORT_TOOLCHAIN_HAS_FP 0
-# endif
+#if defined(FIBER_PORT_TOOLCHAIN_HAS_FP) || \
+		defined(FIBER_PORT_SILICON_HAS_FPU) || \
+		defined(FIBER_PORT_CMSIS_FPU_USED) || \
+		defined(FIBER_HAS_FPU) || defined(FIBER_HAS_EXTENDED_FP_CONTEXT)
+# error "[fiber]: ARM_CM7/r0p1 FPU facts are selected-port-owned and must not be predefined"
 #endif
 
-#ifndef FIBER_PORT_SILICON_HAS_FPU
-# if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
-#  define FIBER_PORT_SILICON_HAS_FPU 1
-# else
-#  define FIBER_PORT_SILICON_HAS_FPU 0
-# endif
+#if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 1
+#elif defined(__VFP_FP__) && !defined(__SOFTFP__)
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 1
+#else
+# define FIBER_PORT_TOOLCHAIN_HAS_FP 0
+#endif
+
+#if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
+# define FIBER_PORT_SILICON_HAS_FPU 1
+#else
+# define FIBER_PORT_SILICON_HAS_FPU 0
 #endif
 
 #if defined(__FPU_USED)
@@ -182,42 +204,40 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 # define FIBER_PORT_CMSIS_FPU_USED 0
 #endif
 
-#ifndef FIBER_HAS_FPU
-# if FIBER_FORCE_SAVE_FPU
-#  define FIBER_HAS_FPU 1
-# elif (FIBER_PORT_SILICON_HAS_FPU == 1) && \
-		((FIBER_PORT_TOOLCHAIN_HAS_FP == 1) || (FIBER_PORT_CMSIS_FPU_USED == 1))
-#  define FIBER_HAS_FPU 1
-# else
-#  define FIBER_HAS_FPU 0
-# endif
+#if (FIBER_PORT_TOOLCHAIN_HAS_FP == 1) && (FIBER_PORT_SILICON_HAS_FPU == 0)
+# error "[fiber]: ARM_CM7 compiler emits FP instructions but CMSIS reports no silicon FPU"
+#endif
+#if defined(__FPU_USED) && \
+		(FIBER_PORT_CMSIS_FPU_USED != FIBER_PORT_TOOLCHAIN_HAS_FP)
+# error "[fiber]: ARM_CM7 CMSIS __FPU_USED disagrees with compiler FP code generation"
 #endif
 
-#ifndef __FPU_USED
-# if FIBER_HAS_FPU
-#  define __FPU_USED 1U
-# else
-#  define __FPU_USED 0U
-# endif
-#endif
-
-#ifndef FIBER_HAS_EXTENDED_FP_CONTEXT
-# if FIBER_HAS_FPU
-#  define FIBER_HAS_EXTENDED_FP_CONTEXT 1
-# else
-#  define FIBER_HAS_EXTENDED_FP_CONTEXT 0
-# endif
+#if (FIBER_PORT_SILICON_HAS_FPU == 1) && (FIBER_PORT_TOOLCHAIN_HAS_FP == 1)
+# define FIBER_HAS_FPU 1
+# define FIBER_HAS_EXTENDED_FP_CONTEXT 1
+#else
+# define FIBER_HAS_FPU 0
+# define FIBER_HAS_EXTENDED_FP_CONTEXT 0
 #endif
 
 #if !defined(__CORTEX_M) || (__CORTEX_M != 7)
 # error "[fiber]: ARM_CM7/r0p1 selected port requires Cortex-M7"
 #endif
 
+#ifndef __NVIC_PRIO_BITS
+# error "[fiber]: ARM_CM7/r0p1 requires CMSIS __NVIC_PRIO_BITS"
+#endif
+#if (__NVIC_PRIO_BITS < 2) || (__NVIC_PRIO_BITS > 8)
+# error "[fiber]: ARM_CM7/r0p1 __NVIC_PRIO_BITS must be in [2, 8]"
+#endif
+
 #ifndef FIBER_SCHEDULER_BASEPRI
-# ifndef __NVIC_PRIO_BITS
-#  error "[fiber]: __NVIC_PRIO_BITS is required to default FIBER_SCHEDULER_BASEPRI"
+# if __NVIC_PRIO_BITS == 8
+/* PRIGROUP necessarily leaves bit 0 as subpriority on an 8-bit implementation. */
+#  define FIBER_SCHEDULER_BASEPRI 2u
+# else
+#  define FIBER_SCHEDULER_BASEPRI (1u << (8u - __NVIC_PRIO_BITS))
 # endif
-# define FIBER_SCHEDULER_BASEPRI (1u << (8u - __NVIC_PRIO_BITS))
 #endif
 
 #if FIBER_SCHEDULER_BASEPRI == 0u
@@ -226,6 +246,14 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 
 #if FIBER_SCHEDULER_BASEPRI > 255u
 # error "[fiber]: ARM_CM7/r0p1 scheduler BASEPRI threshold must fit in 8 bits"
+#endif
+
+FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI &
+		((1u << (8u - __NVIC_PRIO_BITS)) - 1u)) == 0u,
+		"[fiber]: ARM_CM7/r0p1 scheduler BASEPRI uses unimplemented priority bits");
+#if __NVIC_PRIO_BITS == 8
+FIBER_STATIC_ASSERT((FIBER_SCHEDULER_BASEPRI & 1u) == 0u,
+		"[fiber]: ARM_CM7/r0p1 scheduler BASEPRI bit 0 is subpriority when all 8 bits are implemented");
 #endif
 
 /*-----------------------------------------------------------
@@ -247,7 +275,7 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 #define fiber_portBYTE_ALIGNMENT 8u
 #define fiber_portINITIAL_XPSR 0x01000000u
 #define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
-#define fiber_portINITIAL_EXC_RETURN FIBER_INITIAL_EXC_RETURN
+#define fiber_portINITIAL_EXC_RETURN 0xFFFFFFFDu
 
 #define fiber_portNVIC_INT_CTRL_REG \
 	(*((volatile uint32_t *)0xE000ED04u))
@@ -310,7 +338,7 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 #define FIBER_PORT_HAS_PSPLIM 0
 #define FIBER_PORT_HAS_FPU FIBER_HAS_FPU
 #define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT FIBER_HAS_EXTENDED_FP_CONTEXT
-#define FIBER_PORT_BOOT_CLEARS_FPCA (FIBER_HAS_FPU && FIBER_BOOT_CLEAR_FPCA)
+#define FIBER_PORT_BOOT_CLEARS_FPCA FIBER_HAS_FPU
 #define FIBER_PORT_HAS_MVE 0
 #define FIBER_PORT_HAS_PAC 0
 #define FIBER_PORT_HAS_BTI 0

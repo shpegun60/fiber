@@ -20,8 +20,11 @@ Run the validation first with portable conservative defaults:
 #define FIBER_SWITCH_STRICT_BARRIERS 1
 #define FIBER_STACK_CANARY 1
 #define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
-#define FIBER_VALIDATE_EXCEPTION_SETUP 1
 ```
+
+The concrete CM7 port has no startup-validation enable switch. Vector,
+priority, CPUID, errata, and frame validation are mandatory; defining obsolete
+`FIBER_VALIDATE_*` startup switches is a compile error.
 
 Performance-mode runs may be recorded separately, but they must not replace the
 conservative run.
@@ -37,8 +40,9 @@ Before a board run:
 
 ## Startup Exception Setup
 
-`fiber_pendsv_init_lowest_priority()` must complete without panic on the
-validated STM32H7 build.
+`fiber_start()` calls `fiber_pendsv_init_lowest_priority()` automatically. It
+must complete without panic on the validated STM32H7 build; the application
+does not need a separate initialization call.
 
 The runtime check must cover:
 
@@ -60,7 +64,8 @@ Expected setup panic codes when deliberately misconfigured:
 - `'Q'`: scheduler `BASEPRI` masks no implemented priority bits.
 - `'q'`: scheduler `BASEPRI` contains unimplemented priority bits.
 - `'g'`: priority grouping or priority threshold is incompatible.
-- `'7'`: affected Cortex-M7 r0p0/r0p1 core without the errata gate.
+- `'7'`: selected CM7 port is running on a non-Cortex-M7 CPUID, or an affected
+  r0p0/r0p1 errata policy invariant failed.
 
 ## Scheduler Hook API
 
@@ -82,6 +87,10 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_EXC_RETURN
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_SHORT_FRAME
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_BOOT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_XPSR_T
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_XPSR_IPSR
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_STACKED_PC
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_SHORT_ALIGN_FRAME
 ```
 
 `fiber_live.validation_mode_seen` records the selected mode, and
@@ -198,8 +207,11 @@ Validate these scheduler result cases:
   related stack-bound panic code.
 - returned context with an `EXC_RETURN` value outside the exact selected-port
   encoding set traps with `'x'`.
+- returned context without `xPSR.T`, with a nonzero stacked IPSR, or with
+  stacked PC bit 0 set traps with `'x'`.
 - returned context with insufficient software, hardware, or extended-FP frame
-  headroom traps with `'X'` before exception return.
+  headroom, including a missing `xPSR.STACKALIGN` word, traps with `'X'` before
+  exception return.
 - a damaged low-stack software canary traps with `'c'`, including on ports that
   also provide PSPLIM.
 - returned context with an unsealed or corrupted boot record traps before PSP is
@@ -221,6 +233,12 @@ The harness keeps first-start and later-PendSV result validation separate:
   and traps with `'X'` before reading or restoring an incomplete frame.
 - `FIBER_VAL_TRAP_BAD_BOOT` corrupts the next context's `avail` relationship
   and traps with `'a'` in the mandatory fast structural boot-record check.
+- `FIBER_VAL_TRAP_BAD_XPSR_T`, `FIBER_VAL_TRAP_BAD_XPSR_IPSR`, and
+  `FIBER_VAL_TRAP_BAD_STACKED_PC` independently damage the saved architectural
+  Thread/Thumb frame signature and trap with `'x'`.
+- `FIBER_VAL_TRAP_SHORT_ALIGN_FRAME` supplies a complete base frame whose xPSR
+  claims an additional alignment word that is outside the declared stack, and
+  traps with `'X'`.
 
 ## Long-Run H7 Stress
 
@@ -299,6 +317,8 @@ software-canary checks, full live hardware-frame bounds, FPU register readback,
 and exact CM7 source selection. Do not promote the current working state from
 this older snapshot. Re-run normal mode and all listed trap modes, including
 `CANARY`, `BAD_EXC_RETURN`, `SHORT_FRAME`, and `BAD_BOOT`.
+Also run `BAD_XPSR_T`, `BAD_XPSR_IPSR`, `BAD_STACKED_PC`, and
+`SHORT_ALIGN_FRAME` after the saved-frame semantic hardening.
 
 ## Superseded Recorded Result: 2026-07-11
 

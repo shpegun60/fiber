@@ -57,6 +57,8 @@ the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
 exception setup, FPU traits, and architecture-specific critical-section policy.
 Common runtime files should not keep architecture-specific fallback switch
 assembly or CPU capability decisions for ports that are claimed as supported.
+Configuration ownership and every supported CM7 tuning option are documented in
+`FIBER_SETTINGS.md`.
 
 Port selection defaults to automatic detection from compiler ARM architecture
 macros. Production builds may select the profile explicitly, for example:
@@ -79,7 +81,9 @@ the primary hardware-observed path and now builds through the concrete
 documented board rerun; every other profile remains compile/link-covered only
 until its own hardware validation is recorded.
 
-Before starting fibers, initialize PendSV priority:
+`fiber_start()` initializes and validates PendSV/SVCall priority automatically.
+The setup function remains public and idempotent for integrations that want an
+earlier diagnostic check:
 
 ```c
 fiber_pendsv_init_lowest_priority();
@@ -155,8 +159,6 @@ void fiber3_entry(void*)
 
 void app_main(void)
 {
-	fiber_pendsv_init_lowest_priority();
-
 	fiber_init(&f1, stack1, stack1 + sizeof(stack1), fiber1_entry, (void*)1);
 	fiber_init(&f2, stack2, stack2 + sizeof(stack2), fiber2_entry, (void*)2);
 	fiber_init(&f3, stack3, stack3 + sizeof(stack3), fiber3_entry, (void*)3);
@@ -186,9 +188,10 @@ must also remain bounded, non-blocking, non-allocating, non-throwing, and must
 not call `fiber_schedule()` recursively. The same restrictions apply to every
 function reachable from the hook, not only to the top-level thunk.
 
-`fiber_start()` checks the environment, asks the scheduler for the first
-context, validates it, seeds the runtime-owned current context, prepares the
-platform, and does not return. The first scheduler hook call is protected with
+`fiber_start()` configures and validates PendSV/SVCall, checks the environment,
+asks the scheduler for the first context, validates it, seeds the runtime-owned
+current context, prepares the platform, and does not return. The first scheduler
+hook call is protected with
 the same port scheduler critical-section policy as PendSV: BASEPRI on
 BASEPRI-capable ports, or saved PRIMASK on baseline ports. `fiber_start()`
 resets the first-start CPU state to privileged Thread/MSP, optionally rewinds
@@ -210,15 +213,18 @@ traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 Restore-target validation is mandatory and has no performance-disable switch.
 It checks the current context after save and every scheduler-selected target
 before restore. `EXC_RETURN` must match one of the exact encodings allowed by
-the selected port; checking only the Thread/PSP bits is not sufficient. When
-`FIBER_STACK_CANARY=1`, the low-stack canary is checked on every scheduler
+the selected port; checking only the Thread/PSP bits is not sufficient. The
+saved hardware frame must also contain `xPSR.T`, stacked Thread-mode IPSR state,
+a PC with bit 0 clear, and enough space for the optional `xPSR.STACKALIGN` word.
+When `FIBER_STACK_CANARY=1`, the low-stack canary is checked on every scheduler
 selection independently of PSPLIM availability. Even when full per-switch boot
 hashing is disabled, the fast check validates boot-record guards and structural
 relationships before any canary or saved-frame memory is read.
 
-PendSV verifies the active `EXC_RETURN` value before saving a source context.
-If the interrupted Thread context used MSP instead of PSP, a pre-start or
-foreign PendSV traps with `'j'` instead of saving an invalid stack state.
+The concrete CM7 PendSV verifies Handler identity and the complete active
+`EXC_RETURN` encoding before saving a source context. If the interrupted Thread
+context did not use PSP, or any other exception-return encoding is present, a
+pre-start or foreign PendSV traps with `'j'` instead of saving invalid state.
 
 Before writing the source software frame, PendSV also checks that the live PSP
 is inside the current fiber stack bounds and has enough headroom for the core
@@ -377,14 +383,14 @@ Auto selection maps STM32H7/Cortex-M7 to
 FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The concrete
 fiber CM7 scheduler-driven PendSV path raises `BASEPRI` around the scheduler
 bridge, then restores the previous `BASEPRI` value before restoring the selected
-fiber. `FIBER_CORTEX_M7_R0P1_ERRATA_837070=1` enables a FreeRTOS-style guard
-around handler-side `BASEPRI` writes for affected Cortex-M7 r0p1 parts. The
+fiber. The concrete port always enables a FreeRTOS-style guard around
+handler-side `BASEPRI` writes for affected Cortex-M7 r0p1 parts. The
 fiber helper preserves and restores the previous `PRIMASK` instead of blindly
 executing `cpsie i`, so SVC/start critical sections stay closed while the
-errata-safe `BASEPRI` write is serialized. Runtime startup now checks CPUID and
-traps on affected r0p0/r0p1 cores if the workaround is not enabled. The compile
-matrix builds this branch, but real affected hardware validation is still
-required before claiming r0p1 parity.
+errata-safe `BASEPRI` write is serialized. Runtime startup checks that CPUID is
+Cortex-M7 and keeps the affected r0p0/r0p1 policy fail-closed. The compile matrix
+builds this branch, but real affected hardware validation is still required
+before claiming r0p1 parity.
 
 The initial synthetic exception frame stores `PC` with bit 0 clear. Thumb state
 is carried by `xPSR.T`.
@@ -393,14 +399,15 @@ The ARMv7E-M first-start path enters that synthetic frame through SVC, not a
 direct branch. It
 requires a configured scheduler hook, requires no active interrupt masks,
 verifies MSP setup, validates the restore context, checks SVC provenance,
-MSP-frame alignment, and opcode/immediate value, clears pending PendSV before
-opening interrupts for SVC, enables IRQ and fault exceptions, clears BASEPRI in
-the SVC handler, then sets PSP/CONTROL immediately before exception return.
+exact incoming `EXC_RETURN`, stacked Thread/Thumb state, MSP-frame alignment,
+and opcode/immediate value. It clears pending PendSV before opening interrupts
+for SVC, enables IRQ and fault exceptions, clears BASEPRI in the SVC handler,
+then restores PSP and returns through the selected context's `EXC_RETURN`.
 
-`FIBER_INITIAL_EXC_RETURN` defaults to `0xFFFFFFFDu`, which is correct for
-M3/M4/M7 and secure-only style builds. ARMv8-M Non-secure projects can define
-`FIBER_RUN_NONSECURE = 1` to select `0xFFFFFFBCu`, or override
-`FIBER_INITIAL_EXC_RETURN` directly.
+The concrete CM7 port fixes its initial `EXC_RETURN` at `0xFFFFFFFDu` and rejects
+an incompatible override. `FIBER_RUN_NONSECURE` and
+`FIBER_INITIAL_EXC_RETURN` remain only as transitional v8-M bring-up inputs;
+they do not provide production TrustZone or Non-secure support.
 
 Cortex-M23, Cortex-M33, Cortex-M55, MVE, TrustZone/Non-secure, and PAC/BTI
 scenarios are unsupported until their FreeRTOS-style context layout is
@@ -427,7 +434,8 @@ ARMv7E-M. Direct-vector compile coverage does not replace hardware tests and
 does not promote a direct-vector configuration to a runtime-validated board
 claim.
 
-See `DECISIONS.md` for the current context-switch decision log,
+See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
+context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and
 `FREERTOS_SUPPORT_PLAN.md` for the roadmap toward FreeRTOS-style Cortex-M
 CPU-port support.

@@ -48,14 +48,13 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 
 	/* -------- ensure enough space for seed frames --------
 	 * We require:
-	 *   - FIBER_EXC_PER_LEVEL bytes headroom (one full HW exception level as defined by your platform)
-	 *   - one "real" HW frame we build (always base 8 regs = FIBER_EXC_BASE_BYTES)
+	 *   - selected-port top guard bytes
+	 *   - one synthetic base hardware frame
 	 *   - port-owned software frame
 	 */
 	{
-		const size_t need_seed = (size_t)FIBER_EXC_PER_LEVEL
-				+ (size_t)FIBER_EXC_BASE_BYTES
-				+ (size_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
+		const size_t need_seed = (size_t)FIBER_STACK_TOP_GUARD_BYTES
+				+ (size_t)FIBER_PORT_INITIAL_CONTEXT_BYTES;
 		FIBER_REQUIRE(ctx->boot.avail >= need_seed, 'Z');
 	}
 
@@ -93,10 +92,6 @@ void fiber_start(void)
 {
 	FIBER_REQUIRE(fiber_port_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == NULL, 'k');
-
-	fiber_exception_runtime_check();
-	fiber_env_check();
-
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 #if FIBER_PORT_HAS_BASEPRI
@@ -105,6 +100,10 @@ void fiber_start(void)
 #if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
+
+	/* FreeRTOS-style ownership: first start configures and validates its handlers. */
+	fiber_pendsv_init_lowest_priority();
+	fiber_env_check();
 
 	fiber_platform_bootstrap();
 

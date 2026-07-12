@@ -46,8 +46,11 @@ enum {
 	FIBER_BOOT_RECORD_GUARD_HI = 0x5A5A5A5Au
 };
 
+FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_boot_record_compute_hash(const FiberBoot *ctx);
+FIBER_GENERAL_REGS_ONLY
 void fiber_boot_record_check(const FiberBoot *ctx);
+FIBER_GENERAL_REGS_ONLY
 void fiber_boot_record_fast_check(const FiberBoot *ctx);
 
 /*

@@ -22,7 +22,7 @@ compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
 
 ## Current Baseline
 
-Validated primary target:
+Primary target, pending a fresh hardware run after the current hardening diff:
 
 - STM32H7 / Cortex-M7.
 
@@ -37,7 +37,8 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
   FP frame.
 - `FIBER_FPU_LAZY = 0` keeps FP stacking deterministic by default.
 - The initial stacked `PC` has bit 0 clear; Thumb state comes from `xPSR.T`.
-- `FIBER_INITIAL_EXC_RETURN` is configurable.
+- initial `EXC_RETURN` is selected-port-owned. The concrete CM7 value is fixed
+  at `0xFFFFFFFDu`; only transitional v8-M bring-up still accepts an input.
 - First-fiber start uses SVC and enters the first fiber by exception return.
   The direct boot trampoline has been removed; each selected port must provide
   an SVC first-start symbol.
@@ -51,7 +52,8 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 Closed hardening items from the FreeRTOS comparison:
 
 - stacked `PC` bit 0 handling is fixed;
-- hard-coded initial `0xFFFFFFFDu` is replaced by `FIBER_INITIAL_EXC_RETURN`;
+- each selected port publishes its initial `EXC_RETURN`; the concrete CM7 port
+  rejects attempts to override its fixed `0xFFFFFFFDu` ABI;
 - `CONTROL.FPCA` is cleared before the first fiber entry when needed;
 - real switches are rejected when `PRIMASK` would defer PendSV;
 - real switches are rejected when `BASEPRI` would defer PendSV;

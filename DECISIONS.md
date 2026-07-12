@@ -1,5 +1,41 @@
 # Fiber Decision Log
 
+## 2026-07-12: Make CM7 Settings and Saved Frames Fail-Closed
+
+A second line-by-line comparison against local FreeRTOS commit `a50edad`
+tightened the concrete `ARM_CM7/r0p1` contract without changing its
+`r4-r11`/`EXC_RETURN`/FP save and restore order:
+
+- CPU facts are selected-port-owned. The CM7 initial `EXC_RETURN`, security
+  domain, FPCA policy, FPU presence, and saved-frame layout cannot be changed
+  into another architecture by application settings;
+- optional startup-validation switches were removed from the production CM7
+  contract. Vector routing, priority readback, implemented-priority probing,
+  PRIGROUP compatibility, CPUID, and errata checks are mandatory;
+- `fiber_start()` configures PendSV/SVCall priorities before first selection,
+  matching FreeRTOS scheduler-start ownership. Invalid Thread/mask state is
+  rejected before those registers are modified;
+- the default scheduler `BASEPRI` accounts for the unavoidable subpriority bit
+  when all eight NVIC priority bits are implemented. Compile-time and runtime
+  checks reject incompatible thresholds;
+- suspended contexts require an exact selected-port `EXC_RETURN`, complete
+  software/hardware/FP frame bounds, valid `xPSR.T`, Thread-mode stacked IPSR,
+  an even stacked PC, and any `xPSR.STACKALIGN` word;
+- the minimum context reserve is derived from selected-port frame traits. For
+  CM7 with FP it covers 208 bytes for the maximum saved context, plus one fixed
+  maximum hardware-frame top guard and the low red zone;
+- `FIBER_EXC_LEVELS_ON_PSP` was removed. Nested handlers use MSP, so it was not
+  an honest user setting; a larger reviewed reserve can use
+  `FIBER_BOOT_EXTRA_BYTES`;
+- boot-record, canary, scheduler bridge, and panic helpers reachable from
+  PendSV use the general-registers-only compiler contract;
+- the compile matrix includes expected-failure probes for invalid settings and
+  a positive eight-priority-bit default probe.
+
+These changes invalidate the active H7 hardware claim until `NORMAL_RUN` and
+all documented trap modes, including the saved-xPSR/PC/alignment modes, pass on
+the board. Compile and link coverage is not a substitute for that run.
+
 ## 2026-07-12: Make Port ABI and Restore Validation Non-Optional
 
 The paranoid FreeRTOS comparison found several cases where object-only compile

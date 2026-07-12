@@ -23,6 +23,7 @@ extern "C" {
 
 FIBER_WEAK FIBER_NORETURN
 FIBER_ATTR_SENSITIVE
+FIBER_GENERAL_REGS_ONLY
 void fiber_panic(char code);
 
 #ifdef __cplusplus

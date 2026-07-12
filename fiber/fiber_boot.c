@@ -75,7 +75,7 @@ void fiber_platform_bootstrap(void)
 
 	/* Let Mem/Bus/Usage faults fire (where available) to catch programming errors early. */
 #if defined(SCB_SHCSR_MEMFAULTENA_Msk) || defined(SCB_SHCSR_BUSFAULTENA_Msk) || defined(SCB_SHCSR_USGFAULTENA_Msk)
-	SCB->SHCSR |=
+	const uint32_t required_fault_enables =
 # ifdef SCB_SHCSR_MEMFAULTENA_Msk
 			SCB_SHCSR_MEMFAULTENA_Msk |
 # endif
@@ -88,33 +88,41 @@ void fiber_platform_bootstrap(void)
 			0u
 # endif
 			;
+	SCB->SHCSR |= required_fault_enables;
 
 	{ __DSB(); __ISB(); }
+	FIBER_REQUIRE((SCB->SHCSR & required_fault_enables) ==
+			required_fault_enables, 'F');
 #endif
 
 	/* Keep exception frames 8-byte aligned as per ARM ABI. */
 #ifdef SCB_CCR_STKALIGN_Msk
 	SCB->CCR |= SCB_CCR_STKALIGN_Msk;
 	{ __DSB(); __ISB(); }
+	FIBER_REQUIRE((SCB->CCR & SCB_CCR_STKALIGN_Msk) != 0u, 'A');
 #endif
 
 	/* Optionally trap unaligned accesses and division-by-zero to surface UB early. */
 #if defined(SCB_CCR_UNALIGN_TRP_Msk) && FIBER_ENABLE_UNALIGNED_TRAP
 	SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;
 	{ __DSB(); __ISB(); }
+	FIBER_REQUIRE((SCB->CCR & SCB_CCR_UNALIGN_TRP_Msk) != 0u, 'A');
 #endif
 #if defined(SCB_CCR_DIV_0_TRP_Msk) && FIBER_ENABLE_DIV0_TRAP
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 	{ __DSB(); __ISB(); }
+	FIBER_REQUIRE((SCB->CCR & SCB_CCR_DIV_0_TRP_Msk) != 0u, 'D');
 #endif
 
 #if FIBER_PORT_HAS_BASEPRI
 	fiber_port_basepri_write(0u);
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif /* BASEPRI */
 
 #if FIBER_PORT_HAS_FAULTMASK
 	__set_FAULTMASK(0);
 	{ __DSB(); __ISB(); }
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif /* FAULTMASK */
 
 	/* Let the selected port apply its FPU policy, if any. */
@@ -159,7 +167,8 @@ uintptr_t fiber_boot_prepare_msp_for_start(const FiberBoot* const ctx)
 	return 0u;
 }
 
-static uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
+static FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 {
 	h ^= (uint8_t)(v);
 	h *= 16777619u;
@@ -172,6 +181,7 @@ static uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 	return h;
 }
 
+FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_boot_record_compute_hash(const FiberBoot *c)
 {
 	/* Hash invariant fields only. Do not include sealed or hash itself. */
@@ -193,6 +203,7 @@ uint32_t fiber_boot_record_compute_hash(const FiberBoot *c)
 	return h;
 }
 
+FIBER_GENERAL_REGS_ONLY
 void fiber_boot_record_fast_check(const FiberBoot *ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
@@ -225,6 +236,7 @@ void fiber_boot_record_fast_check(const FiberBoot *ctx)
 			'M');
 }
 
+FIBER_GENERAL_REGS_ONLY
 void fiber_boot_record_check(const FiberBoot *ctx)
 {
 	fiber_boot_record_fast_check(ctx);

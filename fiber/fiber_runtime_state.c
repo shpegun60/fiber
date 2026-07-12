@@ -22,9 +22,8 @@ static volatile uint32_t fiber_internal_port_scheduler_selecting = 0;
 # error "[fiber]: FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"
 #endif
 
-#define FIBER_PORT_HIGH_FP_FRAME_BYTES (16u * 4u)
-
-static void fiber_internal_validate_stack_canary(const FiberContext *ctx)
+static FIBER_GENERAL_REGS_ONLY
+void fiber_internal_validate_stack_canary(const FiberContext *ctx)
 {
 #if FIBER_STACK_CANARY
 	const uintptr_t begin = (uintptr_t)ctx->boot.begin;
@@ -54,27 +53,53 @@ void fiber_internal_validate_restore_context(FiberContext *ctx)
 	fiber_internal_validate_stack_canary(ctx);
 
 	const uintptr_t sp = (uintptr_t)ctx->sp;
+	const uintptr_t available_bytes = ctx->boot.stack_top - sp;
 	/* Saved SW frame alignment is selected-port specific. */
 	FIBER_REQUIRE((sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
-	uintptr_t required_bytes = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES
-			+ (uintptr_t)FIBER_EXC_BASE_BYTES;
-	FIBER_REQUIRE((ctx->boot.stack_top - sp) >= required_bytes, 'X');
+	FIBER_REQUIRE(available_bytes >= (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES,
+			'X');
 
 	const uint32_t *const words = (const uint32_t *)sp;
 	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
 
 	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
 
+	uintptr_t hardware_frame_offset =
+			(uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
 #if FIBER_HAS_EXTENDED_FP_CONTEXT
 	if ((exc_return & 0x10u) == 0u) {
-		required_bytes += (uintptr_t)FIBER_PORT_HIGH_FP_FRAME_BYTES
-				+ (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
+		hardware_frame_offset += (uintptr_t)FIBER_HIGH_FP_SOFTWARE_BYTES;
 	}
 #endif
 
-	FIBER_REQUIRE((ctx->boot.stack_top - sp) >= required_bytes, 'X');
+	if ((exc_return & 0x10u) == 0u) {
+		hardware_frame_offset += (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
+	}
+
+	/* The base hardware frame is r0-r3, r12, LR, PC, xPSR. */
+	const uintptr_t stacked_pc_offset = hardware_frame_offset + (6u * 4u);
+	const uintptr_t stacked_xpsr_offset = hardware_frame_offset + (7u * 4u);
+	uintptr_t required_bytes = hardware_frame_offset +
+			(uintptr_t)FIBER_EXC_BASE_BYTES;
+
+	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
+
+	const uint32_t stacked_pc = *(const uint32_t *)(sp + stacked_pc_offset);
+	const uint32_t stacked_xpsr = *(const uint32_t *)(sp + stacked_xpsr_offset);
+
+	/* Thread state is represented by xPSR.T; stacked PC bit 0 stays clear. */
+	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
+	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
+	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+
+	/* xPSR bit 9 records the optional architectural alignment word. */
+	if ((stacked_xpsr & (1u << 9u)) != 0u) {
+		required_bytes += (uintptr_t)FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES;
+	}
+
+	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
 }
 
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
@@ -139,5 +164,3 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 
 	return next;
 }
-
-#undef FIBER_PORT_HIGH_FP_FRAME_BYTES
