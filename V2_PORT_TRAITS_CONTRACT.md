@@ -1,15 +1,22 @@
 # V2 Selected Port Traits Contract
 
-This document defines the compile-time CPU interface consumed by the common
-fiber runtime. It is modeled after the FreeRTOS selected `portmacro.h` plus one
-matching port source group, but the scheduler policy remains application-owned
-and cooperative.
+This document defines the selected port's compile-time CPU contract. It is
+modeled after the FreeRTOS selected `portmacro.h` plus one matching port source
+group, but scheduler policy remains application-owned and cooperative.
+
+`V2_OPAQUE_CONTEXT_CONTRACT.md` defines the final common-runtime boundary. The
+current source still consumes some traits directly while the context layout is
+shared. After the opaque-context migration, common translation units consume
+only opaque context pointers, selected internal ABI token types, and callable
+port operations. Frame-layout traits remain selected-port implementation and
+compile-validation facts.
 
 ## Non-Negotiable Rules
 
 1. The build selects exactly one Cortex-M port.
 2. The selected `fiber_portmacro.h` is the only source of CPU facts.
-3. Common runtime code consumes only canonical `FIBER_PORT_*` traits.
+3. Only selected-port code and compile-time contract validators consume CPU and
+   frame-layout `FIBER_PORT_*` traits after the opaque-context migration.
 4. A CPU fact is never an application performance knob.
 5. Exactly one selected port source group defines every external port ABI
    symbol.
@@ -28,32 +35,60 @@ The preferred production workflow mirrors FreeRTOS:
 3. `fiber_port_selected.h` includes that directory's `fiber_portmacro.h`.
 4. The build compiles exactly one matching port source group.
 
+Step 3 describes the current transitional facade. After the opaque-context
+split, the same selection result feeds separate selected public-type, internal
+ABI-type, and implementation facades. Only selected port sources include
+`fiber_portmacro.h`; common runtime sources include the callable ABI instead.
+
 `fiber_port_select.h` remains an auto-detection and test convenience. Forced or
 profile selection is validated against compiler architecture macros unless the
 explicit mismatch escape hatch is enabled for a controlled compile probe.
 
 ## Include Boundary
 
-Common runtime files include:
+The current transitional facade is:
 
 ```c
 #include "port/fiber_port_selected.h"
 ```
 
-They do not include concrete architecture headers. The facade includes shared
-user settings, compiler support, selection, the selected port contract, trait
-validation, and fail-closed feature policy in that order.
+It includes shared user settings, compiler support, selection, the selected
+port contract, trait validation, and fail-closed feature policy in that order.
+
+The target boundary splits that facade into:
+
+```text
+public fiber_core.h
+    -> API forward declarations
+    -> selected public type-only header that completes FiberContext
+    -> public API declarations
+
+common runtime .c
+    -> API forward declarations
+    -> selected internal ABI type-only header
+    -> callable port ABI
+
+selected port .c
+    -> selected complete context type
+    -> fiber_portmacro.h and CPU implementation helpers
+```
+
+Common runtime translation units must not include the selected complete context
+type and must not be able to use `sizeof(FiberContext)`, field access, frame
+offsets, CMSIS registers, or inline port assembly.
 
 A selected port may depend on:
 
 - CMSIS through `mcu_core.h`;
 - `fiber_compiler.h` for compiler attributes and barriers;
 - `fiber_settings.h` for genuine shared user policy;
-- `fiber_types.h` for the stable `FiberContext` ABI;
+- the selected public type-only header for its private `FiberContext` layout;
+- CPU-neutral metadata helpers that do not impose a context offset;
 - `fiber_panic.h` for mandatory validation failures.
 
 It must not depend on scheduler implementation details, queues, timing policy,
-or application task types.
+or application task types. Its public type-only header must not include CMSIS,
+`mcu_core.h`, register helpers, `fiber_portmacro.h`, or inline assembly.
 
 ## Required CPU Traits
 
@@ -109,9 +144,14 @@ Every boolean is normalized to exactly `0` or `1` and statically validated.
 Application/build flags must not predefine canonical selected-port traits; they
 are port outputs, and such a predefinition is a compile error.
 
+These traits describe the current selected-port contract and remain useful for
+port-local static assertions and compile probes. They do not authorize common
+runtime code to inspect context fields after the opaque-context migration.
+
 ## Trait Consistency
 
-The common validator enforces at least these relationships:
+The compile-time selected-port trait validator enforces at least these
+relationships:
 
 - stack alignment is a power of two and at least 8 bytes;
 - extended FP context requires an FPU;
@@ -197,28 +237,48 @@ DSB/ISB serialization.
 
 ## Required Callable Interface
 
-The selected header provides inline CPU helpers for:
+The current transitional selected header provides inline CPU helpers for FPU,
+BASEPRI/PRIMASK, PSPLIM, vector access, stack-frame construction, and PendSV
+publication. Those helpers remain selected-port-owned during migration; they are
+not the final common-runtime interface.
+
+The target common callable ABI accepts opaque context pointers:
 
 ```text
-fiber_port_read_r9
-fiber_port_initial_xpsr
-fiber_port_stacked_pc
-fiber_port_basepri_read
-fiber_port_basepri_write
+fiber_port_context_init
+fiber_port_context_validate_restore
+fiber_port_context_prepare_first_start
+fiber_port_require_start_environment
+fiber_port_require_schedule_environment
+fiber_port_runtime_prepare
+fiber_port_runtime_validate
+fiber_port_scheduler_state_capture
+fiber_port_scheduler_state_validate
 fiber_port_scheduler_critical_enter
 fiber_port_scheduler_critical_exit
-fiber_port_fpu_enable_early
-fiber_port_psplim_read
-fiber_port_psplim_write
-fiber_port_psplim_config
-fiber_port_vectors_base_addr
-fiber_port_vectors_base_ptr
-fiber_port_read_initial_msp
-fiber_port_set_vectors_base_addr
-fiber_port_pend_switch
+fiber_port_start_first_context
+fiber_port_request_schedule
+fiber_svc
+fiber_pendsv
 ```
 
-The selected source group defines exactly once:
+The selected internal type-only ABI header must complete the private scheduler
+CPU-state and C critical-state token types. Common code may allocate and pass
+those types, but it must not inspect their fields. An incomplete token cannot be
+instantiated and is not a valid interface.
+
+The selected source group defines every mandatory external ABI symbol exactly
+once. The compile matrix performs a relocatable link and uses `nm` to prove that
+property. As the opaque ABI replaces transitional symbols, the audited symbol
+list must be updated in the same structural commit.
+
+Every context layout also defines immutable port identity, layout version,
+size, alignment, and feature identity. A real versioned-symbol relocation or
+equivalent negative link probe is required before separately compiled or
+precompiled library objects are claimed safe against header/object layout
+mismatch.
+
+The current transitional external symbol set is:
 
 ```text
 fiber_port_init_context_frame
@@ -228,9 +288,6 @@ fiber_port_start_first_context
 fiber_svc
 fiber_pendsv
 ```
-
-The compile matrix performs a relocatable link and uses `nm` to prove one
-global definition of each external symbol.
 
 ## Source Layout
 

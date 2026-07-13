@@ -9,6 +9,17 @@ without clobbering LR/EXC_RETURN. The active v2 runtime start is FreeRTOS-like:
 `fiber_start()` enters the first context through SVC and an exception return, so
 the application must also wire `SVC_Handler()` to branch to `fiber_svc()`.
 
+## Architecture Direction
+
+The five-function cooperative API is intended to remain stable while CPU
+context storage becomes selected-port-owned. The current source tree still uses
+a transitional shared `FiberContext`/`FiberBoot` layout. The migration target
+lets application code allocate the selected complete `FiberContext`, while
+common runtime translation units see only opaque pointers and each selected port
+owns context layout, construction, integrity validation, startup state, and
+exception transfer. See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary
+and migration sequence.
+
 ## Project Setup
 
 Add the repository root to the include path, then include the public API:

@@ -18,6 +18,10 @@ fiber/port:
 This keeps the library small and explicit while still using FreeRTOS as the
 baseline for proven Cortex-M context-switch behavior.
 
+The final common/type boundary is defined in
+`V2_OPAQUE_CONTEXT_CONTRACT.md`. It supersedes the older long-term assumption
+that all selected ports share one common-known `FiberContext` layout.
+
 ## Why FreeRTOS Portable Is Not a Drop-In Backend
 
 FreeRTOS Cortex-M port sources are not standalone context-switch libraries.
@@ -173,13 +177,16 @@ MVE/PAC/BTI port split decisions
 But implement those concepts in the native `fiber` runtime contract:
 
 ```text
-fiber_port_init_context_frame()
-fiber_port_start_first_context()
+fiber_port_context_init()
+fiber_port_context_validate_restore()
+fiber_port_context_prepare_first_start()
+fiber_port_runtime_prepare() / fiber_port_runtime_validate()
+fiber_port_start_first_context(first)
 fiber_svc()
 fiber_pendsv()
 fiber_internal_scheduler_pick_next_from_pendsv()
-fiber_internal_validate_restore_context()
-selected-port traits
+selected-port private context seal and dynamic restore checks
+selected-port traits used inside the port and compile validators
 ```
 
 Benefits:
@@ -435,47 +442,62 @@ Long-term target layout:
 
 ```text
 fiber/
-  fiber_types.h
-  fiber_runtime_state.h
-  fiber_runtime_state.c
+  fiber_api_types.h
+  fiber_api_attributes.h
+  fiber_api_decl.h
+  fiber_core.h
+  internal/
+    fiber_core_internal.h
+    fiber_context_metadata.h
+    fiber_runtime_state.h
+    fiber_runtime_state.c
   port/
     fiber_settings.h
     fiber_port_select.h
-    fiber_port_selected.h
     fiber_port_traits.h
-    fiber_port_fpu.h
-    fiber_port_fpu.c
-    fiber_port_psplim.h
-    # Selected ports expose fiber_port_vectors_* helpers directly.
-    # Selected ports own fiber_port_exception.c directly.
+    fiber_port_types_selected.h
+    fiber_port_abi_types_selected.h
+    fiber_port_abi.h
     armv6m/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7m/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7em/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    GCC/
-      ARM_CM7/
-        r0p1/
-          fiber_portmacro.h
-          fiber_port.c
-          FREERTOS_PARITY.md
-    armv7em_m7_r0p1/
-      optional split only if errata policy needs a separate source path
+    ARM_CM7/
+      r0p1/
+        fiber_port_types.h
+        fiber_port_abi_types.h
+        fiber_portmacro.h
+        fiber_port.c
+        fiber_port_exception.c
+        FREERTOS_PARITY.md
     armv8m_baseline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -484,9 +506,12 @@ fiber/
         fiber_secure_context_port.c
     armv8m_mainline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -495,9 +520,12 @@ fiber/
         fiber_secure_context_port.c
     armv81m_mainline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -526,18 +554,20 @@ It is the first build-selected source group for Cortex-M7. Its selected
 `fiber_portmacro.h` and `fiber_port.c` are native fiber files, not wrapper
 includes around the generic ARMv7E-M path. The selected `fiber_portmacro.h`
 should stay close to FreeRTOS `portmacro.h`: CPU constants, selected-port
-traits, and low-level helpers without including the fiber runtime ABI. It may
-include `port/fiber_compiler.h` directly for compiler attributes, barriers,
-diagnostics, and static-assert ABI. The selected `fiber_port.c` may include the
-normal runtime headers it actually uses, such as `fiber_boot.h` and
-`fiber_runtime_state.h`, when it needs runtime types and bridge declarations.
-Neither selected file should include `fiber_target.h` or `fiber_settings.h`
-directly just to inherit CPU policy; CPU policy such as
-BASEPRI, M7 errata, FPU context, frame sizing, exception constants, and local
-defaults belongs to the selected port even when that creates duplication. Its
-parity record must list every relevant FreeRTOS port macro, helper, function,
-assembly path, errata gate, and excluded scheduler feature before behavior is
-claimed as FreeRTOS-level.
+traits, and low-level helpers without including common runtime implementation.
+It may include `port/fiber_compiler.h` directly for compiler attributes,
+barriers, diagnostics, and static-assert ABI. The public
+`fiber_port_types.h` remains type-only and CMSIS-free; it uses only public API
+types, standard integer/size types, CPU-neutral metadata, and port-local
+type-only records. The selected `fiber_port.c` includes its complete context
+type, selected internal ABI types, and the common bridge declarations it needs.
+It does not depend on a common `FiberBoot` layout. Neither selected file should
+include removed target-wide headers merely to inherit CPU policy; CPU policy
+such as BASEPRI, M7 errata, FPU context, frame sizing, exception constants, and
+local defaults belongs to the selected port even when that creates duplication.
+Its parity record must list every relevant FreeRTOS port macro, helper,
+function, assembly path, errata gate, and excluded scheduler feature before
+behavior is claimed as FreeRTOS-level.
 
 Important rule:
 
@@ -554,8 +584,9 @@ their own BASEPRI helpers, scheduler threshold, and naked-asm snippets.
 ## Helper Reimplementation Backlog
 
 The former `fiber/target` helpers have either moved to root runtime files or
-selected ports. Remaining migration work should continue toward `fiber/port`
-root helpers plus selected-port traits:
+selected ports. This list records the current extraction checkpoint. The opaque
+context target supersedes any statement below that requires common runtime code
+to call register/frame helpers directly:
 
 ```text
 BASEPRI policy:
@@ -568,9 +599,8 @@ VTOR/vector policy:
   selected ports own VTOR presence, current/Non-secure vector bank selection,
   vector-base masking, fallback base for no-VTOR profiles, and initial MSP
   reads
-  common runtime uses fiber_port_vectors_base_addr(),
-  fiber_port_vectors_base_ptr(), fiber_port_read_initial_msp(), and
-  fiber_port_set_vectors_base_addr()
+  target common runtime calls port runtime prepare/validate operations and does
+  not see VTOR, vector pointers, or MSP addresses
 
 fiber_port_exception.c:
   done: moved from target/fiber_irq.* into each selected port source group
@@ -594,13 +624,15 @@ PSPLIM policy:
   ports without PSPLIM expose explicit disabled/no-op definitions
 
 fiber_feature_policy.h:
-  done: port-root policy during migration
-  replace remaining per-port claims gradually with selected-port traits
+  current: port-root compile policy during migration
+  target: selected-port traits and compile validators; no context-layout branch
+  in common runtime
 
 fiber_target.h:
   done: deleted
-  fiber/port/fiber_port_selected.h is the selected-port facade and owns common
-  post-port sanity checks, stack/exc-frame constants, and feature-policy entry
+  current fiber/port/fiber_port_selected.h is the transitional selected facade
+  target selection feeds separate public-type, internal-ABI-type, and callable
+  ABI facades
 ```
 
 Do not move these helpers all at once. The migration order should be:
@@ -633,13 +665,14 @@ vTaskSwitchContext():
   replaced by fiber scheduler bridge and user pick_next hook
 
 TCB first-field top-of-stack:
-  replaced by FiberContext.sp with an equivalent saved-top-of-stack invariant
+  replaced by each selected port's private saved-stack-pointer field with an
+  equivalent saved-top-of-stack invariant
 
 pxPortInitialiseStack():
-  represented by fiber_port_init_context_frame()
+  represented by fiber_port_context_init()
 
 prvPortStartFirstTask() / SVC first start:
-  represented by fiber_port_start_first_context() and fiber_svc()
+  represented by fiber_port_start_first_context(first) and fiber_svc()
 
 xPortPendSVHandler():
   represented by fiber_pendsv()

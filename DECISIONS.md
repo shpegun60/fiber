@@ -1,5 +1,44 @@
 # Fiber Decision Log
 
+## 2026-07-13: Define Opaque Selected-Port Context ABI
+
+Before production ports are added in bulk, the common runtime will move to the
+opaque selected-port context boundary defined in
+`V2_OPAQUE_CONTEXT_CONTRACT.md`:
+
+- the public API remains limited to `fiber_init()`, `fiber_current()`,
+  `fiber_scheduler_set_pick_next()`, `fiber_start()`, and `fiber_schedule()`;
+- application code receives the complete selected `FiberContext` type for
+  static allocation but must treat all fields as private;
+- common translation units see only `typedef struct FiberContext FiberContext`
+  and must not dereference, size, align, or inspect the context;
+- the selected port owns the complete context layout, construction, immutable
+  port seal, dynamic restore validation, startup state, and SVC/PendSV transfer;
+- common code owns scheduler semantics, callback storage, recursion and
+  hot-swap policy, NULL handling, and current-context publication;
+- CPU-neutral immutable metadata may be shared, but it is not a substitute for
+  the selected port's final integrity seal;
+- live saved-stack-pointer and FP/MVE state are validated dynamically and are
+  not placed in an immutable hash by default;
+- initial MSP rewind or validation is one port-runtime startup policy, not a
+  permanent field required in every fiber context;
+- selected internal type-only headers complete scheduler CPU-state tokens that
+  common code may allocate and pass without inspecting;
+- each context layout carries port identity, layout version, size, alignment,
+  and feature identity, with a real link-time mismatch guard required before
+  precompiled library objects are supported.
+
+The first structural move must preserve the current scheduler critical-section
+placement, frame layout, panic codes, assembly behavior, and temporary
+per-context MSP behavior. Cleanup and ownership changes that affect behavior
+remain separate commits with separate hardware validation.
+
+This is a documentation-only decision. The current source still uses the
+transitional shared `FiberContext`/`FiberBoot` layout, and no runtime support
+claim changes at this checkpoint. This decision supersedes older architectural
+statements that require one common-known context or boot-record layout for all
+ports.
+
 ## 2026-07-12: Close Startup and Scheduler-Hook State Gaps
 
 The runtime now fails closed around startup side effects and the user scheduler

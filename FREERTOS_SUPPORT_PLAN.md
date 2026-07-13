@@ -20,6 +20,13 @@ MPU task management, or the FreeRTOS API surface.
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
 
+The required common-core boundary before production ports are added in bulk is
+defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. The current shared
+`FiberContext`/`FiberBoot` source layout is transitional. The target common
+runtime owns API and scheduler semantics but compiles against an incomplete
+`FiberContext`; each selected port owns its complete context layout and CPU
+state.
+
 ## Current Baseline
 
 Primary target, pending a fresh hardware run after the current hardening diff:
@@ -85,9 +92,10 @@ Closed hardening items from the FreeRTOS comparison:
 - initial software-frame sizing, saved-SP modulo validation, and saved
   `EXC_RETURN` word selection now come from selected port traits instead of a
   common hard-coded 36-byte assumption;
-- port sources use the shared `fiber_types.h` type ABI and no longer
-  depend on the public `fiber_core.h` API header or on `fiber_boot.h` for data
-  layout definitions;
+- current port sources use the transitional shared `fiber_types.h` type ABI and
+  no longer depend on the public `fiber_core.h` API header or on `fiber_boot.h`
+  for data layout definitions. `V2_OPAQUE_CONTEXT_CONTRACT.md` supersedes this
+  shared layout as the target before production ports are added in bulk;
 - build-selected portmacro workflow exists for the first FreeRTOS-referenced
   Cortex-M7 source group:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
@@ -249,10 +257,12 @@ Closed hardening items from the FreeRTOS comparison:
 
 1. Finish the FreeRTOS-style port ownership split.
 
-   Target rule: each selected `port/arm*/fiber_port_*.h` exports the whole
-   architecture interface for that profile. Common runtime files include only
-   `fiber_port_selected.h` and must not contain
-   architecture-specific switch assembly.
+   First implement `V2_OPAQUE_CONTEXT_CONTRACT.md`. Each selected port exports
+   a public type-only header that completes `FiberContext`, an internal
+   type-only ABI header for private scheduler CPU-state tokens, and a callable
+   ABI that accepts opaque context pointers. Common runtime files must not
+   include the selected complete context type or contain architecture-specific
+   switch assembly.
 
    Move out of common code:
 
@@ -270,9 +280,24 @@ Closed hardening items from the FreeRTOS comparison:
    Keep in common code:
 
    - public cooperative API semantics;
-   - `FiberBoot` construction, sealing, and common range validation;
    - scheduler hook storage and current-context ownership policy;
+   - CPU-neutral immutable metadata helpers that do not reveal where the
+     selected port embeds that metadata;
    - portable diagnostics and app-provided RAM/code plausibility hooks.
+
+   Keep in the selected port:
+
+   - the complete `FiberContext` layout and any port-specific boot data;
+   - context construction, final sealing, and restore validation;
+   - saved-SP, EXC_RETURN, CONTROL, PSPLIM, MPU, security, PAC, FP, and MVE
+     storage as required by that profile;
+   - runtime MSP preparation and first-context SVC transfer.
+
+   The common metadata hash is not the final context proof. Every production
+   port owns an immutable seal over its layout/configuration identity and
+   validates mutable saved state separately before restore. The structural move
+   must preserve current scheduler critical-section placement; callback-wrapper
+   redesign is a separate behavior change.
 
    A transitional fallback may exist only under an explicitly transitional
    directory such as `port/transitional_v8m`. A port cannot be claimed as

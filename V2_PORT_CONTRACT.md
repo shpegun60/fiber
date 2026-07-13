@@ -76,6 +76,12 @@ contract, known limitations, and validation level that matches the claim.
 The detailed selected-port trait contract lives in
 `V2_PORT_TRAITS_CONTRACT.md`.
 
+The target layout-free common-core boundary lives in
+`V2_OPAQUE_CONTEXT_CONTRACT.md`. It supersedes older statements in this
+document that require one shared, common-known `FiberContext` or `FiberBoot`
+layout. The current source tree remains transitional until that migration is
+implemented and validated.
+
 The FreeRTOS reference policy lives in
 `V2_FREERTOS_PORT_REFERENCE_POLICY.md`. FreeRTOS `portable/` is treated as the
 CPU-port reference, not as the default compiled backend for `fiber`.
@@ -84,10 +90,11 @@ CPU-port macro, helper, function, assembly label, config gate, and errata policy
 must be adopted, adapted, replaced, excluded with a reason, or deferred with a
 tracked TODO. Nothing relevant may disappear silently during a port rewrite.
 
-Selected ports are the source of CPU facts. Common port helpers consume selected
-traits and must not infer CPU policy globally. The old `fiber/target` directory
-has been removed; CPU capability policy must live behind the selected-port
-contract.
+Selected ports are the source of CPU facts. Selected-port implementation and
+compile-time validators consume those traits; layout-free common runtime code
+uses the callable port ABI and must not infer CPU policy globally. The old
+`fiber/target` directory has been removed; CPU capability policy must live
+behind the selected-port contract.
 
 ## Non-Goals
 
@@ -112,26 +119,29 @@ in scope only at the CPU context and exception-return layer.
 
 ## Proposed Layout
 
-The final layout can evolve, but the target direction is:
+The target direction is governed by `V2_OPAQUE_CONTEXT_CONTRACT.md`:
 
 ```text
 fiber/
+  fiber_api_types.h
+  fiber_api_attributes.h
+  fiber_api_decl.h
   fiber_core.c
   fiber_core.h
-  fiber_boot.c
-  fiber_boot.h
   fiber_platform_policy.h
   fiber_panic.c
   fiber_panic.h
-  fiber_runtime_state.c
-  fiber_runtime_state.h
-  fiber_stack.c
-  fiber_stack.h
-  fiber_types.h
+  internal/
+    fiber_core_internal.h
+    fiber_context_metadata.h
+    fiber_runtime_state.c
+    fiber_runtime_state.h
   port/
     fiber_settings.h
     fiber_port_select.h
-    fiber_port_selected.h
+    fiber_port_types_selected.h
+    fiber_port_abi_types_selected.h
+    fiber_port_abi.h
     fiber_static_assert.h
     fiber_diagnostics.h
     fiber_compiler.h
@@ -140,22 +150,33 @@ fiber/
     # Selected ports expose fiber_port_vectors_* helpers directly.
     # Selected ports own fiber_port_exception.c directly.
     armv6m/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7m/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7em/
+      fiber_port_types.h
+      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     ARM_CM7/
       r0p1/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacro.h
         fiber_port.c
         fiber_port_exception.c
@@ -167,9 +188,12 @@ fiber/
       fiber_port_exception.c
     armv8m_baseline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -178,9 +202,12 @@ fiber/
         fiber_secure_context_port.c
     armv8m_mainline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -189,9 +216,12 @@ fiber/
         fiber_secure_context_port.c
     armv81m_mainline/
       non_secure/
+        fiber_port_types.h
+        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
       secure/
@@ -212,7 +242,9 @@ FreeRTOS mpu_wrappers*     -> fiber_mpu_wrappers* only if MPU task isolation
                               becomes an explicit feature
 ```
 
-The profile name belongs to the directory. Existing files such as
+Every production port directory must provide its selected public context type,
+its selected internal ABI token types, its callable ABI implementation, and its
+parity ledger. The profile name belongs to the directory. Existing files such as
 `fiber_port_armv7em.c` are transitional names and may be mechanically renamed
 later in a no-behavior-change commit. The current implementation may be split
 gradually. Behavior should not change during a pure file-layout split.
@@ -235,11 +267,12 @@ helpers without including scheduler implementation details. It includes
 `port/fiber_settings.h` only for genuine shared user policy and may include
 `port/fiber_compiler.h` directly for compiler attributes, barriers,
 diagnostics, and static-assert ABI. The selected `fiber_port.c` includes the
-normal runtime headers it actually uses, such as `fiber_boot.h` and
-`fiber_runtime_state.h`, when it needs `FiberContext`, boot records, panic, and
-scheduler bridge declarations. No selected file may inherit CPU facts from
-shared settings; those facts are defined directly as canonical port traits.
-Its `FREERTOS_PARITY.md` is the required audit record for this port.
+selected complete context type and the internal declarations it actually uses.
+Common runtime translation units include only the incomplete public API type,
+selected internal ABI token types, and callable port ABI. No selected file may
+inherit CPU facts from shared settings; those facts are defined directly as
+canonical port traits. Its `FREERTOS_PARITY.md` is the required audit record for
+this port.
 
 Selected ports should use a FreeRTOS-like naming split:
 
@@ -249,7 +282,8 @@ fiber_portXXX
   FreeRTOS portXXX names.
 
 FIBER_PORT_XXX
-  generic trait contract consumed by common runtime code.
+  selected-port CPU traits consumed by port code and compile-time validators.
+  Layout-free common runtime code uses the callable port ABI instead.
 
 FIBER_XXX
   user/build configuration.
@@ -267,7 +301,10 @@ The target architecture is a FreeRTOS-style port boundary:
 - `fiber_core.c` must not own architecture-specific synthetic frame layout;
 - `fiber_core.c` must not contain a fallback PendSV implementation once the
   v2 split is complete;
-- `fiber_boot.c` owns portable boot-record construction and validation only;
+- common code may own CPU-neutral immutable metadata helpers but does not own a
+  complete boot-record or context layout;
+- each selected port owns its complete context layout, port-private boot data,
+  final integrity seal, and dynamic restore validation;
 - first-context CPU startup, SVC startup, CONTROL writes, PSP/MSP programming,
   and exception-return mechanics are port-owned;
 - exception setup such as PendSV/SVC priority, vector wiring validation,
@@ -282,11 +319,13 @@ The target architecture is a FreeRTOS-style port boundary:
 - if a common helper would need architecture policy `#if` branches, prefer
   duplicating that logic inside the selected port.
 
-In the final v2 shape each concrete `port/arm*/fiber_port_*.h` exports the
-selected port interface. The common runtime includes only
-`fiber_port_selected.h`; it does not include concrete
-architecture headers directly and does not branch into architecture-specific
-implementation logic.
+In the final v2 shape each concrete port exports a public type-only context
+header, an internal type-only ABI header, and a callable port ABI. Public code
+gets the selected complete context type through `fiber_core.h`. Common runtime
+translation units compile with an incomplete `FiberContext` and cannot include
+the selected complete type header or branch into architecture-specific
+implementation logic. The current `fiber_port_selected.h` facade is
+transitional and will be split along those boundaries.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as
@@ -821,74 +860,75 @@ on C++ ABI details.
 
 ## Port ABI Contract
 
-Each architecture port should provide a small ABI to the common layer:
+The final callable and type boundaries are defined in
+`V2_OPAQUE_CONTEXT_CONTRACT.md`. Common code uses opaque context pointers and a
+selected internal scheduler-state token; frame sizes and offsets remain
+port-private implementation facts:
 
 ```c
-#define FIBER_PORT_EXC_BASE_BYTES ...
-#define FIBER_PORT_EXC_FP_EXT_BYTES ...
-#define FIBER_PORT_EXC_PER_LEVEL_BYTES ...
-#define FIBER_PORT_SOFTWARE_FRAME_WORDS ...
-#define FIBER_PORT_SOFTWARE_FRAME_BYTES ...
-#define FIBER_PORT_EXC_RETURN_WORD_INDEX ...
-#define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES ...
-#define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES ...
-#define FIBER_PORT_INITIAL_CONTEXT_BYTES ...
-#define FIBER_PORT_MAX_SAVED_CONTEXT_BYTES ...
-#define FIBER_PORT_SAVED_SP_MOD8 ...
+void fiber_port_context_init(FiberContext *ctx,
+                             void *stack_begin,
+                             void *stack_end,
+                             FiberEntryFn entry,
+                             void *arg);
+void fiber_port_context_validate_restore(const FiberContext *ctx);
+void fiber_port_context_prepare_first_start(const FiberContext *ctx);
 
-extern FiberContext *volatile fiber_internal_port_current_context;
-extern FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next;
-extern void *volatile fiber_internal_port_scheduler_user;
+void fiber_port_require_start_environment(void);
+void fiber_port_require_schedule_environment(void);
+void fiber_port_runtime_prepare(void);
+void fiber_port_runtime_validate(void);
 
-void fiber_port_pend_switch(void);
-uint32_t fiber_port_scheduler_critical_enter(void);
-void fiber_port_scheduler_critical_exit(uint32_t state);
-void fiber_port_fpu_enable_early(void);
-void fiber_port_psplim_config(uint32_t stack_low_addr);
-uint32_t fiber_port_psplim_read(void);
-uintptr_t fiber_port_vectors_base_addr(void);
-uint32_t fiber_port_read_initial_msp(void);
-FIBER_NORETURN void fiber_port_start_first_context(uintptr_t msp_top);
-void fiber_port_init_context_frame(FiberContext *ctx);
-void fiber_exception_runtime_check(void);
-void fiber_pendsv_init_lowest_priority(void);
+void fiber_port_scheduler_state_capture(FiberPortSchedulerCpuState *state);
+void fiber_port_scheduler_state_validate(
+        const FiberPortSchedulerCpuState *state);
+void fiber_port_scheduler_critical_enter(
+        FiberPortSchedulerCriticalState *state);
+void fiber_port_scheduler_critical_exit(
+        const FiberPortSchedulerCriticalState *state);
+
+FIBER_API_NORETURN
+void fiber_port_start_first_context(FiberContext *first);
+void fiber_port_request_schedule(void);
 void fiber_pendsv(void);
 void fiber_svc(void);
 ```
 
 Exact names may change, but ownership should not:
 
-- `fiber_types.h` owns the shared type ABI: `entry_t`, `FiberBoot`,
-  `FiberContext`, and the scheduler hook function type. It does not include
-  `fiber_boot.h` or `fiber_core.h`, so ports can inspect offsets without
-  depending on public runtime API headers;
-- `fiber_boot.h` owns the `FiberBoot` integrity constants and hash helper used
-  by both boot construction and port-side restore validation;
-- scheduled restore validation uses a fast sealed-record check by default and
-  must not recompute the full boot-record hash on every switch unless
-  `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1` is explicitly selected;
+- `fiber_api_types.h` owns only tagged forward declarations and callback types;
+- the selected public type-only header completes `FiberContext` for application
+  allocation but is not included by common runtime translation units;
+- the selected internal type-only ABI header completes private scheduler
+  CPU-state tokens that common code may allocate and pass without inspecting;
+- the selected port embeds any CPU-neutral metadata at a private offset and
+  owns the final immutable context seal plus dynamic restore checks;
+- mutable saved SP, EXC_RETURN, FP/MVE, and security state is validated
+  dynamically rather than included in a fixed hash by default;
 - `fiber/port/fiber_port_select.h` owns strict compile-time profile selection only;
-- `fiber/port/fiber_port_selected.h` includes the selected `arm*/fiber_port_*.h`
-  interface and is the common-runtime entry point for port-owned frame
-  constants and low-level handler declarations;
-- each concrete `arm*/fiber_port_*.h` must declare its port interface and frame
-  traits without including `fiber_boot.h` or `fiber_core.h`;
-- common code decides whether a switch is allowed;
+- selected public type, internal ABI type, and callable ABI facades have
+  separate include boundaries;
+- the callable ABI must not expose context fields, frame offsets, or MSP
+  addresses to common code;
+- common code decides lifecycle and scheduler-policy preconditions, while the
+  selected port validates CPU Thread/mask preconditions;
 - common code seeds the current context and scheduler hook before a
   scheduler-driven switch can run;
 - common code owns the current-context policy;
-- common code calls `fiber_port_pend_switch()` only after validating Thread
-  mode, current ownership, and that PRIMASK/BASEPRI/FAULTMASK will not defer the
-  request;
-- `fiber_port_pend_switch()` directly publishes PendSV and emits the selected
-  port's mandatory barriers. It does not mask interrupts around the ICSR write;
+- common code calls `fiber_port_require_schedule_environment()` after checking
+  current ownership, then calls `fiber_port_request_schedule()`;
+- `fiber_port_request_schedule()` directly publishes PendSV and emits the
+  selected port's mandatory barriers. It does not mask interrupts around the
+  ICSR write;
 - the selected port owns the PRIMASK or BASEPRI critical section used only
   around the scheduler hook inside first selection and PendSV;
-- common scheduler-bridge code snapshots and validates PRIMASK, FAULTMASK,
-  BASEPRI, and CONTROL around every hook call before accepting its result;
+- selected-port state capture and validation checks PRIMASK, FAULTMASK,
+  BASEPRI, CONTROL, and any profile-specific state around every hook call;
+- common code owns callback invocation, recursion/hot-swap policy, NULL-result
+  handling, selected-port restore validation, and current publication;
+- the structural opaque-context move preserves the current critical-section
+  placement and must not introduce a second BASEPRI/PRIMASK layer;
 - port code performs CPU-specific save, restore, and exception return;
-- port code may update `fiber_internal_port_current_context` during the real
-  restore path, but it must follow the common current-context policy;
 - port code must not decide scheduler/runtime semantics;
 - port code owns the physical stack frame layout;
 - port code owns SVC first-start mechanics;
@@ -904,18 +944,26 @@ Exact names may change, but ownership should not:
 
 Common code may provide small helpers for hashing, range checks, alignment,
 diagnostics, and user-facing API validation. Those helpers must not hide a CPU
-context layout decision.
+context layout decision. A CPU-neutral metadata hash is not a replacement for
+the selected port's final integrity seal.
 
-`FiberContext.sp` follows the FreeRTOS `pxTopOfStack` invariant: it points to
-the last saved software frame for a context that is not currently running. While
-a fiber is running, the live stack pointer is CPU PSP. A port must update
-`ctx->sp` when saving that context as the source of a switch, and must not move
-the target `ctx->sp` forward after restore.
+The selected port's private saved-stack-pointer field follows the FreeRTOS
+`pxTopOfStack` invariant: it points to the last saved software frame for a
+context that is not currently running. While a fiber is running, the live stack
+pointer is CPU PSP. A port updates its private saved pointer when saving that
+context and must not move the target saved pointer forward after restore.
 
-The port ABI must hide architecture-specific storage from users.
-Scheduler-driven state such as current context, pick-next hook, and hook user
-data must live in an internal port-state module. It may be visible to port
-sources through an internal header, but it must not become user-facing API.
+The port ABI hides architecture-specific storage from common code and treats it
+as private for users. Scheduler hook/user storage and current-context semantics
+remain common-owned; selected CPU-state tokens and runtime startup state remain
+port-owned. Initial MSP rewind/validation is one runtime startup policy and is
+not a mandatory field in every future context.
+
+Each selected context layout has a port identifier, layout version, size,
+alignment, and feature identity. The immutable seal validates this identity.
+Before precompiled library objects are supported, the build must also force a
+real versioned-symbol relocation or equivalent link-time mismatch failure; an
+unused `extern` declaration is not sufficient.
 
 Avoid a port-level function shaped like `fiber_port_request_switch(from, to)`.
 Passing `from` and `to` to the port makes it too easy for the port to start
@@ -945,15 +993,16 @@ Required invariants:
 - invalid stack bounds trap before the first switch;
 - no user entry runs on MSP unless a port explicitly documents that policy.
 
-The layout used by `fiber_port_init_context_frame()` is part of the port ABI.
-Changing it requires updating the port audit note and compile/runtime
-validation.
+The layout used by `fiber_port_context_init()` is part of the selected port ABI.
+Changing it requires updating the port audit note, layout identity, link guard,
+and compile/runtime validation.
 
-Common validation may use selected-port traits to prove stack bounds, saved-SP
-alignment, and `EXC_RETURN` sanity. It must not hard-code a universal software
-frame size such as 36 bytes. ARMv6-M and ARMv7E-M currently both use a 9-word
-software frame, but ARMv8-M security, PSPLIM, MVE, PAC, or BTI support may need
-different context slots. New ports must publish their own trait header before a
+Selected-port validation proves stack bounds, saved-SP alignment, frame shape,
+and `EXC_RETURN` sanity. Common code may validate CPU-neutral API inputs but
+must not inspect frame traits or hard-code a universal software frame size such
+as 36 bytes. ARMv6-M and ARMv7E-M currently both use a 9-word software frame,
+but ARMv8-M security, PSPLIM, MVE, PAC, or BTI support may need different
+context slots. New ports publish and validate their private layout before a
 runtime support claim is made.
 
 ## PendSV Contract
@@ -1196,10 +1245,10 @@ validation before carrying the same claim.
 Behavior-changing commits should be small enough that a failed board validation
 can be traced to one decision.
 
-Changing the `FiberContext.sp` save/restore invariant is a behavior-changing
-commit, even when the new invariant is more FreeRTOS-like. Such a change must
-repeat the relevant board runtime validation before inheriting an earlier
-runtime-validated support label.
+Changing a selected port's private saved-stack-pointer save/restore invariant is
+a behavior-changing commit, even when the new invariant is more FreeRTOS-like.
+Such a change must repeat the relevant board runtime validation before
+inheriting an earlier runtime-validated support label.
 
 ## Validation Levels
 

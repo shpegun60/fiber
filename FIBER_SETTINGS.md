@@ -5,6 +5,10 @@ without changing the selected CPU-port ABI. CPU capabilities, frame layout,
 EXC_RETURN, FPCA handling, stack alignment, vector-bank selection, and switch
 barriers belong to the selected `fiber_portmacro.h`.
 
+Under `V2_OPAQUE_CONTEXT_CONTRACT.md`, `FIBER_REWIND_MSP` remains a selected
+port runtime-start policy. Common code and future per-context layouts do not
+store or interpret its MSP plan.
+
 ## User Policy
 
 | Setting | Default | Purpose |

@@ -5,6 +5,12 @@ The goal is not to copy FreeRTOS source text. The goal is to audit every CPU
 port mechanism in the local FreeRTOS reference and either reimplement it,
 adapt it to the cooperative fiber model, or explicitly exclude it.
 
+This ledger describes the current transitional shared-context checkpoint. The
+target in `../../../../V2_OPAQUE_CONTEXT_CONTRACT.md` moves the complete CM7
+context type, construction, seal, and restore validation into this selected
+port. The structural migration must update this file list and every affected
+mapping without changing the validated save/restore behavior.
+
 ## Reference
 
 FreeRTOS reference tree:
