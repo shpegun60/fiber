@@ -254,6 +254,233 @@ function Test-ContextPortBoundary {
     }
 }
 
+function Test-SelectedPortIntegrityPreflight {
+    param([string]$RepositoryRoot)
+
+    $bootSources = @(
+        "fiber\port\ARM_CM0\fiber_port_boot.c",
+        "fiber\port\ARM_CM3\fiber_port_boot.c",
+        "fiber\port\ARM_CM4\fiber_port_boot.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c"
+    )
+
+    foreach ($relativePath in $bootSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $saveBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_context_validate_save_current(const FiberContext *ctx)" `
+            -Path $path
+        $restoreBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_context_validate_restore(FiberContext *ctx)" `
+            -Path $path
+
+        $saveCapture = $saveBody.IndexOf(
+            "fiber_port_capture_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $savePointer = $saveBody.IndexOf("fiber_port_validate_context_pointer(ctx);",
+            [System.StringComparison]::Ordinal)
+        $saveStackMap = $saveBody.IndexOf(
+            "fiber_port_validate_stack_address_map_on_switch(ctx);",
+            [System.StringComparison]::Ordinal)
+        $saveStackMapGate = $saveBody.IndexOf(
+            "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
+            [System.StringComparison]::Ordinal)
+        $saveStackMapEnd = if ($saveStackMap -ge 0) {
+            $saveBody.IndexOf("#endif", $saveStackMap)
+        }
+        else {
+            -1
+        }
+        $saveCanary = $saveBody.IndexOf("fiber_port_validate_stack_canary(ctx);",
+            [System.StringComparison]::Ordinal)
+        $saveMsp = $saveBody.IndexOf("fiber_port_validate_start_msp_for_boot(&ctx->boot);",
+            [System.StringComparison]::Ordinal)
+        $saveStateCheck = $saveBody.LastIndexOf(
+            "fiber_port_validate_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $savePsp = $saveBody.IndexOf("const uintptr_t psp = (uintptr_t)__get_PSP();",
+            [System.StringComparison]::Ordinal)
+
+        if (($saveCapture -lt 0) -or ($savePointer -lt 0) -or
+                ($saveStackMap -lt 0) -or ($saveCanary -lt 0) -or ($saveMsp -ge 0) -or
+                ($saveStateCheck -lt 0) -or ($savePsp -lt 0) -or
+                ($saveCapture -ge $savePointer) -or
+                ($saveStackMapGate -lt 0) -or ($saveStackMapEnd -lt 0) -or
+                ($savePointer -ge $saveStackMapGate) -or
+                ($saveStackMapGate -ge $saveStackMap) -or
+                ($saveStackMapEnd -ge $saveCanary) -or
+                ($saveStateCheck -le $savePsp)) {
+            throw "Selected port save preflight must gate address-map hooks before canary and live PSP access without revalidating the startup MSP plan: $path"
+        }
+
+        $restoreCapture = $restoreBody.IndexOf(
+            "fiber_port_capture_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $restorePointer = $restoreBody.IndexOf("fiber_port_validate_context_pointer(ctx);",
+            [System.StringComparison]::Ordinal)
+        $restoreStackMap = $restoreBody.IndexOf(
+            "fiber_port_validate_stack_address_map_on_switch(ctx);",
+            [System.StringComparison]::Ordinal)
+        $restoreCode = $restoreBody.IndexOf("fiber_addr_plausible_code(",
+            [System.StringComparison]::Ordinal)
+        $restoreMapGate = $restoreBody.IndexOf(
+            "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
+            [System.StringComparison]::Ordinal)
+        $restoreStackMapEnd = if ($restoreStackMap -ge 0) {
+            $restoreBody.IndexOf("#endif", $restoreStackMap)
+        }
+        else {
+            -1
+        }
+        if ($restoreCode -ge 0) {
+            $restoreCodePrefix = $restoreBody.Substring(0, $restoreCode)
+            $restoreCodeGate = $restoreCodePrefix.LastIndexOf(
+                "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
+                [System.StringComparison]::Ordinal)
+            $restoreCodeEnd = $restoreBody.IndexOf("#endif", $restoreCode)
+        }
+        else {
+            $restoreCodeGate = -1
+            $restoreCodeEnd = -1
+        }
+        $restoreStateCheck = $restoreBody.LastIndexOf(
+            "fiber_port_validate_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $restoreMsp = $restoreBody.IndexOf(
+            "fiber_port_validate_start_msp_for_boot(&ctx->boot);",
+            [System.StringComparison]::Ordinal)
+
+        if (($restoreCapture -lt 0) -or ($restorePointer -lt 0) -or
+                ($restoreStackMap -lt 0) -or ($restoreCode -lt 0) -or
+                ($restoreMapGate -lt 0) -or ($restoreStateCheck -lt 0) -or
+                ($restoreMsp -lt 0) -or
+                ($restoreCapture -ge $restorePointer) -or
+                ($restoreStackMapEnd -lt 0) -or ($restoreCodeGate -lt 0) -or
+                ($restoreCodeEnd -lt 0) -or
+                ($restorePointer -ge $restoreMapGate) -or
+                ($restoreMapGate -ge $restoreStackMap) -or
+                ($restoreStackMapEnd -ge $restoreCode) -or
+                ($restoreCodeGate -ge $restoreCode) -or
+                ($restoreCodeEnd -le $restoreCode) -or
+                ($restoreMsp -le $restoreStackMapEnd) -or
+                ($restoreStateCheck -le $restoreCode)) {
+            throw "Selected port restore validation must retain the startup MSP plan and gate address-map hooks: $path"
+        }
+
+        $pointerBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_validate_context_pointer(const FiberContext *const ctx)" `
+            -Path $path
+        $stackMapBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_validate_stack_address_map_on_switch(" `
+            -Path $path
+        $requiredAddressMapPolicy = @(
+            "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
+            "const uintptr_t end = begin + sizeof(*ctx);",
+            "fiber_addr_plausible_ram(begin, end)"
+        )
+        foreach ($required in $requiredAddressMapPolicy) {
+            if ($pointerBody.IndexOf($required,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "Selected port context address-map policy is incomplete in ${path}: $required"
+            }
+        }
+
+        $requiredStackAddressMapPolicy = @(
+            "fiber_addr_plausible_ram(ctx->boot.stack_base,",
+            "ctx->boot.stack_top)"
+        )
+        foreach ($required in $requiredStackAddressMapPolicy) {
+            if ($stackMapBody.IndexOf($required,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "Selected port stack address-map policy is incomplete in ${path}: $required"
+            }
+        }
+    }
+}
+
+function Test-PendSvSaveValidationOrdering {
+    param([string]$RepositoryRoot)
+
+    $portSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+    )
+
+    foreach ($relativePath in $portSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $pendsvBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_pendsv(void)" -Path $path
+
+        $validationCalls = [regex]::Matches($pendsvBody,
+            "bl\s+fiber_port_context_validate_save_current\b")
+        $stackBaseLoads = [regex]::Matches($pendsvBody,
+            "ldr\s+r2,\s+\[r1,\s+%c\[offsb\]\]")
+
+        if (($validationCalls.Count -eq 0) -or
+                ($validationCalls.Count -ne $stackBaseLoads.Count)) {
+            throw "PendSV save validation/load count mismatch in $path"
+        }
+
+        for ($index = 0; $index -lt $validationCalls.Count; ++$index) {
+            if ($validationCalls[$index].Index -ge $stackBaseLoads[$index].Index) {
+                throw "PendSV reads current stack metadata before save validation in $path"
+            }
+        }
+    }
+}
+
+function Test-ScheduleValidationOwnership {
+    param([string]$RepositoryRoot)
+
+    $portSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+    )
+
+    foreach ($relativePath in $portSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $scheduleBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_require_schedule_environment(void)" `
+            -Path $path
+        $bridgeBody = Get-CFunctionBody -Source $source `
+            -Signature "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)" `
+            -Path $path
+
+        if ($scheduleBody.IndexOf("fiber_internal_require_schedule_current();",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Thread schedule path must retain current-context ownership check: $path"
+        }
+        if ($scheduleBody.IndexOf("fiber_port_context_validate_save_current(",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Thread schedule path must not duplicate PendSV save preflight: $path"
+        }
+
+        $hook = $bridgeBody.IndexOf("fiber_internal_scheduler_invoke_pick_next(current);",
+            [System.StringComparison]::Ordinal)
+        $restoreCurrent = $bridgeBody.IndexOf("fiber_port_context_validate_restore(current);",
+            [System.StringComparison]::Ordinal)
+        $restoreNext = $bridgeBody.IndexOf("fiber_port_context_validate_restore(next);",
+            [System.StringComparison]::Ordinal)
+        $commit = $bridgeBody.IndexOf("fiber_internal_scheduler_commit_current_context(next);",
+            [System.StringComparison]::Ordinal)
+
+        if (($hook -lt 0) -or ($restoreCurrent -ge 0) -or
+                ($restoreNext -lt 0) -or ($commit -lt 0) -or
+                ($restoreNext -le $hook) -or ($commit -le $restoreNext)) {
+            throw "PendSV scheduler bridge must validate only the selected next context after scheduling: $path"
+        }
+    }
+}
+
 function Test-CommonRuntimeWithoutCmsis {
     param(
         [string]$RepositoryRoot,
@@ -337,6 +564,9 @@ if (-not (Test-Path $nm)) {
 
 Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
 Test-ContextPortBoundary -RepositoryRoot $RepoRoot
+Test-SelectedPortIntegrityPreflight -RepositoryRoot $RepoRoot
+Test-PendSvSaveValidationOrdering -RepositoryRoot $RepoRoot
+Test-ScheduleValidationOwnership -RepositoryRoot $RepoRoot
 
 $commonSources = @(
     "fiber\fiber_core.c",
@@ -918,10 +1148,50 @@ void Error_Handler(void);
         throw "Alternate startup fault-policy probe failed:`n$($alternateFaultPolicyResult.Output)"
     }
 
+    Write-Host "== cortex-m7f / settings-contract-address-map-on-switch =="
+    $addressMapOnArgs = $probeCommonArgs + @(
+        "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1",
+        "-I$probe4Dir",
+        "-I$RepoRoot",
+        "-I$(Join-Path $RepoRoot 'fiber')",
+        "-I$cmsis",
+        "-c",
+        $probeBootSource,
+        "-o",
+        (Join-Path $probe4Dir "address-map-on-switch.o")
+    )
+    $addressMapOnResult = Invoke-CompilerProbe -Compiler $gcc `
+        -Arguments $addressMapOnArgs `
+        -LogPath (Join-Path $probe4Dir "address-map-on-switch.log")
+    if ($addressMapOnResult.ExitCode -ne 0) {
+        throw "Address-map-on-switch policy probe failed:`n$($addressMapOnResult.Output)"
+    }
+
+    Write-Host "== cortex-m7f / settings-contract-production-switch-policy =="
+    $productionSwitchArgs = $probeCommonArgs + @(
+        "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+        "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0",
+        "-I$probe4Dir",
+        "-I$RepoRoot",
+        "-I$(Join-Path $RepoRoot 'fiber')",
+        "-I$cmsis",
+        "-c",
+        $probeBootSource,
+        "-o",
+        (Join-Path $probe4Dir "production-switch-policy.o")
+    )
+    $productionSwitchResult = Invoke-CompilerProbe -Compiler $gcc `
+        -Arguments $productionSwitchArgs `
+        -LogPath (Join-Path $probe4Dir "production-switch-policy.log")
+    if ($productionSwitchResult.ExitCode -ne 0) {
+        throw "Production switch policy probe failed:`n$($productionSwitchResult.Output)"
+    }
+
     $negativeCases = @(
         [pscustomobject]@{ Name = "invalid-fpu-lazy"; Define = "-DFIBER_FPU_LAZY=2"; Diagnostic = "FIBER_FPU_LAZY must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-rewind-msp"; Define = "-DFIBER_REWIND_MSP=2"; Diagnostic = "FIBER_REWIND_MSP must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-hash-on-switch"; Define = "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=2"; Diagnostic = "FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "invalid-address-map-on-switch"; Define = "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=2"; Diagnostic = "FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-permissive-address-map-hooks"; Define = "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=2"; Diagnostic = "FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-canary-boolean"; Define = "-DFIBER_STACK_CANARY=2"; Diagnostic = "FIBER_STACK_CANARY must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-canary-zero-redzone"; Define = "-DFIBER_STACK_REDZONE_BYTES=0"; Diagnostic = "enabled stack canary requires at least 8 bytes of red zone"; Dir = $probe4Dir; Source = $probeSource },

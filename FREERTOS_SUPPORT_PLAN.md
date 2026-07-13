@@ -112,8 +112,10 @@ Closed hardening items from the FreeRTOS comparison:
   modes with its port-owned errata workaround always enabled;
 - scheduled context restore recomputes the selected-port boot-record hash by
   default; `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0` is an explicit
-  performance opt-out, while mandatory structural, canary, frame, and saved-PC
-  code-address validation remain active;
+  performance opt-out, while mandatory structural, canary, frame, EXC_RETURN,
+  xPSR, and Thumb-PC validation remain active. Optional
+  `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` adds linker-map validation of
+  runtime context/stack and saved-PC addresses;
 - portable FPU policy defaults to `FIBER_FPU_LAZY = 0`; PendSV publication and
   context-boundary DSB/ISB serialization are mandatory selected-port behavior;
 - source comments no longer claim full "all STM32" validation;

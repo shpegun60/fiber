@@ -15,7 +15,8 @@ store or interpret its MSP plan.
 | --- | ---: | --- |
 | `FIBER_FPU_LAZY` | `0` | `0` selects deterministic eager FP stacking; `1` enables lazy `LSPEN` behavior on an FPU port. |
 | `FIBER_REWIND_MSP` | `1` | Restore MSP from the validated initial vector value before first SVC. Set `0` only when the integration intentionally preserves current MSP. The selected port creates this plan once at `fiber_start()`, never per context. |
-| `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH` | `1` | Recompute the sealed boot-record hash on every restore. Set `0` only as a measured performance opt-out; structural, canary, frame, code-address, and ownership checks remain mandatory. |
+| `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH` | `1` | Recompute the sealed boot-record hash on every restore. Set `0` only as a measured performance opt-out; structural, canary, frame, and ownership checks remain mandatory. |
+| `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH` | `0` | `fiber_init()` always checks context, stack, and entry addresses. Set `1` to also run RAM map hooks for context/stack and the code map hook for each saved PC during every switch. |
 | `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS` | `0` | Require integration-defined RAM and code plausibility hooks. Set `1` only for constrained bring-up to enable the selected weak accept-any fallback. |
 | `FIBER_STACK_CANARY` | `1` | Validate the runtime-owned low-stack canary before every restore. |
 | `FIBER_STACK_REDZONE_BYTES` | `32` | Reserve a selected-port-aligned low-stack region below the PSP lower bound. |
@@ -29,19 +30,30 @@ relocatable link, and selected-port ABI symbol audit with
 
 ## Safety Baseline
 
-The defaults are the conservative validation baseline. They use eager FP
-stacking, a runtime-owned startup MSP plan, integration-specific address-map
-hooks, a low-stack canary, an aligned red zone, and a full immutable boot-record
-hash before every restore.
+The defaults use eager FP stacking, a runtime-owned startup MSP plan,
+integration-specific address-map hooks during initialization, a low-stack
+canary, an aligned red zone, and a full immutable boot-record hash before every
+restore. They intentionally leave switch-time address-map hooks disabled:
+runtime structural and frame checks remain mandatory, while application linker
+map checks are not paid on every cooperative switch.
+
+A conservative validation build sets both
+`FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1` and
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`. A measured production build may use
+`0` for both only when its integration treats successfully initialized boot
+metadata as immutable and trusted.
 
 Changing `FIBER_FPU_LAZY`, `FIBER_REWIND_MSP`,
 `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH`,
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH`,
 `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS`, `FIBER_STACK_CANARY`, or
 `FIBER_STACK_REDZONE_BYTES` changes runtime behavior and requires the relevant
 board validation run again. `FIBER_STACK_REDZONE_BYTES` must be a multiple of
 the selected-port stack alignment; with a canary enabled it must be at least
 8 bytes. Settings of `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0` and
-`FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` are not safety-equivalent defaults.
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0` are not equivalent to the full
+validation build. `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` is never a
+production safety-equivalent default.
 
 ## Platform Policy
 

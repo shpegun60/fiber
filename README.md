@@ -88,10 +88,14 @@ int fiber_addr_plausible_code(uintptr_t address);
 ```
 
 They must accept only valid persistent RAM ranges and executable code addresses
-for the actual linker map. They are called from the PendSV validation path and
-must not use FP/MVE, allocate, block, or call fiber APIs. Defining
-`FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any defaults
-for constrained bring-up only; it is not a production safety setting.
+for the actual linker map. `fiber_init()` always calls them for context storage,
+the supplied PSP stack, and the entry point. The default does not call them
+from the save/restore switch path. Define
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` for a validation build that also
+checks runtime context/stack addresses and every saved stacked PC. Hook
+implementations must not use FP/MVE, allocate, block, or call fiber APIs.
+Defining `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any
+defaults for constrained bring-up only; it is not a production safety setting.
 
 `FiberContext` objects and their PSP stack buffers require persistent storage.
 Use static, global, or application-owned storage that outlives every context
@@ -366,6 +370,7 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_STACK_CANARY = 1`
 - `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 1`
+- `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH = 0`
 - `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START = 0`
 - `FIBER_ENABLE_CONFIGURABLE_FAULTS = 1`
 - SVC first-start is mandatory for runtime-supported ports
@@ -373,6 +378,13 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 - FPU ports enable and read back CP10/CP11 before first start
 - stack alignment, EXC_RETURN, FPCA handling, and canary encoding are
   selected-port/runtime facts, not user settings
+
+For full linker-map validation set both
+`FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH` and
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH` to `1`. A production integration may
+set both to `0` only after `fiber_init()` has established immutable trusted
+metadata; the mandatory structural, canary, PSP, saved-frame, EXC_RETURN, xPSR,
+and Thumb-PC checks remain active.
 
 `FIBER_VALIDATE_SCHEDULED_CONTEXT` and `FIBER_VALIDATE_CURRENT` were removed.
 Defining either obsolete switch is a compile error because current ownership

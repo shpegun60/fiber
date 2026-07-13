@@ -244,12 +244,14 @@ Fiber: an indirect user scheduler hook crosses the PendSV ABI, so its definition
         must use FIBER_SCHEDULER_HOOK_ATTR and must not execute FP/MVE code.
 
 FreeRTOS: TCB ownership and stack checks are controlled by the kernel.
-Fiber: selected-port restore validation additionally seals context ABI identity,
+Fiber: selected-port validation additionally seals context ABI identity,
        validates the context pointer before dereference, preflights the running
-       context and PSP before PENDSVSET and again inside PendSV before its first
-       current-context field read, checks a low-stack canary, rehashes immutable
-       boot data by default, and validates the saved stacked PC against the
-       integration code-address policy.
+       context and PSP once inside PendSV before its first current-context field
+       read, checks a low-stack canary, rehashes immutable boot data by default,
+       validates exactly the scheduler-selected restore context, and validates
+       address-map hook CPU-state
+       preservation plus the saved stacked PC against the integration
+       code-address policy when `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`.
 ```
 
 ## Current Status

@@ -10,6 +10,26 @@
 #ifndef FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORTMACRO_H_
 #define FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORTMACRO_H_
 
+/* Keep the selected-port compiler/asm contract identical to concrete ports. */
+#ifndef fiber_portFORCE_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+# else
+#  define fiber_portFORCE_INLINE static inline
+# endif
+#endif
+
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
+
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
+
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 # include "fiber_port_types.h"
 #endif

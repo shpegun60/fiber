@@ -131,9 +131,21 @@ void fiber_port_validate_context_pointer(const FiberContext *const ctx)
 	FIBER_REQUIRE((begin & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u,
 			'A');
 	FIBER_REQUIRE(begin <= (UINTPTR_MAX - sizeof(*ctx)), 'O');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	const uintptr_t end = begin + sizeof(*ctx);
 	FIBER_REQUIRE(fiber_addr_plausible_ram(begin, end) != 0, 'C');
+#endif
 }
+
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_stack_address_map_on_switch(
+		const FiberContext *const ctx)
+{
+	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
+			ctx->boot.stack_top) != 0, 'P');
+}
+#endif
 /* -------------------------------------------------------------------------- */
 /* Fault hygiene: clear "sticky" status where present (v7-M/v7E-M/v8-M Main). */
 /* Use read-then-write (W1C) to avoid leftovers from a previous session.      */
@@ -580,16 +592,69 @@ void fiber_port_validate_stack_canary(const FiberContext *const ctx)
 #endif
 }
 
+/* With switch-time address-map validation enabled, hooks run from Thread mode
+ * and PendSV. They must not silently alter the selected CPU execution state. */
+typedef struct FiberPortValidationCpuState {
+	uint32_t primask;
+	uint32_t control;
+#if FIBER_PORT_HAS_BASEPRI
+	uint32_t basepri;
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	uint32_t faultmask;
+#endif
+} FiberPortValidationCpuState;
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_capture_validation_cpu_state(FiberPortValidationCpuState *const state)
+{
+	FIBER_REQUIRE(state != NULL, 'C');
+	fiber_portCOMPILER_BARRIER();
+	state->primask = __get_PRIMASK();
+	state->control = __get_CONTROL();
+#if FIBER_PORT_HAS_BASEPRI
+	state->basepri = fiber_port_basepri_read();
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	state->faultmask = __get_FAULTMASK();
+#endif
+	fiber_portCOMPILER_BARRIER();
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_validation_cpu_state(
+		const FiberPortValidationCpuState *const before)
+{
+	FIBER_REQUIRE(before != NULL, 'C');
+	fiber_portCOMPILER_BARRIER();
+	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+#endif
+	fiber_portCOMPILER_BARRIER();
+}
+
 FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_save_current(const FiberContext *ctx)
 {
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
 	fiber_port_validate_context_pointer(ctx);
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 	fiber_port_boot_record_check(&ctx->boot);
 #else
 	fiber_port_boot_record_fast_check(&ctx->boot);
 #endif
-	fiber_port_validate_start_msp_for_boot(&ctx->boot);
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	fiber_port_validate_stack_address_map_on_switch(ctx);
+#endif
+	fiber_port_validate_stack_canary(ctx);
+	/* The running context passed restore validation before it entered Thread
+	 * mode. The startup MSP plan is restore-only and is not used for saving. */
 
 	/* ctx->sp names the last saved frame and is stale while this fiber runs.
 	 * Validate the live PSP instead, before PendSV assembly reads boot fields. */
@@ -597,17 +662,23 @@ void fiber_port_context_validate_save_current(const FiberContext *ctx)
 	FIBER_REQUIRE((psp & ((uintptr_t)sizeof(uint32_t) - 1u)) == 0u, 'A');
 	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
+	fiber_port_validate_validation_cpu_state(&cpu_state);
 }
 
 FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_restore(FiberContext *ctx)
 {
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
 	fiber_port_validate_context_pointer(ctx);
 	FIBER_REQUIRE(ctx->sp != NULL, 'P');
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 	fiber_port_boot_record_check(&ctx->boot);
 #else
 	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	fiber_port_validate_stack_address_map_on_switch(ctx);
 #endif
 	fiber_port_validate_start_msp_for_boot(&ctx->boot);
 	fiber_port_validate_stack_canary(ctx);
@@ -643,12 +714,15 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	FIBER_REQUIRE(fiber_addr_plausible_code((uintptr_t)stacked_pc) != 0, 'c');
+#endif
 
 	if ((stacked_xpsr & (1u << 9u)) != 0u) {
 		required_bytes += (uintptr_t)FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES;
 	}
 	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
+	fiber_port_validate_validation_cpu_state(&cpu_state);
 }
 
 uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)

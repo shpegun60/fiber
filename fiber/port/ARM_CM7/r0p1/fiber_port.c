@@ -118,8 +118,6 @@ void fiber_port_require_schedule_environment(void)
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	fiber_port_context_validate_save_current(
-			fiber_internal_port_current_context);
 }
 
 void fiber_port_request_schedule(void)
@@ -198,11 +196,12 @@ FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
 FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)
 {
 	FIBER_REQUIRE(current != 0, 'C');
-	fiber_port_context_validate_restore(current);
 	FiberPortSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
 	FiberContext *const next = fiber_internal_scheduler_invoke_pick_next(current);
 	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	/* PendSV preflight validated and saved current. Validate only the context
+	 * selected for restore; this also covers next == current. */
 	fiber_port_context_validate_restore(next);
 	fiber_internal_scheduler_commit_current_context(next);
 	return next;

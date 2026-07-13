@@ -13,20 +13,35 @@ integrity boundary before additional Cortex-M ports are implemented:
   would violate the caller's interrupt contract.
 - Startup MSP ownership is one runtime-wide selected-port plan built after
   start preconditions, never a stale field copied into every `FiberContext`.
-- Before a restore validator reads a context or saved frame, it checks context
-  pointer extent and RAM plausibility. Before PENDSVSET, and again inside
-  PendSV before its first current-context field read, the selected port validates
-  the current context seal and live PSP so PendSV assembly never reads
-  unverified current metadata. It seals and fast-checks selected port
+- `fiber_init()` always validates context storage, PSP stack range, and entry
+  code with integration address-map hooks before initializing memory. Before a
+  restore validator reads a context or saved frame, it always checks pointer
+  non-NULL, alignment, and extent. `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`
+  additionally checks context/stack map plausibility before dereference and the
+  dynamic stacked PC before exception return; the default `0` omits only these
+  hot-path hooks. The Thread-mode request checks only current ownership and
+  CPU mask preconditions, then publishes PendSV. Inside PendSV, before its
+  first current-context field read, the selected port validates the current
+  context seal, low-stack canary, and live PSP so assembly never reads
+  unverified current metadata. The authoritative preflight snapshots and rechecks CPU
+  mask/CONTROL state around optional integration address-map hooks. It seals
+  and fast-checks selected port
   identity, layout version, context size/alignment, feature mask, and initial
   EXC_RETURN. The default rehashes immutable boot metadata on every restore.
-- Saved frame validation proves the exact EXC_RETURN, stack bounds, xPSR state,
-  Thumb PC form, and code-address plausibility before exception return.
+- Saved frame validation always proves the exact EXC_RETURN, stack bounds, xPSR
+  state, and Thumb PC form before exception return. Full code-address-map
+  plausibility is additionally checked when
+  `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`.
 - RAM/code plausibility hooks, scheduler bridges, and panic operations reachable
-  from PendSV use the selected general-registers-only ABI. The conservative
-  default requires integration-defined address-map hooks; the permissive weak
-  fallback is an explicit bring-up opt-out. Integration overrides must not
-  execute FP/MVE code or block.
+  from PendSV use the selected general-registers-only ABI. The safe default
+  requires integration-defined address-map hooks during initialization; the
+  permissive weak fallback is an explicit bring-up opt-out. When switch-time
+  map validation is enabled, integration overrides must not execute FP/MVE,
+  block, or alter selected CPU mask/CONTROL state.
+- The compile matrix statically proves that every selected PendSV path invokes
+  `fiber_port_context_validate_save_current()` before its first current stack
+  metadata load, and that every selected save/restore preflight retains its
+  canary and CPU-state guard ordering.
 - Automatic local fiber stacks and the unused heap-only stack helper were
   removed. A context and its PSP stack require persistent application storage.
 

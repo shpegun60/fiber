@@ -18,6 +18,7 @@ Run the validation first with portable conservative defaults:
 #define FIBER_FPU_LAZY 0
 #define FIBER_STACK_CANARY 1
 #define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 1
+#define FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH 1
 #define FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS 0
 ```
 
@@ -42,7 +43,8 @@ Before a board run:
   plausibility hooks backed by the actual linker memory map. The H7 harness
   validates AXI RAM, non-cacheable AXI RAM, DTCM, SRAMAHB, BKPSRAM, and FLASH.
   Those hooks must preserve `PRIMASK`, `BASEPRI`, `FAULTMASK`, and `CONTROL`;
-  they can execute from PendSV validation paths.
+  with `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`, they execute from PendSV
+  validation paths.
 - Any behavior-changing first-start or PendSV change must get a fresh board run;
   earlier recorded results become historical until the new checkpoint passes.
 
@@ -242,7 +244,8 @@ Validate these scheduler result cases:
 - returned context without `xPSR.T`, with a nonzero stacked IPSR, or with
   stacked PC bit 0 set traps with `'x'`.
 - returned context with a structurally valid stacked PC outside the board's
-  executable code map traps with `'c'`.
+  executable code map traps with `'c'` when
+  `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`.
 - returned context with insufficient software, hardware, or extended-FP frame
   headroom, including a missing `xPSR.STACKALIGN` word, traps with `'X'` before
   exception return.
@@ -266,7 +269,9 @@ The harness keeps first-start and later-PendSV result validation separate:
 - `FIBER_VAL_TRAP_BAD_NEXT` lets first-start enter the first fiber, then traps
   on a later `pick_next(current, user)` with `'P'`.
 - `FIBER_VAL_TRAP_CANARY` damages the running fiber canary and traps with `'c'`
-  in the Thread-mode save-side preflight before `PENDSVSET`.
+  in the authoritative PendSV save-side preflight before its first
+  save-metadata load. Thread mode only checks yield preconditions before it
+  publishes `PENDSVSET`.
 - `FIBER_VAL_TRAP_BAD_EXC_RETURN` damages the next saved exception-return word
   and traps with `'x'` before restore.
 - `FIBER_VAL_TRAP_SHORT_FRAME` moves the next saved SP too close to `stack_top`
@@ -280,8 +285,9 @@ The harness keeps first-start and later-PendSV result validation separate:
   `FIBER_VAL_TRAP_BAD_STACKED_PC` independently damage the saved architectural
   Thread/Thumb frame signature and trap with `'x'`.
 - `FIBER_VAL_TRAP_BAD_STACKED_PC_ADDRESS` supplies an aligned non-Thumb saved
-  PC outside the linker-exported FLASH range and traps with `'c'` through the
-  H7 harness code-address plausibility hook.
+  PC outside the linker-exported FLASH range and, with
+  `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`, traps with `'c'` through the H7
+  harness code-address plausibility hook.
 - `FIBER_VAL_TRAP_SHORT_ALIGN_FRAME` supplies a complete base frame whose xPSR
   claims an additional alignment word that is outside the declared stack, and
   traps with `'X'`.

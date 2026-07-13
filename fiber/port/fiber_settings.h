@@ -79,17 +79,28 @@
 /* Current ownership and restore-target checks are always active. The safe
  * default also recomputes the selected-port boot-record hash before every
  * restore. Set 0 only as a measured performance opt-out: mandatory metadata,
- * structural, canary, frame, and code-address checks remain active, while full
- * hash checks still run during init/start.
+ * structural, canary, and frame checks remain active, while full hash checks
+ * still run during init/start.
  */
 #ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 # define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 1
 #endif
 
+/* Address-map hooks always validate context storage, stack ranges, and entry
+ * code during fiber_init(). Set this to 1 for a validation build that also
+ * invokes the RAM hooks before every save/restore and the code hook for every
+ * stacked PC. The default keeps these integration hooks out of the switch hot
+ * path; structural metadata, canary, PSP, saved-frame, EXC_RETURN, xPSR, and
+ * Thumb-PC checks remain mandatory either way.
+ */
+#ifndef FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+# define FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH 0
+#endif
+
 /* Address-map hooks validate context storage, stacks, MSP snapshots, entry
- * points, and saved PCs before the selected port dereferences them. The safe
- * default requires an integration-specific RAM and code map. Set 1 only for
- * constrained bring-up where the selected weak accept-any defaults are an
+ * points, and optional dynamic switch-time addresses. The safe default requires
+ * an integration-specific RAM and code map during initialization. Set 1 only
+ * for constrained bring-up where the selected weak accept-any defaults are an
  * explicit and temporary trade-off. */
 #ifndef FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS
 # define FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS 0
@@ -137,6 +148,10 @@
 #if (FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 0) && \
 		(FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 1)
 # error "[fiber]: FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"
+#endif
+#if (FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH != 0) && \
+		(FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH != 1)
+# error "[fiber]: FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH must be 0 or 1"
 #endif
 #if (FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS != 0) && \
 		(FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS != 1)

@@ -276,8 +276,10 @@ fails closed before its saved frame is read.
 The conservative default recomputes the immutable boot-record hash before every
 restore. An integration may explicitly select the fast structural-only path,
 but that is a performance trade-off, not a safety-equivalent default. Both paths
-must validate the context identity, stack bounds, canary, saved-frame shape, and
-saved PC code-address policy before exception return.
+must validate the context identity, stack bounds, canary, saved-frame shape,
+EXC_RETURN, xPSR, and Thumb-PC form before exception return. The optional
+`FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` policy additionally validates the
+dynamic context/stack and saved-PC addresses against the linker map.
 
 ## Runtime MSP Ownership
 
@@ -425,27 +427,42 @@ Only after those checks pass may the port normalize stack bounds, construct the
 initial frame, initialize metadata, seal the context, or write a canary.
 
 Before `fiber_port_context_validate_restore()` reads `ctx->sp` or any boot
-field, it must validate the context pointer itself: non-NULL, alignment,
-overflow-free `sizeof(*ctx)` extent, and `fiber_addr_plausible_ram()` policy.
-The conservative default requires integration-defined RAM and code plausibility
-hooks. `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` is an explicit bring-up
-opt-out that enables weak accept-any fallbacks; it is not a production claim.
+field, it must validate the context pointer itself: non-NULL, alignment, and
+overflow-free `sizeof(*ctx)` extent. `fiber_init()` always applies the
+integration RAM/code plausibility policy to context storage, supplied stack, and
+entry. `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` additionally applies RAM
+plausibility to an incoming runtime context before dereference and to its
+declared stack after structural boot validation. `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1`
+is an explicit bring-up opt-out that enables weak accept-any fallbacks; it is
+not a production claim.
 
-Before publishing `PENDSVSET`, the selected Thread-mode schedule path calls
-`fiber_port_context_validate_save_current()`. PendSV repeats that preflight
-before its first current-context field access, so an externally pended PendSV
-also fails closed. The preflight validates the runtime-owned current pointer,
-sealed boot record, startup MSP plan, and live PSP bounds. It deliberately does
-not read `ctx->sp`, because that field names an older saved frame while the
-context is executing.
+The selected Thread-mode schedule path validates only Thread mode, runtime
+current-context ownership, and applicable interrupt-mask preconditions before
+publishing `PENDSVSET`. PendSV owns the one authoritative save preflight before
+its first current-context field access, so an externally pended PendSV also
+fails closed. The preflight validates the runtime-owned current pointer, sealed
+boot record, low-stack canary, and live PSP bounds. It deliberately does not
+read `ctx->sp`, because that field names an older saved frame while the context
+is executing. The selected port captures
+`PRIMASK`, `CONTROL`, and every implemented priority/fault mask before this
+preflight and validates the exact values again after it completes.
 
+After saving the outgoing context, PendSV does not run a redundant restore
+validation on it. The scheduler bridge validates exactly the returned `next`
+context before publishing it as current and restoring it. Restore validation
+retains startup MSP-plan validation because a scheduler can select a context
+that has not previously run; save validation omits it because the running
+context necessarily passed restore validation before it entered Thread mode.
+
+With `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`,
 `fiber_addr_plausible_ram()` and `fiber_addr_plausible_code()` can run from the
-PendSV restore path. Their declarations and every override must use the selected
-general-registers-only ABI and must not execute FP, MVE, allocation, blocking,
-or scheduler-recursive code. They must preserve `PRIMASK`, `BASEPRI` where
-present, `FAULTMASK` where present, and `CONTROL` exactly. The code hook
-validates each saved stacked PC after the architectural xPSR/Thumb checks and
-before exception return.
+PendSV save/restore path. Their declarations and every override must use the
+selected general-registers-only ABI and must not execute FP, MVE, allocation,
+blocking, or scheduler-recursive code. They must preserve `PRIMASK`, `BASEPRI`
+where present, `FAULTMASK` where present, and `CONTROL` exactly. Save and
+restore preflights enforce that contract with `'r'`, `'B'`, `'t'`, and `'l'`
+before continuing. In that mode the code hook validates each saved stacked PC
+after the architectural xPSR/Thumb checks and before exception return.
 
 `fiber_scheduler_set_pick_next()` accepts one non-NULL hook before start,
 rejects replacement while selecting or running, and publishes the hook and user
