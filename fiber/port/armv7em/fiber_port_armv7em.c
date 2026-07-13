@@ -14,6 +14,7 @@
 #if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
 
 #include "../../fiber_boot.h"
+#include "../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
 
 #define FBR_STRINGIFY2(x) #x
@@ -60,6 +61,26 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	ctx->sp = sp;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+}
+
+void fiber_port_require_schedule_environment(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	fiber_internal_require_schedule_current();
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+#endif
+}
+
+void fiber_port_request_schedule(void)
+{
+	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	__DSB();
+	__ISB();
 }
 
 FIBER_NORETURN

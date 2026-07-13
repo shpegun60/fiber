@@ -1,5 +1,25 @@
 # Fiber Decision Log
 
+## 2026-07-13: Move Privileged Schedule Requests Behind Selected Ports
+
+`fiber_schedule()` remains the public cooperative trigger, but it no longer
+reads CPU special registers or writes PendSV state itself. It invokes the
+selected-port ABI in two steps:
+
+- `fiber_port_require_schedule_environment()` validates the port-owned
+  Thread-mode and interrupt-mask rules;
+- `fiber_port_request_schedule()` performs the selected request mechanism.
+
+The common runtime retains current-context lifecycle ownership through
+`fiber_internal_require_schedule_current()`. Direct privileged ports call that
+guard after the IPSR check and before PRIMASK, BASEPRI, and FAULTMASK checks, so
+the CM7 failure order remains `i -> G -> p -> b -> f -> PENDSVSET`.
+
+The compile matrix now proves exactly one definition of both selected-port ABI
+symbols and rejects CPU-specific access in the body of `fiber_schedule()`.
+This is a source-boundary and generated-assembly checkpoint, not a renewed H7
+hardware-runtime claim; normal and trap validation must be repeated on board.
+
 ## 2026-07-13: Close Opaque-Port Portability Gaps
 
 A contract-level source audit against local FreeRTOS commit `a50edad`, covering
@@ -19,10 +39,9 @@ The contract is tightened before structural migration:
 - `fiber_port_request_schedule()` is mechanism-neutral: privileged ports may
   pend PendSV directly, while unprivileged MPU ports must enter a validated
   port-owned SVC that pends PendSV from Handler mode;
-- before common-core freeze, the existing CM7 Thread-mode register checks and
-  direct PendSV publication move unchanged behind that selected-port request
-  boundary; common runtime objects must then compile without CMSIS or CPU
-  special-register access;
+- the existing CM7 Thread-mode register checks and direct PendSV publication
+  now live behind the selected-port environment/request boundary; remaining
+  common-runtime CPU access moves with the opaque-context transition;
 - common scheduling code does not read CPU mask registers. Privileged ports
   validate them before direct PendSV publication; unprivileged ports validate
   safely observable state before SVC and the real mask state in Handler mode;
@@ -899,9 +918,9 @@ Hardening decisions:
   `0xFFFFFFBCu`, or override `FIBER_INITIAL_EXC_RETURN` directly.
 - The validated privileged CM7 request path rejects a real scheduler jump when
   `PRIMASK`, BASEPRI, or FAULTMASK is nonzero, because a pending PendSV delayed
-  past a critical section is unsafe. This is historical CM7 behavior to retain
-  when the checks move behind `fiber_port_request_schedule()`; it is not a
-  requirement for common code to read privileged registers.
+  past a critical section is unsafe. This behavior is preserved by the selected
+  port environment/request boundary; it is not a requirement for common code
+  to read privileged registers.
 - Future unprivileged MPU request paths enter a validated yield SVC instead.
   Handler mode validates the real mask state before publishing PendSV, and
   every unprivileged restore guarantees zero PRIMASK and, where implemented,

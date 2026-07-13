@@ -1333,11 +1333,13 @@ Minimum evidence for stronger labels:
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.
-12. Move all schedule-time IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK, SCB,
-    and direct-PendSV access behind `fiber_port_request_schedule()`. Preserve
-    current CM7 behavior in the selected CM7 port, compile common runtime code
-    without CMSIS, and add a validated yield-SVC request path before an MPU or
-    unprivileged support claim.
+12. Move schedule-time CPU access behind the selected-port request ABI. Done
+    for current privileged direct-PendSV ports: common `fiber_schedule()` calls
+    `fiber_port_require_schedule_environment()` and
+    `fiber_port_request_schedule()` only, and the selected port preserves its
+    CPU-register checks and PendSV publication. Remaining: remove non-schedule
+    CPU access from the transitional common runtime and add a validated yield
+    SVC path before an MPU or unprivileged support claim.
 13. Add full ARMv8-M Baseline/Mainline PSPLIM and security-domain context
     layout before claiming runtime support.
 14. Add full ARMv8.1-M/MVE/PAC/BTI context policy before claiming STM32N6-class

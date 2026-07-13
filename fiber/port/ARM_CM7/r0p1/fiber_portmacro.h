@@ -587,14 +587,18 @@ fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_yield_request(void)
 	fiber_portINST_SYNC_BARRIER();
 }
 
-fiber_portFORCE_INLINE void fiber_port_pend_switch(void)
-{
-	fiber_arm_cm7_r0p1_yield_request();
-}
-
 struct FiberContext;
 
 void fiber_port_init_context_frame(struct FiberContext *ctx);
+
+/* Thread-mode schedule boundary. These are selected-port ABI entry points,
+ * deliberately out-of-line so common runtime objects do not inherit CPU
+ * register access or direct ICSR writes. */
+FIBER_NOINLINE
+void fiber_port_require_schedule_environment(void);
+
+FIBER_NOINLINE
+void fiber_port_request_schedule(void);
 
 void fiber_exception_runtime_check(void);
 

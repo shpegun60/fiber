@@ -368,14 +368,13 @@ __STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 	{ __DSB(); __ISB(); }
 }
 
-__STATIC_FORCEINLINE void fiber_port_pend_switch(void)
-{
-	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-	__DSB();
-	__ISB();
-}
-
 void fiber_port_init_context_frame(FiberContext *ctx);
+
+FIBER_NOINLINE
+void fiber_port_require_schedule_environment(void);
+
+FIBER_NOINLINE
+void fiber_port_request_schedule(void);
 
 void fiber_exception_runtime_check(void);
 

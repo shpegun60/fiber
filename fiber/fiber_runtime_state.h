@@ -37,6 +37,12 @@ FiberContext *fiber_internal_scheduler_pick_first_from_start(void);
 FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
 
+/* Common-owned lifecycle guard used by selected ports before they request a
+ * scheduler exception. Ports must call this helper instead of inspecting the
+ * current-context global directly. */
+FIBER_GENERAL_REGS_ONLY
+void fiber_internal_require_schedule_current(void);
+
 __STATIC_FORCEINLINE FiberContext *fiber_port_load_current_context(void)
 {
 	__COMPILER_BARRIER();

@@ -165,6 +165,14 @@ void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_n
 }
 
 FIBER_GENERAL_REGS_ONLY
+void fiber_internal_require_schedule_current(void)
+{
+	__COMPILER_BARRIER();
+	FIBER_REQUIRE(fiber_internal_port_current_context != 0, 'G');
+	__COMPILER_BARRIER();
+}
+
+FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
 {
 	FiberSchedulerPickNextFn const pick_next = fiber_internal_port_scheduler_pick_next;

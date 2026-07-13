@@ -113,7 +113,7 @@ user/build option      -> FIBER_XXX
 | `portTICK_PERIOD_MS` | user scheduler tick policy | Excluded. |
 | `portBYTE_ALIGNMENT` | `fiber_portBYTE_ALIGNMENT` and `FIBER_PORT_STACK_ALIGNMENT` | Reimplemented. Alignment is a fixed selected-port trait, not a user setting. |
 | `portDONT_DISCARD` | shared `fiber_compiler.h` attribute helpers | Adapted. The selected port intentionally depends on the shared compiler ABI instead of duplicating toolchain attributes. |
-| `portYIELD()` | `fiber_schedule()` plus `fiber_arm_cm7_r0p1_yield_request()` / `fiber_port_pend_switch()` | Adapted. The validated privileged CM7 request path rejects Handler mode and PRIMASK/BASEPRI/FAULTMASK delayed switches before pending PendSV. The opaque-context migration preserves that behavior behind `fiber_port_request_schedule()`; it does not make common code own those register checks. |
+| `portYIELD()` | `fiber_schedule()` -> `fiber_port_require_schedule_environment()` -> `fiber_port_request_schedule()` -> `fiber_arm_cm7_r0p1_yield_request()` | Adapted. The selected CM7 port rejects Handler mode, calls the common current-owner guard, then rejects PRIMASK/BASEPRI/FAULTMASK delayed switches before pending PendSV. Common `fiber_schedule()` owns no CPU register access. |
 | `portNVIC_INT_CTRL_REG` | `fiber_portNVIC_INT_CTRL_REG` | Reimplemented. |
 | `portNVIC_PENDSVSET_BIT` | `fiber_portNVIC_PENDSVSET_BIT` | Reimplemented. |
 | `portEND_SWITCHING_ISR()` | none | Excluded. Current fiber core has no ISR fiber API. Future ISR wake APIs must be scheduler-level and audited separately. |

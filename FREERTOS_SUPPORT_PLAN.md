@@ -53,8 +53,10 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
   an SVC first-start symbol.
 - The current validated privileged CM7 request path rejects Handler mode and
   rejects scheduler jumps while PRIMASK, BASEPRI, or FAULTMASK is nonzero.
-- Before common-core freeze, those checks and direct PendSV publication move
-  unchanged behind `fiber_port_request_schedule()` in the selected CM7 port.
+- `fiber_schedule()` delegates its environment checks and PendSV request through
+  the selected-port ABI. The selected CM7 port preserves the historical
+  `IPSR -> current -> PRIMASK -> BASEPRI -> FAULTMASK -> PENDSVSET` sequence.
+  A fresh H7 board run is still required after this source-boundary change.
 - Future unprivileged MPU paths use a validated yield SVC and enforce zero mask
   state as a selected-port restore invariant instead of reading privileged mask
   registers from common Thread-mode code.

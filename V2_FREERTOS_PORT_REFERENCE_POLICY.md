@@ -428,8 +428,8 @@ FreeRTOS mpu_wrappers*.c:
 The MPU yield mechanism is not optional when unprivileged fibers are supported.
 FreeRTOS `ARM_CM3_MPU`, `ARM_CM4_MPU`, and v8-M MPU ports issue SVC from
 unprivileged Thread mode and pend PendSV from privileged Handler mode. The fiber
-equivalent remains behind `fiber_port_request_schedule()`: direct PendSV and SVC
-yield are two selected-port implementations of the same common request ABI.
+equivalent remains behind the selected-port schedule ABI: direct PendSV and SVC
+yield are two selected-port implementations of the same common request flow.
 This does not import the FreeRTOS scheduler or MPU wrapper API.
 
 ## STM32-Relevant Port Source Groups
@@ -703,10 +703,11 @@ Do not move these helpers all at once. The migration order should be:
 4. exception priority and vector validation
 5. FPU policy
 6. PSPLIM policy
-7. privilege-aware schedule-request boundary: move Thread-mode CPU-register
-   checks and direct PendSV publication out of common code; preserve the
-   current privileged CM7 behavior in its selected port and add the MPU yield
-   SVC path before any unprivileged support claim
+7. privilege-aware schedule-request boundary: done for privileged direct-PendSV
+   ports. Common `fiber_schedule()` calls selected-port environment and request
+   operations only; the CM7 port preserves the historical checks and direct
+   PendSV publication. Add the MPU yield SVC path before any unprivileged
+   support claim
 8. v8-M secure/non-secure context helpers
 ```
 

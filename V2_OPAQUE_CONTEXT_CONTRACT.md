@@ -455,10 +455,12 @@ pointer with the required common ordering barriers.
 6. publish the selected context as current;
 7. transfer through the selected port's mandatory SVC first-start path.
 
-`fiber_schedule()` validates only common running/current ownership and calls
-`fiber_port_request_schedule()`. Common code does not read IPSR, CONTROL,
-PRIMASK, BASEPRI, FAULTMASK, SCB, or NVIC state. CPU preconditions and the
-request mechanism are selected-port policy:
+`fiber_schedule()` delegates environment validation and the request through
+`fiber_port_require_schedule_environment()` and
+`fiber_port_request_schedule()`. Common code owns only current-context
+lifecycle validation and does not read IPSR, CONTROL, PRIMASK, BASEPRI,
+FAULTMASK, SCB, or NVIC state. CPU preconditions and the request mechanism are
+selected-port policy:
 
 - a privileged non-MPU path validates Thread mode and every readable mask
   invariant, then may publish `PENDSVSET` directly with mandatory barriers;
@@ -653,10 +655,13 @@ SMP and cross-core migration remain outside this freeze.
 
 ### Commit 3: Common Hardening Cleanup
 
-- replace common-core IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK, SCB, and
-  direct-PendSV access with `fiber_port_request_schedule()`;
+- schedule-time IPSR, PRIMASK, BASEPRI, FAULTMASK, SCB, and direct-PendSV
+  access now live behind `fiber_port_require_schedule_environment()` and
+  `fiber_port_request_schedule()`; remaining non-schedule common CPU access
+  moves with the opaque context transition;
 - preserve the generated CM7 direct-request sequence and every existing CM7
-  panic code while moving that sequence into the selected CM7 port;
+  panic code while keeping the common current-owner guard between the IPSR and
+  mask checks in the selected CM7 port;
 - compare ranges through `uintptr_t`;
 - validate context alignment before the first write;
 - reject overlap between context storage and its own stack;

@@ -89,6 +89,27 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 }
 
 /*-----------------------------------------------------------
+ * Thread-mode schedule request.
+ *
+ * Preserve the established CM7 failure codes while keeping special-register
+ * access and ICSR publication inside the selected port ABI.
+ *----------------------------------------------------------*/
+
+void fiber_port_require_schedule_environment(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	fiber_internal_require_schedule_current();
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+}
+
+void fiber_port_request_schedule(void)
+{
+	fiber_arm_cm7_r0p1_yield_request();
+}
+
+/*-----------------------------------------------------------
  * First context start.
  *
  * FreeRTOS starts the first task through SVC. Fiber does the same, but the

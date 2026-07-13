@@ -9,6 +9,7 @@
  */
 
 #include "../../fiber_boot.h"
+#include "../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
 
 #if FIBER_PORT_ARMV6M
@@ -57,6 +58,20 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	ctx->sp = sp;
 
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+}
+
+void fiber_port_require_schedule_environment(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	fiber_internal_require_schedule_current();
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+}
+
+void fiber_port_request_schedule(void)
+{
+	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	__DSB();
+	__ISB();
 }
 
 FIBER_NORETURN

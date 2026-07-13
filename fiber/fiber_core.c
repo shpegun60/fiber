@@ -138,29 +138,20 @@ void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *use
 }
 
 /* --------------------------------------------------------------------------
- * fiber_schedule: robust cooperative scheduler trigger
+ * fiber_schedule: common cooperative scheduler trigger
  *
- * Goals:
- *  - Enter only from Thread mode.
- *  - Require a seeded runtime-owned current context.
- *  - Reject calls that would silently defer PendSV behind interrupt masks.
- *  - Keep scheduler policy outside the core; PendSV calls the configured bridge.
- *  - Keep barriers conservative to avoid reordering surprises
+ * Common code owns only runtime-current ownership. The selected port owns
+ * Thread-mode/mask validation and the architecture-specific request mechanism.
+ * Keeping those CPU details out of this translation unit is required before
+ * MPU/unprivileged ports can replace a direct PendSV request with yield SVC.
  * -------------------------------------------------------------------------- */
 
 void fiber_schedule(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');  /* fiber_schedule is a Thread-mode API */
-	FIBER_REQUIRE(fiber_current() != NULL, 'G');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p'); /* do not defer the scheduler jump */
-#if FIBER_PORT_HAS_BASEPRI
-	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b'); /* do not defer PendSV behind BASEPRI */
-#endif
-#if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f'); /* do not defer PendSV behind FAULTMASK */
-#endif
-
-	fiber_port_pend_switch();
+	/* The selected port invokes the common current-owner guard in historical
+	 * failure order between its Thread-mode and interrupt-mask checks. */
+	fiber_port_require_schedule_environment();
+	fiber_port_request_schedule();
 }
 #if !FIBER_PENDSV_VECTOR_DIRECT
 # ifndef FIBER_PENDSV_WIRED

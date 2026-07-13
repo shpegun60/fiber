@@ -84,6 +84,73 @@ function Find-CmsisCore {
     throw "CMSIS core headers not found. Set CMSIS_CORE_INCLUDE to a folder containing cmsis_compiler.h and core_cm*.h."
 }
 
+function Get-CFunctionBody {
+    param(
+        [string]$Source,
+        [string]$Signature,
+        [string]$Path
+    )
+
+    $signatureIndex = $Source.IndexOf($Signature, [System.StringComparison]::Ordinal)
+    if ($signatureIndex -lt 0) {
+        throw "Missing function signature in ${Path}: $Signature"
+    }
+
+    $openBraceIndex = $Source.IndexOf('{', $signatureIndex)
+    if ($openBraceIndex -lt 0) {
+        throw "Missing function body in ${Path}: $Signature"
+    }
+
+    $depth = 0
+    for ($index = $openBraceIndex; $index -lt $Source.Length; ++$index) {
+        if ($Source[$index] -eq '{') {
+            ++$depth
+        }
+        elseif ($Source[$index] -eq '}') {
+            --$depth
+            if ($depth -eq 0) {
+                return $Source.Substring($openBraceIndex, $index - $openBraceIndex + 1)
+            }
+        }
+    }
+
+    throw "Unterminated function body in ${Path}: $Signature"
+}
+
+function Test-SchedulePortBoundary {
+    param([string]$RepositoryRoot)
+
+    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
+    $coreSource = Get-Content -LiteralPath $corePath -Raw
+    $scheduleBody = Get-CFunctionBody -Source $coreSource `
+        -Signature "void fiber_schedule(void)" -Path $corePath
+
+    $requiredCalls = @(
+        "fiber_port_require_schedule_environment();",
+        "fiber_port_request_schedule();"
+    )
+    foreach ($requiredCall in $requiredCalls) {
+        if ($scheduleBody.IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "fiber_schedule must delegate through selected-port ABI: missing $requiredCall"
+        }
+    }
+
+    $forbiddenCpuAccess = @(
+        "__get_IPSR",
+        "__get_PRIMASK",
+        "__get_BASEPRI",
+        "__get_FAULTMASK",
+        "fiber_port_basepri_read",
+        "SCB->ICSR",
+        "fiber_port_pend_switch"
+    )
+    foreach ($forbidden in $forbiddenCpuAccess) {
+        if ($scheduleBody.IndexOf($forbidden, [System.StringComparison]::Ordinal) -ge 0) {
+            throw "fiber_schedule must not contain CPU-specific schedule access: $forbidden"
+        }
+    }
+}
+
 function Invoke-CompilerProbe {
     param(
         [string]$Compiler,
@@ -117,6 +184,8 @@ $nm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-nm.exe"
 if (-not (Test-Path $nm)) {
     throw "arm-none-eabi-nm.exe not found next to compiler: $gcc"
 }
+
+Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
 
 $commonSources = @(
     "fiber\fiber_core.c",
@@ -220,6 +289,8 @@ New-Item -ItemType Directory -Path $buildRoot | Out-Null
 
 $requiredPortSymbols = @(
     "fiber_port_init_context_frame",
+    "fiber_port_require_schedule_environment",
+    "fiber_port_request_schedule",
     "fiber_port_start_first_context",
     "fiber_svc",
     "fiber_pendsv",
