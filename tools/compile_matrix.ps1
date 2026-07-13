@@ -91,13 +91,31 @@ function Get-CFunctionBody {
         [string]$Path
     )
 
-    $signatureIndex = $Source.IndexOf($Signature, [System.StringComparison]::Ordinal)
-    if ($signatureIndex -lt 0) {
-        throw "Missing function signature in ${Path}: $Signature"
+    $searchIndex = 0
+    $signatureIndex = -1
+    $openBraceIndex = -1
+    while ($true) {
+        $candidate = $Source.IndexOf($Signature, $searchIndex,
+            [System.StringComparison]::Ordinal)
+        if ($candidate -lt 0) {
+            break
+        }
+
+        $afterSignature = $candidate + $Signature.Length
+        $candidateBrace = $Source.IndexOf('{', $afterSignature)
+        $candidateSemicolon = $Source.IndexOf(';', $afterSignature)
+        if (($candidateBrace -ge 0) -and
+                (($candidateSemicolon -lt 0) -or
+                 ($candidateBrace -lt $candidateSemicolon))) {
+            $signatureIndex = $candidate
+            $openBraceIndex = $candidateBrace
+            break
+        }
+
+        $searchIndex = $afterSignature
     }
 
-    $openBraceIndex = $Source.IndexOf('{', $signatureIndex)
-    if ($openBraceIndex -lt 0) {
+    if ($signatureIndex -lt 0) {
         throw "Missing function body in ${Path}: $Signature"
     }
 
@@ -275,48 +293,35 @@ function Test-SelectedPortIntegrityPreflight {
             -Signature "void fiber_port_context_validate_restore(FiberContext *ctx)" `
             -Path $path
 
-        $saveCapture = $saveBody.IndexOf(
-            "fiber_port_capture_validation_cpu_state(&cpu_state);",
-            [System.StringComparison]::Ordinal)
         $savePointer = $saveBody.IndexOf("fiber_port_validate_context_pointer(ctx);",
             [System.StringComparison]::Ordinal)
         $saveStackMap = $saveBody.IndexOf(
             "fiber_port_validate_stack_address_map_on_switch(ctx);",
             [System.StringComparison]::Ordinal)
-        $saveStackMapGate = $saveBody.IndexOf(
-            "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
-            [System.StringComparison]::Ordinal)
-        $saveStackMapEnd = if ($saveStackMap -ge 0) {
-            $saveBody.IndexOf("#endif", $saveStackMap)
-        }
-        else {
-            -1
-        }
         $saveCanary = $saveBody.IndexOf("fiber_port_validate_stack_canary(ctx);",
             [System.StringComparison]::Ordinal)
         $saveMsp = $saveBody.IndexOf("fiber_port_validate_start_msp_for_boot(&ctx->boot);",
             [System.StringComparison]::Ordinal)
-        $saveStateCheck = $saveBody.LastIndexOf(
-            "fiber_port_validate_validation_cpu_state(&cpu_state);",
-            [System.StringComparison]::Ordinal)
         $savePsp = $saveBody.IndexOf("const uintptr_t psp = (uintptr_t)__get_PSP();",
             [System.StringComparison]::Ordinal)
+        $saveGuardedCapture = [regex]::IsMatch($saveBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+FiberPortValidationCpuState cpu_state;\s+fiber_port_capture_validation_cpu_state\(&cpu_state\);\s*#endif')
+        $saveGuardedStackMap = [regex]::IsMatch($saveBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+fiber_port_validate_stack_address_map_on_switch\(ctx\);\s*#endif')
+        $saveGuardedStateCheck = [regex]::IsMatch($saveBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+fiber_port_validate_validation_cpu_state\(&cpu_state\);\s*#endif')
 
-        if (($saveCapture -lt 0) -or ($savePointer -lt 0) -or
+        if (($savePointer -lt 0) -or
                 ($saveStackMap -lt 0) -or ($saveCanary -lt 0) -or ($saveMsp -ge 0) -or
-                ($saveStateCheck -lt 0) -or ($savePsp -lt 0) -or
-                ($saveCapture -ge $savePointer) -or
-                ($saveStackMapGate -lt 0) -or ($saveStackMapEnd -lt 0) -or
-                ($savePointer -ge $saveStackMapGate) -or
-                ($saveStackMapGate -ge $saveStackMap) -or
-                ($saveStackMapEnd -ge $saveCanary) -or
-                ($saveStateCheck -le $savePsp)) {
-            throw "Selected port save preflight must gate address-map hooks before canary and live PSP access without revalidating the startup MSP plan: $path"
+                ($savePsp -lt 0) -or
+                (-not $saveGuardedCapture) -or (-not $saveGuardedStackMap) -or
+                (-not $saveGuardedStateCheck) -or
+                ($savePointer -ge $saveStackMap) -or
+                ($saveStackMap -ge $saveCanary) -or
+                ($saveCanary -ge $savePsp)) {
+            throw "Selected port save preflight must gate all CPU-state and address-map hooks before canary and live PSP access without revalidating the startup MSP plan: $path"
         }
 
-        $restoreCapture = $restoreBody.IndexOf(
-            "fiber_port_capture_validation_cpu_state(&cpu_state);",
-            [System.StringComparison]::Ordinal)
         $restorePointer = $restoreBody.IndexOf("fiber_port_validate_context_pointer(ctx);",
             [System.StringComparison]::Ordinal)
         $restoreStackMap = $restoreBody.IndexOf(
@@ -324,48 +329,34 @@ function Test-SelectedPortIntegrityPreflight {
             [System.StringComparison]::Ordinal)
         $restoreCode = $restoreBody.IndexOf("fiber_addr_plausible_code(",
             [System.StringComparison]::Ordinal)
-        $restoreMapGate = $restoreBody.IndexOf(
-            "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
-            [System.StringComparison]::Ordinal)
-        $restoreStackMapEnd = if ($restoreStackMap -ge 0) {
-            $restoreBody.IndexOf("#endif", $restoreStackMap)
-        }
-        else {
-            -1
-        }
-        if ($restoreCode -ge 0) {
-            $restoreCodePrefix = $restoreBody.Substring(0, $restoreCode)
-            $restoreCodeGate = $restoreCodePrefix.LastIndexOf(
-                "#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH",
-                [System.StringComparison]::Ordinal)
-            $restoreCodeEnd = $restoreBody.IndexOf("#endif", $restoreCode)
-        }
-        else {
-            $restoreCodeGate = -1
-            $restoreCodeEnd = -1
-        }
         $restoreStateCheck = $restoreBody.LastIndexOf(
             "fiber_port_validate_validation_cpu_state(&cpu_state);",
             [System.StringComparison]::Ordinal)
         $restoreMsp = $restoreBody.IndexOf(
             "fiber_port_validate_start_msp_for_boot(&ctx->boot);",
             [System.StringComparison]::Ordinal)
+        $restoreGuardedCapture = [regex]::IsMatch($restoreBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+FiberPortValidationCpuState cpu_state;\s+fiber_port_capture_validation_cpu_state\(&cpu_state\);\s*#endif')
+        $restoreGuardedStackMap = [regex]::IsMatch($restoreBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+fiber_port_validate_stack_address_map_on_switch\(ctx\);\s*#endif')
+        $restoreGuardedCode = [regex]::IsMatch($restoreBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+FIBER_REQUIRE\(fiber_addr_plausible_code\(\(uintptr_t\)stacked_pc\) != 0, .c.\);\s*#endif')
+        $restoreGuardedStateCheck = [regex]::IsMatch($restoreBody,
+            '(?s)#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH\s+fiber_port_validate_validation_cpu_state\(&cpu_state\);\s*#endif')
 
-        if (($restoreCapture -lt 0) -or ($restorePointer -lt 0) -or
+        if (($restorePointer -lt 0) -or
                 ($restoreStackMap -lt 0) -or ($restoreCode -lt 0) -or
-                ($restoreMapGate -lt 0) -or ($restoreStateCheck -lt 0) -or
+                ($restoreStateCheck -lt 0) -or
                 ($restoreMsp -lt 0) -or
-                ($restoreCapture -ge $restorePointer) -or
-                ($restoreStackMapEnd -lt 0) -or ($restoreCodeGate -lt 0) -or
-                ($restoreCodeEnd -lt 0) -or
-                ($restorePointer -ge $restoreMapGate) -or
-                ($restoreMapGate -ge $restoreStackMap) -or
-                ($restoreStackMapEnd -ge $restoreCode) -or
-                ($restoreCodeGate -ge $restoreCode) -or
-                ($restoreCodeEnd -le $restoreCode) -or
-                ($restoreMsp -le $restoreStackMapEnd) -or
+                (-not $restoreGuardedCapture) -or
+                (-not $restoreGuardedStackMap) -or
+                (-not $restoreGuardedCode) -or
+                (-not $restoreGuardedStateCheck) -or
+                ($restorePointer -ge $restoreStackMap) -or
+                ($restoreStackMap -ge $restoreMsp) -or
+                ($restoreMsp -ge $restoreCode) -or
                 ($restoreStateCheck -le $restoreCode)) {
-            throw "Selected port restore validation must retain the startup MSP plan and gate address-map hooks: $path"
+            throw "Selected port restore validation must retain the startup MSP plan and gate all CPU-state and address-map hooks: $path"
         }
 
         $pointerBody = Get-CFunctionBody -Source $source `
@@ -396,6 +387,39 @@ function Test-SelectedPortIntegrityPreflight {
                 throw "Selected port stack address-map policy is incomplete in ${path}: $required"
             }
         }
+
+        $fallbackBody = Get-CFunctionBody -Source $source `
+            -Signature "uintptr_t fiber_port_fallback_initial_msp_checked(void)" `
+            -Path $path
+        $prepareMspBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_prepare_start_msp_plan(void)" `
+            -Path $path
+        $validateMspBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)" `
+            -Path $path
+        $fallbackCapture = $fallbackBody.IndexOf(
+            "fiber_port_capture_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $fallbackCall = $fallbackBody.IndexOf("fiber_fallback_initial_msp();",
+            [System.StringComparison]::Ordinal)
+        $fallbackStateCheck = $fallbackBody.IndexOf(
+            "fiber_port_validate_validation_cpu_state(&cpu_state);",
+            [System.StringComparison]::Ordinal)
+        $fallbackWrapper = "fiber_port_fallback_initial_msp_checked();"
+
+        if (($fallbackCapture -lt 0) -or ($fallbackCall -lt 0) -or
+                ($fallbackStateCheck -lt 0) -or ($fallbackCapture -ge $fallbackCall) -or
+                ($fallbackStateCheck -le $fallbackCall) -or
+                ($prepareMspBody.IndexOf($fallbackWrapper,
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($validateMspBody.IndexOf($fallbackWrapper,
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($prepareMspBody.IndexOf("fiber_fallback_initial_msp();",
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($validateMspBody.IndexOf("fiber_fallback_initial_msp();",
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+            throw "Selected port MSP fallback must preserve CPU state locally: $path"
+        }
     }
 }
 
@@ -418,10 +442,13 @@ function Test-PendSvSaveValidationOrdering {
 
         $validationCalls = [regex]::Matches($pendsvBody,
             "bl\s+fiber_port_context_validate_save_current\b")
+        $currentContextLoads = [regex]::Matches($pendsvBody,
+            '"ldr\s+r1,\s+\[r1\][^"]*\\n"')
         $stackBaseLoads = [regex]::Matches($pendsvBody,
             "ldr\s+r2,\s+\[r1,\s+%c\[offsb\]\]")
 
         if (($validationCalls.Count -eq 0) -or
+                ($validationCalls.Count -ne $currentContextLoads.Count) -or
                 ($validationCalls.Count -ne $stackBaseLoads.Count)) {
             throw "PendSV save validation/load count mismatch in $path"
         }
@@ -429,6 +456,20 @@ function Test-PendSvSaveValidationOrdering {
         for ($index = 0; $index -lt $validationCalls.Count; ++$index) {
             if ($validationCalls[$index].Index -ge $stackBaseLoads[$index].Index) {
                 throw "PendSV reads current stack metadata before save validation in $path"
+            }
+
+            $currentLoadEnd = $currentContextLoads[$index].Index +
+                    $currentContextLoads[$index].Length
+            if ($currentLoadEnd -ge $validationCalls[$index].Index) {
+                throw "PendSV current-context load does not precede save validation in $path"
+            }
+
+            $beforeValidation = $pendsvBody.Substring($currentLoadEnd,
+                    $validationCalls[$index].Index - $currentLoadEnd)
+            $currentFieldAccesses = [regex]::Matches($beforeValidation,
+                '"\s*(?:ldr|str|ldmia|stmia|ldmdb|stmdb)\s+[^"\r\n]*\[\s*r1(?:\s*,|\s*\])')
+            if ($currentFieldAccesses.Count -ne 0) {
+                throw "PendSV reads or writes a current-context field before save validation in $path"
             }
         }
     }

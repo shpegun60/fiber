@@ -23,8 +23,9 @@ integrity boundary before additional Cortex-M ports are implemented:
   CPU mask preconditions, then publishes PendSV. Inside PendSV, before its
   first current-context field read, the selected port validates the current
   context seal, low-stack canary, and live PSP so assembly never reads
-  unverified current metadata. The authoritative preflight snapshots and rechecks CPU
-  mask/CONTROL state around optional integration address-map hooks. It seals
+  unverified current metadata. When optional integration address-map hooks are
+  enabled, the authoritative preflight snapshots and rechecks CPU mask/CONTROL
+  state around them; the default map-off path omits those snapshots. It seals
   and fast-checks selected port
   identity, layout version, context size/alignment, feature mask, and initial
   EXC_RETURN. The default rehashes immutable boot metadata on every restore.
@@ -40,8 +41,12 @@ integrity boundary before additional Cortex-M ports are implemented:
   block, or alter selected CPU mask/CONTROL state.
 - The compile matrix statically proves that every selected PendSV path invokes
   `fiber_port_context_validate_save_current()` before its first current stack
-  metadata load, and that every selected save/restore preflight retains its
-  canary and CPU-state guard ordering.
+  metadata load, that no current-context field is accessed before that call,
+  and that map-enabled save/restore preflights retain their canary and CPU-state
+  guard ordering. Rare MSP fallback hooks have their own local CPU-state guard.
+- Startup MSP-plan validation remains on every restore. A per-context cached
+  result would add port-private mutable ABI state, so it is intentionally
+  deferred rather than silently weakening the first-restore safety invariant.
 - Automatic local fiber stacks and the unused heap-only stack helper were
   removed. A context and its PSP stack require persistent application storage.
 

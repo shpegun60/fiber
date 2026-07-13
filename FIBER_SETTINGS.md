@@ -35,7 +35,9 @@ integration-specific address-map hooks during initialization, a low-stack
 canary, an aligned red zone, and a full immutable boot-record hash before every
 restore. They intentionally leave switch-time address-map hooks disabled:
 runtime structural and frame checks remain mandatory, while application linker
-map checks are not paid on every cooperative switch.
+map checks and their validation CPU-state snapshots are not paid on every
+cooperative switch. A rare MSP fallback hook remains locally guarded if a
+selected port needs it after an unstable vector-table read.
 
 A conservative validation build sets both
 `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1` and

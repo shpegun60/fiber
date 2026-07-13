@@ -22,6 +22,10 @@
 #include "../../../fiber_platform_policy.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
+#if FIBER_REWIND_MSP
+static FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_port_fallback_initial_msp_checked(void);
+#endif
 
 /* -------------------------------------------------------------------------- 	*/
 /* Optional permissive defaults for bring-up only.                             */
@@ -64,7 +68,7 @@ static void fiber_port_prepare_start_msp_plan(void)
 	uint32_t second = fiber_port_read_initial_msp();
 
 	if ((first == 0u) || (first != second)) {
-		const uintptr_t fallback = fiber_fallback_initial_msp();
+		const uintptr_t fallback = fiber_port_fallback_initial_msp_checked();
 		FIBER_REQUIRE(fallback != 0u, 'f');
 		first = (uint32_t)fallback;
 		second = (uint32_t)fallback;
@@ -112,7 +116,7 @@ void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)
 	__ISB();
 	uint32_t second = fiber_port_read_initial_msp();
 	if ((first == 0u) || (first != second)) {
-		const uintptr_t fallback = fiber_fallback_initial_msp();
+		const uintptr_t fallback = fiber_port_fallback_initial_msp_checked();
 		FIBER_REQUIRE(fallback != 0u, 'f');
 		first = (uint32_t)fallback;
 		second = (uint32_t)fallback;
@@ -592,8 +596,8 @@ void fiber_port_validate_stack_canary(const FiberContext *const ctx)
 #endif
 }
 
-/* With switch-time address-map validation enabled, hooks run from Thread mode
- * and PendSV. They must not silently alter the selected CPU execution state. */
+/* Integration hooks must not silently alter selected CPU execution state.
+ * Address-map hooks run only when enabled; the MSP fallback is guarded locally. */
 typedef struct FiberPortValidationCpuState {
 	uint32_t primask;
 	uint32_t control;
@@ -638,11 +642,25 @@ void fiber_port_validate_validation_cpu_state(
 	fiber_portCOMPILER_BARRIER();
 }
 
-FIBER_GENERAL_REGS_ONLY
-void fiber_port_context_validate_save_current(const FiberContext *ctx)
+#if FIBER_REWIND_MSP
+static FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_port_fallback_initial_msp_checked(void)
 {
 	FiberPortValidationCpuState cpu_state;
 	fiber_port_capture_validation_cpu_state(&cpu_state);
+	const uintptr_t fallback = fiber_fallback_initial_msp();
+	fiber_port_validate_validation_cpu_state(&cpu_state);
+	return fallback;
+}
+#endif
+
+FIBER_GENERAL_REGS_ONLY
+void fiber_port_context_validate_save_current(const FiberContext *ctx)
+{
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
+#endif
 	fiber_port_validate_context_pointer(ctx);
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 	fiber_port_boot_record_check(&ctx->boot);
@@ -662,14 +680,19 @@ void fiber_port_context_validate_save_current(const FiberContext *ctx)
 	FIBER_REQUIRE((psp & ((uintptr_t)sizeof(uint32_t) - 1u)) == 0u, 'A');
 	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
+
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
 }
 
 FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_restore(FiberContext *ctx)
 {
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	FiberPortValidationCpuState cpu_state;
 	fiber_port_capture_validation_cpu_state(&cpu_state);
+#endif
 	fiber_port_validate_context_pointer(ctx);
 	FIBER_REQUIRE(ctx->sp != NULL, 'P');
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
@@ -722,7 +745,10 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 		required_bytes += (uintptr_t)FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES;
 	}
 	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
+
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
 }
 
 uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)

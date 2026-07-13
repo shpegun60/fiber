@@ -443,9 +443,11 @@ its first current-context field access, so an externally pended PendSV also
 fails closed. The preflight validates the runtime-owned current pointer, sealed
 boot record, low-stack canary, and live PSP bounds. It deliberately does not
 read `ctx->sp`, because that field names an older saved frame while the context
-is executing. The selected port captures
-`PRIMASK`, `CONTROL`, and every implemented priority/fault mask before this
-preflight and validates the exact values again after it completes.
+is executing. With switch-time address-map validation enabled, the selected
+port captures `PRIMASK`, `CONTROL`, and every implemented priority/fault mask
+before this preflight and validates the exact values again after it completes.
+With `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0`, no validation CPU-state snapshot
+is taken on the normal save or restore path.
 
 After saving the outgoing context, PendSV does not run a redundant restore
 validation on it. The scheduler bridge validates exactly the returned `next`
@@ -453,6 +455,9 @@ context before publishing it as current and restoring it. Restore validation
 retains startup MSP-plan validation because a scheduler can select a context
 that has not previously run; save validation omits it because the running
 context necessarily passed restore validation before it entered Thread mode.
+The startup MSP plan is deliberately rechecked for every restore. Caching that
+result per context would require new port-private mutable ABI state and is
+deferred until a port explicitly needs that tradeoff.
 
 With `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`,
 `fiber_addr_plausible_ram()` and `fiber_addr_plausible_code()` can run from the
@@ -463,6 +468,9 @@ where present, `FAULTMASK` where present, and `CONTROL` exactly. Save and
 restore preflights enforce that contract with `'r'`, `'B'`, `'t'`, and `'l'`
 before continuing. In that mode the code hook validates each saved stacked PC
 after the architectural xPSR/Thumb checks and before exception return.
+If an unstable vector-table read requires `fiber_fallback_initial_msp()`, the
+selected port applies the same CPU-state preservation check locally around that
+rare integration hook even when switch-time address-map validation is off.
 
 `fiber_scheduler_set_pick_next()` accepts one non-NULL hook before start,
 rejects replacement while selecting or running, and publishes the hook and user
