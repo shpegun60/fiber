@@ -6,77 +6,18 @@
  */
 
 #include "fiber_core.h"
-#include "fiber_boot.h"
 #include "fiber_runtime_state.h"
 #include "port/fiber_port_selected.h"
-
-FIBER_STATIC_ASSERT(offsetof(FiberContext, sp) == 0, "sp must be at offset 0");
 
 /* Safety net if a task ever returns from its entry function */
 FIBER_NORETURN FIBER_ATTR_SENSITIVE void fiber_internal_task_return(void) { fiber_panic('R'); }
 
-/* ---------------- Paranoid seed builder ----------------
- * Common code validates inputs and stack bounds. The selected port owns the
- * actual CPU software-frame layout under the synthetic hardware exception frame.
- */
+/* The selected port owns the complete context layout, boot record, stack
+ * geometry, integrity seal, and synthetic frame construction. */
 void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const stack_end,
 		const entry_t entry, void* const arg)
 {
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* -------- basic nullness and monotonicity -------- */
-	FIBER_REQUIRE(ctx         != NULL, 'C');
-	FIBER_REQUIRE(stack_begin != NULL, 'B');
-	FIBER_REQUIRE(stack_end   != NULL, 'T');
-	FIBER_REQUIRE(entry       != NULL, 'E');
-	FIBER_REQUIRE(stack_end > stack_begin, 'N');
-
-	/* -------- entry must be Thumb and plausibly executable -------- */
-	{
-		const uintptr_t ea = (uintptr_t)entry;
-		FIBER_REQUIRE((ea & 1u) == 1u, 'e');  /* Thumb bit */
-		FIBER_REQUIRE(fiber_addr_plausible_code(ea & ~(uintptr_t)1u) != 0, 'c');
-	}
-
-	/* -------- obtain sealed boot plan from your existing factory -------- */
-	ctx->boot = fiber_create_boot(stack_begin, stack_end, entry, arg);
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* -------- top must satisfy the selected port and AAPCS alignment -------- */
-	FIBER_REQUIRE((((uintptr_t)ctx->boot.stack_top) &
-			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'a');
-
-	/* -------- ensure enough space for the synthetic initial context -------- */
-	{
-		const size_t need_seed = (size_t)FIBER_PORT_INITIAL_CONTEXT_BYTES;
-		FIBER_REQUIRE(ctx->boot.avail >= need_seed, 'Z');
-	}
-
-#if FIBER_STACK_CANARY
-	/* Keep the software canary as an independent check even when PSPLIM exists. */
-	{
-		const uintptr_t canary_cell = fiber_word_align_up((uintptr_t)ctx->boot.begin);
-		((volatile uint32_t*)canary_cell)[0] =
-				FIBER_INTERNAL_STACK_CANARY_VALUE;
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-	}
-#endif
-
-	fiber_port_init_context_frame(ctx);
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-
-	/* Intentionally expect sp % 8 == 4 after placing SW area.
-	 * After removing SW area in PendSV, PSP will be 8-byte aligned exactly at HW frame. */
-	FIBER_REQUIRE((((uintptr_t)ctx->sp) & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
-
-	/* The initial saved context includes one basic hardware exception frame. */
-	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');
-	FIBER_REQUIRE((uintptr_t)ctx->sp <=
-			ctx->boot.stack_top - (uintptr_t)FIBER_EXC_BASE_BYTES, 'S');
-
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);
 }
 
 FiberContext* fiber_current(void)
@@ -87,45 +28,21 @@ FiberContext* fiber_current(void)
 FIBER_NORETURN
 void fiber_start(void)
 {
-	fiber_env_check();
+	fiber_port_require_start_environment();
 
 	FIBER_REQUIRE(fiber_port_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == NULL, 'k');
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-#if FIBER_PORT_HAS_BASEPRI
-	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-#endif
-#if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-#endif
+	fiber_port_require_start_interrupt_state();
 
 	/* FreeRTOS-style ownership: first start configures and validates its handlers. */
 	fiber_pendsv_init_lowest_priority();
 
-	fiber_platform_bootstrap();
+	fiber_port_runtime_prepare();
 
 	FiberContext *const first = fiber_internal_scheduler_pick_first_from_start();
 
-	fiber_boot_check(&first->boot);
-
-#if FIBER_PORT_USES_PSPLIM_REGISTER
-	fiber_port_psplim_config((uint32_t)first->boot.stack_base);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-	FIBER_REQUIRE(fiber_port_psplim_read() == (uint32_t)first->boot.stack_base, 'L');
-#endif
-
-	const uintptr_t msp_top = fiber_boot_prepare_msp_for_start(&first->boot);
-	fiber_internal_validate_restore_context(first);
-
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-#if FIBER_PORT_HAS_BASEPRI
-	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-#endif
-#if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-#endif
+	const uintptr_t msp_top = fiber_port_context_prepare_first_start(first);
+	fiber_port_require_start_interrupt_state();
 
 	fiber_port_seed_current_context(first);
 	fiber_port_start_first_context(msp_top);

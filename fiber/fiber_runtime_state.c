@@ -5,7 +5,6 @@
  */
 
 #include "fiber_runtime_state.h"
-#include "fiber_boot.h"
 #include "port/fiber_port_selected.h"
 
 FiberContext *volatile fiber_internal_port_current_context = 0;
@@ -68,87 +67,6 @@ void fiber_internal_validate_scheduler_cpu_state(
 	__COMPILER_BARRIER();
 }
 
-static FIBER_GENERAL_REGS_ONLY
-void fiber_internal_validate_stack_canary(const FiberContext *ctx)
-{
-#if FIBER_STACK_CANARY
-	const uintptr_t begin = (uintptr_t)ctx->boot.begin;
-	const uintptr_t canary_cell = fiber_word_align_up(begin);
-
-	FIBER_REQUIRE(canary_cell >= begin, 'c');
-	FIBER_REQUIRE(canary_cell <= (UINTPTR_MAX - sizeof(uint32_t)), 'c');
-	FIBER_REQUIRE((canary_cell + sizeof(uint32_t)) <= ctx->boot.stack_base, 'c');
-	FIBER_REQUIRE(*(const volatile uint32_t *)canary_cell ==
-			FIBER_INTERNAL_STACK_CANARY_VALUE, 'c');
-#else
-	(void)ctx;
-#endif
-}
-
-FIBER_GENERAL_REGS_ONLY
-void fiber_internal_validate_restore_context(FiberContext *ctx)
-{
-	FIBER_REQUIRE(ctx != 0, 'N');
-	FIBER_REQUIRE(((uintptr_t)ctx & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u,
-			'A');
-	FIBER_REQUIRE(ctx->sp != 0, 'P');
-#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
-	fiber_boot_record_check(&ctx->boot);
-#else
-	fiber_boot_record_fast_check(&ctx->boot);
-#endif
-	fiber_internal_validate_stack_canary(ctx);
-
-	const uintptr_t sp = (uintptr_t)ctx->sp;
-	const uintptr_t available_bytes = ctx->boot.stack_top - sp;
-	/* Saved SW frame alignment is selected-port specific. */
-	FIBER_REQUIRE((sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
-	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
-	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
-	FIBER_REQUIRE(available_bytes >= (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES,
-			'X');
-
-	const uint32_t *const words = (const uint32_t *)sp;
-	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
-
-	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
-
-	uintptr_t hardware_frame_offset =
-			(uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
-#if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
-	if ((exc_return & 0x10u) == 0u) {
-		hardware_frame_offset += (uintptr_t)FIBER_HIGH_FP_SOFTWARE_BYTES;
-	}
-#endif
-
-	if ((exc_return & 0x10u) == 0u) {
-		hardware_frame_offset += (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
-	}
-
-	/* The base hardware frame is r0-r3, r12, LR, PC, xPSR. */
-	const uintptr_t stacked_pc_offset = hardware_frame_offset + (6u * 4u);
-	const uintptr_t stacked_xpsr_offset = hardware_frame_offset + (7u * 4u);
-	uintptr_t required_bytes = hardware_frame_offset +
-			(uintptr_t)FIBER_EXC_BASE_BYTES;
-
-	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
-
-	const uint32_t stacked_pc = *(const uint32_t *)(sp + stacked_pc_offset);
-	const uint32_t stacked_xpsr = *(const uint32_t *)(sp + stacked_xpsr_offset);
-
-	/* Thread state is represented by xPSR.T; stacked PC bit 0 stays clear. */
-	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
-	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
-	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
-
-	/* xPSR bit 9 records the optional architectural alignment word. */
-	if ((stacked_xpsr & (1u << 9u)) != 0u) {
-		required_bytes += (uintptr_t)FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES;
-	}
-
-	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
-}
-
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                                  void *user)
 {
@@ -191,7 +109,7 @@ FiberContext *fiber_internal_scheduler_pick_first_from_start(void)
 	FiberContext *const first = pick_next(0, user);
 
 	fiber_internal_validate_scheduler_cpu_state(&cpu_state);
-	fiber_internal_validate_restore_context(first);
+	fiber_port_context_validate_restore(first);
 	fiber_port_scheduler_critical_exit(critical_state);
 
 	__DMB();
@@ -210,14 +128,14 @@ FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *curre
 
 	FIBER_REQUIRE(current != 0, 'C');
 	FIBER_REQUIRE(pick_next != 0, 'K');
-	fiber_internal_validate_restore_context(current);
+	fiber_port_context_validate_restore(current);
 
 	FiberSchedulerCpuState cpu_state;
 	fiber_internal_capture_scheduler_cpu_state(&cpu_state);
 	FiberContext *const next = pick_next(current, user);
 
 	fiber_internal_validate_scheduler_cpu_state(&cpu_state);
-	fiber_internal_validate_restore_context(next);
+	fiber_port_context_validate_restore(next);
 
 	__DMB();
 	fiber_internal_port_current_context = next;

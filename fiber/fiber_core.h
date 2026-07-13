@@ -7,8 +7,8 @@
 #ifndef MCU_FIBER_FIBER_CORE_H_
 #define MCU_FIBER_FIBER_CORE_H_
 
+#include "fiber_api_types.h"
 #include "port/fiber_port_selected.h"
-#include "fiber_types.h"
 
 #ifdef __cplusplus
 extern "C" {

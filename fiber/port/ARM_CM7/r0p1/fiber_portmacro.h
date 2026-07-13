@@ -15,10 +15,12 @@
  */
 #include <stdint.h>
 
+#include "fiber_port_types.h"
 #include "mcu_core.h"
 #include "../../fiber_settings.h"
 #include "../../fiber_compiler.h"
 #include "../../../fiber_panic.h"
+#include "fiber_port_boot.h"
 
 /*
  * Keep this header close to the FreeRTOS portmacro.h model: selected-port CPU

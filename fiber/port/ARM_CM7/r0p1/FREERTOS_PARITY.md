@@ -5,11 +5,13 @@ The goal is not to copy FreeRTOS source text. The goal is to audit every CPU
 port mechanism in the local FreeRTOS reference and either reimplement it,
 adapt it to the cooperative fiber model, or explicitly exclude it.
 
-This ledger describes the current transitional shared-context checkpoint. The
-target in `../../../../V2_OPAQUE_CONTEXT_CONTRACT.md` moves the complete CM7
-context type, construction, seal, and restore validation into this selected
-port. The structural migration must update this file list and every affected
-mapping without changing the validated save/restore behavior.
+This ledger describes the current transitional context-shape checkpoint. The
+complete CM7 type now lives in this selected port's type-only header, but its
+layout remains deliberately identical to the other current ports. The target in
+`../../../../V2_OPAQUE_CONTEXT_CONTRACT.md` moves construction, seal, and restore
+validation into this selected port without changing the validated save/restore
+behavior. The structural migration must update this file list and every affected
+mapping.
 
 ## Reference
 
@@ -41,10 +43,15 @@ Native fiber files:
 ```text
 fiber/port/ARM_CM7/r0p1/fiber_portmacro.h
 fiber/port/ARM_CM7/r0p1/fiber_port.c
+fiber/port/ARM_CM7/r0p1/fiber_port_boot.c
 fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
-fiber/fiber_types.h
+fiber/port/ARM_CM7/r0p1/fiber_port_types.h
+fiber/port/ARM_CM7/r0p1/fiber_port_boot_types.h
+fiber/port/ARM_CM7/r0p1/fiber_port_boot.h
+fiber/port/fiber_port_selected.h
+fiber/fiber_api_types.h
+fiber/fiber_types.h (compatibility facade)
 fiber/fiber_runtime_state.h
-fiber/fiber_boot.h
 fiber/port/fiber_static_assert.h
 ```
 
@@ -69,6 +76,7 @@ FIBER_PORT_BUILD_SELECTED=1
 FIBER_PORT_ARMV7EM=1
 include path: fiber/port/ARM_CM7/r0p1
 sources:      fiber/port/ARM_CM7/r0p1/fiber_port.c
+              fiber/port/ARM_CM7/r0p1/fiber_port_boot.c
               fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
 ```
 

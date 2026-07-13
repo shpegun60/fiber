@@ -11,8 +11,14 @@
 #ifndef FIBER_PORT_ARMV6M_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARMV6M_FIBER_PORTMACRO_H_
 
+#if FIBER_PORT_ARMV6M
+# include "fiber_port_types.h"
+#endif
 #include "fiber_port_armv6m.h"
 #include "../../fiber_panic.h"
+#if FIBER_PORT_ARMV6M
+# include "fiber_port_boot.h"
+#endif
 
 #ifndef FIBER_SVC_START_NUMBER
 # define FIBER_SVC_START_NUMBER 70

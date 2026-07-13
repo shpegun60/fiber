@@ -23,11 +23,12 @@ The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
 
 The required common-core boundary before production ports are added in bulk is
-defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. The current shared
-`FiberContext`/`FiberBoot` source layout is transitional. The target common
-runtime owns API and scheduler semantics but compiles against an incomplete
-`FiberContext`; each selected port owns its complete context layout and CPU
-state.
+defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. `fiber_api_types.h` exposes only
+the forward declaration and callbacks, while each selected port owns its
+complete `FiberContext`, `FiberPortBoot` record, boot/hash implementation, and
+CPU state. The current physical `sp + FiberPortBoot` shape is transitional, but
+common runtime sources now operate through the callable port ABI and do not
+access that layout.
 
 ## Current Baseline
 
@@ -97,17 +98,19 @@ Closed hardening items from the FreeRTOS comparison:
 - initial software-frame sizing, saved-SP modulo validation, and saved
   `EXC_RETURN` word selection now come from selected port traits instead of a
   common hard-coded 36-byte assumption;
-- current port sources use the transitional shared `fiber_types.h` type ABI and
-  no longer depend on the public `fiber_core.h` API header or on `fiber_boot.h`
-  for data layout definitions. `V2_OPAQUE_CONTEXT_CONTRACT.md` supersedes this
-  shared layout as the target before production ports are added in bulk;
+- each current selected port now owns `fiber_port_types.h`,
+  `fiber_port_boot_types.h`, `fiber_port_boot.h`, and `fiber_port_boot.c`;
+  `fiber_port_selected.h` is the sole selector and its selected
+  `fiber_portmacro.h` includes that contract. `fiber_types.h` remains a
+  source-compatible facade. The physical `sp + FiberPortBoot` layout is
+  transitional, while common sources already use the opaque callable ABI;
 - build-selected portmacro workflow exists for the first FreeRTOS-referenced
   Cortex-M7 source group:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
   matrix compiles this source group for Cortex-M7/Cortex-M7F build-selected
   modes with its port-owned errata workaround always enabled;
-- scheduled context restore uses mandatory metadata plus structural boot-record
-  checks by default; the full `FiberBoot` hash is still checked during
+- scheduled context restore uses mandatory selected-port boot-record checks by
+  default; the full selected-port boot-record hash is still checked during
   init/start and is opt-in for every switch through
   `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
 - portable FPU policy defaults to `FIBER_FPU_LAZY = 0`; PendSV publication and
@@ -262,12 +265,13 @@ Closed hardening items from the FreeRTOS comparison:
 
 1. Finish the FreeRTOS-style port ownership split.
 
-   First implement `V2_OPAQUE_CONTEXT_CONTRACT.md`. Each selected port exports
-   a public type-only header that completes `FiberContext`, an internal
-   type-only ABI header for private scheduler CPU-state tokens, and a callable
-   ABI that accepts opaque context pointers. Common runtime files must not
-   include the selected complete context type or contain architecture-specific
-   switch assembly.
+   The public type-only phase of `V2_OPAQUE_CONTEXT_CONTRACT.md` is complete:
+   each selected port exports `fiber_port_types.h`, and the selected facade
+   completes `FiberContext` for application allocation. Continue with an
+   internal type-only ABI header for private scheduler CPU-state tokens and a
+   callable ABI that accepts opaque context pointers. Common runtime files must
+   then stop including the selected complete context type or containing
+   architecture-specific switch assembly.
 
    Move out of common code:
 
@@ -414,7 +418,7 @@ Closed hardening items from the FreeRTOS comparison:
    FreeRTOS PendSV snippets, which rely on the broader RTOS stack-checking
    infrastructure.
 
-   There is no v2 public API for starting from a caller-provided `FiberBoot`
+   There is no v2 public API for starting from a caller-provided port boot
    record. Ports without hardware validation are not runtime-supported.
 
 2. Keep vector wiring verification active.

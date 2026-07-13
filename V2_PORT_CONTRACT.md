@@ -76,11 +76,11 @@ contract, known limitations, and validation level that matches the claim.
 The detailed selected-port trait contract lives in
 `V2_PORT_TRAITS_CONTRACT.md`.
 
-The target layout-free common-core boundary lives in
-`V2_OPAQUE_CONTEXT_CONTRACT.md`. It supersedes older statements in this
-document that require one shared, common-known `FiberContext` or `FiberBoot`
-layout. The current source tree remains transitional until that migration is
-implemented and validated.
+The layout-free common-core boundary lives in `V2_OPAQUE_CONTEXT_CONTRACT.md`.
+It supersedes older statements in this document that require one shared,
+common-known `FiberContext` or boot-record layout. The current selected ports
+own their `FiberPortBoot` record and callable boot ABI; a fresh hardware run is
+still required before this structural change renews any runtime claim.
 
 The FreeRTOS reference policy lives in
 `V2_FREERTOS_PORT_REFERENCE_POLICY.md`. FreeRTOS `portable/` is treated as the
@@ -121,12 +121,18 @@ in scope only at the CPU context and exception-return layer.
 
 The target direction is governed by `V2_OPAQUE_CONTEXT_CONTRACT.md`:
 
+The implemented structural boundary contains `fiber_api_types.h`, the single
+`fiber_port_selected.h` facade, and one port-owned set of
+`fiber_port_types.h`, `fiber_port_boot_types.h`, `fiber_port_boot.h`, and
+`fiber_port_boot.c` files per current port. The selected `fiber_portmacro.h`
+includes its local type contract. Common runtime translation units use only
+the callable ABI and no longer inspect complete context or boot-record fields.
+
 ```text
 fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
-  fiber_context_metadata_types.h
   fiber_core.c
   fiber_core.h
   fiber_platform_policy.h
@@ -134,13 +140,12 @@ fiber/
   fiber_panic.h
   internal/
     fiber_core_internal.h
-    fiber_context_metadata.h
     fiber_runtime_state.c
     fiber_runtime_state.h
   port/
     fiber_settings.h
     fiber_port_select.h
-    fiber_port_types_selected.h
+    fiber_port_selected.h
     fiber_port_abi_types_selected.h
     fiber_port_abi.h
     fiber_static_assert.h
@@ -152,40 +157,56 @@ fiber/
     # Selected ports own fiber_port_exception.c directly.
     armv6m/
       fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7m/
       fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     armv7em/
       fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
     ARM_CM7/
       r0p1/
         fiber_port_types.h
+        fiber_port_boot_types.h
+        fiber_port_boot.h
         fiber_port_abi_types.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_boot.c
         fiber_port_exception.c
         FREERTOS_PARITY.md
     transitional_v8m/
+      fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_portmacro.h
       fiber_port_transitional_v8m.h
       fiber_port_transitional_v8m.c
+      fiber_port_boot.c
       fiber_port_exception.c
     armv8m_baseline/
       non_secure/

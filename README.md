@@ -12,13 +12,17 @@ the application must also wire `SVC_Handler()` to branch to `fiber_svc()`.
 ## Architecture Direction
 
 The five-function cooperative API is intended to remain stable while CPU
-context storage becomes selected-port-owned. The current source tree still uses
-a transitional shared `FiberContext`/`FiberBoot` layout. The migration target
-lets application code allocate the selected complete `FiberContext`, while
-common runtime translation units see only opaque pointers and each selected port
-owns context layout, construction, integrity validation, startup state, and
-exception transfer. See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary
-and migration sequence.
+context storage is selected-port-owned. `fiber_core.h` completes `FiberContext`
+through one selected public type-only port header, and `FiberEntryFn` is the
+named entry type with `entry_t` kept as a compatible alias. Each current port
+owns its `FiberPortBoot` record, hash implementation, stack geometry, restore
+validation, and first-start preparation. The current physical layout remains
+`sp + FiberPortBoot` for compatibility, but `fiber_core.c` and the common
+scheduler bridge use only callable port ABI functions and do not dereference
+that layout. A future port may therefore change its boot record or use a
+hardware-backed integrity implementation without changing the common core.
+See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary and migration
+sequence.
 
 ## Project Setup
 
@@ -32,7 +36,6 @@ Compile the common runtime sources into the application:
 
 ```text
 fiber/fiber_core.c
-fiber/fiber_boot.c
 fiber/fiber_stack.c
 fiber/fiber_runtime_state.c
 fiber/fiber_panic.c
@@ -42,14 +45,19 @@ Then compile exactly one matching port source pair:
 
 ```text
 Cortex-M0/M0+: fiber/port/armv6m/fiber_port_armv6m.c
+               fiber/port/armv6m/fiber_port_boot.c
                fiber/port/armv6m/fiber_port_exception.c
 Cortex-M3:     fiber/port/armv7m/fiber_port_armv7m.c
+               fiber/port/armv7m/fiber_port_boot.c
                fiber/port/armv7m/fiber_port_exception.c
 Cortex-M4/F:   fiber/port/armv7em/fiber_port_armv7em.c
+               fiber/port/armv7em/fiber_port_boot.c
                fiber/port/armv7em/fiber_port_exception.c
 Cortex-M7/F:   fiber/port/ARM_CM7/r0p1/fiber_port.c
+               fiber/port/ARM_CM7/r0p1/fiber_port_boot.c
                fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
 v8-M bring-up: fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
+               fiber/port/transitional_v8m/fiber_port_boot.c
                fiber/port/transitional_v8m/fiber_port_exception.c
 ```
 

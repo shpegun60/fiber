@@ -503,18 +503,16 @@ fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
-  fiber_context_metadata_types.h
   fiber_core.h
   internal/
     fiber_core_internal.h
-    fiber_context_metadata.h
     fiber_runtime_state.h
     fiber_runtime_state.c
   port/
     fiber_settings.h
     fiber_port_select.h
     fiber_port_traits.h
-    fiber_port_types_selected.h
+    fiber_port_selected.h
     fiber_port_abi_types_selected.h
     fiber_port_abi.h
     armv6m/
@@ -616,11 +614,13 @@ should stay close to FreeRTOS `portmacro.h`: CPU constants, selected-port
 traits, and low-level helpers without including common runtime implementation.
 It may include `port/fiber_compiler.h` directly for compiler attributes,
 barriers, diagnostics, and static-assert ABI. The public
-`fiber_port_types.h` remains type-only and CMSIS-free; it uses only public API
-types, standard integer/size types, CPU-neutral metadata, and port-local
-type-only records. The selected `fiber_port.c` includes its complete context
-type, selected internal ABI types, and the common bridge declarations it needs.
-It does not depend on a common `FiberBoot` layout. Neither selected file should
+`fiber_port_types.h` and `fiber_port_boot_types.h` remain type-only and
+CMSIS-free; they use only public API types, standard integer/size types, and
+port-local type-only records. The matching `fiber_port_boot.c` owns the boot
+record and integrity implementation. The selected `fiber_port.c` includes its
+complete context type, selected internal ABI types, and the common bridge
+declarations it needs. It does not depend on a common boot-record layout.
+Neither selected file should
 include removed target-wide headers merely to inherit CPU policy; CPU policy
 such as BASEPRI, M7 errata, FPU context, frame sizing, exception constants, and
 local defaults belongs to the selected port even when that creates duplication.

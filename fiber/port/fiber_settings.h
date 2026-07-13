@@ -74,7 +74,7 @@
 #endif
 
 /* Current ownership and restore-target checks are always active.
- * Set this to 1 to additionally recompute the sealed FiberBoot hash on every
+ * Set this to 1 to additionally recompute the selected-port boot-record hash on every
  * scheduled restore. Leave 0 to use mandatory metadata and structural checks;
  * full hash checks still run during init/start.
  */

@@ -15,7 +15,6 @@
 #if FIBER_PORT_BUILD_SELECTED || \
 		(FIBER_PORT_ARMV7EM && (__CORTEX_M == 7))
 
-#include "../../../fiber_boot.h"
 #include "../../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
 #include "../../fiber_port_traits.h"
@@ -32,9 +31,9 @@ void fiber_internal_task_return(void);
 
 enum {
 	fiber_portOFFSET_STACK_BASE =
-		offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base),
+		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
 	fiber_portOFFSET_STACK_TOP =
-		offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top),
+		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top),
 	fiber_portOFFSET_BASIC_STACKED_XPSR = 7u * 4u,
 	fiber_portOFFSET_EXTENDED_STACKED_XPSR =
 		FIBER_PORT_EXC_FP_EXT_BYTES + (7u * 4u)
@@ -48,7 +47,7 @@ FIBER_STATIC_ASSERT(fiber_portOFFSET_STACK_TOP < 4096,
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_boot_record_check(&ctx->boot);
+	fiber_port_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
@@ -227,7 +226,7 @@ void fiber_svc(void)
 			"beq   90f                              \n"
 
 			"push  {r0, lr}                         \n"
-			"bl    fiber_internal_validate_restore_context \n"
+			"bl    fiber_port_context_validate_restore \n"
 			"pop   {r2, lr}                         \n" /* r2 = current context */
 
 			"ldr   r0, [r2]                         \n" /* r0 = current->sp */
@@ -448,7 +447,7 @@ void fiber_pendsv(void)
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
-			  [alignpad] "I" (FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES),
+			  [alignpad] "I" (FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
 			  [xpsrbasic] "I" (fiber_portOFFSET_BASIC_STACKED_XPSR),
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),

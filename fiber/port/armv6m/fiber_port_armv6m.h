@@ -11,7 +11,6 @@
 #include "../fiber_compiler.h"
 #include "../fiber_port_select.h"
 #include "mcu_core.h"
-#include "../../fiber_types.h"
 
 #if FIBER_PORT_ARMV6M
 

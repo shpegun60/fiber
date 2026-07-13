@@ -9,8 +9,8 @@
  * into concrete profile-owned sources.
  */
 
-#include "../../fiber_boot.h"
 #include "../../fiber_runtime_state.h"
+#include "../fiber_port_select.h"
 #include "fiber_portmacro.h"
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
@@ -19,8 +19,8 @@
 #define FBR_STRINGIFY(x) FBR_STRINGIFY2(x)
 
 enum {
-	FBR_OFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_base),
-	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberBoot, stack_top)
+	FBR_OFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
+	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
 };
 
 FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
@@ -29,7 +29,7 @@ FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
-	fiber_boot_record_check(&ctx->boot);
+	fiber_port_boot_record_check(&ctx->boot);
 
 	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
@@ -190,7 +190,7 @@ void fiber_svc(void)
 			"beq   90f                              \n"
 
 			"push  {r0, lr}                         \n"
-			"bl    fiber_internal_validate_restore_context \n"
+			"bl    fiber_port_context_validate_restore \n"
 			"pop   {r2, r3}                         \n" /* r2 = current context, r3 = handler LR */
 			"mov   lr, r3                           \n"
 
@@ -264,7 +264,7 @@ void fiber_svc(void)
 			"beq   90f                              \n"
 
 			"push  {r0, lr}                         \n"
-			"bl    fiber_internal_validate_restore_context \n"
+			"bl    fiber_port_context_validate_restore \n"
 			"pop   {r2, lr}                         \n" /* r2 = current context */
 
 #if FIBER_PORT_USES_PSPLIM_REGISTER

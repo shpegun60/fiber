@@ -10,8 +10,14 @@
 #ifndef FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORTMACRO_H_
 #define FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORTMACRO_H_
 
+#if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+# include "fiber_port_types.h"
+#endif
 #include "fiber_port_transitional_v8m.h"
 #include "../../fiber_panic.h"
+#if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+# include "fiber_port_boot.h"
+#endif
 
 #ifndef FIBER_SVC_START_NUMBER
 # define FIBER_SVC_START_NUMBER 70

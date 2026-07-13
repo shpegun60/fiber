@@ -6,9 +6,20 @@ This document defines the target common-core boundary that must be completed
 before adding production Cortex-M ports in bulk.
 
 It supersedes every older v2 statement that requires one shared, common-known
-`FiberContext` or `FiberBoot` layout for all ports. The current source tree still
-uses that transitional layout; this document describes the migration target, not
-the behavior of the current checkpoint.
+`FiberContext` or boot-record layout for all ports. The selected-port context
+and boot ownership phase is implemented: `fiber_api_types.h`, the single
+`fiber_port_selected.h` facade, and per-port `fiber_port_types.h`,
+`fiber_port_boot_types.h`, `fiber_port_boot.h`, and `fiber_port_boot.c` files
+now exist. Every current port deliberately preserves an ABI-compatible
+`sp + FiberPortBoot` physical layout, while `fiber_types.h` is only a
+compatibility facade.
+
+`fiber_core.c` and `fiber_runtime_state.c` now use only `FiberContext *` and
+the callable selected-port ABI. They do not dereference, size, align, or inspect
+the context or its boot record. The selected port owns construction, record
+sealing, hash selection, dynamic restore validation, and first-start
+preparation. This structural move requires a fresh hardware validation run; it
+does not itself expand runtime support claims.
 
 The reference model is the local FreeRTOS Cortex-M port set. Classic CM3, CM4F,
 and CM7 ports primarily switch through a saved stack pointer. MPU and v8-M ports
@@ -131,49 +142,55 @@ fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
-  fiber_context_metadata_types.h
   fiber_core.h
 
   internal/
     fiber_core_internal.h
-    fiber_context_metadata.h
     fiber_runtime_state.h
 
   port/
-    fiber_port_types_selected.h
+    fiber_port_selected.h
     fiber_port_abi_types_selected.h
     fiber_port_abi.h
 
     ARM_CM7/r0p1/
       fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       FREERTOS_PARITY.md
 ```
 
 `fiber_api_types.h` contains only forward declarations and callback types. It
-must not include CMSIS or a selected port.
+must not include CMSIS or a selected port. `FiberEntryFn` is the named entry
+type and `entry_t` remains a source-compatible alias.
 
 `fiber_api_attributes.h` contains public compiler attributes such as the
 noreturn declaration and `FIBER_SCHEDULER_HOOK_ATTR`. It may detect compiler
 capabilities but must not include CMSIS, CPU feature traits, register helpers,
 or inline assembly.
 
-`fiber_context_metadata_types.h` is a public type-only utility header. It
-contains the complete CPU-neutral metadata type because a selected public
-`fiber_port_types.h` may embed that type. It contains no metadata helper
-functions, selected-port policy, CMSIS dependency, register helper, or inline
-assembly. `internal/fiber_context_metadata.h` declares the common helper
-operations that initialize and validate the type.
+There is no common complete boot-record type. Each selected port's
+`fiber_port_boot_types.h` owns the concrete boot metadata embedded by its
+`fiber_port_types.h`; it remains type-only and CMSIS-free. The matching
+`fiber_port_boot.c` owns construction, integrity sealing, hash selection, stack
+geometry, and startup policy. A future port may use a different record layout
+or hardware-backed integrity operation without changing common runtime code.
+
+`fiber_port_selected.h` is the single global selection facade. It selects one
+`fiber_portmacro.h`; that selected portmacro includes its local public
+`fiber_port_types.h` as part of the one-port contract.
 
 `fiber_port_types.h` is a public type-only selected-port header. It completes
 `FiberContext` but must not include `mcu_core.h`, SCB/NVIC definitions, CMSIS
 intrinsics, `fiber_portmacro.h`, register helpers, or inline assembly.
-It may include standard integer/size types, `fiber_api_types.h`, CPU-neutral
-metadata types, compiler-neutral alignment declarations, and port-local
-type-only MPU/security records under the same restrictions.
+It may include standard integer/size types, `fiber_api_types.h`,
+compiler-neutral alignment declarations, and port-local type-only boot,
+MPU, or security records under the same restrictions.
 
 The selected public type header also exposes only the storage facts required by
 application allocation, such as context alignment, stack alignment, and minimum
@@ -204,43 +221,21 @@ _Alignof(FiberContext);
 offsetof(FiberContext, any_field);
 ```
 
-## Common Context Metadata
+## Port-Owned Boot Metadata
 
-CPU-neutral immutable inputs may use one shared utility type declared in
-`fiber_context_metadata_types.h`:
+There is deliberately no common boot-record type or context-metadata record. Each
+selected port defines its own `FiberPortBoot` inside
+`fiber_port_boot_types.h` and stores it at a private offset in `FiberContext`.
+The current ports retain equivalent fields for mechanical compatibility, but
+that is not a cross-port ABI promise.
 
-```c
-typedef struct FiberContextMetadata {
-    uintptr_t raw_stack_begin;
-    uintptr_t raw_stack_end;
-    FiberEntryFn entry;
-    void *arg;
+The selected port owns its corresponding construction and validation helpers in
+`fiber_port_boot.c`, including the integrity algorithm. A future port may use a
+different record, omit irrelevant fields, or use a hardware hash/CRC unit as
+part of its integrity policy. Common runtime code obtains no metadata accessor,
+does not calculate any boot hash, and never learns the boot-record offset.
 
-    uint32_t magic;
-    uint16_t version;
-    uint16_t sealed;
-    uint32_t hash;
-} FiberContextMetadata;
-```
-
-CPU-neutral helpers declared by `internal/fiber_context_metadata.h` may
-initialize and validate this object:
-
-```c
-void fiber_metadata_init(FiberContextMetadata *metadata,
-                         void *stack_begin,
-                         void *stack_end,
-                         FiberEntryFn entry,
-                         void *arg);
-
-void fiber_metadata_validate(const FiberContextMetadata *metadata);
-```
-
-The selected port embeds the metadata at any private offset and calls the common
-helpers. Common runtime code does not request a metadata accessor and does not
-learn that offset.
-
-The common metadata hash is an accidental-corruption check, not a security
+An integrity check is an accidental-corruption check, not a security
 authentication primitive and not the final proof that a context is restorable.
 
 ## Port-Private Integrity Seal
@@ -255,7 +250,7 @@ void fiber_port_context_validate_restore(const FiberContext *ctx);
 
 The immutable port seal covers at least:
 
-- the common metadata hash;
+- the selected-port boot-record integrity value;
 - effective stack bounds and alignment;
 - selected port identifier and context layout version;
 - context size and feature mask;
@@ -374,12 +369,13 @@ void fiber_port_context_init(FiberContext *ctx,
                              FiberEntryFn entry,
                              void *arg);
 
-void fiber_port_context_validate_restore(const FiberContext *ctx);
-void fiber_port_context_prepare_first_start(const FiberContext *ctx);
+void fiber_port_context_validate_restore(FiberContext *ctx);
+uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
 
 void fiber_port_require_start_environment(void);
-void fiber_port_require_schedule_environment(void);
+void fiber_port_require_start_interrupt_state(void);
 void fiber_port_runtime_prepare(void);
+void fiber_port_require_schedule_environment(void);
 void fiber_port_runtime_validate(void);
 
 void fiber_port_scheduler_state_capture(FiberPortSchedulerCpuState *state);

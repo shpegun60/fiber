@@ -1,5 +1,69 @@
 # Fiber Decision Log
 
+## 2026-07-13: Move Boot Records into Selected Ports
+
+The opaque selected-port context boundary is now implemented for the current
+source groups.
+
+- Each selected port owns `fiber_port_boot_types.h`, `fiber_port_boot.h`, and
+  `fiber_port_boot.c`. `FiberPortBoot` and `FiberPortMspPolicy_t` are local
+  port types; the former root boot and metadata layers are removed.
+- Each selected port owns boot-record construction, structural checks, hash
+  computation, canary handling, stack geometry, first-start MSP preparation,
+  CPU startup preparation, and restore validation. A future port may use a
+  different boot layout or a hardware integrity engine without changing the
+  common runtime.
+- `fiber_core.c` and `fiber_runtime_state.c` operate on `FiberContext *` only.
+  They do not dereference context or boot-record fields, and call the selected
+  ABI for initialization, validation, start environment checks, runtime
+  preparation, and first-context preparation.
+- The current physical layout remains ABI-compatible with the historical
+  `sp + boot-record` shape, but no common boot-record alias is exported. Each selected
+  port exposes only its own `FiberPortBoot` record; it is not a common or
+  cross-port record contract.
+- The compile matrix requires exactly one selected definition for the full boot
+  ABI, including construction, fast/full integrity checks, first-start MSP
+  preparation, runtime preparation, and context validation.
+
+This is a behavior-preserving ownership move by intent. Its H7 runtime claim is
+pending the normal and trap validation rerun because boot and first-start code
+now compile from the concrete port source group.
+
+This decision supersedes the temporary root metadata ownership described by the
+following historical entries.
+
+## Historical 2026-07-13: Split Selected-Port Context Type Layer
+
+This was the first mechanical opaque-context migration phase. Its temporary
+root metadata layer was superseded by the selected-port boot ownership decision
+above without changing context-switch, SVC, PendSV, scheduler, or startup
+behavior.
+
+- `fiber_api_types.h` now owns only CPU-neutral forward declarations and public
+  callback types. `FiberEntryFn` is the named entry type; `entry_t` remains its
+  source-compatible alias.
+- The temporary root metadata header owned the previous common boot-record
+  definition. Its per-context MSP fields and exact contents remained transitional.
+- `fiber_port_selected.h` is the only global selector. It includes exactly one
+  `fiber_portmacro.h`, and that selected portmacro includes its local public
+  type-only `fiber_port_types.h`.
+- Each current layout intentionally remains ABI-identical to the former
+  `sp + boot-record` definition. `fiber_types.h` is now a compatibility facade,
+  not the owner of that layout.
+- Inactive port source files can compile beside the selected port in the matrix
+  without re-defining `FiberContext`; their local type header is included only
+  when that port is active.
+
+The compile matrix builds each selected port type header without a generated
+device header or CMSIS include path and asserts the transitional layout for
+every profile. The forced STM32H7 Debug build remains
+`text=10656`, `data=12`, and `bss=8000`.
+
+This is not the final opaque common-core boundary: common `.c` files still
+include `fiber_port_selected.h` and access the transitional layout. The next
+mechanical phase introduces selected internal ABI token types and a callable
+port ABI before common field access can move into selected ports.
+
 ## 2026-07-13: Move Privileged Schedule Requests Behind Selected Ports
 
 `fiber_schedule()` remains the public cooperative trigger, but it no longer
@@ -20,7 +84,7 @@ symbols and rejects CPU-specific access in the body of `fiber_schedule()`.
 This is a source-boundary and generated-assembly checkpoint, not a renewed H7
 hardware-runtime claim; normal and trap validation must be repeated on board.
 
-## 2026-07-13: Close Opaque-Port Portability Gaps
+## Historical 2026-07-13: Close Opaque-Port Portability Gaps
 
 A contract-level source audit against local FreeRTOS commit `a50edad`, covering
 classic, MPU, v8-M, NTZ, TF-M, and MVE/PAC port groups, confirms that the
@@ -28,7 +92,7 @@ selected-port-owned opaque context can represent every STM32-relevant Cortex-M
 profile without adding CPU layout to the common core. This does not replace the
 required line-by-line parity ledger for each implemented port.
 
-The contract is tightened before structural migration:
+This historical contract refinement preceded the selected-port boot move:
 
 - `fiber_context_metadata_types.h` is the public type-only metadata layer;
   `internal/fiber_context_metadata.h` contains helper declarations;
@@ -67,10 +131,10 @@ This remains a documentation-only refinement. It proves that the architecture
 can host the relevant FreeRTOS port families; it does not claim those ports are
 implemented or hardware-validated.
 
-## 2026-07-13: Define Opaque Selected-Port Context ABI
+## Historical 2026-07-13: Define Opaque Selected-Port Context ABI
 
-Before production ports are added in bulk, the common runtime will move to the
-opaque selected-port context boundary defined in
+Before production ports are added in bulk, the common runtime was planned to
+move to the opaque selected-port context boundary defined in
 `V2_OPAQUE_CONTEXT_CONTRACT.md`:
 
 - the public API remains limited to `fiber_init()`, `fiber_current()`,
@@ -100,8 +164,8 @@ placement, frame layout, panic codes, assembly behavior, and temporary
 per-context MSP behavior. Cleanup and ownership changes that affect behavior
 remain separate commits with separate hardware validation.
 
-This is a documentation-only decision. The current source still uses the
-transitional shared `FiberContext`/`FiberBoot` layout, and no runtime support
+This is a documentation-only decision. The current source still used the
+transitional shared context/boot-record layout, and no runtime support
 claim changes at this checkpoint. This decision supersedes older architectural
 statements that require one common-known context or boot-record layout for all
 ports.
@@ -956,8 +1020,8 @@ Known limits:
 - Cortex-M55 / MVE needs a concrete port-owned context layout and hardware
   validation. There is no force-save override; a production port must derive
   and implement every required FP/MVE context slot from compiler and CPU facts.
-- There is no v2 public API for starting from a caller-provided `FiberBoot`
-  record. Ports without hardware validation are not runtime-supported.
+- There is no v2 public API for starting from a caller-provided common
+  boot record. Ports without hardware validation are not runtime-supported.
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
   not replace hardware tests, but it must stay green before widening support
   claims beyond STM32H7/Cortex-M7.

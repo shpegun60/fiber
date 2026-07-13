@@ -151,6 +151,51 @@ function Test-SchedulePortBoundary {
     }
 }
 
+function Test-ContextPortBoundary {
+    param([string]$RepositoryRoot)
+
+    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
+    $runtimePath = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
+    $sources = @{
+        $corePath = Get-Content -LiteralPath $corePath -Raw
+        $runtimePath = Get-Content -LiteralPath $runtimePath -Raw
+    }
+
+    $forbiddenLayoutKnowledge = @(
+        "->boot",
+        "->sp",
+        "FiberPortBoot",
+        "offsetof(FiberContext",
+        "sizeof(FiberContext",
+        "_Alignof(FiberContext"
+    )
+    foreach ($path in $sources.Keys) {
+        foreach ($forbidden in $forbiddenLayoutKnowledge) {
+            if ($sources[$path].IndexOf($forbidden, [System.StringComparison]::Ordinal) -ge 0) {
+                throw "Common runtime must not inspect selected context layout: $forbidden in $path"
+            }
+        }
+    }
+
+    $requiredCoreCalls = @(
+        "fiber_port_context_init(",
+        "fiber_port_require_start_environment();",
+        "fiber_port_require_start_interrupt_state();",
+        "fiber_port_runtime_prepare();",
+        "fiber_port_context_prepare_first_start("
+    )
+    foreach ($requiredCall in $requiredCoreCalls) {
+        if ($sources[$corePath].IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "fiber_core.c must use selected-port context ABI: missing $requiredCall"
+        }
+    }
+
+    if ($sources[$runtimePath].IndexOf("fiber_port_context_validate_restore(",
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "fiber_runtime_state.c must validate contexts through selected-port ABI"
+    }
+}
+
 function Invoke-CompilerProbe {
     param(
         [string]$Compiler,
@@ -186,10 +231,10 @@ if (-not (Test-Path $nm)) {
 }
 
 Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
+Test-ContextPortBoundary -RepositoryRoot $RepoRoot
 
 $commonSources = @(
     "fiber\fiber_core.c",
-    "fiber\fiber_boot.c",
     "fiber\fiber_runtime_state.c",
     "fiber\fiber_stack.c",
     "fiber\fiber_panic.c"
@@ -197,14 +242,19 @@ $commonSources = @(
 
 $selectorPortSources = @(
     "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+    "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
     "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c",
     "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+    "fiber\port\transitional_v8m\fiber_port_boot.c",
     "fiber\port\transitional_v8m\fiber_port_exception.c",
     "fiber\port\armv6m\fiber_port_armv6m.c",
+    "fiber\port\armv6m\fiber_port_boot.c",
     "fiber\port\armv6m\fiber_port_exception.c",
     "fiber\port\armv7m\fiber_port_armv7m.c",
+    "fiber\port\armv7m\fiber_port_boot.c",
     "fiber\port\armv7m\fiber_port_exception.c",
     "fiber\port\armv7em\fiber_port_armv7em.c",
+    "fiber\port\armv7em\fiber_port_boot.c",
     "fiber\port\armv7em\fiber_port_exception.c"
 )
 
@@ -264,12 +314,12 @@ $portIncludeDirs = @{
 }
 
 $buildSelectedPortSourcesByProfile = @{
-    "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\armv6m\fiber_port_armv6m.c", "fiber\port\armv6m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\armv7m\fiber_port_armv7m.c", "fiber\port\armv7m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\armv7em\fiber_port_armv7em.c", "fiber\port\armv7em\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\armv6m\fiber_port_armv6m.c", "fiber\port\armv6m\fiber_port_boot.c", "fiber\port\armv6m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\armv7m\fiber_port_armv7m.c", "fiber\port\armv7m\fiber_port_boot.c", "fiber\port\armv7m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\armv7em\fiber_port_armv7em.c", "fiber\port\armv7em\fiber_port_boot.c", "fiber\port\armv7em\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
 }
 
 $buildSelectedPortIncludeDirsByConfig = @{
@@ -279,9 +329,9 @@ $buildSelectedPortIncludeDirsByConfig = @{
 }
 
 $buildSelectedPortSourcesByConfig = @{
-    "cortex-m7"  = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
-    "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
-    "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7"  = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
 }
 
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
@@ -289,6 +339,18 @@ New-Item -ItemType Directory -Path $buildRoot | Out-Null
 
 $requiredPortSymbols = @(
     "fiber_port_init_context_frame",
+    "fiber_port_context_init",
+    "fiber_port_context_validate_restore",
+    "fiber_port_context_prepare_first_start",
+    "fiber_port_require_start_environment",
+    "fiber_port_require_start_interrupt_state",
+    "fiber_port_boot_create",
+    "fiber_port_boot_check",
+    "fiber_port_boot_prepare_msp_for_start",
+    "fiber_port_boot_record_compute_hash",
+    "fiber_port_boot_record_fast_check",
+    "fiber_port_boot_record_check",
+    "fiber_port_runtime_prepare",
     "fiber_port_require_schedule_environment",
     "fiber_port_request_schedule",
     "fiber_port_start_first_context",
@@ -401,6 +463,63 @@ try {
                 ExtraArgs = @("-mcmse")
                 PortSources = $selectorPortSources
             }
+        }
+
+        # Port selection is centralized in fiber_port_selected.h. Test the
+        # exact type-only header owned by the same selected source group
+        # without a generated device header or CMSIS include path. The public
+        # selected facade itself is covered by the normal source builds below.
+        $typeProbeDir = Join-Path (Join-Path $buildRoot $cfg.Name) "type-only"
+        New-Item -ItemType Directory -Path $typeProbeDir | Out-Null
+        $typeProbeSource = @"
+#include <stddef.h>
+#include <stdint.h>
+
+#include "fiber_port_types.h"
+
+_Static_assert(offsetof(FiberContext, sp) == 0u,
+    "[fiber]: transitional FiberContext.sp must remain first");
+_Static_assert(offsetof(FiberContext, boot) == sizeof(uint32_t *),
+    "[fiber]: transitional FiberContext.boot offset changed");
+_Static_assert(sizeof(FiberContext) ==
+        (offsetof(FiberContext, boot) + sizeof(FiberPortBoot)),
+    "[fiber]: transitional FiberContext has unexpected tail padding");
+_Static_assert(_Alignof(FiberContext) == _Alignof(uint32_t *),
+    "[fiber]: transitional FiberContext alignment changed");
+
+int fiber_type_layout_probe(void)
+{
+    return 0;
+}
+"@
+        $typeProbePath = Join-Path $typeProbeDir "fiber-type-layout-probe.c"
+        $typeProbeObject = Join-Path $typeProbeDir "fiber-type-layout-probe.o"
+        Set-Content -Path $typeProbePath -Value $typeProbeSource -Encoding ASCII
+
+        $typeProbeArgs = $cfg.CpuArgs + @(
+            "-mthumb"
+        ) + $cfg.Extra + @(
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-Wall",
+            "-Wextra",
+            "-Wundef",
+            "-Werror=undef",
+            "-Werror=implicit-function-declaration",
+            "-Werror=return-type",
+            "-I$(Join-Path $RepoRoot $portIncludeDir)",
+            "-I$RepoRoot",
+            "-I$(Join-Path $RepoRoot 'fiber')",
+            "-c",
+            $typeProbePath,
+            "-o",
+            $typeProbeObject
+        )
+
+        & $gcc @typeProbeArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Type-only selected-port header compile failed for $($cfg.Name)"
         }
 
         foreach ($mode in $selectionModes) {
@@ -642,7 +761,7 @@ void Error_Handler(void);
         "-DFIBER_SVC_WIRED=1"
     )
     $probeSource = Join-Path $RepoRoot "fiber\fiber_core.c"
-    $probeBootSource = Join-Path $RepoRoot "fiber\fiber_boot.c"
+    $probeBootSource = Join-Path $RepoRoot "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c"
 
     Write-Host ""
     Write-Host "== cortex-m7f / settings-contract-prio8-default =="

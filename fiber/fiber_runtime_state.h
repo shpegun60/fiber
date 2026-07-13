@@ -7,7 +7,7 @@
 #ifndef FIBER_FIBER_RUNTIME_STATE_H_
 #define FIBER_FIBER_RUNTIME_STATE_H_
 
-#include "fiber_types.h"
+#include "fiber_api_types.h"
 #include "port/fiber_compiler.h"
 
 #ifdef __cplusplus
@@ -27,9 +27,6 @@ extern void *volatile fiber_internal_port_scheduler_user;
 
 void fiber_internal_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                                  void *user);
-
-FIBER_GENERAL_REGS_ONLY
-void fiber_internal_validate_restore_context(FiberContext *ctx);
 
 FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_scheduler_pick_first_from_start(void);

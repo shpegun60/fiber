@@ -12,7 +12,6 @@
 #include "../fiber_compiler.h"
 #include "../fiber_port_select.h"
 #include "mcu_core.h"
-#include "../../fiber_types.h"
 #include "../../fiber_panic.h"
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE

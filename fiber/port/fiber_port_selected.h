@@ -19,8 +19,9 @@
 #include "fiber_settings.h"
 #include "fiber_compiler.h"
 #include "fiber_port_select.h"
-#include "../fiber_types.h"
 
+/* This is the only global port selector. The selected portmacro.h brings its
+ * own type-only FiberContext definition and every other port-local contract. */
 #if FIBER_PORT_BUILD_SELECTED
 # include "fiber_portmacro.h"
 #elif FIBER_PORT_ARMV6M

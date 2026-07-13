@@ -11,8 +11,14 @@
 #ifndef FIBER_PORT_ARMV7EM_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARMV7EM_FIBER_PORTMACRO_H_
 
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
+# include "fiber_port_types.h"
+#endif
 #include "fiber_port_armv7em.h"
 #include "../../fiber_panic.h"
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
+# include "fiber_port_boot.h"
+#endif
 
 #ifndef FIBER_SVC_START_NUMBER
 # define FIBER_SVC_START_NUMBER 70
