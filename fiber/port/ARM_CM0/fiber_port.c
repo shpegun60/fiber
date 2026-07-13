@@ -1,29 +1,30 @@
 /*
- * fiber_port_armv7m.c
+ * fiber_port.c
  *
- * ARMv7-M PendSV port.
+ * ARM_CM0 PendSV port.
  *
- * This file owns the Cortex-M3 mainline SVC first-start and PendSV
+ * This file owns the Cortex-M0/M0+ Thumb-1 SVC first-start and PendSV
  * implementation. The port is compile-covered; hardware validation is still
- * required before claiming runtime support on a specific STM32 ARMv7-M target.
+ * required before claiming runtime support on a specific STM32 ARMv6-M target.
  */
 
 #include "../../fiber_runtime_state.h"
 #include "../fiber_port_select.h"
+
+#if FIBER_PORT_ARMV6M
+
 #include "fiber_portmacro.h"
 
-#if FIBER_PORT_ARMV7M
-
-#define FBR_STRINGIFY2(x) #x
-#define FBR_STRINGIFY(x) FBR_STRINGIFY2(x)
+#define fiber_portSTRINGIFY2(x) #x
+#define fiber_portSTRINGIFY(x) fiber_portSTRINGIFY2(x)
 
 enum {
-	FBR_OFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
-	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
+	fiber_portOFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
+	fiber_portOFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
 };
 
-FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
-FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE <= 124, "fiber_portOFF_STACK_BASE must fit Thumb-1 LDR word offset");
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_TOP <= 124, "fiber_portOFF_STACK_TOP must fit Thumb-1 LDR word offset");
 
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
@@ -44,8 +45,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	*(--sp) = 0u; /* R1  */
 	*(--sp) = (uint32_t)(uintptr_t)ctx->boot.arg;
 
-	/* ARMv7-M software frame, low to high: [r4..r11][LR(EXC_RETURN)]. */
-	*(--sp) = FIBER_PORT_INITIAL_EXC_RETURN;
+	/* ARMv6-M software frame, low to high: [LR][r4..r7][r8..r11]. */
 	*(--sp) = 0u;                    /* r11 */
 	*(--sp) = 0u;                    /* r10 */
 	*(--sp) = fiber_port_read_r9();  /* r9  */
@@ -54,6 +54,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 	*(--sp) = 0u;                    /* r6  */
 	*(--sp) = 0u;                    /* r5  */
 	*(--sp) = 0u;                    /* r4  */
+	*(--sp) = FIBER_PORT_INITIAL_EXC_RETURN;
 
 	ctx->sp = sp;
 
@@ -65,17 +66,11 @@ void fiber_port_require_schedule_environment(void)
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	fiber_internal_require_schedule_current();
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-#if FIBER_PORT_HAS_BASEPRI
-	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-#endif
-#if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-#endif
 }
 
 void fiber_port_request_schedule(void)
 {
-	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
 	__DSB();
 	__ISB();
 }
@@ -95,7 +90,8 @@ void fiber_port_start_first_context(uintptr_t msp_top)
 			"msr   control, r3                      \n" /* privileged Thread/MSP */
 			"isb                                    \n"
 			"mrs   r3, control                      \n"
-			"tst   r3, #3                           \n"
+			"movs  r2, #3                           \n"
+			"tst   r3, r2                           \n"
 			"bne   9f                               \n"
 
 			"cmp   r0, #0                           \n"
@@ -115,13 +111,10 @@ void fiber_port_start_first_context(uintptr_t msp_top)
 			"dsb                                    \n"
 			"isb                                    \n"
 			"cpsie i                                \n"
-#if FIBER_PORT_HAS_FAULTMASK
-			"cpsie f                                \n"
-#endif
 			"dsb                                    \n"
 			"isb                                    \n"
 
-			"svc   #" FBR_STRINGIFY(FIBER_SVC_START_NUMBER) " \n"
+			"svc   #" fiber_portSTRINGIFY(FIBER_SVC_START_NUMBER) " \n"
 
 			"movs  r0, #121                         \n" /* 'y': SVC did not transfer control */
 			"bl    fiber_panic                      \n"
@@ -143,10 +136,14 @@ void fiber_svc(void)
 	__ASM volatile(
 			".syntax unified                         \n"
 
-			"tst   lr, #4                           \n"
+			"movs  r2, #4                           \n"
+			"mov   r3, lr                           \n"
+			"tst   r3, r2                           \n"
 			"bne   93f                              \n" /* first-start SVC must arrive from MSP */
 			"mrs   r0, msp                          \n"
-			"tst   r0, #7                           \n"
+			"movs  r2, #7                           \n"
+			"mov   r3, r0                           \n"
+			"tst   r3, r2                           \n"
 			"bne   93f                              \n" /* first-start MSP frame must be 8-byte aligned */
 			"ldr   r3, [r0, #24]                    \n" /* stacked PC */
 			"subs  r3, #2                           \n"
@@ -154,16 +151,12 @@ void fiber_svc(void)
 			"cmp   r2, #0xDF                        \n"
 			"bne   94f                              \n"
 			"ldrb  r3, [r3]                         \n"
-			"cmp   r3, #" FBR_STRINGIFY(FIBER_SVC_START_NUMBER) " \n"
+			"cmp   r3, #" fiber_portSTRINGIFY(FIBER_SVC_START_NUMBER) " \n"
 			"bne   94f                              \n"
 
 			"cpsid i                                \n"
 			"dsb                                    \n"
 			"isb                                    \n"
-#if FIBER_PORT_HAS_BASEPRI
-			"movs  r0, #0                           \n"
-			FBR_ASM_WRITE_BASEPRI_R0_SYNC
-#endif
 
 			"ldr   r0, =fiber_internal_port_current_context \n"
 			"ldr   r0, [r0]                         \n"
@@ -172,20 +165,28 @@ void fiber_svc(void)
 
 			"push  {r0, lr}                         \n"
 			"bl    fiber_port_context_validate_restore \n"
-			"pop   {r2, lr}                         \n" /* r2 = current context */
+			"pop   {r2, r3}                         \n" /* r2 = current context, r3 = handler LR */
+			"mov   lr, r3                           \n"
 
 			"ldr   r0, [r2]                         \n" /* r0 = current->sp */
-			"ldmia r0!, {r4-r11, r14}               \n"
+			"adds  r0, #20                          \n" /* move to staged r8-r11 */
+			"ldmia r0!, {r4-r7}                     \n"
+			"mov   r8,  r4                          \n"
+			"mov   r9,  r5                          \n"
+			"mov   r10, r6                          \n"
+			"mov   r11, r7                          \n"
 
-			"msr   psp, r0                          \n"
-			"isb                                    \n"
+			"msr   psp, r0                          \n" /* PSP = hardware frame */
+			"subs  r0, #36                          \n"
+			"ldmia r0!, {r3-r7}                     \n" /* r3 = EXC_RETURN; restore low regs */
+			"mov   lr, r3                           \n"
 
 			"dsb                                    \n"
 			"isb                                    \n"
 			"cpsie i                                \n"
 			"dsb                                    \n"
 			"isb                                    \n"
-			"bx    r14                              \n"
+			"bx    lr                               \n"
 
 			"90:                                    \n"
 			"movs  r0, #67                          \n" /* 'C' */
@@ -208,10 +209,11 @@ void fiber_svc(void)
 }
 
 /*
- * ARMv7-M PendSV implementation.
+ * ARMv6-M PendSV implementation.
  *
- * Cortex-M3 is mainline without high FP context. It uses the same FreeRTOS-style
- * BASEPRI-protected scheduler bridge discipline as other BASEPRI-capable ports.
+ * ARMv6-M has no BASEPRI, no FPU, and no Thumb-2 STMDB/LDMIA high-register
+ * convenience path. The scheduler bridge is protected with saved PRIMASK
+ * through fiber_portASM_ENTER_SCHEDULER_CRITICAL.
  */
 FIBER_ATTR_NAKED_ASM
 void fiber_pendsv(void)
@@ -230,10 +232,12 @@ void fiber_pendsv(void)
 			/* ----------------------------------------------------------------------
 			 * Load runtime-owned current context.
 			 * ---------------------------------------------------------------------- */
-			/* In Handler mode, EXC_RETURN is the source of truth for the
-			 * interrupted stack. Do not use CONTROL.SPSEL as the PendSV proof.
+			/* Thumb-1 safe EXC_RETURN bit-2 check. CONTROL.SPSEL is not a
+			 * reliable Handler-mode proof of the interrupted Thread stack.
 			 */
-			"tst   lr, #4                           \n" /* interrupted Thread context must use PSP */
+			"movs  r2, #4                           \n"
+			"mov   r3, lr                           \n"
+			"tst   r3, r2                           \n" /* interrupted Thread context must use PSP */
 			"beq   91f                              \n" /* foreign/pre-start PendSV used MSP */
 
 			"ldr   r1, =fiber_internal_port_current_context \n"
@@ -256,15 +260,32 @@ void fiber_pendsv(void)
 			"bhi   92f                              \n" /* HW frame crosses declared stack top */
 
 			/* ----------------------------------------------------------------------
-			 * Save current context: [r4..r11][LR(EXC_RETURN)].
+			 * Save current context.
+			 *
+			 * SW layout low->high:
+			 *   [LR][r4][r5][r6][r7][r8][r9][r10][r11]
+			 *
+			 * ARMv6-M cannot push high registers directly here, so r8-r11 are staged
+			 * through r4-r7 and stored manually.
 			 * ---------------------------------------------------------------------- */
-			"stmdb r0!, {r4-r11, r14}               \n"
-			"str   r0, [r1]                         \n" /* current->sp = complete SW frame */
+			"subs  r0, #%c[swbytes]                 \n" /* reserve software frame */
+			"mov   r2, r0                           \n" /* keep base until publication */
 
-			FBR_ASM_ENTER_SCHEDULER_CRITICAL
+			"mov   r3, lr                           \n"
+			"stmia r0!, {r3-r7}                     \n" /* save EXC_RETURN and low regs */
+
+			"mov   r4, r8                           \n"
+			"mov   r5, r9                           \n"
+			"mov   r6, r10                          \n"
+			"mov   r7, r11                          \n"
+			"stmia r0!, {r4-r7}                     \n" /* save staged high regs */
+
+			"str   r2, [r1]                         \n" /* current->sp = complete SW frame */
+
+			fiber_portASM_ENTER_SCHEDULER_CRITICAL
 			"mov   r0, r1                           \n" /* arg0 = current */
 			"bl    fiber_internal_scheduler_pick_next_from_pendsv \n"
-			FBR_ASM_EXIT_SCHEDULER_CRITICAL
+			fiber_portASM_EXIT_SCHEDULER_CRITICAL
 
 			"mov   r2, r0                           \n" /* r2 = selected next */
 
@@ -272,18 +293,27 @@ void fiber_pendsv(void)
 			 * Restore selected context.
 			 * ---------------------------------------------------------------------- */
 			"ldr   r0, [r2]                         \n" /* r0 = target->sp */
-			"ldmia r0!, {r4-r11, r14}               \n"
+			"adds  r0, #20                          \n" /* move to staged r8-r11 */
+			"ldmia r0!, {r4-r7}                     \n" /* staged r8-r11 */
+			"mov   r8,  r4                          \n"
+			"mov   r9,  r5                          \n"
+			"mov   r10, r6                          \n"
+			"mov   r11, r7                          \n"
 
 			"msr   psp, r0                          \n" /* PSP = target HW frame */
+			"subs  r0, #%c[swbytes]                 \n" /* move to saved EXC_RETURN and low regs */
+			"ldmia r0!, {r3-r7}                     \n" /* r3 = EXC_RETURN; restore low regs */
+			"mov   lr, r3                           \n"
+
 			"isb                                    \n"
 
 			"dsb                                    \n"
 			"isb                                    \n"
 
-			"bx    r14                              \n" /* exception return */
+			"bx    lr                               \n" /* exception return */
 
 			/* ----------------------------------------------------------------------
-			 * Fatal port states.
+			 * Fatal port state: scheduler path entered without a current context.
 			 * ---------------------------------------------------------------------- */
 			"90:                                    \n"
 			"movs  r0, #67                          \n" /* 'C' */
@@ -300,17 +330,16 @@ void fiber_pendsv(void)
 			"bl    fiber_panic                      \n"
 			"b     92b                              \n"
 			:
-			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
-			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			: [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
-			  [offsb] "I" (FBR_OFF_STACK_BASE),
-			  [offtop] "I" (FBR_OFF_STACK_TOP)
+			  [offsb] "I" (fiber_portOFF_STACK_BASE),
+			  [offtop] "I" (fiber_portOFF_STACK_TOP)
 			: "memory","cc"
 	);
 }
 
-#undef FBR_STRINGIFY
-#undef FBR_STRINGIFY2
+#undef fiber_portSTRINGIFY
+#undef fiber_portSTRINGIFY2
 
 #if !FIBER_SVC_VECTOR_DIRECT
 # ifndef FIBER_SVC_WIRED
@@ -318,4 +347,4 @@ FIBER_DIAG_WARN("[fiber]: user must wire SVC_Handler to branch to fiber_svc with
 # endif /* FIBER_SVC_WIRED */
 #endif /* !FIBER_SVC_VECTOR_DIRECT */
 
-#endif /* FIBER_PORT_ARMV7M */
+#endif /* FIBER_PORT_ARMV6M */

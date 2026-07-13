@@ -1,5 +1,39 @@
 # Fiber Decision Log
 
+## 2026-07-13: Normalize Concrete Classic Cortex-M Port Groups
+
+The compile-covered classic ports now use the same selected-port source-group
+shape as the concrete Cortex-M7 port:
+
+```text
+fiber/port/ARM_CM0/
+fiber/port/ARM_CM3/
+fiber/port/ARM_CM4/
+fiber/port/ARM_CM7/r0p1/
+```
+
+- Each group owns `fiber_portmacro.h`, `fiber_port_types.h`,
+  `fiber_port_boot_types.h`, `fiber_port_boot.h`, `fiber_port_boot.c`,
+  `fiber_port.c`, `fiber_port_exception.c`, and `FREERTOS_PARITY.md`.
+- `fiber_portmacro.h` is the selected CPU contract. It owns the CPU dictionary,
+  feature traits, inline helpers, and callable port ABI declarations. Do not
+  add an intermediate selected-port facade such as `fiber_port.h`.
+- `FIBER_PORT_ARMV6M`, `FIBER_PORT_ARMV7M`, and `FIBER_PORT_ARMV7EM` remain
+  selector facts only. They do not identify a source group: selection maps them
+  to ARM_CM0, ARM_CM3, ARM_CM4, or ARM_CM7/r0p1 as appropriate.
+- `fiber/port/transitional_v8m` remains an explicit compile-only bring-up
+  fixture. It is not a common implementation layer or a production support
+  claim for Cortex-M23, Cortex-M33, Cortex-M55, TrustZone, MVE, PAC, or BTI.
+  It must be deleted once concrete v8-M Baseline, v8-M Mainline, and ARMv8.1-M
+  source groups replace its compile-matrix coverage.
+- The per-port parity records name the corresponding local FreeRTOS reference
+  files and identify deliberately excluded scheduler, tick, MPU, and queue
+  behavior.
+
+This is a source-boundary and naming normalization. It does not intentionally
+change PendSV, SVC, context-frame, or scheduler behavior. Hardware validation
+status remains unchanged.
+
 ## 2026-07-13: Move Boot Records into Selected Ports
 
 The opaque selected-port context boundary is now implemented for the current
@@ -363,9 +397,9 @@ and `fiber/target/fiber_irq.h`. It is also no longer a shared root
 Each concrete port source group now owns its exception setup file:
 
 ```text
-fiber/port/armv6m/fiber_port_exception.c
-fiber/port/armv7m/fiber_port_exception.c
-fiber/port/armv7em/fiber_port_exception.c
+fiber/port/ARM_CM0/fiber_port_exception.c
+fiber/port/ARM_CM3/fiber_port_exception.c
+fiber/port/ARM_CM4/fiber_port_exception.c
 fiber/port/transitional_v8m/fiber_port_exception.c
 fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
 ```
@@ -613,14 +647,14 @@ This is a boundary cleanup:
 - `port/transitional_v8m` remains transitional and runtime-gated. It is not a
   FreeRTOS-level support claim for v8-M Baseline/Mainline or ARMv8.1-M.
 
-Historical note: at this checkpoint the H7 path still lived in
-`port/armv7em`. The 2026-07-12 selected-port decision above supersedes that
-layout: H7 now uses `port/ARM_CM7/r0p1`, while generic `armv7em` serves M4/M4F.
+Historical note: at this checkpoint the H7 path still shared the former
+ARMv7E-M source group. The selected-port decision above supersedes that layout:
+H7 now uses `port/ARM_CM7/r0p1`, while `port/ARM_CM4` serves M4/M4F.
 
 ## 2026-07-11: ARMv7-M Port Split Checkpoint
 
 The Cortex-M3 / ARMv7-M path now lives in
-`fiber/port/armv7m/fiber_port_armv7m.c`.
+`fiber/port/ARM_CM3/fiber_port.c`.
 
 This is a focused port-layout step:
 
@@ -734,7 +768,7 @@ validation claim.
 ## 2026-07-10: ARMv6-M Port Split Checkpoint
 
 The Cortex-M0/M0+ Thumb-1 PendSV path now lives in
-`fiber/port/armv6m/fiber_port_armv6m.c`.
+`fiber/port/ARM_CM0/fiber_port.c`.
 
 This is a mechanical port-layout step:
 

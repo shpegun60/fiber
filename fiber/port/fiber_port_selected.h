@@ -25,16 +25,16 @@
 #if FIBER_PORT_BUILD_SELECTED
 # include "fiber_portmacro.h"
 #elif FIBER_PORT_ARMV6M
-# include "armv6m/fiber_portmacro.h"
+# include "ARM_CM0/fiber_portmacro.h"
 #elif FIBER_PORT_ARMV7M
-# include "armv7m/fiber_portmacro.h"
+# include "ARM_CM3/fiber_portmacro.h"
 #elif FIBER_PORT_ARMV7EM
 # if !defined(__CORTEX_M)
 #  error "[fiber]: ARMv7E-M selection requires CMSIS __CORTEX_M"
 # elif (__CORTEX_M == 7)
 #  include "ARM_CM7/r0p1/fiber_portmacro.h"
 # elif (__CORTEX_M == 4)
-#  include "armv7em/fiber_portmacro.h"
+#  include "ARM_CM4/fiber_portmacro.h"
 # else
 #  error "[fiber]: selected ARMv7E-M core has no concrete fiber port"
 # endif

@@ -1,6 +1,6 @@
-/* ARMv6-M boot-record and first-start ABI. */
-#ifndef FIBER_PORT_ARMV6M_FIBER_PORT_BOOT_H_
-#define FIBER_PORT_ARMV6M_FIBER_PORT_BOOT_H_
+/* ARMv7E-M boot-record and first-start ABI. */
+#ifndef FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_H_
+#define FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_H_
 
 #include "fiber_port_types.h"
 #include "../fiber_compiler.h"
@@ -42,4 +42,4 @@ void fiber_port_require_start_interrupt_state(void);
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_ARMV6M_FIBER_PORT_BOOT_H_ */
+#endif /* FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_H_ */

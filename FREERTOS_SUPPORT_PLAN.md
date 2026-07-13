@@ -125,9 +125,9 @@ Closed hardening items from the FreeRTOS comparison:
 
 | Core family | Current state | Target state |
 | --- | --- | --- |
-| Cortex-M0/M0+ | Dedicated `port/armv6m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware and document MSP rewind policy |
-| Cortex-M3 | Dedicated `port/armv7m` SVC/PendSV/frame code exists and is compile-covered | Validate on hardware |
-| Cortex-M4F | Dedicated generic ARMv7E-M source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
+| Cortex-M0/M0+ | Concrete `port/ARM_CM0` SVC/PendSV/frame code is compile/link-covered | Validate on hardware and document MSP rewind policy |
+| Cortex-M3 | Concrete `port/ARM_CM3` SVC/PendSV/frame code is compile/link-covered | Validate on hardware |
+| Cortex-M4F | Concrete `port/ARM_CM4` source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
 | Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
 | Cortex-M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
 | Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |

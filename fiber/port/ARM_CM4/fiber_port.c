@@ -1,10 +1,10 @@
 /*
- * fiber_port_armv7em.c
+ * fiber_port.c
  *
- * Cortex-M4/M4F ARMv7E-M port.
+ * ARM_CM4 Cortex-M4/M4F port.
  *
  * Cortex-M7 uses the concrete ARM_CM7/r0p1 source group. This implementation
- * owns the generic M4/M4F frame, SVC, and PendSV path and remains
+ * owns the concrete M4/M4F frame, SVC, and PendSV path and remains
  * compile/link-covered until profile-specific hardware validation is recorded.
  */
 
@@ -16,16 +16,16 @@
 #include "../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
 
-#define FBR_STRINGIFY2(x) #x
-#define FBR_STRINGIFY(x) FBR_STRINGIFY2(x)
+#define fiber_portSTRINGIFY2(x) #x
+#define fiber_portSTRINGIFY(x) fiber_portSTRINGIFY2(x)
 
 enum {
-	FBR_OFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
-	FBR_OFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
+	fiber_portOFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
+	fiber_portOFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
 };
 
-FIBER_STATIC_ASSERT(FBR_OFF_STACK_BASE < 4096, "FBR_OFF_STACK_BASE must fit Thumb-2 LDR imm12");
-FIBER_STATIC_ASSERT(FBR_OFF_STACK_TOP < 4096, "FBR_OFF_STACK_TOP must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE < 4096, "fiber_portOFF_STACK_BASE must fit Thumb-2 LDR imm12");
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_TOP < 4096, "fiber_portOFF_STACK_TOP must fit Thumb-2 LDR imm12");
 
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
@@ -77,7 +77,7 @@ void fiber_port_require_schedule_environment(void)
 
 void fiber_port_request_schedule(void)
 {
-	SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
 	__DSB();
 	__ISB();
 }
@@ -121,7 +121,7 @@ void fiber_port_start_first_context(uintptr_t msp_top)
 			"dsb                                    \n"
 			"isb                                    \n"
 
-			"svc   #" FBR_STRINGIFY(FIBER_SVC_START_NUMBER) " \n"
+			"svc   #" fiber_portSTRINGIFY(FIBER_SVC_START_NUMBER) " \n"
 
 			"movs  r0, #121                         \n" /* 'y': SVC did not transfer control */
 			"bl    fiber_panic                      \n"
@@ -154,7 +154,7 @@ void fiber_svc(void)
 			"cmp   r2, #0xDF                        \n"
 			"bne   94f                              \n"
 			"ldrb  r3, [r3]                         \n" /* SVC immediate */
-			"cmp   r3, #" FBR_STRINGIFY(FIBER_SVC_START_NUMBER) " \n"
+			"cmp   r3, #" fiber_portSTRINGIFY(FIBER_SVC_START_NUMBER) " \n"
 			"bne   94f                              \n"
 
 			"cpsid i                                \n"
@@ -162,7 +162,7 @@ void fiber_svc(void)
 			"isb                                    \n"
 #if FIBER_PORT_HAS_BASEPRI
 			"movs  r0, #0                           \n"
-			FBR_ASM_WRITE_BASEPRI_R0_SYNC
+			fiber_portASM_WRITE_BASEPRI_R0_SYNC
 #endif
 
 			"ldr   r0, =fiber_internal_port_current_context \n"
@@ -306,10 +306,10 @@ void fiber_pendsv(void)
 			"stmdb r0!, {r4-r11, r14}               \n" /* push r4..r11 and LR(EXC_RETURN) */
 			"str   r0, [r1]                         \n" /* current->sp = r0 */
 
-			FBR_ASM_ENTER_SCHEDULER_CRITICAL
+			fiber_portASM_ENTER_SCHEDULER_CRITICAL
 			"mov   r0, r1                           \n" /* arg0 = current */
 			"bl    fiber_internal_scheduler_pick_next_from_pendsv \n"
-			FBR_ASM_EXIT_SCHEDULER_CRITICAL
+			fiber_portASM_EXIT_SCHEDULER_CRITICAL
 
 			"mov   r2, r0                           \n" /* r2 = selected next context */
 
@@ -363,14 +363,14 @@ void fiber_pendsv(void)
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),
 #endif
-			  [offsb] "I" (FBR_OFF_STACK_BASE),
-			  [offtop] "I" (FBR_OFF_STACK_TOP)
+			  [offsb] "I" (fiber_portOFF_STACK_BASE),
+			  [offtop] "I" (fiber_portOFF_STACK_TOP)
 			: "memory","cc"
 	);
 }
 
-#undef FBR_STRINGIFY
-#undef FBR_STRINGIFY2
+#undef fiber_portSTRINGIFY
+#undef fiber_portSTRINGIFY2
 
 #if !FIBER_SVC_VECTOR_DIRECT
 # ifndef FIBER_SVC_WIRED

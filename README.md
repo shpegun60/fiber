@@ -41,22 +41,22 @@ fiber/fiber_runtime_state.c
 fiber/fiber_panic.c
 ```
 
-Then compile exactly one matching port source pair:
+Then compile exactly one matching port source group:
 
 ```text
-Cortex-M0/M0+: fiber/port/armv6m/fiber_port_armv6m.c
-               fiber/port/armv6m/fiber_port_boot.c
-               fiber/port/armv6m/fiber_port_exception.c
-Cortex-M3:     fiber/port/armv7m/fiber_port_armv7m.c
-               fiber/port/armv7m/fiber_port_boot.c
-               fiber/port/armv7m/fiber_port_exception.c
-Cortex-M4/F:   fiber/port/armv7em/fiber_port_armv7em.c
-               fiber/port/armv7em/fiber_port_boot.c
-               fiber/port/armv7em/fiber_port_exception.c
+Cortex-M0/M0+: fiber/port/ARM_CM0/fiber_port.c
+               fiber/port/ARM_CM0/fiber_port_boot.c
+               fiber/port/ARM_CM0/fiber_port_exception.c
+Cortex-M3:     fiber/port/ARM_CM3/fiber_port.c
+               fiber/port/ARM_CM3/fiber_port_boot.c
+               fiber/port/ARM_CM3/fiber_port_exception.c
+Cortex-M4/F:   fiber/port/ARM_CM4/fiber_port.c
+               fiber/port/ARM_CM4/fiber_port_boot.c
+               fiber/port/ARM_CM4/fiber_port_exception.c
 Cortex-M7/F:   fiber/port/ARM_CM7/r0p1/fiber_port.c
                fiber/port/ARM_CM7/r0p1/fiber_port_boot.c
                fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
-v8-M bring-up: fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
+v8-M fixture:  fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
                fiber/port/transitional_v8m/fiber_port_boot.c
                fiber/port/transitional_v8m/fiber_port_exception.c
 ```
@@ -64,6 +64,8 @@ v8-M bring-up: fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
 Do not add every port source directory to a production target. The compile
 matrix deliberately compiles selector-guarded alternatives to audit selection,
 then relocatably links the result to prove a single complete port ABI.
+`transitional_v8m` is a compile-only bring-up fixture, not a production port.
+It will be deleted when concrete v8-M and ARMv8.1-M ports replace it.
 
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
 only selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h`
@@ -71,7 +73,7 @@ includes the concrete selected `fiber_portmacro.h` interface and its
 port-owned frame traits. Public runtime code should use `fiber/fiber_core.h`;
 exception wiring or low-level port integration should include the selected
 port-specific header or `fiber/port/fiber_port_selected.h`.
-The v2 target is FreeRTOS-style ownership: each concrete `arm*` port exports
+The v2 target is FreeRTOS-style ownership: each concrete selected port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
 exception setup, FPU traits, and architecture-specific critical-section policy.
 Common runtime files should not keep architecture-specific fallback switch
@@ -410,8 +412,8 @@ The STM32H7 / Cortex-M7 path is the primary validation target. The core switch
 matches the FreeRTOS PendSV pattern: save `r4-r11`, preserve `EXC_RETURN`, run
 on PSP, and conditionally save `s16-s31` when an extended FP frame is active.
 Auto selection maps STM32H7/Cortex-M7 to
-`FIBER_PORT_NAME == "ARM_CM7/r0p1"`; Cortex-M4/M4F uses the separate generic
-`armv7em` source group.
+`FIBER_PORT_NAME == "ARM_CM7/r0p1"`; Cortex-M4/M4F uses the separate concrete
+`ARM_CM4` source group.
 
 FreeRTOS routes Cortex-M7 through a dedicated `ARM_CM7/r0p1` port. The concrete
 fiber CM7 scheduler-driven PendSV path raises `BASEPRI` around the scheduler

@@ -1,27 +1,74 @@
 /*
- * fiber_port_armv7em.h
+ * fiber_portmacro.h
  *
- * ARMv7E-M selected port interface.
+ * ARM_CM4 selected portmacro facade.
+ *
+ * This concrete port covers Cortex-M4 and Cortex-M4F. This header owns the
+ * CPU dictionary, traits, inline helpers, and selected-port ABI.
  */
 
-#ifndef FIBER_PORT_ARMV7EM_FIBER_PORT_ARMV7EM_H_
-#define FIBER_PORT_ARMV7EM_FIBER_PORT_ARMV7EM_H_
+#ifndef FIBER_PORT_ARM_CM4_FIBER_PORTMACRO_H_
+#define FIBER_PORT_ARM_CM4_FIBER_PORTMACRO_H_
 
+/* Keep the selected-port compiler/asm contract identical to ARM_CM7. */
+#ifndef fiber_portFORCE_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+# else
+#  define fiber_portFORCE_INLINE static inline
+# endif
+#endif
+
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
+
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
+
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
+# include "fiber_port_types.h"
+#endif
+#include <stdint.h>
+#include "mcu_core.h"
 #include "../fiber_settings.h"
 #include "../fiber_compiler.h"
-#include "../fiber_port_select.h"
-#include "mcu_core.h"
 #include "../../fiber_panic.h"
 
 #if FIBER_PORT_ARMV7EM
 
 #if !defined(__CORTEX_M) || (__CORTEX_M != 4)
-# error "[fiber]: generic ARMv7E-M port currently supports Cortex-M4/M4F only"
+# error "[fiber]: ARM_CM4 port requires Cortex-M4 or Cortex-M4F"
 #endif
 
 #ifndef FIBER_PORT_NAME
-# define FIBER_PORT_NAME "armv7em"
+# define FIBER_PORT_NAME "ARM_CM4"
 #endif
+
+/* FreeRTOS-style CPU dictionary, owned by this concrete port. */
+#define fiber_portSTACK_GROWTH (-1)
+#define fiber_portBYTE_ALIGNMENT 8u
+#define fiber_portINITIAL_XPSR 0x01000000u
+#define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
+#define fiber_portINITIAL_EXC_RETURN 0xFFFFFFFDu
+
+#define fiber_portNVIC_INT_CTRL_REG (*((volatile uint32_t *)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
+#define fiber_portNVIC_PENDSVCLEAR_BIT (1u << 27u)
+#define fiber_portNVIC_SHPR2_REG (*((volatile uint32_t *)0xE000ED1Cu))
+#define fiber_portNVIC_SHPR3_REG (*((volatile uint32_t *)0xE000ED20u))
+#define fiber_portSCB_VTOR_REG (*((volatile uint32_t *)0xE000ED08u))
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+
+#define fiber_portEXC_BASE_BYTES (8u * 4u)
+#define fiber_portSOFTWARE_FRAME_WORDS 9u
+#define fiber_portSOFTWARE_FRAME_BYTES (fiber_portSOFTWARE_FRAME_WORDS * 4u)
+#define fiber_portEXC_RETURN_WORD_INDEX 8u
 
 #define FIBER_PORT_HAS_BASEPRI 1
 #define FIBER_PORT_HAS_FAULTMASK 1
@@ -84,13 +131,18 @@
 # define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 0
 #endif
 
-#define FIBER_PORT_STACK_ALIGNMENT 8u
+#define fiber_portEXC_FP_EXT_BYTES \
+	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)
+#define fiber_portEXC_PER_LEVEL \
+	(fiber_portEXC_BASE_BYTES + fiber_portEXC_FP_EXT_BYTES)
+
+#define FIBER_PORT_STACK_ALIGNMENT fiber_portBYTE_ALIGNMENT
 #define FIBER_PORT_BOOT_CLEARS_FPCA FIBER_PORT_HAS_FPU
 #define FIBER_PORT_HAS_MVE 0
 #define FIBER_PORT_HAS_PAC 0
 #define FIBER_PORT_HAS_BTI 0
 #define FIBER_PORT_USES_PSPLIM_REGISTER 0
-#define FIBER_PORT_INITIAL_EXC_RETURN 0xFFFFFFFDu
+#define FIBER_PORT_INITIAL_EXC_RETURN fiber_portINITIAL_EXC_RETURN
 #define FIBER_PORT_SCHEDULER_MASK_KIND FIBER_PORT_MASK_BASEPRI
 
 #ifndef FIBER_PORT_SCHEDULER_BASEPRI
@@ -129,15 +181,14 @@
 #define FIBER_PORT_HAS_SECURE_CONTEXT_SLOT 0
 #define FIBER_PORT_HAS_PAC_KEY_SLOT 0
 
-#define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
-#define FIBER_PORT_EXC_FP_EXT_BYTES \
-	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)
+#define FIBER_PORT_EXC_BASE_BYTES fiber_portEXC_BASE_BYTES
+#define FIBER_PORT_EXC_FP_EXT_BYTES fiber_portEXC_FP_EXT_BYTES
 #define FIBER_PORT_EXC_PER_LEVEL_BYTES \
-	(FIBER_PORT_EXC_BASE_BYTES + FIBER_PORT_EXC_FP_EXT_BYTES)
+	fiber_portEXC_PER_LEVEL
 
-#define FIBER_PORT_SOFTWARE_FRAME_WORDS 9u
-#define FIBER_PORT_SOFTWARE_FRAME_BYTES (FIBER_PORT_SOFTWARE_FRAME_WORDS * 4u)
-#define FIBER_PORT_EXC_RETURN_WORD_INDEX 8u
+#define FIBER_PORT_SOFTWARE_FRAME_WORDS fiber_portSOFTWARE_FRAME_WORDS
+#define FIBER_PORT_SOFTWARE_FRAME_BYTES fiber_portSOFTWARE_FRAME_BYTES
+#define FIBER_PORT_EXC_RETURN_WORD_INDEX fiber_portEXC_RETURN_WORD_INDEX
 #define FIBER_PORT_HIGH_FP_SOFTWARE_BYTES \
 	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (16u * 4u) : 0u)
 #define FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES 4u
@@ -149,116 +200,116 @@
 	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
 #define FIBER_PORT_SAVED_SP_MOD8 4u
 
-#define FBR_BASEPRI_SYM "BASEPRI"
-#define FBR_ASM_SNAP_BASEPRI_R3      "mrs   r3, " FBR_BASEPRI_SYM "           \n"
-#define FBR_ASM_WRITE_BASEPRI_R0     "msr   " FBR_BASEPRI_SYM ", r0           \n"
-#define FBR_ASM_WRITE_BASEPRI_R2     "msr   " FBR_BASEPRI_SYM ", r2           \n"
-#define FBR_ASM_WRITE_BASEPRI_R3     "msr   " FBR_BASEPRI_SYM ", r3           \n"
+#define fiber_portBASEPRI_SYM "BASEPRI"
+#define fiber_portASM_SNAP_BASEPRI_R3      "mrs   r3, " fiber_portBASEPRI_SYM "           \n"
+#define fiber_portASM_WRITE_BASEPRI_R0     "msr   " fiber_portBASEPRI_SYM ", r0           \n"
+#define fiber_portASM_WRITE_BASEPRI_R2     "msr   " fiber_portBASEPRI_SYM ", r2           \n"
+#define fiber_portASM_WRITE_BASEPRI_R3     "msr   " fiber_portBASEPRI_SYM ", r3           \n"
 
 #if FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND
-# define FBR_ASM_WRITE_BASEPRI_R0_SYNC \
+# define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
 	"mrs   r12, primask                  \n" \
 	"cpsid i                              \n" \
-	FBR_ASM_WRITE_BASEPRI_R0 \
+	fiber_portASM_WRITE_BASEPRI_R0 \
 	"dsb                                  \n" \
 	"isb                                  \n" \
 	"msr   primask, r12                  \n" \
 	"dsb                                  \n" \
 	"isb                                  \n"
-# define FBR_ASM_WRITE_BASEPRI_R2_SYNC \
+# define fiber_portASM_WRITE_BASEPRI_R2_SYNC \
 	"mrs   r12, primask                  \n" \
 	"cpsid i                              \n" \
-	FBR_ASM_WRITE_BASEPRI_R2 \
+	fiber_portASM_WRITE_BASEPRI_R2 \
 	"dsb                                  \n" \
 	"isb                                  \n" \
 	"msr   primask, r12                  \n" \
 	"dsb                                  \n" \
 	"isb                                  \n"
-# define FBR_ASM_WRITE_BASEPRI_R3_SYNC \
+# define fiber_portASM_WRITE_BASEPRI_R3_SYNC \
 	"mrs   r12, primask                  \n" \
 	"cpsid i                              \n" \
-	FBR_ASM_WRITE_BASEPRI_R3 \
+	fiber_portASM_WRITE_BASEPRI_R3 \
 	"dsb                                  \n" \
 	"isb                                  \n" \
 	"msr   primask, r12                  \n" \
 	"dsb                                  \n" \
 	"isb                                  \n"
 #else
-# define FBR_ASM_WRITE_BASEPRI_R0_SYNC \
-	FBR_ASM_WRITE_BASEPRI_R0 \
+# define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R0 \
 	"dsb                                  \n" \
 	"isb                                  \n"
-# define FBR_ASM_WRITE_BASEPRI_R2_SYNC \
-	FBR_ASM_WRITE_BASEPRI_R2 \
+# define fiber_portASM_WRITE_BASEPRI_R2_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R2 \
 	"dsb                                  \n" \
 	"isb                                  \n"
-# define FBR_ASM_WRITE_BASEPRI_R3_SYNC \
-	FBR_ASM_WRITE_BASEPRI_R3 \
+# define fiber_portASM_WRITE_BASEPRI_R3_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R3 \
 	"dsb                                  \n" \
 	"isb                                  \n"
 #endif
 
-#define FBR_ASM_ENTER_SCHEDULER_BASEPRI \
-	FBR_ASM_SNAP_BASEPRI_R3 \
+#define fiber_portASM_ENTER_SCHEDULER_BASEPRI \
+	fiber_portASM_SNAP_BASEPRI_R3 \
 	"movs  r2, %[sched_basepri]           \n" \
 	"stmdb sp!, {r2, r3}                  \n" \
-	FBR_ASM_WRITE_BASEPRI_R2_SYNC
+	fiber_portASM_WRITE_BASEPRI_R2_SYNC
 
-#define FBR_ASM_EXIT_SCHEDULER_BASEPRI \
+#define fiber_portASM_EXIT_SCHEDULER_BASEPRI \
 	"ldmia sp!, {r2, r3}                  \n" \
-	FBR_ASM_WRITE_BASEPRI_R3_SYNC
+	fiber_portASM_WRITE_BASEPRI_R3_SYNC
 
-#define FBR_ASM_ENTER_SCHEDULER_CRITICAL FBR_ASM_ENTER_SCHEDULER_BASEPRI
-#define FBR_ASM_EXIT_SCHEDULER_CRITICAL FBR_ASM_EXIT_SCHEDULER_BASEPRI
+#define fiber_portASM_ENTER_SCHEDULER_CRITICAL fiber_portASM_ENTER_SCHEDULER_BASEPRI
+#define fiber_portASM_EXIT_SCHEDULER_CRITICAL fiber_portASM_EXIT_SCHEDULER_BASEPRI
 
-#define FBR_ASM_MSR_PSPLIM(_reg) /* ARMv7E-M has no PSPLIM. */
+#define fiber_portASM_MSR_PSPLIM(_reg) /* ARMv7E-M has no PSPLIM. */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-__STATIC_FORCEINLINE uint32_t fiber_port_read_r9(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 {
 	uint32_t v;
-	__ASM volatile("mov %0, r9" : "=r"(v));
+	fiber_portASM volatile("mov %0, r9" : "=r"(v));
 	return v;
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_initial_xpsr(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_initial_xpsr(void)
 {
-	return 0x01000000u;
+	return fiber_portINITIAL_XPSR;
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
+fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
 {
-	return (uint32_t)(entry & ~(uintptr_t)1u);
+	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_basepri_read(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;
-	__ASM volatile("mrs %0, " FBR_BASEPRI_SYM : "=r"(value) :: "memory");
+	fiber_portASM volatile("mrs %0, " fiber_portBASEPRI_SYM : "=r"(value) :: "memory");
 	return value;
 }
 
-__STATIC_FORCEINLINE void fiber_port_basepri_write(uint32_t value)
+fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 {
 #if FIBER_PORT_ENABLE_M7_R0P1_ERRATA_WORKAROUND
 	const uint32_t primask = __get_PRIMASK();
 	__disable_irq();
-	__ASM volatile("msr " FBR_BASEPRI_SYM ", %0" :: "r"(value) : "memory");
+	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0" :: "r"(value) : "memory");
 	__DSB();
 	__ISB();
 	__set_PRIMASK(primask);
 	__DSB();
 	__ISB();
 #else
-	__ASM volatile("msr " FBR_BASEPRI_SYM ", %0" :: "r"(value) : "memory");
+	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0" :: "r"(value) : "memory");
 	{ __DSB(); __ISB(); }
 #endif
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_scheduler_critical_enter(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_scheduler_critical_enter(void)
 {
 	const uint32_t scheduler_basepri = (uint32_t)FIBER_PORT_SCHEDULER_BASEPRI;
 	const uint32_t old_basepri = fiber_port_basepri_read();
@@ -266,12 +317,12 @@ __STATIC_FORCEINLINE uint32_t fiber_port_scheduler_critical_enter(void)
 	return old_basepri;
 }
 
-__STATIC_FORCEINLINE void fiber_port_scheduler_critical_exit(uint32_t state)
+fiber_portFORCE_INLINE void fiber_port_scheduler_critical_exit(uint32_t state)
 {
 	fiber_port_basepri_write(state);
 }
 
-__STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
+fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
 {
 #if FIBER_PORT_HAS_FPU
 # if !defined(FPU) || !defined(FPU_FPCCR_ASPEN_Msk) || \
@@ -323,22 +374,22 @@ __STATIC_FORCEINLINE void fiber_port_fpu_enable_early(void)
 #endif
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_psplim_read(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_psplim_read(void)
 {
 	return 0u;
 }
 
-__STATIC_FORCEINLINE void fiber_port_psplim_write(uint32_t limit)
+fiber_portFORCE_INLINE void fiber_port_psplim_write(uint32_t limit)
 {
 	(void)limit;
 }
 
-__STATIC_FORCEINLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
+fiber_portFORCE_INLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
 {
 	(void)stack_low_addr;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_port_vectors_base_addr(void)
+fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 {
 	uintptr_t value = (uintptr_t)SCB->VTOR;
 # if defined(SCB_VTOR_TBLOFF_Msk)
@@ -347,18 +398,18 @@ __STATIC_FORCEINLINE uintptr_t fiber_port_vectors_base_addr(void)
 	return value;
 }
 
-__STATIC_FORCEINLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_port_read_initial_msp(void)
+fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 {
 	const uint32_t *const vectors = fiber_port_vectors_base_ptr();
 	return vectors[0];
 }
 
-__STATIC_FORCEINLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
+fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 {
 # if defined(SCB_VTOR_TBLOFF_Msk)
 	base &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
@@ -393,5 +444,38 @@ void fiber_pendsv(void);
 #endif
 
 #endif /* FIBER_PORT_ARMV7EM */
+#if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
+# include "fiber_port_boot.h"
+#endif
 
-#endif /* FIBER_PORT_ARMV7EM_FIBER_PORT_ARMV7EM_H_ */
+#ifndef FIBER_SVC_START_NUMBER
+# define FIBER_SVC_START_NUMBER 70
+#endif
+#ifndef FIBER_PENDSV_VECTOR_DIRECT
+# define FIBER_PENDSV_VECTOR_DIRECT 0
+#endif
+#ifndef FIBER_SVC_VECTOR_DIRECT
+# define FIBER_SVC_VECTOR_DIRECT 0
+#endif
+
+#if defined(FIBER_FORCE_PRIGROUP) || defined(FIBER_TUNE_SYSTICK) || \
+		defined(FIBER_TUNE_SVCALL)
+# error "[fiber]: exception ownership is fixed by the selected port"
+#endif
+
+#if defined(FIBER_VALIDATE_EXCEPTION_SETUP) || \
+		defined(FIBER_VALIDATE_VECTOR_WIRING) || \
+		defined(FIBER_VALIDATE_PENDSV_VECTOR) || \
+		defined(FIBER_VALIDATE_SVC_VECTOR) || \
+		defined(FIBER_VALIDATE_BASEPRI_PRIORITY_MASK) || \
+		defined(FIBER_VALIDATE_PRIORITY_GROUPING) || \
+		defined(FIBER_VALIDATE_M7_R0P1_ERRATA_POLICY) || \
+		defined(FIBER_VALIDATE_SVC_PRIORITY)
+# error "[fiber]: selected-port exception validation is mandatory"
+#endif
+
+FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
+		(FIBER_SVC_START_NUMBER <= 255),
+		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
+
+#endif /* FIBER_PORT_ARM_CM4_FIBER_PORTMACRO_H_ */

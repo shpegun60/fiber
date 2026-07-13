@@ -155,7 +155,7 @@ fiber/
     fiber_port_traits.h
     # Selected ports expose fiber_port_vectors_* helpers directly.
     # Selected ports own fiber_port_exception.c directly.
-    armv6m/
+    ARM_CM0/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
@@ -166,7 +166,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    armv7m/
+    ARM_CM3/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
@@ -177,7 +177,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    armv7em/
+    ARM_CM4/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
@@ -266,10 +266,11 @@ FreeRTOS mpu_wrappers*     -> fiber_mpu_wrappers* only if MPU task isolation
 
 Every production port directory must provide its selected public context type,
 its selected internal ABI token types, its callable ABI implementation, and its
-parity ledger. The profile name belongs to the directory. Existing files such as
-`fiber_port_armv7em.c` are transitional names and may be mechanically renamed
-later in a no-behavior-change commit. The current implementation may be split
-gradually. Behavior should not change during a pure file-layout split.
+parity ledger. The profile name belongs to the directory. Current concrete
+source groups use the role names `fiber_port.c`, `fiber_port_boot.c`, and
+`fiber_port_exception.c`. The selected `fiber_portmacro.h` is the only
+port-wide CPU-contract facade; do not add a second selected-port header such as
+`fiber_port.h`. Behavior must not change during a pure file-layout split.
 
 The first FreeRTOS-style source-group workflow is:
 
@@ -353,7 +354,8 @@ Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as
 `port/transitional_v8m`, be clearly marked, be compile-covered, and be tracked
 as debt. A port cannot be claimed as FreeRTOS-level while it depends on a
-transitional PendSV or frame builder.
+transitional PendSV or frame builder. Delete this directory when concrete v8-M
+Baseline, v8-M Mainline, and ARMv8.1-M source groups replace its coverage.
 
 The `fiber/port` helper-root convention is reserved for reusable helper code, not selected-port
 fallback behavior.
@@ -1220,7 +1222,7 @@ FreeRTOS has a Cortex-M7 r0p1 workaround around `BASEPRI` writes in PendSV for
 ARM errata 837070.
 
 FreeRTOS routes `GCC_ARM_CM7` to a dedicated `portable/GCC/ARM_CM7/r0p1` port
-instead of treating Cortex-M7 as only a generic ARMv7E-M build.
+instead of sharing Cortex-M7 with the Cortex-M4 port.
 
 The ARMv7E-M scheduler-driven PendSV path writes `BASEPRI` around the scheduler
 bridge. The concrete `ARM_CM7/r0p1` port always emits an errata-safe `BASEPRI`
@@ -1239,9 +1241,9 @@ is still not a hardware validation claim.
 Affected Cortex-M7 r0p0/r0p1 hardware must pass runtime scheduler-switch
 validation before parity with the FreeRTOS CM7/r0p1 port can be claimed.
 
-If this policy grows beyond a guarded `BASEPRI` sequence, ARMv7E-M should split
-into a dedicated Cortex-M7/r0p1 source path rather than hiding too much behavior
-behind generic ARMv7E-M conditionals.
+If this policy grows beyond a guarded `BASEPRI` sequence, the Cortex-M7 source
+path must remain separate from ARM_CM4 rather than hiding behavior behind shared
+ARMv7E-M conditionals.
 
 ## FreeRTOS Sync Policy
 

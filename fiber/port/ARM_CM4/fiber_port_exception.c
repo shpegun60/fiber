@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * fiber_port_exception.c - ARMv7E-M exception setup and validation
+ * fiber_port_exception.c - ARM_CM4 exception setup and validation
  *
  * Exception routing, priority, and vector checks are mandatory port behavior.
  * -------------------------------------------------------------------------- */
@@ -58,7 +58,7 @@ __STATIC_FORCEINLINE uintptr_t fiber_strip_thumb_bit(uintptr_t addr) {
     return addr & ~(uintptr_t)1u;
 }
 
-/* Optional: clear a pending PendSV in case some genius set it earlier */
+/* Clear any pending PendSV before the port begins scheduling. */
 __STATIC_FORCEINLINE void fiber_pendsv_clear_pending(void) {
 #ifdef SCB_ICSR_PENDSVCLR_Msk
     SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk;

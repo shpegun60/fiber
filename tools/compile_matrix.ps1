@@ -247,15 +247,15 @@ $selectorPortSources = @(
     "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
     "fiber\port\transitional_v8m\fiber_port_boot.c",
     "fiber\port\transitional_v8m\fiber_port_exception.c",
-    "fiber\port\armv6m\fiber_port_armv6m.c",
-    "fiber\port\armv6m\fiber_port_boot.c",
-    "fiber\port\armv6m\fiber_port_exception.c",
-    "fiber\port\armv7m\fiber_port_armv7m.c",
-    "fiber\port\armv7m\fiber_port_boot.c",
-    "fiber\port\armv7m\fiber_port_exception.c",
-    "fiber\port\armv7em\fiber_port_armv7em.c",
-    "fiber\port\armv7em\fiber_port_boot.c",
-    "fiber\port\armv7em\fiber_port_exception.c"
+    "fiber\port\ARM_CM0\fiber_port.c",
+    "fiber\port\ARM_CM0\fiber_port_boot.c",
+    "fiber\port\ARM_CM0\fiber_port_exception.c",
+    "fiber\port\ARM_CM3\fiber_port.c",
+    "fiber\port\ARM_CM3\fiber_port_boot.c",
+    "fiber\port\ARM_CM3\fiber_port_exception.c",
+    "fiber\port\ARM_CM4\fiber_port.c",
+    "fiber\port\ARM_CM4\fiber_port_boot.c",
+    "fiber\port\ARM_CM4\fiber_port_exception.c"
 )
 
 $configs = @(
@@ -305,18 +305,18 @@ $portResultMacros = @{
 }
 
 $portIncludeDirs = @{
-    "FIBER_PORT_PROFILE_ARMV6M"           = "fiber\port\armv6m"
-    "FIBER_PORT_PROFILE_ARMV7M"           = "fiber\port\armv7m"
-    "FIBER_PORT_PROFILE_ARMV7EM"          = "fiber\port\armv7em"
+    "FIBER_PORT_PROFILE_ARMV6M"           = "fiber\port\ARM_CM0"
+    "FIBER_PORT_PROFILE_ARMV7M"           = "fiber\port\ARM_CM3"
+    "FIBER_PORT_PROFILE_ARMV7EM"          = "fiber\port\ARM_CM4"
     "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = "fiber\port\transitional_v8m"
     "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = "fiber\port\transitional_v8m"
     "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = "fiber\port\transitional_v8m"
 }
 
 $buildSelectedPortSourcesByProfile = @{
-    "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\armv6m\fiber_port_armv6m.c", "fiber\port\armv6m\fiber_port_boot.c", "fiber\port\armv6m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\armv7m\fiber_port_armv7m.c", "fiber\port\armv7m\fiber_port_boot.c", "fiber\port\armv7m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\armv7em\fiber_port_armv7em.c", "fiber\port\armv7em\fiber_port_boot.c", "fiber\port\armv7em\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\ARM_CM0\fiber_port.c", "fiber\port\ARM_CM0\fiber_port_boot.c", "fiber\port\ARM_CM0\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\ARM_CM3\fiber_port.c", "fiber\port\ARM_CM3\fiber_port_boot.c", "fiber\port\ARM_CM3\fiber_port_exception.c")
+    "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\ARM_CM4\fiber_port.c", "fiber\port\ARM_CM4\fiber_port_boot.c", "fiber\port\ARM_CM4\fiber_port_exception.c")
     "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
     "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
     "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")

@@ -493,8 +493,8 @@ secure_context_port.c -> fiber_secure_context_port.c
 ```
 
 The CPU profile belongs to the directory name, not necessarily to every file
-name. Existing files such as `fiber_port_armv7em.c` are transitional names and
-may be mechanically renamed later in a no-behavior-change commit.
+name. Concrete port source groups use role names such as `fiber_port.c` and
+`fiber_port_exception.c`.
 
 Long-term target layout:
 
@@ -515,7 +515,7 @@ fiber/
     fiber_port_selected.h
     fiber_port_abi_types_selected.h
     fiber_port_abi.h
-    armv6m/
+    ARM_CM0/
       fiber_port_types.h
       fiber_port_abi_types.h
       fiber_portmacro.h
@@ -523,7 +523,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    armv7m/
+    ARM_CM3/
       fiber_port_types.h
       fiber_port_abi_types.h
       fiber_portmacro.h
@@ -531,7 +531,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    armv7em/
+    ARM_CM4/
       fiber_port_types.h
       fiber_port_abi_types.h
       fiber_portmacro.h
@@ -609,7 +609,7 @@ _reference/FreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1
 
 It is the first build-selected source group for Cortex-M7. Its selected
 `fiber_portmacro.h` and `fiber_port.c` are native fiber files, not wrapper
-includes around the generic ARMv7E-M path. The selected `fiber_portmacro.h`
+includes around the separate ARM_CM4 path. The selected `fiber_portmacro.h`
 should stay close to FreeRTOS `portmacro.h`: CPU constants, selected-port
 traits, and low-level helpers without including common runtime implementation.
 It may include `port/fiber_compiler.h` directly for compiler attributes,

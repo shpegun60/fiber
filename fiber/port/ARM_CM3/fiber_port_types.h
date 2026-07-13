@@ -1,11 +1,11 @@
 /*
  * fiber_port_types.h
  *
- * Type-only public context layout for the generic ARMv7E-M port.
+ * Type-only public context layout for the selected ARM_CM3 port.
  */
 
-#ifndef FIBER_PORT_ARMV7EM_FIBER_PORT_TYPES_H_
-#define FIBER_PORT_ARMV7EM_FIBER_PORT_TYPES_H_
+#ifndef FIBER_PORT_ARM_CM3_FIBER_PORT_TYPES_H_
+#define FIBER_PORT_ARM_CM3_FIBER_PORT_TYPES_H_
 
 #include "../../fiber_api_types.h"
 #include "fiber_port_boot_types.h"
@@ -23,4 +23,4 @@ struct FiberContext {
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_ARMV7EM_FIBER_PORT_TYPES_H_ */
+#endif /* FIBER_PORT_ARM_CM3_FIBER_PORT_TYPES_H_ */

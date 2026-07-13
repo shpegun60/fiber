@@ -1,14 +1,14 @@
 /*
  * fiber_port_boot.c
  *
- * ARMv7E-M-owned PSP boot helpers.
+ * ARM_CM4-owned PSP boot helpers.
  * - Paranoid context builder and checker with red-zone & PSPLIM accounting.
  * - Platform bootstrap: fault policy/STKALIGN/unaligned/div0/FPU/TrustZone.
  * - Environment precondition check (Thread, privileged, MSP selected).
  *
- * No RTOS coexistence. If you call this under an RTOS, you own the crash.
+ * The cooperative fiber runtime owns PSP, PendSV, and SVC state while active.
  *
- * Scope: generic Cortex-M4/M4F / ARMv7E-M only. FPU context is controlled by
+ * Scope: Cortex-M4/M4F only. FPU context is controlled by
  * selected traits; PSPLIM and TrustZone state are not part of this port.
  */
 

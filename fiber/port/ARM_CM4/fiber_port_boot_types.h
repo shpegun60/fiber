@@ -1,6 +1,6 @@
 /* ARMv7E-M-owned immutable boot metadata. */
-#ifndef FIBER_PORT_ARMV7EM_FIBER_PORT_BOOT_TYPES_H_
-#define FIBER_PORT_ARMV7EM_FIBER_PORT_BOOT_TYPES_H_
+#ifndef FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_TYPES_H_
+#define FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_TYPES_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -29,4 +29,4 @@ typedef struct FiberPortBoot {
 	uint32_t hash;
 } FiberPortBoot;
 
-#endif /* FIBER_PORT_ARMV7EM_FIBER_PORT_BOOT_TYPES_H_ */
+#endif /* FIBER_PORT_ARM_CM4_FIBER_PORT_BOOT_TYPES_H_ */

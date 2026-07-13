@@ -525,14 +525,14 @@ FIBER_STATIC_ASSERT((FIBER_PORT_IS_BASELINE + FIBER_PORT_IS_MAINLINE) == 1,
  */
 #ifndef FIBER_PORT_NAME
 # if FIBER_PORT_ARMV6M
-#  define FIBER_PORT_NAME "armv6m"
+#  define FIBER_PORT_NAME "ARM_CM0"
 # elif FIBER_PORT_ARMV7M
-#  define FIBER_PORT_NAME "armv7m"
+#  define FIBER_PORT_NAME "ARM_CM3"
 # elif FIBER_PORT_ARMV7EM
 #  if defined(__CORTEX_M) && (__CORTEX_M == 7)
 #   define FIBER_PORT_NAME "ARM_CM7/r0p1"
 #  else
-#   define FIBER_PORT_NAME "armv7em"
+#   define FIBER_PORT_NAME "ARM_CM4"
 #  endif
 # elif FIBER_PORT_ARMV8M_BASELINE
 #  define FIBER_PORT_NAME "armv8m_baseline"

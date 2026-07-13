@@ -1,12 +1,12 @@
 /*
  * fiber_port_boot.c
  *
- * ARMv6-M-owned PSP boot helpers.
+ * ARM_CM0-owned PSP boot helpers.
  * - Paranoid context builder and checker with red-zone & PSPLIM accounting.
  * - Platform bootstrap: fault policy/STKALIGN/unaligned/div0/FPU/TrustZone.
  * - Environment precondition check (Thread, privileged, MSP selected).
  *
- * No RTOS coexistence. If you call this under an RTOS, you own the crash.
+ * The cooperative fiber runtime owns PSP, PendSV, and SVC state while active.
  *
  * Scope: Cortex-M0/M0+ only. PSP and CONTROL.SPSEL are available; PSPLIM,
  * configurable Mem/Bus/Usage faults, BASEPRI, and FPU context are not.
