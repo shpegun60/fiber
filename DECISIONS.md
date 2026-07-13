@@ -1,5 +1,41 @@
 # Fiber Decision Log
 
+## 2026-07-13: Complete Opaque Common Runtime Boundary
+
+The current v2 source groups now implement the intended three-layer boundary:
+
+```text
+public API and selected storage type
+    fiber_core.h + fiber_port_selected.h
+
+common runtime callable ABI
+    fiber_port_runtime_abi.h
+
+selected complete CPU contract
+    concrete fiber_portmacro.h and selected port sources
+```
+
+- `fiber_port_selected.h` is type-only. It completes `FiberContext` for
+  application allocation but does not expose CMSIS, CPU traits, frame geometry,
+  or selected-port register helpers to common runtime translation units.
+- `fiber_core.c` and `fiber_runtime_state.c` use opaque `FiberContext *`
+  pointers and the callable port runtime ABI. They do not dereference, size, or
+  align the selected context and do not read CPU special registers.
+- Common runtime owns hook lifecycle, first-selection lifecycle, hook
+  invocation, and publication of the current context. The selected port owns
+  the callback CPU-state snapshot, scheduler critical-section mechanics, and
+  restore validation around each selected context.
+- `fiber_port_geometry.h` is selected-port implementation data. It derives
+  stack/frame constants from selected traits and is not a public core include.
+- The public API remains exactly `fiber_init()`, `fiber_current()`,
+  `fiber_scheduler_set_pick_next()`, `fiber_start()`, and `fiber_schedule()`.
+  `fiber_yield()`, sleep, wake, timing, and task-state names describe a future
+  application scheduler layer; they are not current fiber exports.
+
+This is a source-boundary refactor. It does not widen hardware support claims;
+the H7 runtime validation checklist must be rerun after the behavior-preserving
+port-wrapper move.
+
 ## 2026-07-13: Normalize Concrete Classic Cortex-M Port Groups
 
 The compile-covered classic ports now use the same selected-port source-group

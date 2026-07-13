@@ -138,16 +138,14 @@ fiber/
   fiber_platform_policy.h
   fiber_panic.c
   fiber_panic.h
-  internal/
-    fiber_core_internal.h
-    fiber_runtime_state.c
-    fiber_runtime_state.h
+  fiber_runtime_state.c
+  fiber_runtime_state.h
   port/
     fiber_settings.h
     fiber_port_select.h
     fiber_port_selected.h
-    fiber_port_abi_types_selected.h
-    fiber_port_abi.h
+    fiber_port_runtime_abi.h
+    fiber_port_geometry.h
     fiber_static_assert.h
     fiber_diagnostics.h
     fiber_compiler.h
@@ -159,7 +157,6 @@ fiber/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
-      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
       fiber_port_boot.c
@@ -170,7 +167,6 @@ fiber/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
-      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
       fiber_port_boot.c
@@ -181,7 +177,6 @@ fiber/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
-      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
       fiber_port_boot.c
@@ -193,7 +188,6 @@ fiber/
         fiber_port_types.h
         fiber_port_boot_types.h
         fiber_port_boot.h
-        fiber_port_abi_types.h
         fiber_portmacro.h
         fiber_port.c
         fiber_port_boot.c
@@ -211,7 +205,6 @@ fiber/
     armv8m_baseline/
       non_secure/
         fiber_port_types.h
-        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
@@ -225,7 +218,6 @@ fiber/
     armv8m_mainline/
       non_secure/
         fiber_port_types.h
-        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
@@ -239,7 +231,6 @@ fiber/
     armv81m_mainline/
       non_secure/
         fiber_port_types.h
-        fiber_port_abi_types.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
@@ -265,8 +256,8 @@ FreeRTOS mpu_wrappers*     -> fiber_mpu_wrappers* only if MPU task isolation
 ```
 
 Every production port directory must provide its selected public context type,
-its selected internal ABI token types, its callable ABI implementation, and its
-parity ledger. The profile name belongs to the directory. Current concrete
+its callable ABI implementation, private CPU-state validation, and its parity
+ledger. The profile name belongs to the directory. Current concrete
 source groups use the role names `fiber_port.c`, `fiber_port_boot.c`, and
 `fiber_port_exception.c`. The selected `fiber_portmacro.h` is the only
 port-wide CPU-contract facade; do not add a second selected-port header such as
@@ -291,10 +282,11 @@ helpers without including scheduler implementation details. It includes
 `port/fiber_compiler.h` directly for compiler attributes, barriers,
 diagnostics, and static-assert ABI. The selected `fiber_port.c` includes the
 selected complete context type and the internal declarations it actually uses.
-Common runtime translation units include only the incomplete public API type,
-selected internal ABI token types, and callable port ABI. No selected file may
-inherit CPU facts from shared settings; those facts are defined directly as
-canonical port traits. Its `FREERTOS_PARITY.md` is the required audit record for
+Common runtime translation units include only the incomplete public API type and
+the callable port runtime ABI. Selected-port CPU snapshots are private local
+implementation data. No selected file may inherit CPU facts from shared
+settings; those facts are defined directly as canonical port traits. Its
+`FREERTOS_PARITY.md` is the required audit record for
 this port.
 
 Selected ports should use a FreeRTOS-like naming split:
@@ -534,20 +526,25 @@ The common runtime does not own:
 - FPU/MVE lazy-stacking register policy;
 - SVC instruction encoding or SVC handler dispatch.
 
-The common API should keep this shape:
+The current public API has this exact shape:
 
 ```c
+void fiber_init(FiberContext *ctx,
+                void *stack_begin,
+                void *stack_end,
+                entry_t entry,
+                void *arg);
 FiberContext *fiber_current(void);
-void fiber_yield(void);
-void fiber_sleep_until(uint32_t tick);
+void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
+                                   void *user);
 void fiber_schedule(void);
 FIBER_NORETURN void fiber_start(void);
 ```
 
-Current low-level user code should call `fiber_start()` and `fiber_schedule()`.
-The long-term v2 user path should be `fiber_start()`, `fiber_yield()`,
-`fiber_sleep_until()`, and wait/wake APIs. Direct target selection from Thread
-mode is not part of the core API.
+Direct target selection from Thread mode is not part of the core API.
+`fiber_yield()`, `fiber_sleep_until()`, `fiber_wake()`, wait APIs, ticks, and
+task-state types are not current library exports. They are future application
+scheduler-layer design names only.
 
 The low-level primitive that enters the scheduler-driven PendSV path should not
 own yield/sleep/wait policy. Its working name is `fiber_schedule()`; a name such
@@ -577,12 +574,12 @@ Common scheduler-jump preconditions:
 - that first hook call must use the same port scheduler critical-section policy
   as PendSV scheduler calls.
 
-New examples should prefer `fiber_yield()` and sleep/wait APIs once those are
-implemented. Low-level examples may call `fiber_schedule()` directly to show the
-core scheduler jump.
+Future scheduler integrations may expose `fiber_yield()` and sleep/wait APIs.
+Until then, application scheduler code calls `fiber_schedule()` after it has
+updated its own policy state.
 
-User-facing scheduling APIs must update scheduler state before requesting the
-core scheduler jump:
+For example, a future application scheduler may update its state before
+requesting the core scheduler jump:
 
 ```text
 fiber_yield()
@@ -636,10 +633,11 @@ application scheduling policy. This keeps the core small and allows the
 application to provide a C or C++ scheduler without rewriting architecture
 assembly.
 
-## Cooperative Round-Robin Scheduler Contract
+## Future Cooperative Round-Robin Scheduler Contract
 
-The scheduler goal is a deterministic cooperative round-robin core, not a
-FreeRTOS priority scheduler.
+This section specifies a possible future application scheduler, not behavior
+implemented by the current `fiber` API. Its goal is a deterministic cooperative
+round-robin policy, not a FreeRTOS priority scheduler.
 
 Required behavior:
 
@@ -728,11 +726,11 @@ next `FiberContext`, validates that result, and restores it.
 
 ## Custom Scheduler Hook Contract
 
-`fiber` should allow the scheduling policy to be supplied by the application.
+`fiber` allows the scheduling policy to be supplied by the application.
 This keeps the library focused on context switching while allowing a C or C++
 application to implement its own ready/sleep/wait model.
 
-The public shape should be similar to:
+The current public shape is:
 
 ```c
 typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current,
@@ -775,7 +773,7 @@ current = current_context
 panic if live PSP cannot hold the source software frame
 save current context
 enter port scheduler critical section
-next = fiber_internal_scheduler_pick_next_from_pendsv(current)
+next = fiber_port_scheduler_pick_next_from_pendsv(current)
 panic if next == NULL
 panic if next is not a valid restore target
 current_context = next
@@ -789,13 +787,15 @@ context, the stable scheduler bridge declaration, the pick-next function
 pointer, and the user context pointer. Do not reintroduce `from/to` slots as a
 competing switch mechanism.
 
-The internal bridge should have a narrow shape, for example:
+The selected-port scheduler wrapper has this shape:
 
 ```c
-FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(FiberContext *current);
+FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
+        FiberContext *current);
 ```
 
-The bridge owns validation around the user hook:
+The selected wrapper and common runtime helpers jointly enforce validation around
+the user hook:
 
 - the hook must be configured before the scheduler starts;
 - `fiber_start()` must select the first context by calling the hook with

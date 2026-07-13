@@ -16,7 +16,7 @@
 
 #if FIBER_PORT_ARMV6M
 
-#include "../fiber_port_selected.h"
+#include "fiber_portmacro.h"
 #include "../../fiber_platform_policy.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);

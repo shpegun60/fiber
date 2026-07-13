@@ -8,18 +8,25 @@
 #ifndef FIBER_FIBER_STACK_H_
 #define FIBER_FIBER_STACK_H_
 
-#include "port/fiber_port_selected.h"
 #include <stdint.h>
+
+#if !defined(__cplusplus)
+# include <stdalign.h>
+#endif
+
+/* Public stack declarations use the architectural Cortex-M ABI alignment.
+ * Selected-port minimum-size and any stricter rules are validated by
+ * fiber_init(); frame geometry remains private to the selected port. */
+#define FIBER_PUBLIC_STACK_ALIGNMENT 8u
+
 /* Static/global or function-static stack buffer. */
 /* alignas goes before static for strict toolchains. */
 #define FIBER_STACK_ARRAY_STATIC(name, BYTES)                                  \
-    alignas(FIBER_PORT_STACK_ALIGNMENT) static uint8_t name[(BYTES)];          \
-    static_assert((BYTES) >= FIBER_STACK_MIN_BOOT, "[fiber]: stack too small")
+    alignas(FIBER_PUBLIC_STACK_ALIGNMENT) static uint8_t name[(BYTES)]
 
 /* Automatic local stack buffer on the caller stack. */
 #define FIBER_STACK_ARRAY_LOCAL(name, BYTES)                                   \
-    alignas(FIBER_PORT_STACK_ALIGNMENT) uint8_t name[(BYTES)];                 \
-    static_assert((BYTES) >= FIBER_STACK_MIN_BOOT, "[fiber]: stack too small")
+    alignas(FIBER_PUBLIC_STACK_ALIGNMENT) uint8_t name[(BYTES)]
 
 /* Base/top helpers in the format expected by fiber_init(). */
 #define FIBER_STACK_BASE(buf)  ((void*)(buf))

@@ -143,21 +143,17 @@ fiber/
   fiber_api_attributes.h
   fiber_api_decl.h
   fiber_core.h
-
-  internal/
-    fiber_core_internal.h
-    fiber_runtime_state.h
+  fiber_runtime_state.h
 
   port/
     fiber_port_selected.h
-    fiber_port_abi_types_selected.h
-    fiber_port_abi.h
+    fiber_port_runtime_abi.h
+    fiber_port_geometry.h
 
     ARM_CM7/r0p1/
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
-      fiber_port_abi_types.h
       fiber_portmacro.h
       fiber_port.c
       fiber_port_boot.c
@@ -181,9 +177,9 @@ There is no common complete boot-record type. Each selected port's
 geometry, and startup policy. A future port may use a different record layout
 or hardware-backed integrity operation without changing common runtime code.
 
-`fiber_port_selected.h` is the single global selection facade. It selects one
-`fiber_portmacro.h`; that selected portmacro includes its local public
-`fiber_port_types.h` as part of the one-port contract.
+`fiber_port_selected.h` is the single global public-type selector. It selects
+one local `fiber_port_types.h` and completes `FiberContext` for application
+storage. It does not include the selected complete `fiber_portmacro.h`.
 
 `fiber_port_types.h` is a public type-only selected-port header. It completes
 `FiberContext` but must not include `mcu_core.h`, SCB/NVIC definitions, CMSIS
@@ -192,27 +188,23 @@ It may include standard integer/size types, `fiber_api_types.h`,
 compiler-neutral alignment declarations, and port-local type-only boot,
 MPU, or security records under the same restrictions.
 
-The selected public type header also exposes only the storage facts required by
-application allocation, such as context alignment, stack alignment, and minimum
-stack bytes. It does not expose software-frame offsets, EXC_RETURN slots, or
-register-save geometry. Those remain private implementation and compile-audit
-facts.
+The selected public type header exposes only storage facts required by
+application allocation. It does not expose software-frame offsets, EXC_RETURN
+slots, or register-save geometry. Those remain private implementation and
+compile-audit facts in the selected complete `fiber_portmacro.h` and its
+selected helpers.
 
-`fiber_port_abi_types.h` is an internal type-only selected-port header. It may
-complete private token types that common code must allocate without interpreting,
-such as scheduler CPU-state snapshots or critical-section tokens. It must not
-complete `FiberContext` for common translation units.
-
-`fiber_port_abi.h` declares callable selected-port operations using pointers to
-the incomplete `FiberContext`. It must not expose context fields or frame offsets.
+`fiber_port_runtime_abi.h` declares callable selected-port operations using
+pointers to incomplete `FiberContext` objects. It must not expose context fields,
+CPU traits, CMSIS registers, or frame offsets. It is the only selected-port
+header included by common runtime implementation files.
 
 `fiber_core.h` is the public umbrella. It includes the API types, public
 attributes, selected complete context type, and public declarations.
 
 Common `.c` files include the API declarations, internal runtime declarations,
-selected internal ABI types, and callable port ABI. They do not include the
-selected complete context type. Therefore these expressions must fail to compile
-in common code:
+and callable port ABI. They do not include the selected complete context type.
+Therefore these expressions must fail to compile in common code:
 
 ```c
 ctx->port_private_cpu;
@@ -303,60 +295,33 @@ Common runtime owns:
 - scheduler hook and user pointer storage;
 - `current == NULL` first-selection semantics;
 - recursion and hot-swap guards;
-- missing-hook and NULL-result failures;
-- calling selected-port restore validation;
+- missing-hook failure and hook invocation;
 - publication of the new current context;
 - ordering barriers around common runtime state.
 
 The selected port owns:
 
+- first-selection and PendSV scheduler wrapper entry points;
 - scheduler critical-section mechanics;
 - CPU-state snapshot and validation around the user hook;
-- BASEPRI or PRIMASK policy;
-- M7 errata handling for BASEPRI writes;
+- restore validation of the source and returned contexts;
+- BASEPRI or PRIMASK policy and M7 errata handling;
 - additional state such as CONTROL, PSPLIM, security-bank state, or future
   port-specific registers.
 
-The port must not choose a fiber, reinterpret NULL, publish current, or implement
-the recursion policy.
+The port wrapper calls the common hook-invocation helper and the common
+current-context publication helper. It does not choose a fiber, reinterpret a
+NULL hook result, own hook lifecycle, or implement the recursion policy.
 
-For the structural migration, preserve the current critical-section placement:
+The mechanical split preserves critical-section placement:
 
-- first selection enters and exits through the existing C critical-section API;
-- PendSV enters and exits through the existing selected-port assembly;
-- state capture and validation do not add a second interrupt-mask layer.
+- first selection enters and exits through the selected port C critical-section
+  API;
+- PendSV enters and exits through selected-port assembly;
+- selected-port CPU-state capture does not add a second interrupt-mask layer.
 
-Do not introduce `fiber_port_call_scheduler_guarded()` in the mechanical move.
-Unifying callback invocation and critical-section ownership is a separate
-behavior-changing decision.
-
-Incomplete scheduler snapshot and critical-state types cannot be instantiated
-by common C. The selected internal type-only ABI header must provide complete
-private types:
-
-```c
-typedef struct FiberPortSchedulerCpuState {
-    uintptr_t port_private_words[/* selected-port constant */];
-} FiberPortSchedulerCpuState;
-
-typedef struct FiberPortSchedulerCriticalState {
-    uintptr_t port_private_words[/* selected-port constant */];
-} FiberPortSchedulerCriticalState;
-
-void fiber_port_scheduler_state_capture(FiberPortSchedulerCpuState *state);
-void fiber_port_scheduler_state_validate(
-        const FiberPortSchedulerCpuState *state);
-
-void fiber_port_scheduler_critical_enter(
-        FiberPortSchedulerCriticalState *state);
-void fiber_port_scheduler_critical_exit(
-        const FiberPortSchedulerCriticalState *state);
-```
-
-The exact selected types may use private named fields instead of word arrays.
-Common code may allocate and pass them but must not inspect them. The C critical
-token is used by first selection. PendSV may keep the equivalent token in its
-port-local assembly frame; this does not create a second critical section.
+CPU snapshot and critical-state records are private local selected-port data.
+Common C neither allocates nor interprets them.
 
 ## Callable Port Boundary
 
@@ -368,7 +333,6 @@ void fiber_port_context_init(FiberContext *ctx,
                              void *stack_end,
                              FiberEntryFn entry,
                              void *arg);
-
 void fiber_port_context_validate_restore(FiberContext *ctx);
 uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
 
@@ -376,20 +340,18 @@ void fiber_port_require_start_environment(void);
 void fiber_port_require_start_interrupt_state(void);
 void fiber_port_runtime_prepare(void);
 void fiber_port_require_schedule_environment(void);
-void fiber_port_runtime_validate(void);
-
-void fiber_port_scheduler_state_capture(FiberPortSchedulerCpuState *state);
-void fiber_port_scheduler_state_validate(
-        const FiberPortSchedulerCpuState *state);
-void fiber_port_scheduler_critical_enter(
-        FiberPortSchedulerCriticalState *state);
-void fiber_port_scheduler_critical_exit(
-        const FiberPortSchedulerCriticalState *state);
-
-FIBER_API_NORETURN
-void fiber_port_start_first_context(FiberContext *first);
-
 void fiber_port_request_schedule(void);
+
+void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
+                                         void *user);
+FiberContext *fiber_port_scheduler_pick_first_from_start(void);
+FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
+        FiberContext *current);
+
+void fiber_exception_runtime_check(void);
+void fiber_pendsv_init_lowest_priority(void);
+FIBER_API_NORETURN
+void fiber_port_start_first_context(uintptr_t msp_top);
 void fiber_svc(void);
 void fiber_pendsv(void);
 ```
@@ -397,31 +359,30 @@ void fiber_pendsv(void);
 Exact internal names may evolve during the mechanical split. The ownership and
 the prohibition on common context layout knowledge are frozen.
 
-The reverse port-to-common boundary is also explicit. PendSV calls one stable,
-general-registers-only common scheduler bridge after saving the current CPU
-context and entering the selected-port critical section:
+The reverse port-to-common boundary is also explicit. After saving the current
+CPU context, PendSV calls the selected-port
+`fiber_port_scheduler_pick_next_from_pendsv()` wrapper. That wrapper applies
+selected CPU-state and restore validation, then calls the common
+general-registers-only helpers:
 
 ```c
-FIBER_GENERAL_REGS_ONLY
-FiberContext *fiber_internal_scheduler_pick_next_from_pendsv(
-        FiberContext *current);
+FiberContext *fiber_internal_scheduler_invoke_pick_next(FiberContext *current);
+void fiber_internal_scheduler_commit_current_context(FiberContext *next);
 ```
 
-The bridge invokes the application hook, validates callback CPU-state
-preservation, rejects NULL or corrupt results, publishes the selected current
-context, and returns the same opaque pointer to the port for restore. The port
-does not publish current or reinterpret scheduler results.
+The common helpers invoke the application hook and publish the selected current
+context. The selected wrapper rejects invalid restore targets before invoking
+the common publication helper.
 
 ## Common Runtime Flow
 
 The common API flow is frozen at the ownership level even if internal function
 names change.
 
-`fiber_init()` performs CPU-neutral argument checks and delegates all context
-writes, stack normalization, frame construction, sealing, and final validation
-to `fiber_port_context_init()`. Common code checks only facts available without
-a complete context type: a non-NULL context pointer, raw stack range monotonicity
-through `uintptr_t`, a non-NULL entry point, and common lifecycle preconditions.
+`fiber_init()` delegates all argument checks, context writes, stack
+normalization, frame construction, sealing, and final validation to
+`fiber_port_context_init()`. The selected port is the only implementation that
+can safely validate selected context storage and frame geometry.
 
 `fiber_port_context_init()` owns every selected-storage check. Before its first
 write through `ctx` or into the supplied stack, it must:
@@ -444,9 +405,10 @@ pointer with the required common ordering barriers.
 
 1. validate common lifecycle and selected-port start preconditions;
 2. prepare and validate port runtime state before invoking user scheduler code;
-3. enter the port C critical section and capture callback CPU state;
-4. call `pick_next(NULL, user)`, validate preserved CPU state and the returned
-   context, then leave the exact previous critical state restored;
+3. call the selected-port first-selection wrapper, which enters its C critical
+   section, captures callback CPU state, invokes `pick_next(NULL, user)`, and
+   validates the returned context;
+4. leave the exact previous selected critical state restored;
 5. prepare the selected first context and port-owned startup MSP state;
 6. publish the selected context as current;
 7. transfer through the selected port's mandatory SVC first-start path.
@@ -474,8 +436,9 @@ PendSV performs this sequence:
 
 1. the selected port saves the current CPU context into its private layout;
 2. the selected port enters its handler-side scheduler critical section;
-3. the common scheduler bridge calls `pick_next(current, user)`, validates the
-   callback and selected context, and publishes current exactly once;
+3. the selected-port scheduler wrapper validates callback CPU state and the
+   selected context, calls the common hook helper, and publishes current exactly
+   once through the common runtime helper;
 4. the selected port restores the exact previous critical state;
 5. the selected port restores the returned context and exception-returns.
 

@@ -17,7 +17,7 @@
 
 #if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
 
-#include "../fiber_port_selected.h"
+#include "fiber_portmacro.h"
 #include "../../fiber_platform_policy.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);

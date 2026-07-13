@@ -17,6 +17,10 @@
 #include "../../fiber_panic.h"
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 # include "fiber_port_boot.h"
+# include "../fiber_port_traits.h"
+# include "../fiber_port_geometry.h"
+# include "../fiber_feature_policy.h"
+# include "../fiber_port_runtime_abi.h"
 #endif
 
 #ifndef FIBER_SVC_START_NUMBER
@@ -48,5 +52,15 @@
 FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 		(FIBER_SVC_START_NUMBER <= 255),
 		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
+FIBER_STATIC_ASSERT((FIBER_PENDSV_VECTOR_DIRECT == 0) ||
+		(FIBER_PENDSV_VECTOR_DIRECT == 1),
+		"[fiber]: FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1");
+FIBER_STATIC_ASSERT((FIBER_SVC_VECTOR_DIRECT == 0) ||
+		(FIBER_SVC_VECTOR_DIRECT == 1),
+		"[fiber]: FIBER_SVC_VECTOR_DIRECT must be 0 or 1");
+
+#if !FIBER_PENDSV_VECTOR_DIRECT && !defined(FIBER_PENDSV_WIRED)
+FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to branch to fiber_pendsv without clobbering LR; define FIBER_PENDSV_WIRED=1 after you do it");
+#endif
 
 #endif /* FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORTMACRO_H_ */

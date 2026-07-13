@@ -18,7 +18,7 @@
 #if FIBER_PORT_BUILD_SELECTED || \
 		(FIBER_PORT_ARMV7EM && (__CORTEX_M == 7))
 
-#include "../../fiber_port_selected.h"
+#include "fiber_portmacro.h"
 #include "../../../fiber_platform_policy.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);

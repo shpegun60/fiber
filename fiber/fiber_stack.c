@@ -31,7 +31,7 @@ fiber_stack_region_from_buf(void *buf, size_t bytes, fiber_stack_region *out)
 static inline int
 fiber_stack_heap_alloc(size_t bytes, fiber_stack_region *out)
 {
-    const size_t align = (size_t)FIBER_PORT_STACK_ALIGNMENT;
+    const size_t align = (size_t)FIBER_PUBLIC_STACK_ALIGNMENT;
     const size_t total = bytes + (align - 1u);   /* alignment headroom */
     uint8_t *raw = (uint8_t*)malloc(total);
     if (!raw) return 0;

@@ -81,6 +81,87 @@ void fiber_port_request_schedule(void)
 	__ISB();
 }
 
+/* The selected port owns the CPU-state contract around the user scheduler.
+ * Common runtime owns only hook lifecycle and current-context publication. */
+typedef struct FiberPortSchedulerCpuState {
+	uint32_t primask;
+	uint32_t control;
+#if FIBER_PORT_HAS_BASEPRI
+	uint32_t basepri;
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	uint32_t faultmask;
+#endif
+} FiberPortSchedulerCpuState;
+
+static FIBER_GENERAL_REGS_ONLY void
+fiber_port_capture_scheduler_cpu_state(FiberPortSchedulerCpuState *state)
+{
+	FIBER_REQUIRE(state != 0, 'C');
+	__COMPILER_BARRIER();
+	state->primask = __get_PRIMASK();
+	state->control = __get_CONTROL();
+#if FIBER_PORT_HAS_BASEPRI
+	state->basepri = fiber_port_basepri_read();
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	state->faultmask = __get_FAULTMASK();
+#endif
+	__COMPILER_BARRIER();
+}
+
+static FIBER_GENERAL_REGS_ONLY void
+fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before)
+{
+	FIBER_REQUIRE(before != 0, 'C');
+	__COMPILER_BARRIER();
+	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+#if FIBER_PORT_HAS_BASEPRI
+	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
+#endif
+#if FIBER_PORT_HAS_FAULTMASK
+	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+#endif
+	__COMPILER_BARRIER();
+}
+
+void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
+		void *user)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	fiber_internal_scheduler_store_pick_next(pick_next, user);
+}
+
+FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+FiberContext *fiber_port_scheduler_pick_first_from_start(void)
+{
+	fiber_internal_scheduler_begin_first_selection();
+	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
+	FiberPortSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const first = fiber_internal_scheduler_invoke_pick_next(0);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_restore(first);
+	fiber_port_scheduler_critical_exit(critical_state);
+	fiber_internal_scheduler_end_first_selection();
+	return first;
+}
+
+FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)
+{
+	FIBER_REQUIRE(current != 0, 'C');
+	fiber_port_context_validate_restore(current);
+	FiberPortSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const next = fiber_internal_scheduler_invoke_pick_next(current);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_restore(next);
+	fiber_internal_scheduler_commit_current_context(next);
+	return next;
+}
+
 FIBER_NORETURN
 FIBER_ATTR_NAKED_ASM
 void fiber_port_start_first_context(uintptr_t msp_top)
@@ -264,7 +345,7 @@ void fiber_pendsv(void)
 
 			fiber_portASM_ENTER_SCHEDULER_CRITICAL
 			"mov   r0, r1                           \n" /* arg0 = current */
-			"bl    fiber_internal_scheduler_pick_next_from_pendsv \n"
+			"bl    fiber_port_scheduler_pick_next_from_pendsv \n"
 			fiber_portASM_EXIT_SCHEDULER_CRITICAL
 
 			"mov   r2, r0                           \n" /* r2 = selected next */

@@ -16,7 +16,7 @@
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 
-#include "../fiber_port_selected.h"
+#include "fiber_portmacro.h"
 #include "../../fiber_platform_policy.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);

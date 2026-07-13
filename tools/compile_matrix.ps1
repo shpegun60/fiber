@@ -177,12 +177,38 @@ function Test-ContextPortBoundary {
         }
     }
 
+    foreach ($path in $sources.Keys) {
+        if ($sources[$path].IndexOf("fiber_port_selected.h",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Common runtime must not include the selected complete type facade: $path"
+        }
+    }
+
+    $forbiddenRuntimeCpuAccess = @(
+        "__get_IPSR",
+        "__get_PRIMASK",
+        "__get_CONTROL",
+        "__get_BASEPRI",
+        "__get_FAULTMASK",
+        "fiber_port_basepri_read",
+        "fiber_port_scheduler_critical_",
+        "FIBER_PORT_HAS_"
+    )
+    foreach ($forbidden in $forbiddenRuntimeCpuAccess) {
+        if ($sources[$runtimePath].IndexOf($forbidden,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Common scheduler state must not inspect selected CPU state: $forbidden in $runtimePath"
+        }
+    }
+
     $requiredCoreCalls = @(
         "fiber_port_context_init(",
         "fiber_port_require_start_environment();",
         "fiber_port_require_start_interrupt_state();",
         "fiber_port_runtime_prepare();",
-        "fiber_port_context_prepare_first_start("
+        "fiber_port_context_prepare_first_start(",
+        "fiber_port_scheduler_pick_first_from_start();",
+        "fiber_port_scheduler_set_pick_next("
     )
     foreach ($requiredCall in $requiredCoreCalls) {
         if ($sources[$corePath].IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
@@ -190,9 +216,41 @@ function Test-ContextPortBoundary {
         }
     }
 
-    if ($sources[$runtimePath].IndexOf("fiber_port_context_validate_restore(",
-            [System.StringComparison]::Ordinal) -lt 0) {
-        throw "fiber_runtime_state.c must validate contexts through selected-port ABI"
+    $requiredRuntimeCalls = @(
+        "fiber_internal_scheduler_invoke_pick_next(",
+        "fiber_internal_scheduler_commit_current_context("
+    )
+    foreach ($requiredCall in $requiredRuntimeCalls) {
+        if ($sources[$runtimePath].IndexOf($requiredCall,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "fiber_runtime_state.c must retain common scheduler ownership: missing $requiredCall"
+        }
+    }
+
+    $portSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+    )
+    $requiredPortBridgeSymbols = @(
+        "FiberPortSchedulerCpuState",
+        "fiber_port_scheduler_set_pick_next",
+        "fiber_port_scheduler_pick_first_from_start",
+        "fiber_port_scheduler_pick_next_from_pendsv",
+        "fiber_port_context_validate_restore",
+        "fiber_internal_scheduler_commit_current_context"
+    )
+    foreach ($relativePath in $portSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        foreach ($requiredSymbol in $requiredPortBridgeSymbols) {
+            if ($source.IndexOf($requiredSymbol,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "Selected port must own scheduler CPU-state validation: missing $requiredSymbol in $path"
+            }
+        }
     }
 }
 
@@ -353,6 +411,9 @@ $requiredPortSymbols = @(
     "fiber_port_runtime_prepare",
     "fiber_port_require_schedule_environment",
     "fiber_port_request_schedule",
+    "fiber_port_scheduler_set_pick_next",
+    "fiber_port_scheduler_pick_first_from_start",
+    "fiber_port_scheduler_pick_next_from_pendsv",
     "fiber_port_start_first_context",
     "fiber_svc",
     "fiber_pendsv",
@@ -670,7 +731,7 @@ void Error_Handler(void);
                 "-I$(Join-Path $RepoRoot 'fiber')",
                 "-I$cmsis",
                 "-c",
-                (Join-Path $RepoRoot "fiber\fiber_core.c"),
+                (Join-Path $RepoRoot "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"),
                 "-o",
                 $objectPath
             )
@@ -760,7 +821,10 @@ void Error_Handler(void);
         "-DFIBER_PENDSV_WIRED=1",
         "-DFIBER_SVC_WIRED=1"
     )
-    $probeSource = Join-Path $RepoRoot "fiber\fiber_core.c"
+    # Settings and trait checks are selected-port responsibilities. Probe the
+    # concrete CM7 port rather than common fiber_core.c, which deliberately
+    # sees only the opaque callable port ABI.
+    $probeSource = Join-Path $RepoRoot "fiber\port\ARM_CM7\r0p1\fiber_port.c"
     $probeBootSource = Join-Path $RepoRoot "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c"
 
     Write-Host ""

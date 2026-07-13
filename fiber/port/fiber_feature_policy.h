@@ -12,7 +12,7 @@
 #include "fiber_port_select.h"
 
 #ifndef FIBER_PORT_NAME
-# error "[fiber]: include fiber_port_selected.h before fiber_feature_policy.h"
+# error "[fiber]: include the selected fiber_portmacro.h before fiber_feature_policy.h"
 #endif
 
 /*

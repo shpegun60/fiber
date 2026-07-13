@@ -148,6 +148,9 @@ provide a naked `SVC_Handler()` branch wrapper that reaches `fiber_svc()` while
 preserving the original SVC handler LR/EXC_RETURN:
 
 ```c
+/* Vector wrappers intentionally use the selected CM7 port naked-ASM ABI. */
+#include "fiber/port/ARM_CM7/r0p1/fiber_portmacro.h"
+
 FIBER_ATTR_NAKED_ASM
 void SVC_Handler(void)
 {

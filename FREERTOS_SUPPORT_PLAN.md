@@ -100,10 +100,11 @@ Closed hardening items from the FreeRTOS comparison:
   common hard-coded 36-byte assumption;
 - each current selected port now owns `fiber_port_types.h`,
   `fiber_port_boot_types.h`, `fiber_port_boot.h`, and `fiber_port_boot.c`;
-  `fiber_port_selected.h` is the sole selector and its selected
-  `fiber_portmacro.h` includes that contract. `fiber_types.h` remains a
-  source-compatible facade. The physical `sp + FiberPortBoot` layout is
-  transitional, while common sources already use the opaque callable ABI;
+  `fiber_port_selected.h` is the sole public type selector and selects one
+  local `fiber_port_types.h`. The matching selected `fiber_portmacro.h` is the
+  private complete CPU contract. `fiber_types.h` remains a source-compatible
+  facade. The physical `sp + FiberPortBoot` layout is transitional, while
+  common sources already use the opaque callable ABI;
 - build-selected portmacro workflow exists for the first FreeRTOS-referenced
   Cortex-M7 source group:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
@@ -265,12 +266,13 @@ Closed hardening items from the FreeRTOS comparison:
 
 1. Finish the FreeRTOS-style port ownership split.
 
-   The public type-only phase of `V2_OPAQUE_CONTEXT_CONTRACT.md` is complete:
-   each selected port exports `fiber_port_types.h`, and the selected facade
-   completes `FiberContext` for application allocation. Continue with an
-   internal type-only ABI header for private scheduler CPU-state tokens and a
-   callable ABI that accepts opaque context pointers. Common runtime files must
-   then stop including the selected complete context type or containing
+   The opaque callable phase of `V2_OPAQUE_CONTEXT_CONTRACT.md` is complete:
+   each selected port exports `fiber_port_types.h`, the selected facade
+   completes `FiberContext` for application allocation, and common runtime
+   uses `fiber_port_runtime_abi.h` with incomplete context pointers. CPU-state
+   snapshots remain private local data in selected port wrappers; common runtime
+   has no selected-port token type to allocate or inspect. Common runtime files
+   no longer include the selected complete port contract or contain
    architecture-specific switch assembly.
 
    Move out of common code:

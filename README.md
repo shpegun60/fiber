@@ -68,11 +68,24 @@ then relocatably links the result to prove a single complete port ABI.
 It will be deleted when concrete v8-M and ARMv8.1-M ports replace it.
 
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
-only selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h`
-includes the concrete selected `fiber_portmacro.h` interface and its
-port-owned frame traits. Public runtime code should use `fiber/fiber_core.h`;
-exception wiring or low-level port integration should include the selected
-port-specific header or `fiber/port/fiber_port_selected.h`.
+selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h` completes
+only the selected public `FiberContext` storage type. The complete CPU contract
+is the concrete selected `fiber_portmacro.h`; it is private to selected port
+sources and deliberate low-level integration or test code. Common runtime code
+uses the opaque callable `fiber_port_runtime_abi.h` boundary and does not include
+the selected complete port contract.
+
+The public API is exactly `fiber_init()`, `fiber_current()`,
+`fiber_scheduler_set_pick_next()`, `fiber_start()`, and `fiber_schedule()`.
+Names such as `fiber_yield()`, `fiber_sleep_until()`, and `fiber_wake()` are
+future application-scheduler design examples. They are not current library
+exports.
+
+For automatic ARMv7E-M public type selection, include the device CMSIS header
+(normally the application's `main.h`) before `fiber_core.h`; it provides
+`__CORTEX_M` so the facade can distinguish the concrete M4 and M7 source
+groups. A build-selected integration supplies its selected type header through
+the build include path instead.
 The v2 target is FreeRTOS-style ownership: each concrete selected port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
 exception setup, FPU traits, and architecture-specific critical-section policy.
@@ -283,6 +296,8 @@ In `stm32xxx_it.c`:
 
 ```c
 #include "fiber/fiber_core.h"
+/* Example for the concrete STM32H7/Cortex-M7 selected port. */
+#include "fiber/port/ARM_CM7/r0p1/fiber_portmacro.h"
 
 FIBER_ATTR_NAKED_ASM
 void PendSV_Handler(void)
