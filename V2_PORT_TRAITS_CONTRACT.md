@@ -33,9 +33,11 @@ The preferred production workflow mirrors FreeRTOS:
 1. The build adds the selected port directory to the include path.
 2. The build defines `FIBER_PORT_BUILD_SELECTED=1`.
 3. `fiber_port_selected.h` includes that directory's `fiber_portmacro.h`.
-4. The build compiles exactly one matching runtime port source group plus only
-   the explicitly matched Secure or TF-M companion sources required by that
-   profile. Companion sources must not define a second callable port ABI.
+4. Each runtime image compiles exactly one matching runtime port source group.
+   If the profile needs Secure or TF-M integration, the build graph binds the
+   runtime image to one matching companion component or artifact. That companion
+   may be built as a separate Secure target or supplied by TF-M; it must not
+   define a second callable fiber runtime ABI in the same runtime image.
 
 Step 3 describes the current transitional facade. After the opaque-context
 split, the same selection result feeds separate selected public-type, internal
@@ -232,10 +234,23 @@ The CM7 r0p1 port preserves PRIMASK around every BASEPRI write required by ARM
 errata 837070. Its naked-assembly synchronized write macros clobber `r12`; no
 live context state may be kept there across those macros.
 
-`fiber_schedule()` itself rejects Handler mode and nonzero PRIMASK, BASEPRI, or
-FAULTMASK when the selected port implements them. It then delegates PendSV
-publication to the port. Every port publishes `PENDSVSET` followed by mandatory
-DSB/ISB serialization.
+Common `fiber_schedule()` validates only common lifecycle/current ownership and
+delegates CPU-state validation plus the request mechanism to the selected port.
+The selected port must make that validation privilege-aware:
+
+- a privileged direct-PendSV path validates Thread mode and every readable mask
+  invariant before publishing `PENDSVSET`;
+- an unprivileged MPU path performs only checks safely observable from
+  unprivileged Thread mode, then issues a port-owned yield SVC;
+- the yield SVC validates instruction/service provenance and the real privileged
+  CPU mask state before publishing `PENDSVSET` from Handler mode;
+- a port that restores an unprivileged context guarantees zero PRIMASK and,
+  where implemented, zero BASEPRI and FAULTMASK as restore invariants. It must
+  not depend on an unprivileged pre-SVC read to prove those values.
+
+Every actual ICSR publication, whether direct or from the SVC handler, is
+followed by mandatory DSB/ISB serialization. Scheduler selection still occurs
+only in PendSV after the outgoing context has been saved.
 
 ## Required Callable Interface
 

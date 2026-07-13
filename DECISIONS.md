@@ -19,12 +19,28 @@ The contract is tightened before structural migration:
 - `fiber_port_request_schedule()` is mechanism-neutral: privileged ports may
   pend PendSV directly, while unprivileged MPU ports must enter a validated
   port-owned SVC that pends PendSV from Handler mode;
+- before common-core freeze, the existing CM7 Thread-mode register checks and
+  direct PendSV publication move unchanged behind that selected-port request
+  boundary; common runtime objects must then compile without CMSIS or CPU
+  special-register access;
+- common scheduling code does not read CPU mask registers. Privileged ports
+  validate them before direct PendSV publication; unprivileged ports validate
+  safely observable state before SVC and the real mask state in Handler mode;
+- every unprivileged restore guarantees zero PRIMASK and, where implemented,
+  zero BASEPRI and FAULTMASK;
 - selected-port configuration calls a common-owned lifecycle guard and never
   reads common scheduler/current globals directly;
 - MPU ports must protect common runtime and context state from unprivileged
   writes and own CONTROL, PSPLIM, MPU, secure-context, PAC, and FP/MVE storage;
-- Secure and TF-M directories are companion source groups, not additional
-  cooperative scheduler ports;
+- Secure and TF-M integration is a matched companion component/artifact, not an
+  additional cooperative scheduler port. It may live in a separate Secure
+  target or be supplied by TF-M and never defines a second callable fiber runtime
+  ABI in the same runtime image;
+- separate Secure images expose a versioned gateway/service ABI and require a
+  manifest or startup compatibility check because normal link relocations cannot
+  validate two firmware images;
+- every target tree includes the public type-only
+  `fiber_context_metadata_types.h` layer;
 - every configuration that changes context layout or saved-state meaning gets
   a distinct ABI identity and validation record.
 
@@ -881,12 +897,15 @@ Hardening decisions:
   The default stays `0xFFFFFFFDu` for M3/M4/M7 and secure-only style builds.
 - ARMv8-M Non-secure projects can set `FIBER_RUN_NONSECURE = 1` to select
   `0xFFFFFFBCu`, or override `FIBER_INITIAL_EXC_RETURN` directly.
-- `fiber_schedule()` rejects real scheduler jumps when `PRIMASK` is already set,
-  because a pending PendSV delayed past a critical section is unsafe.
-- On cores with BASEPRI, `fiber_schedule()` also rejects scheduler jumps when
-  `BASEPRI` is already set.
-- On cores with FAULTMASK, `fiber_schedule()` also rejects scheduler jumps when
-  `FAULTMASK` is already set.
+- The validated privileged CM7 request path rejects a real scheduler jump when
+  `PRIMASK`, BASEPRI, or FAULTMASK is nonzero, because a pending PendSV delayed
+  past a critical section is unsafe. This is historical CM7 behavior to retain
+  when the checks move behind `fiber_port_request_schedule()`; it is not a
+  requirement for common code to read privileged registers.
+- Future unprivileged MPU request paths enter a validated yield SVC instead.
+  Handler mode validates the real mask state before publishing PendSV, and
+  every unprivileged restore guarantees zero PRIMASK and, where implemented,
+  zero BASEPRI and FAULTMASK.
 - The first-start path clears `CONTROL.FPCA` before entering the first fiber
   when an FPU context exists. On the current ARMv7E-M v2 path this happens
   through SVC first-start.

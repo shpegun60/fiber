@@ -126,6 +126,7 @@ fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
+  fiber_context_metadata_types.h
   fiber_core.c
   fiber_core.h
   fiber_platform_policy.h
@@ -411,8 +412,9 @@ build defines:
   exactly one FIBER_PORT_ARMV*=1
 
 build sources:
-  exactly one selected runtime port source group
-  optional matched Secure/TF-M companion sources that define no second ABI
+  exactly one selected runtime port source group per runtime image
+  matched Secure/TF-M companion component may be a separate target/artifact
+  no second callable fiber runtime ABI exists in the same runtime image
 ```
 
 During the v2 migration, `fiber_port_select.h` still validates and normalizes
@@ -476,7 +478,7 @@ Backlog required before stronger parity claims:
 | ARMv8-M Baseline / M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level. | Implement a PSPLIM slot/security policy, or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
 | ARMv8-M Mainline / M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
-| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per security/profile ABI plus only its matched Secure/TF-M companion sources. |
+| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per runtime-image security/profile ABI and bind its identity-matched Secure artifact or TF-M component where required. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
 Do not describe a profile as FreeRTOS-level only because it has selection logic.
@@ -533,10 +535,15 @@ Common scheduler-jump preconditions:
 
 - `fiber_schedule()` is a Thread-mode API;
 - a runtime-owned current context must already be seeded;
-- real scheduler jumps require `PRIMASK == 0`;
-- real scheduler jumps require `BASEPRI == 0` on cores that implement BASEPRI;
-- real scheduler jumps require `FAULTMASK == 0` on cores that implement
-  FAULTMASK;
+- every restored fiber context requires `PRIMASK == 0`, `BASEPRI == 0` where
+  implemented, and `FAULTMASK == 0` where implemented;
+- privileged direct-PendSV paths validate those masks before the ICSR write;
+- unprivileged MPU paths do not trust pre-SVC reads of privileged mask state.
+  They issue the port-owned yield SVC, whose Handler-mode dispatch validates the
+  real masks before the ICSR write;
+- the unprivileged `fiber_current()`/`fiber_schedule()` call graph and
+  Thread-mode request stub are executable without privileged register or
+  privileged-write access. Required common state is mapped read-only;
 - the scheduler hook must return a real initialized `FiberContext`;
 - the scheduler hook is exception-path code and must be declared with
   `FIBER_SCHEDULER_HOOK_ATTR`; it must not use FP, MVE, allocation, blocking,
@@ -912,17 +919,27 @@ Exact names may change, but ownership should not:
 - the callable ABI must not expose context fields, frame offsets, or MSP
   addresses to common code;
 - common code decides lifecycle and scheduler-policy preconditions, while the
-  selected port validates CPU Thread/mask preconditions;
+  selected port owns privilege-aware CPU mode/mask validation across the direct
+  request path, yield-SVC Handler path, and context-restore boundary;
 - common code seeds the current context and scheduler hook before a
   scheduler-driven switch can run;
 - common code owns the current-context policy;
-- common code calls `fiber_port_require_schedule_environment()` after checking
-  current ownership, then calls `fiber_port_request_schedule()`;
+- common code checks current ownership and calls the selected-port schedule
+  request boundary. It does not read IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK,
+  SCB, or NVIC state;
+- `fiber_port_require_schedule_environment()` and
+  `fiber_port_request_schedule()` may remain separate internally, but their
+  combined selected-port contract is privilege-aware;
 - `fiber_port_request_schedule()` owns the architecture-specific request
   mechanism. Privileged non-MPU ports may directly publish PendSV with mandatory
-  barriers and without masking around the ICSR write. Unprivileged or MPU ports
-  issue a port-owned yield SVC, whose validated Handler-mode dispatch publishes
-  PendSV;
+  barriers after validating Thread/mask state. Unprivileged or MPU ports perform
+  only safely observable pre-SVC checks and issue a port-owned yield SVC, whose
+  validated Handler-mode dispatch checks the real privileged mask state and
+  publishes PendSV;
+- ports that restore unprivileged fibers guarantee zero PRIMASK and, where
+  implemented, zero BASEPRI and FAULTMASK before exception return. Handler
+  validation is defense in depth, not a repair path for a mask state that could
+  block or fault SVC entry;
 - neither the direct nor SVC request path selects a context. Scheduler selection
   remains inside PendSV after the outgoing context is saved;
 - the selected port owns the PRIMASK or BASEPRI critical section used only
@@ -1316,11 +1333,16 @@ Minimum evidence for stronger labels:
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.
-12. Add full ARMv8-M Baseline/Mainline PSPLIM and security-domain context
+12. Move all schedule-time IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK, SCB,
+    and direct-PendSV access behind `fiber_port_request_schedule()`. Preserve
+    current CM7 behavior in the selected CM7 port, compile common runtime code
+    without CMSIS, and add a validated yield-SVC request path before an MPU or
+    unprivileged support claim.
+13. Add full ARMv8-M Baseline/Mainline PSPLIM and security-domain context
     layout before claiming runtime support.
-13. Add full ARMv8.1-M/MVE/PAC/BTI context policy before claiming STM32N6-class
+14. Add full ARMv8.1-M/MVE/PAC/BTI context policy before claiming STM32N6-class
     support.
-14. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
+15. Keep `main` stable until a `v2` path passes the same STM32H7 validation.
 
 ## Implementation Strategy
 

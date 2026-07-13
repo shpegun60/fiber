@@ -319,10 +319,11 @@ port.c / portasm.c
   implement the selected CPU port functions and exception handlers
 ```
 
-There is no runtime port registry. The "engine" is the selected `portmacro.h`
-header plus exactly one selected runtime port source group in the build. A
-security profile may add matched Secure or TF-M companion sources, but they do
-not define a second runtime port ABI.
+There is no runtime port registry. In each runtime image, the "engine" is the
+selected `portmacro.h` header plus exactly one selected runtime port source
+group. A security profile may require a matched companion component, but that
+component may be built as a separate Secure target/artifact or supplied by TF-M.
+It does not define a second callable fiber runtime ABI in the same runtime image.
 
 The v2 `fiber` equivalent has two stages:
 
@@ -335,8 +336,8 @@ development/convenience stage:
 FreeRTOS-like production stage:
   build defines FIBER_PORT_BUILD_SELECTED=1
   build defines exactly one FIBER_PORT_ARMV*=1
-  build includes exactly one selected runtime port source group
-  build may include only that profile's matched Secure/TF-M companion sources
+  each runtime image includes exactly one selected runtime port source group
+  build graph binds only the matched Secure/TF-M companion component/artifact
   fiber_port_select.h validates only during migration
 ```
 
@@ -445,19 +446,29 @@ ARM_CM3_MPU
 ARM_CM4F
 ARM_CM4_MPU
 ARM_CM7/r0p1
-ARM_CM23/non_secure plus optional ARM_CM23/secure companion
+ARM_CM23/non_secure runtime
+ARM_CM23/secure companion component, normally a separate Secure target/artifact
 ARM_CM23_NTZ/non_secure
-ARM_CM33/non_secure plus optional ARM_CM33/secure companion
-ARM_CM33_NTZ/non_secure plus optional TF-M companion
-ARM_CM55/non_secure plus optional ARM_CM55/secure companion
-ARM_CM55_NTZ/non_secure plus optional TF-M companion
+ARM_CM33/non_secure runtime
+ARM_CM33/secure companion component, normally a separate Secure target/artifact
+ARM_CM33_NTZ/non_secure runtime plus the matching TF-M wrapper when selected
+ARM_CM55/non_secure runtime
+ARM_CM55/secure companion component, normally a separate Secure target/artifact
+ARM_CM55_NTZ/non_secure runtime plus the matching TF-M wrapper when selected
 ```
 
 The concrete STM32 device selects one of these CPU/security/privilege profiles;
-chip series names do not define context layout by themselves. A secure companion
-group provides secure-context mechanics to the selected Non-secure runtime and
-is not a second scheduler port. A build still contains exactly one implementation
-of the fiber callable port ABI.
+chip series names do not define context layout by themselves. A Secure companion
+component provides secure-context mechanics to the selected Non-secure runtime
+and is not a second scheduler port. It commonly lives in a separate Secure
+image/target. In the TF-M case, the Non-secure runtime includes the matching
+wrapper while TF-M owns the Secure firmware. Each runtime image still contains
+exactly one implementation of the fiber callable port ABI.
+
+A separate Secure image cannot share the runtime image's relocation-based ABI
+guard. Its gateway/service ABI must be versioned, and the integration must fail
+the build or `fiber_start()` compatibility check when Secure and Non-secure
+manifests do not match.
 
 The opaque selected-port context contract is sufficient for every source group
 above because it permits the selected public type to embed saved PSP, MPU
@@ -492,6 +503,7 @@ fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
+  fiber_context_metadata_types.h
   fiber_core.h
   internal/
     fiber_core_internal.h
@@ -691,7 +703,11 @@ Do not move these helpers all at once. The migration order should be:
 4. exception priority and vector validation
 5. FPU policy
 6. PSPLIM policy
-7. v8-M secure/non-secure context helpers
+7. privilege-aware schedule-request boundary: move Thread-mode CPU-register
+   checks and direct PendSV publication out of common code; preserve the
+   current privileged CM7 behavior in its selected port and add the MPU yield
+   SVC path before any unprivileged support claim
+8. v8-M secure/non-secure context helpers
 ```
 
 Each step needs compile matrix coverage. Behavior-affecting steps also need the

@@ -455,14 +455,18 @@ pointer with the required common ordering barriers.
 6. publish the selected context as current;
 7. transfer through the selected port's mandatory SVC first-start path.
 
-`fiber_schedule()` validates common running state, asks the selected port to
-validate Thread/mask preconditions, and calls `fiber_port_request_schedule()`.
-The request mechanism is selected-port policy:
+`fiber_schedule()` validates only common running/current ownership and calls
+`fiber_port_request_schedule()`. Common code does not read IPSR, CONTROL,
+PRIMASK, BASEPRI, FAULTMASK, SCB, or NVIC state. CPU preconditions and the
+request mechanism are selected-port policy:
 
-- a privileged non-MPU port may publish `PENDSVSET` directly with its mandatory
-  barriers;
-- an unprivileged or MPU port must issue a port-owned SVC. The SVC handler
-  validates the request and publishes `PENDSVSET` from privileged Handler mode.
+- a privileged non-MPU path validates Thread mode and every readable mask
+  invariant, then may publish `PENDSVSET` directly with mandatory barriers;
+- an unprivileged or MPU path validates only state safely observable from
+  unprivileged Thread mode and issues a port-owned SVC;
+- the yield SVC validates the instruction, service number, stacked-frame
+  provenance, allowed origin, and real privileged CPU mask state before
+  publishing `PENDSVSET` from Handler mode with mandatory barriers.
 
 Neither request path selects a context or invokes the scheduler hook. The
 scheduler bridge still runs only from PendSV after the current CPU context is
@@ -555,10 +559,19 @@ not sufficient. Every production MPU port must also enforce these rules:
 
 - context construction, optional MPU/security configuration, scheduler-hook
   installation, and `fiber_start()` are privileged pre-start operations;
+- `fiber_current()`, common `fiber_schedule()`, and the Thread-mode schedule
+  request stub are executable from unprivileged code. They may read only state
+  mapped as unprivileged-read-only and must not touch privileged-only data or
+  registers before SVC;
 - an unprivileged `fiber_schedule()` reaches privileged code through a
   port-owned SVC and never writes SCB/NVIC state directly;
 - the yield SVC validates its instruction, service number, frame provenance,
-  and allowed origin before pending PendSV;
+  allowed origin, and privileged CPU state before pending PendSV;
+- every restore of an unprivileged context guarantees PRIMASK is zero and,
+  where implemented, BASEPRI and FAULTMASK are zero. Unprivileged reads of
+  those registers are not accepted as proof of the restored state, and the port
+  must not rely on SVC to repair mask state that could prevent or fault
+  exception entry;
 - the scheduler callback and current-context publication remain common-owned
   and execute only after PendSV has saved the complete outgoing context;
 - common runtime state, scheduler-hook state, immutable context metadata, and
@@ -595,12 +608,21 @@ selected-port-private state:
 | `ARM_CM33`, `ARM_CM33_NTZ`, and TF-M companion | M33/M33F profiles | PSPLIM/CONTROL, MPU, security-domain and optional FP state |
 | `ARM_CM55`, `ARM_CM55_NTZ`, and TF-M companion | M55/MVE profiles | PSPLIM/CONTROL, MPU, MVE/FP, PAC/BTI and security state |
 
-FreeRTOS secure directories are companion source groups, not independent
-cooperative schedulers. A fiber build selects exactly one runtime port source
-group and, when required, its matching Secure or TF-M companion group. Every
-configuration that changes `FiberContext` layout or saved-state meaning gets a
-distinct layout/feature identity and must participate in the ABI mismatch
+FreeRTOS secure directories provide companion components, not independent
+cooperative schedulers. Each runtime image selects exactly one runtime port
+source group. When required, its build graph binds a matching Secure companion
+artifact that may be produced by a separate security-domain target, or uses the
+matching TF-M integration while TF-M supplies the Secure firmware. The companion
+does not define a second callable fiber runtime ABI in the same runtime image.
+Every configuration that changes `FiberContext` layout or saved-state meaning
+gets a distinct layout/feature identity and participates in the ABI mismatch
 guard.
+
+When the companion is a separate firmware image, an ordinary relocation-based
+link guard cannot prove cross-image compatibility. The selected security profile
+must define a versioned gateway ABI and a build-manifest or startup compatibility
+check covering the SecureContext contract, feature identity, and expected
+service numbers before `fiber_start()` can succeed.
 
 This proves architectural capacity, not implementation or hardware validation.
 Each family still requires its own line-by-line parity ledger, compile/link
@@ -631,6 +653,10 @@ SMP and cross-core migration remain outside this freeze.
 
 ### Commit 3: Common Hardening Cleanup
 
+- replace common-core IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK, SCB, and
+  direct-PendSV access with `fiber_port_request_schedule()`;
+- preserve the generated CM7 direct-request sequence and every existing CM7
+  panic code while moving that sequence into the selected CM7 port;
 - compare ranges through `uintptr_t`;
 - validate context alignment before the first write;
 - reject overlap between context storage and its own stack;
@@ -639,6 +665,9 @@ SMP and cross-core migration remain outside this freeze.
 - make weak panic autonomous from application `Error_Handler`;
 - move startup-only MSP policy out of per-context state;
 - add forbidden-header and forbidden-symbol isolation probes;
+- compile the common runtime without CMSIS or CPU special-register helpers and
+  reject any common object that references SCB, NVIC, SVC, PendSV, or CPU mask
+  access symbols;
 - keep each behavior change small enough to diagnose independently.
 
 ### Commit 4: Hardware Freeze Validation
@@ -660,8 +689,13 @@ CM33, and CM55 without modifying common context logic.
 
 The compile matrix must prove:
 
-- exactly one selected context type and runtime source group, plus only the
-  matched Secure/TF-M companion sources that define no second callable port ABI;
+- exactly one selected context type and runtime source group in each runtime
+  image;
+- any required Secure/TF-M companion is identity-matched, may be a separate
+  artifact/target, and defines no second callable fiber runtime ABI in that
+  runtime image;
+- a separate Secure artifact exposes a versioned gateway ABI and fails build or
+  startup compatibility validation when its manifest/service identity differs;
 - exactly one definition of every mandatory callable port ABI symbol;
 - common core compiles with incomplete `FiberContext`;
 - forbidden common includes of selected complete type headers fail review/probes;
@@ -673,6 +707,11 @@ The compile matrix must prove:
   fail before any context or stack byte is modified;
 - unprivileged MPU profiles compile a yield-SVC request path and do not publish
   PendSV directly from Thread mode;
+- the unprivileged schedule call graph has no privileged register access or
+  writeable access to privileged runtime/context state before SVC;
+- unprivileged restore validation proves zero PRIMASK and, where implemented,
+  zero BASEPRI and FAULTMASK, while Handler-side yield-SVC tests reject
+  corrupted privileged mask state;
 - mismatched context header/object ABI fails before precompiled-object support is
   claimed;
 - all source and documentation remain ASCII-only.

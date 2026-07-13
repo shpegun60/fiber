@@ -51,12 +51,13 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 - First-fiber start uses SVC and enters the first fiber by exception return.
   The direct boot trampoline has been removed; each selected port must provide
   an SVC first-start symbol.
-- `fiber_schedule()` rejects calls from Handler mode.
-- `fiber_schedule()` rejects scheduler jumps while `PRIMASK` is already set.
-- `fiber_schedule()` rejects scheduler jumps while `BASEPRI` is already set on cores
-  that implement BASEPRI.
-- `fiber_schedule()` rejects scheduler jumps while `FAULTMASK` is already set on
-  cores that implement FAULTMASK.
+- The current validated privileged CM7 request path rejects Handler mode and
+  rejects scheduler jumps while PRIMASK, BASEPRI, or FAULTMASK is nonzero.
+- Before common-core freeze, those checks and direct PendSV publication move
+  unchanged behind `fiber_port_request_schedule()` in the selected CM7 port.
+- Future unprivileged MPU paths use a validated yield SVC and enforce zero mask
+  state as a selected-port restore invariant instead of reading privileged mask
+  registers from common Thread-mode code.
 
 Closed hardening items from the FreeRTOS comparison:
 
