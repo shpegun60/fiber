@@ -94,9 +94,11 @@ documented board rerun; every other profile remains compile/link-covered only
 until its own hardware validation is recorded.
 
 `fiber_start()` initializes and validates PendSV/SVCall priority automatically.
-The setup function remains public and idempotent for integrations that want an
-earlier diagnostic check. A direct call requires privileged Thread mode on MSP
-with PRIMASK, BASEPRI, and FAULTMASK clear:
+The current transitional selected-port integration also exposes the idempotent
+diagnostic below for early bring-up checks. It is not part of the frozen
+five-function cooperative API and will be replaced by the internal selected-port
+runtime prepare/validate boundary. A direct transitional call requires
+privileged Thread mode on MSP with PRIMASK, BASEPRI, and FAULTMASK clear:
 
 ```c
 fiber_pendsv_init_lowest_priority();
@@ -330,8 +332,10 @@ switch cannot be silently delayed out of a masked interrupt region. On cores
 with BASEPRI, a real scheduler jump also requires `BASEPRI == 0`. On cores with
 FAULTMASK, `FAULTMASK` must also be clear.
 
-`fiber_pendsv_init_lowest_priority()` and `fiber_start()` run the runtime
-exception setup check by default. The check verifies:
+The transitional `fiber_pendsv_init_lowest_priority()` diagnostic and the public
+`fiber_start()` entry run the runtime exception setup check by default. The
+diagnostic is not part of the frozen five-function cooperative API. The check
+verifies:
 
 - PendSV priority reads back as the lowest priority;
 - SVCall priority reads back as highest priority;

@@ -60,7 +60,9 @@ fiber_start()
   scheduler hook selects first FiberContext with current == NULL
 
 fiber_schedule()
-  pends the selected-port scheduler exception path
+  requests the selected-port scheduler exception path
+  privileged ports may pend PendSV directly
+  unprivileged MPU ports enter a validated yield SVC first
 
 PendSV
   saves current FiberContext
@@ -318,7 +320,9 @@ port.c / portasm.c
 ```
 
 There is no runtime port registry. The "engine" is the selected `portmacro.h`
-header plus exactly one selected port source group in the build.
+header plus exactly one selected runtime port source group in the build. A
+security profile may add matched Secure or TF-M companion sources, but they do
+not define a second runtime port ABI.
 
 The v2 `fiber` equivalent has two stages:
 
@@ -331,7 +335,8 @@ development/convenience stage:
 FreeRTOS-like production stage:
   build defines FIBER_PORT_BUILD_SELECTED=1
   build defines exactly one FIBER_PORT_ARMV*=1
-  build includes exactly one selected port source group
+  build includes exactly one selected runtime port source group
+  build may include only that profile's matched Secure/TF-M companion sources
   fiber_port_select.h validates only during migration
 ```
 
@@ -418,6 +423,48 @@ FreeRTOS mpu_wrappers*.c:
   not part of the core fiber CPU-port runtime by default
   exclude unless a future MPU task-isolation feature is explicitly added
 ```
+
+The MPU yield mechanism is not optional when unprivileged fibers are supported.
+FreeRTOS `ARM_CM3_MPU`, `ARM_CM4_MPU`, and v8-M MPU ports issue SVC from
+unprivileged Thread mode and pend PendSV from privileged Handler mode. The fiber
+equivalent remains behind `fiber_port_request_schedule()`: direct PendSV and SVC
+yield are two selected-port implementations of the same common request ABI.
+This does not import the FreeRTOS scheduler or MPU wrapper API.
+
+## STM32-Relevant Port Source Groups
+
+The local FreeRTOS GCC build at commit `a50edad` selects materially different
+source groups rather than one universal Cortex-M implementation. The fiber port
+tree must preserve the same distinctions when they change saved state or
+privilege/security behavior:
+
+```text
+ARM_CM0
+ARM_CM3
+ARM_CM3_MPU
+ARM_CM4F
+ARM_CM4_MPU
+ARM_CM7/r0p1
+ARM_CM23/non_secure plus optional ARM_CM23/secure companion
+ARM_CM23_NTZ/non_secure
+ARM_CM33/non_secure plus optional ARM_CM33/secure companion
+ARM_CM33_NTZ/non_secure plus optional TF-M companion
+ARM_CM55/non_secure plus optional ARM_CM55/secure companion
+ARM_CM55_NTZ/non_secure plus optional TF-M companion
+```
+
+The concrete STM32 device selects one of these CPU/security/privilege profiles;
+chip series names do not define context layout by themselves. A secure companion
+group provides secure-context mechanics to the selected Non-secure runtime and
+is not a second scheduler port. A build still contains exactly one implementation
+of the fiber callable port ABI.
+
+The opaque selected-port context contract is sufficient for every source group
+above because it permits the selected public type to embed saved PSP, MPU
+regions, CONTROL, PSPLIM, secure-context handles, PAC keys, and FP/MVE state.
+The common core remains unchanged. This is a structural conclusion only; each
+new source group remains unsupported until its parity ledger and validation
+evidence are complete.
 
 Naming rule for new or mechanically renamed port role files:
 

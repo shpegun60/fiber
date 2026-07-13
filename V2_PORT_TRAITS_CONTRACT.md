@@ -33,7 +33,9 @@ The preferred production workflow mirrors FreeRTOS:
 1. The build adds the selected port directory to the include path.
 2. The build defines `FIBER_PORT_BUILD_SELECTED=1`.
 3. `fiber_port_selected.h` includes that directory's `fiber_portmacro.h`.
-4. The build compiles exactly one matching port source group.
+4. The build compiles exactly one matching runtime port source group plus only
+   the explicitly matched Secure or TF-M companion sources required by that
+   profile. Companion sources must not define a second callable port ABI.
 
 Step 3 describes the current transitional facade. After the opaque-context
 split, the same selection result feeds separate selected public-type, internal

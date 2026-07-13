@@ -15,7 +15,9 @@ a cooperative STM32 fiber library:
 
 This is not a plan to clone the FreeRTOS scheduler. The target is FreeRTOS-like
 CPU context-switch robustness without tasks, priorities, tick scheduling, queues,
-MPU task management, or the FreeRTOS API surface.
+a common FreeRTOS-style MPU task-management API, or the FreeRTOS API surface.
+Selected MPU ports may still own optional pre-start region/privilege
+configuration and an SVC yield path for unprivileged fibers.
 
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.

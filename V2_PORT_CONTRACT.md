@@ -411,7 +411,8 @@ build defines:
   exactly one FIBER_PORT_ARMV*=1
 
 build sources:
-  exactly one selected port source group
+  exactly one selected runtime port source group
+  optional matched Secure/TF-M companion sources that define no second ABI
 ```
 
 During the v2 migration, `fiber_port_select.h` still validates and normalizes
@@ -475,7 +476,7 @@ Backlog required before stronger parity claims:
 | ARMv8-M Baseline / M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level. | Implement a PSPLIM slot/security policy, or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
 | ARMv8-M Mainline / M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
-| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with concrete security/profile ports, each selected as exactly one source group. |
+| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per security/profile ABI plus only its matched Secure/TF-M companion sources. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
 Do not describe a profile as FreeRTOS-level only because it has selection logic.
@@ -917,9 +918,13 @@ Exact names may change, but ownership should not:
 - common code owns the current-context policy;
 - common code calls `fiber_port_require_schedule_environment()` after checking
   current ownership, then calls `fiber_port_request_schedule()`;
-- `fiber_port_request_schedule()` directly publishes PendSV and emits the
-  selected port's mandatory barriers. It does not mask interrupts around the
-  ICSR write;
+- `fiber_port_request_schedule()` owns the architecture-specific request
+  mechanism. Privileged non-MPU ports may directly publish PendSV with mandatory
+  barriers and without masking around the ICSR write. Unprivileged or MPU ports
+  issue a port-owned yield SVC, whose validated Handler-mode dispatch publishes
+  PendSV;
+- neither the direct nor SVC request path selects a context. Scheduler selection
+  remains inside PendSV after the outgoing context is saved;
 - the selected port owns the PRIMASK or BASEPRI critical section used only
   around the scheduler hook inside first selection and PendSV;
 - selected-port state capture and validation checks PRIMASK, FAULTMASK,

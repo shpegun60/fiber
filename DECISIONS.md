@@ -1,5 +1,37 @@
 # Fiber Decision Log
 
+## 2026-07-13: Close Opaque-Port Portability Gaps
+
+A contract-level source audit against local FreeRTOS commit `a50edad`, covering
+classic, MPU, v8-M, NTZ, TF-M, and MVE/PAC port groups, confirms that the
+selected-port-owned opaque context can represent every STM32-relevant Cortex-M
+profile without adding CPU layout to the common core. This does not replace the
+required line-by-line parity ledger for each implemented port.
+
+The contract is tightened before structural migration:
+
+- `fiber_context_metadata_types.h` is the public type-only metadata layer;
+  `internal/fiber_context_metadata.h` contains helper declarations;
+- `fiber_port_context_init()` owns context alignment, extent-overflow, and
+  context/stack overlap checks and performs them before its first write;
+- `fiber_pendsv_init_lowest_priority()` is explicitly transitional diagnostic
+  surface, not a sixth frozen public API function;
+- `fiber_port_request_schedule()` is mechanism-neutral: privileged ports may
+  pend PendSV directly, while unprivileged MPU ports must enter a validated
+  port-owned SVC that pends PendSV from Handler mode;
+- selected-port configuration calls a common-owned lifecycle guard and never
+  reads common scheduler/current globals directly;
+- MPU ports must protect common runtime and context state from unprivileged
+  writes and own CONTROL, PSPLIM, MPU, secure-context, PAC, and FP/MVE storage;
+- Secure and TF-M directories are companion source groups, not additional
+  cooperative scheduler ports;
+- every configuration that changes context layout or saved-state meaning gets
+  a distinct ABI identity and validation record.
+
+This remains a documentation-only refinement. It proves that the architecture
+can host the relevant FreeRTOS port families; it does not claim those ports are
+implemented or hardware-validated.
+
 ## 2026-07-13: Define Opaque Selected-Port Context ABI
 
 Before production ports are added in bulk, the common runtime will move to the

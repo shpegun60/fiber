@@ -131,6 +131,7 @@ fiber/
   fiber_api_types.h
   fiber_api_attributes.h
   fiber_api_decl.h
+  fiber_context_metadata_types.h
   fiber_core.h
 
   internal/
@@ -159,6 +160,13 @@ must not include CMSIS or a selected port.
 noreturn declaration and `FIBER_SCHEDULER_HOOK_ATTR`. It may detect compiler
 capabilities but must not include CMSIS, CPU feature traits, register helpers,
 or inline assembly.
+
+`fiber_context_metadata_types.h` is a public type-only utility header. It
+contains the complete CPU-neutral metadata type because a selected public
+`fiber_port_types.h` may embed that type. It contains no metadata helper
+functions, selected-port policy, CMSIS dependency, register helper, or inline
+assembly. `internal/fiber_context_metadata.h` declares the common helper
+operations that initialize and validate the type.
 
 `fiber_port_types.h` is a public type-only selected-port header. It completes
 `FiberContext` but must not include `mcu_core.h`, SCB/NVIC definitions, CMSIS
@@ -198,7 +206,8 @@ offsetof(FiberContext, any_field);
 
 ## Common Context Metadata
 
-CPU-neutral immutable inputs may use one shared utility type:
+CPU-neutral immutable inputs may use one shared utility type declared in
+`fiber_context_metadata_types.h`:
 
 ```c
 typedef struct FiberContextMetadata {
@@ -214,7 +223,8 @@ typedef struct FiberContextMetadata {
 } FiberContextMetadata;
 ```
 
-CPU-neutral helpers may initialize and validate this object:
+CPU-neutral helpers declared by `internal/fiber_context_metadata.h` may
+initialize and validate this object:
 
 ```c
 void fiber_metadata_init(FiberContextMetadata *metadata,
@@ -413,8 +423,22 @@ names change.
 
 `fiber_init()` performs CPU-neutral argument checks and delegates all context
 writes, stack normalization, frame construction, sealing, and final validation
-to `fiber_port_context_init()`. Context alignment and context/stack non-overlap
-must be rejected before the selected port performs its first write.
+to `fiber_port_context_init()`. Common code checks only facts available without
+a complete context type: a non-NULL context pointer, raw stack range monotonicity
+through `uintptr_t`, a non-NULL entry point, and common lifecycle preconditions.
+
+`fiber_port_context_init()` owns every selected-storage check. Before its first
+write through `ctx` or into the supplied stack, it must:
+
+1. validate selected-context alignment;
+2. compute the context storage extent through `uintptr_t` and reject addition
+   overflow;
+3. reject overlap between `[ctx, ctx + sizeof(*ctx))` and the raw stack range;
+4. validate every selected-port stack alignment and minimum-size precondition
+   needed before construction.
+
+Only after those checks pass may the port normalize stack bounds, construct the
+initial frame, initialize metadata, seal the context, or write a canary.
 
 `fiber_scheduler_set_pick_next()` accepts one non-NULL hook before start,
 rejects replacement while selecting or running, and publishes the hook and user
@@ -432,8 +456,17 @@ pointer with the required common ordering barriers.
 7. transfer through the selected port's mandatory SVC first-start path.
 
 `fiber_schedule()` validates common running state, asks the selected port to
-validate Thread/mask preconditions, and requests PendSV. It does not select a
-context or invoke the scheduler hook in Thread mode.
+validate Thread/mask preconditions, and calls `fiber_port_request_schedule()`.
+The request mechanism is selected-port policy:
+
+- a privileged non-MPU port may publish `PENDSVSET` directly with its mandatory
+  barriers;
+- an unprivileged or MPU port must issue a port-owned SVC. The SVC handler
+  validates the request and publishes `PENDSVSET` from privileged Handler mode.
+
+Neither request path selects a context or invokes the scheduler hook. The
+scheduler bridge still runs only from PendSV after the current CPU context is
+saved.
 
 PendSV performs this sequence:
 
@@ -491,11 +524,20 @@ fiber_start()
 
 Each selected-port configuration function must:
 
-1. validate context magic, port identity, and layout;
-2. reject a running or immutable context;
-3. apply the private configuration;
-4. rebuild the port-private seal;
-5. leave the context fully restorable or explicitly unready.
+1. call a common-owned internal lifecycle guard before touching port-private
+   state;
+2. validate context magic, port identity, and layout;
+3. reject a running, runtime-started, or immutable context;
+4. apply the private configuration;
+5. rebuild any initial frame affected by CONTROL, PSPLIM, MPU, security, FP,
+   MVE, PAC, or BTI policy;
+6. rebuild the port-private seal;
+7. leave the context fully restorable or explicitly unready.
+
+The lifecycle guard may have a name such as
+`fiber_internal_context_configuration_require_open()`. Its exact name is not
+frozen, but its ownership is: selected ports must not inspect common current,
+scheduler-hook, or runtime-state globals directly.
 
 The library cannot observe when an application inserts a pointer into its own
 scheduler data structure. The application must not mutate a context after making
@@ -505,6 +547,66 @@ not a synchronization API.
 Possible optional APIs include MPU region configuration, privilege/security
 policy, and secure-context allocation. They are selected-port APIs and do not
 expand the five-function common surface.
+
+## MPU And Unprivileged Runtime Rules
+
+The opaque selected-port scheme supports MPU ports, but opaque layout alone is
+not sufficient. Every production MPU port must also enforce these rules:
+
+- context construction, optional MPU/security configuration, scheduler-hook
+  installation, and `fiber_start()` are privileged pre-start operations;
+- an unprivileged `fiber_schedule()` reaches privileged code through a
+  port-owned SVC and never writes SCB/NVIC state directly;
+- the yield SVC validates its instruction, service number, frame provenance,
+  and allowed origin before pending PendSV;
+- the scheduler callback and current-context publication remain common-owned
+  and execute only after PendSV has saved the complete outgoing context;
+- common runtime state, scheduler-hook state, immutable context metadata, and
+  port-private context state reside in privileged or unprivileged-read-only
+  memory. Unprivileged fibers must not be able to modify them directly;
+- the scheduler hook, its user state, and the complete hook call graph are
+  trusted privileged code because PendSV invokes them in Handler mode. A port
+  must not call untrusted fiber code while privileged;
+- selected-port context layout owns MPU regions, privilege/CONTROL state,
+  system-call state, PSPLIM, secure-context handles, PAC keys, and FP/MVE state
+  required by that profile;
+- static-lifetime secure context is compatible with this freeze. Dynamic secure
+  context deletion remains outside the five-function lifecycle.
+
+`fiber_current()` may return an identity pointer to unprivileged code, but the
+selected public type contract and MPU mapping must prevent writable access to
+its private fields. A C cast is not a security boundary.
+
+## FreeRTOS Cortex-M Port Coverage Proof
+
+The local FreeRTOS GCC port set at commit `a50edad` confirms that no additional
+common context field is required. Each STM32-relevant family maps to
+selected-port-private state:
+
+| FreeRTOS reference family | STM32-relevant role | Selected-port ownership |
+| --- | --- | --- |
+| `ARM_CM0` | M0/M0+ | Thumb-1 frame, PRIMASK policy, SVC/PendSV assembly |
+| `ARM_CM3` | M3 non-MPU | saved PSP and general-register frame |
+| `ARM_CM3_MPU` | M3 MPU/unprivileged | MPU regions, CONTROL/system-call state, SVC yield |
+| `ARM_CM4F` | M4/M4F non-MPU | saved PSP, EXC_RETURN, optional high FP state |
+| `ARM_CM4_MPU` | M4/M4F MPU | MPU regions, CONTROL, FP state, SVC yield |
+| `ARM_CM7/r0p1` | M7/M7F | FP state, BASEPRI policy, errata 837070 handling |
+| `ARM_CM23` and `ARM_CM23_NTZ` | v8-M Baseline profiles | PSPLIM/CONTROL, optional MPU and SecureContext policy |
+| `ARM_CM33`, `ARM_CM33_NTZ`, and TF-M companion | M33/M33F profiles | PSPLIM/CONTROL, MPU, security-domain and optional FP state |
+| `ARM_CM55`, `ARM_CM55_NTZ`, and TF-M companion | M55/MVE profiles | PSPLIM/CONTROL, MPU, MVE/FP, PAC/BTI and security state |
+
+FreeRTOS secure directories are companion source groups, not independent
+cooperative schedulers. A fiber build selects exactly one runtime port source
+group and, when required, its matching Secure or TF-M companion group. Every
+configuration that changes `FiberContext` layout or saved-state meaning gets a
+distinct layout/feature identity and must participate in the ABI mismatch
+guard.
+
+This proves architectural capacity, not implementation or hardware validation.
+Each family still requires its own line-by-line parity ledger, compile/link
+matrix, generated-assembly audit, trap tests, and board evidence. Dual-core STM32
+devices are supported as one independent single-core fiber runtime per build;
+SMP and cross-core migration remain outside this freeze.
 
 ## Mechanical Migration Sequence
 
@@ -558,12 +660,19 @@ CM33, and CM55 without modifying common context logic.
 
 The compile matrix must prove:
 
-- exactly one selected context type and source group;
+- exactly one selected context type and runtime source group, plus only the
+  matched Secure/TF-M companion sources that define no second callable port ABI;
 - exactly one definition of every mandatory callable port ABI symbol;
 - common core compiles with incomplete `FiberContext`;
 - forbidden common includes of selected complete type headers fail review/probes;
 - selected public type headers compile without CMSIS;
+- the public metadata type header remains type-only and no public selected type
+  header includes an `internal/` header;
 - port context size/alignment/layout identity is self-consistent;
+- negative context alignment, extent-overflow, and context/stack-overlap probes
+  fail before any context or stack byte is modified;
+- unprivileged MPU profiles compile a yield-SVC request path and do not publish
+  PendSV directly from Thread mode;
 - mismatched context header/object ABI fails before precompiled-object support is
   claimed;
 - all source and documentation remain ASCII-only.
