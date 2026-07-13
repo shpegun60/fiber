@@ -119,6 +119,18 @@ FIBER_STATIC_ASSERT(FIBER_PORT_SCHEDULER_BASEPRI <= 255u,
 # error "[fiber]: selected port must define FIBER_PORT_HAS_PAC_KEY_SLOT"
 #endif
 
+#ifndef FIBER_PORT_CONTEXT_ABI_PORT_ID
+# error "[fiber]: selected port must define FIBER_PORT_CONTEXT_ABI_PORT_ID"
+#endif
+
+#ifndef FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION
+# error "[fiber]: selected port must define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION"
+#endif
+
+#ifndef FIBER_PORT_CONTEXT_ABI_FEATURE_MASK
+# error "[fiber]: selected port must define FIBER_PORT_CONTEXT_ABI_FEATURE_MASK"
+#endif
+
 #ifndef FIBER_PORT_EXC_BASE_BYTES
 # error "[fiber]: selected port must define FIBER_PORT_EXC_BASE_BYTES"
 #endif
@@ -253,6 +265,11 @@ FIBER_STATIC_ASSERT((FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 0) ||
 FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PAC_KEY_SLOT == 0) ||
 		(FIBER_PORT_HAS_PAC_KEY_SLOT == 1),
 		"[fiber]: FIBER_PORT_HAS_PAC_KEY_SLOT must be 0 or 1");
+
+FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_PORT_ID != 0u,
+		"[fiber]: selected-port context ABI id must be non-zero");
+FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION != 0u,
+		"[fiber]: selected-port context ABI layout version must be non-zero");
 
 FIBER_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
 		(FIBER_PORT_HAS_PSPLIM == 1),

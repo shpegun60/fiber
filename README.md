@@ -36,7 +36,6 @@ Compile the common runtime sources into the application:
 
 ```text
 fiber/fiber_core.c
-fiber/fiber_stack.c
 fiber/fiber_runtime_state.c
 fiber/fiber_panic.c
 ```
@@ -74,6 +73,31 @@ is the concrete selected `fiber_portmacro.h`; it is private to selected port
 sources and deliberate low-level integration or test code. Common runtime code
 uses the opaque callable `fiber_port_runtime_abi.h` boundary and does not include
 the selected complete port contract.
+
+The common runtime sources also compile without CMSIS. Selected ports provide
+the required CPU barrier and terminal panic-wait operations through the callable
+ABI, so device headers and special-register access stay out of `fiber_core.c`,
+runtime state, and the default panic fallback.
+
+The conservative default also requires the integration to define both selected
+general-registers-only address-map hooks:
+
+```c
+int fiber_addr_plausible_ram(uintptr_t begin, uintptr_t end);
+int fiber_addr_plausible_code(uintptr_t address);
+```
+
+They must accept only valid persistent RAM ranges and executable code addresses
+for the actual linker map. They are called from the PendSV validation path and
+must not use FP/MVE, allocate, block, or call fiber APIs. Defining
+`FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any defaults
+for constrained bring-up only; it is not a production safety setting.
+
+`FiberContext` objects and their PSP stack buffers require persistent storage.
+Use static, global, or application-owned storage that outlives every context
+restore. Automatic local buffers are intentionally not supported; reclaimable
+storage is valid only after the application has permanently stopped that
+context.
 
 The public API is exactly `fiber_init()`, `fiber_current()`,
 `fiber_scheduler_set_pick_next()`, `fiber_start()`, and `fiber_schedule()`.
@@ -259,9 +283,12 @@ the selected port; checking only the Thread/PSP bits is not sufficient. The
 saved hardware frame must also contain `xPSR.T`, stacked Thread-mode IPSR state,
 a PC with bit 0 clear, and enough space for the optional `xPSR.STACKALIGN` word.
 When `FIBER_STACK_CANARY=1`, the low-stack canary is checked on every scheduler
-selection independently of PSPLIM availability. Even when full per-switch boot
-hashing is disabled, the fast check validates boot-record guards and structural
-relationships before any canary or saved-frame memory is read.
+selection independently of PSPLIM availability. The default also recomputes the
+full immutable boot-record hash before each restore. A performance build may
+disable that hash only explicitly; its fast check still validates boot-record
+guards and structural relationships before any canary or saved-frame memory is
+read. Restore validation also checks that the saved stacked PC is a selected
+port-plausible executable address, in addition to its architectural frame bits.
 
 The concrete CM7 PendSV verifies Handler identity and the complete active
 `EXC_RETURN` encoding before saving a source context. If the interrupted Thread
@@ -338,7 +365,7 @@ reason. Direct vectoring to `fiber_svc()` is valid when
 
 - `FIBER_FPU_LAZY = 0`
 - `FIBER_STACK_CANARY = 1`
-- `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 0`
+- `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH = 1`
 - `FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START = 0`
 - `FIBER_ENABLE_CONFIGURABLE_FAULTS = 1`
 - SVC first-start is mandatory for runtime-supported ports

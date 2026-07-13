@@ -130,6 +130,10 @@ FIBER_PORT_HAS_PSPLIM_SLOT
 FIBER_PORT_HAS_SECURE_CONTEXT_SLOT
 FIBER_PORT_HAS_PAC_KEY_SLOT
 
+FIBER_PORT_CONTEXT_ABI_PORT_ID
+FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION
+FIBER_PORT_CONTEXT_ABI_FEATURE_MASK
+
 FIBER_PORT_EXC_BASE_BYTES
 FIBER_PORT_EXC_FP_EXT_BYTES
 FIBER_PORT_EXC_PER_LEVEL_BYTES
@@ -147,6 +151,12 @@ FIBER_PORT_SAVED_SP_MOD8
 Every boolean is normalized to exactly `0` or `1` and statically validated.
 Application/build flags must not predefine canonical selected-port traits; they
 are port outputs, and such a predefinition is a compile error.
+
+The context ABI identifier and layout version must be nonzero and stable for one
+selected source group. Increment the layout version whenever a field offset,
+saved-frame format, required alignment, initial EXC_RETURN semantics, or enabled
+context slot changes. The feature mask records the selected layout facts and may
+legitimately be zero for a minimal port.
 
 These traits describe the current selected-port contract and remain useful for
 port-local static assertions and compile probes. They do not authorize common
@@ -172,6 +182,8 @@ relationships:
 - initial EXC_RETURN selects Thread mode, PSP, and a basic frame;
 - saved EXC_RETURN accepts only the selected port's exact basic encoding and,
   when supported, the corresponding exact extended-FP encoding.
+- the context ABI identifier and layout version are nonzero before any context
+  can be sealed.
 
 ## Stack Geometry
 
@@ -254,57 +266,43 @@ only in PendSV after the outgoing context has been saved.
 
 ## Required Callable Interface
 
-The current transitional selected header provides inline CPU helpers for FPU,
-BASEPRI/PRIMASK, PSPLIM, vector access, stack-frame construction, and PendSV
-publication. Those helpers remain selected-port-owned during migration; they are
-not the final common-runtime interface.
-
-The target common callable ABI accepts opaque context pointers:
+The common runtime sees the current callable ABI below and no selected layout,
+CMSIS, frame, or CPU-register detail. Selected-port-local FPU, BASEPRI/PRIMASK,
+PSPLIM, vector, frame, and PendSV helpers remain implementation details.
 
 ```text
 fiber_port_context_init
 fiber_port_context_validate_restore
+fiber_port_context_validate_save_current
 fiber_port_context_prepare_first_start
+fiber_port_runtime_memory_barrier
+fiber_port_panic_wait
 fiber_port_require_start_environment
+fiber_port_require_start_interrupt_state
 fiber_port_require_schedule_environment
 fiber_port_runtime_prepare
-fiber_port_runtime_validate
-fiber_port_scheduler_state_capture
-fiber_port_scheduler_state_validate
-fiber_port_scheduler_critical_enter
-fiber_port_scheduler_critical_exit
-fiber_port_start_first_context
 fiber_port_request_schedule
-fiber_svc
-fiber_pendsv
-```
-
-The selected internal type-only ABI header must complete the private scheduler
-CPU-state and C critical-state token types. Common code may allocate and pass
-those types, but it must not inspect their fields. An incomplete token cannot be
-instantiated and is not a valid interface.
-
-The selected source group defines every mandatory external ABI symbol exactly
-once. The compile matrix performs a relocatable link and uses `nm` to prove that
-property. As the opaque ABI replaces transitional symbols, the audited symbol
-list must be updated in the same structural commit.
-
-Every context layout also defines immutable port identity, layout version,
-size, alignment, and feature identity. A real versioned-symbol relocation or
-equivalent negative link probe is required before separately compiled or
-precompiled library objects are claimed safe against header/object layout
-mismatch.
-
-The current transitional external symbol set is:
-
-```text
-fiber_port_init_context_frame
+fiber_port_scheduler_set_pick_next
+fiber_port_scheduler_pick_first_from_start
+fiber_port_scheduler_pick_next_from_pendsv
 fiber_exception_runtime_check
 fiber_pendsv_init_lowest_priority
 fiber_port_start_first_context
 fiber_svc
 fiber_pendsv
 ```
+
+The selected source group defines every mandatory external ABI symbol exactly
+once. The compile matrix performs a relocatable link and uses `nm` to prove that
+property, including port-private global boot-record and context-frame helpers.
+Every callable ABI addition or removal updates the audited symbol list in the
+same structural commit.
+
+Every context layout also defines immutable port identity, layout version,
+size, alignment, and feature identity. A real versioned-symbol relocation or
+equivalent negative link probe is required before separately compiled or
+precompiled library objects are claimed safe against header/object layout
+mismatch.
 
 ## Source Layout
 

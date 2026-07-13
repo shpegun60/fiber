@@ -125,6 +125,22 @@
 #define FIBER_PORT_HAS_SECURE_CONTEXT_SLOT 0
 #define FIBER_PORT_HAS_PAC_KEY_SLOT 0
 
+/* Immutable seal identity. A context must never be restored by a port with a
+ * different saved-frame layout or selected CPU feature contract. */
+#define FIBER_PORT_CONTEXT_ABI_PORT_ID 0x434D3033u
+#define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010001u
+#define FIBER_PORT_CONTEXT_ABI_FEATURE_MASK \
+	((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? 1u : 0u) | \
+	 (FIBER_PORT_USES_PSPLIM_REGISTER ? 2u : 0u) | \
+	 (FIBER_PORT_HAS_CONTROL_SLOT ? 4u : 0u) | \
+	 (FIBER_PORT_HAS_SECURE_CONTEXT_SLOT ? 8u : 0u) | \
+	 (FIBER_PORT_HAS_MVE ? 16u : 0u) | \
+	 (FIBER_PORT_HAS_PAC ? 32u : 0u) | \
+	 (FIBER_PORT_HAS_BTI ? 64u : 0u) | \
+	 (FIBER_PORT_RUNS_NONSECURE ? 128u : 0u) | \
+	 (FIBER_PORT_TARGETS_NS_BANK ? 256u : 0u) | \
+	 (FIBER_PORT_HAS_PAC_KEY_SLOT ? 512u : 0u))
+
 #define FIBER_PORT_EXC_BASE_BYTES fiber_portEXC_BASE_BYTES
 #define FIBER_PORT_EXC_FP_EXT_BYTES fiber_portEXC_FP_EXT_BYTES
 #define FIBER_PORT_EXC_PER_LEVEL_BYTES \

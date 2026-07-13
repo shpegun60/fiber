@@ -16,6 +16,23 @@
 #include "../../fiber_runtime_state.h"
 #include "fiber_portmacro.h"
 
+FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+void fiber_port_runtime_memory_barrier(void)
+{
+	__DMB();
+	__COMPILER_BARRIER();
+}
+
+FIBER_NORETURN FIBER_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_panic_wait(void)
+{
+	__DSB();
+	__ISB();
+	for (;;) {
+		__WFE();
+	}
+}
+
 #define fiber_portSTRINGIFY2(x) #x
 #define fiber_portSTRINGIFY(x) fiber_portSTRINGIFY2(x)
 
@@ -73,6 +90,8 @@ void fiber_port_require_schedule_environment(void)
 #if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
+	fiber_port_context_validate_save_current(
+			fiber_internal_port_current_context);
 }
 
 void fiber_port_request_schedule(void)
@@ -348,6 +367,13 @@ void fiber_pendsv(void)
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
 			"cmp   r1, #0                           \n"
 			"beq   90f                              \n" /* no current is a fatal port state */
+
+			/* Validate the running context before the assembly reads its fields.
+			 * This also makes an externally pended PendSV fail closed. */
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_context_validate_save_current \n"
+			"pop   {r0, r1, r2, lr}                 \n"
 
 			"ldr   r2, [r1, %c[offsb]]              \n" /* r2 = current->boot.stack_base */
 			"cmp   r0, r2                           \n"

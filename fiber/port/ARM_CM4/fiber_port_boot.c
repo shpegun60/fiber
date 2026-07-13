@@ -22,19 +22,116 @@
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
 
-/* -------------------------------------------------------------------------- 	*/
-/* Weak defaults for platform hooks (app may override)                         	*/
-/* -------------------------------------------------------------------------- 	*/
-FIBER_WEAK int fiber_addr_plausible_ram(uintptr_t start, uintptr_t end) {
+/* -------------------------------------------------------------------------- */
+/* Optional permissive defaults for bring-up only.                             */
+/* -------------------------------------------------------------------------- */
+#if FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS
+FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+int fiber_addr_plausible_ram(uintptr_t start, uintptr_t end) {
 	(void)start; (void)end; return 1; /* accept any RAM range by default */
 }
 
-FIBER_WEAK int fiber_addr_plausible_code(uintptr_t addr) {
+FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+int fiber_addr_plausible_code(uintptr_t addr) {
 	(void)addr; return 1;             /* accept any code address by default */
 }
+#endif
 
-FIBER_WEAK uintptr_t fiber_fallback_initial_msp(void) {
+FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_fallback_initial_msp(void) {
 	return (uintptr_t)0;              /* default: no usable fallback */
+}
+
+/* Startup MSP ownership is runtime-wide, never a property of one context.
+ * Keeping this plan outside FiberPortBoot prevents a context created before
+ * start from freezing a stale Thread/MSP snapshot. */
+typedef struct FiberPortStartMspPlan {
+	uintptr_t top;
+	uint32_t prepared;
+} FiberPortStartMspPlan;
+
+static FiberPortStartMspPlan fiber_port_start_msp_plan;
+
+static void fiber_port_prepare_start_msp_plan(void)
+{
+	FIBER_REQUIRE(fiber_port_start_msp_plan.prepared == 0u, 'M');
+
+	uintptr_t top;
+#if FIBER_REWIND_MSP
+	uint32_t first = fiber_port_read_initial_msp();
+	__ISB();
+	uint32_t second = fiber_port_read_initial_msp();
+
+	if ((first == 0u) || (first != second)) {
+		const uintptr_t fallback = fiber_fallback_initial_msp();
+		FIBER_REQUIRE(fallback != 0u, 'f');
+		first = (uint32_t)fallback;
+		second = (uint32_t)fallback;
+	}
+	FIBER_REQUIRE(first == second, 'V');
+	top = fiber_stack_align_down((uintptr_t)first);
+#else
+	top = fiber_stack_align_down((uintptr_t)__get_MSP());
+#endif
+
+	FIBER_REQUIRE(top != 0u, 'M');
+	FIBER_REQUIRE((top & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'M');
+	{
+		const uintptr_t check = (top >= 4u) ? (top - 4u) : top;
+		FIBER_REQUIRE(fiber_addr_plausible_ram(check, top) != 0, 'R');
+	}
+
+	fiber_port_start_msp_plan.top = top;
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	fiber_port_start_msp_plan.prepared = 1u;
+	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'n');
+	FIBER_REQUIRE(fiber_port_start_msp_plan.prepared == 1u, 'M');
+
+	const uintptr_t top = fiber_port_start_msp_plan.top;
+	FIBER_REQUIRE(top != 0u, 'M');
+	FIBER_REQUIRE((top & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'M');
+	FIBER_REQUIRE(!(top > ctx->stack_base && top <= ctx->stack_top), 'O');
+	{
+		const size_t gap = (top > ctx->stack_top)
+				? (size_t)(top - ctx->stack_top)
+				: (size_t)(ctx->stack_base - top);
+		FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES, 'G');
+	}
+
+#if FIBER_REWIND_MSP
+	uint32_t first = fiber_port_read_initial_msp();
+	__ISB();
+	uint32_t second = fiber_port_read_initial_msp();
+	if ((first == 0u) || (first != second)) {
+		const uintptr_t fallback = fiber_fallback_initial_msp();
+		FIBER_REQUIRE(fallback != 0u, 'f');
+		first = (uint32_t)fallback;
+		second = (uint32_t)fallback;
+	}
+	FIBER_REQUIRE(first == second, 'V');
+	FIBER_REQUIRE(top == fiber_stack_align_down((uintptr_t)first), 'W');
+#endif
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_context_pointer(const FiberContext *const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'N');
+
+	const uintptr_t begin = (uintptr_t)ctx;
+	FIBER_REQUIRE((begin & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE(begin <= (UINTPTR_MAX - sizeof(*ctx)), 'O');
+	const uintptr_t end = begin + sizeof(*ctx);
+	FIBER_REQUIRE(fiber_addr_plausible_ram(begin, end) != 0, 'C');
 }
 /* -------------------------------------------------------------------------- */
 /* Fault hygiene: clear "sticky" status where present (v7-M/v7E-M/v8-M Main). */
@@ -70,8 +167,8 @@ static inline void fiber_clear_sticky_faults(void)
 #endif
 
 /* -------------------------------------------------------------------------- */
-/* Platform bootstrap: apply fault policy, STKALIGN, UB traps, and FPU policy. */
-/* Idempotent and safe to call multiple times at boot.                        */
+/* One-shot runtime preparation: apply port policy and create the startup MSP */
+/* plan after fiber_start() has established its interrupt preconditions.      */
 /* -------------------------------------------------------------------------- */
 void fiber_port_runtime_prepare(void)
 {
@@ -123,57 +220,23 @@ void fiber_port_runtime_prepare(void)
 	FIBER_REQUIRE((SCB->CCR & SCB_CCR_DIV_0_TRP_Msk) != 0u, 'D');
 #endif
 
-#if FIBER_PORT_HAS_BASEPRI
-	fiber_port_basepri_write(0u);
-	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-#endif /* BASEPRI */
-
-#if FIBER_PORT_HAS_FAULTMASK
-	__set_FAULTMASK(0);
-	{ __DSB(); __ISB(); }
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-#endif /* FAULTMASK */
-
 	/* Let the selected port apply its FPU policy, if any. */
 	fiber_port_fpu_enable_early();
+	fiber_port_prepare_start_msp_plan();
 }
 
 uintptr_t fiber_port_boot_prepare_msp_for_start(const FiberPortBoot* const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
 	fiber_port_boot_check(ctx);
-
-	if (ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND) {
-		uint32_t ra = fiber_port_read_initial_msp();
-		__ISB();
-		uint32_t rb = fiber_port_read_initial_msp();
-
-		if ((ra == 0u) || (ra != rb)) {
-			const uintptr_t fb = fiber_fallback_initial_msp();
-			FIBER_REQUIRE(fb != 0u, 'f');
-			ra = (uint32_t)fb;
-			rb = (uint32_t)fb;
-		}
-
-		const uintptr_t expected = fiber_stack_align_down((uintptr_t)ra);
-		FIBER_REQUIRE(expected == ctx->msp_top, 'W');
-		FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
-		return ctx->msp_top;
-	}
-
-	const uintptr_t cur_msp = fiber_stack_align_down((uintptr_t)__get_MSP());
-	FIBER_REQUIRE(cur_msp == ctx->msp_top, 'K');
-	FIBER_REQUIRE(!(cur_msp > ctx->stack_base && cur_msp <= ctx->stack_top), 'o');
-	{
-		const size_t gap = (cur_msp > ctx->stack_top)
-							 ? (size_t)(cur_msp - ctx->stack_top)
-									 : (size_t)(ctx->stack_base - cur_msp);
-		FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES, 'g');
-	}
-
+	fiber_port_validate_start_msp_for_boot(ctx);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+
+#if FIBER_REWIND_MSP
+	return fiber_port_start_msp_plan.top;
+#else
 	return 0u;
+#endif
 }
 
 static FIBER_GENERAL_REGS_ONLY
@@ -203,8 +266,12 @@ uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *c)
 	h = fiber_boot_hash32_accum(h, (uint32_t)c->avail);
 	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->entry);
 	h = fiber_boot_hash32_accum(h, (uint32_t)(uintptr_t)c->arg);
-	h = fiber_boot_hash32_accum(h, (uint32_t)c->msp_policy);
-	h = fiber_boot_hash32_accum(h, (uint32_t)c->msp_top);
+	h = fiber_boot_hash32_accum(h, c->abi_port_id);
+	h = fiber_boot_hash32_accum(h, c->abi_layout_version);
+	h = fiber_boot_hash32_accum(h, c->abi_context_size);
+	h = fiber_boot_hash32_accum(h, c->abi_context_alignment);
+	h = fiber_boot_hash32_accum(h, c->abi_feature_mask);
+	h = fiber_boot_hash32_accum(h, c->abi_initial_exc_return);
 	h = fiber_boot_hash32_accum(h, (uint32_t)c->magic);
 	h = fiber_boot_hash32_accum(h, (uint32_t)c->version);
 	h = fiber_boot_hash32_accum(h, (uint32_t)c->guard_lo);
@@ -240,12 +307,16 @@ void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx)
 	FIBER_REQUIRE(ctx->avail == (size_t)(ctx->stack_top - ctx->stack_base), 'a');
 	FIBER_REQUIRE(ctx->entry != NULL, 'E');
 	FIBER_REQUIRE((((uintptr_t)ctx->entry) & 1u) != 0u, 'e');
-	FIBER_REQUIRE((ctx->msp_policy == FIBER_PORT_MSP_POLICY_VALIDATE) ||
-			(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND), 'M');
-	FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-	FIBER_REQUIRE((ctx->msp_top &
-			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
-			'M');
+	FIBER_REQUIRE(ctx->abi_port_id == FIBER_PORT_CONTEXT_ABI_PORT_ID, 'q');
+	FIBER_REQUIRE(ctx->abi_layout_version == FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION,
+			'q');
+	FIBER_REQUIRE(ctx->abi_context_size == (uint32_t)sizeof(FiberContext), 'q');
+	FIBER_REQUIRE(ctx->abi_context_alignment == (uint32_t)_Alignof(FiberContext),
+			'q');
+	FIBER_REQUIRE(ctx->abi_feature_mask == FIBER_PORT_CONTEXT_ABI_FEATURE_MASK,
+			'q');
+	FIBER_REQUIRE(ctx->abi_initial_exc_return == FIBER_PORT_INITIAL_EXC_RETURN,
+			'q');
 }
 
 FIBER_GENERAL_REGS_ONLY
@@ -255,58 +326,6 @@ void fiber_port_boot_record_check(const FiberPortBoot *ctx)
 	FIBER_REQUIRE(ctx->hash == fiber_port_boot_record_compute_hash(ctx), 'h');
 }
 
-
-/* -------------------------------------------------------------------------- */
-/* MSP planning (called by constructor)                                       */
-/* - For REWIND: read VTOR[0] twice (stability), else require fallback.       */
-/* - For VALIDATE: snapshot current MSP.                                      */
-/* Both paths: plausibility, non-overlap, minimum gap to PSP.                 */
-/* -------------------------------------------------------------------------- */
-static void fiber_port_boot_plan_msp(FiberPortBoot* const ctx)
-{
-#if FIBER_REWIND_MSP
-	ctx->msp_policy = FIBER_PORT_MSP_POLICY_REWIND;
-
-	uint32_t msp0a = fiber_port_read_initial_msp();
-	__ISB();
-	uint32_t msp0b = fiber_port_read_initial_msp();
-
-	if ((msp0a == 0u) || (msp0a != msp0b)) {
-		const uintptr_t fb = fiber_fallback_initial_msp();  /* fallback must provide non-zero MSP */
-		FIBER_REQUIRE(fb != 0u, 'f');
-		msp0a = (uint32_t)fb;
-		msp0b = (uint32_t)fb;
-	}
-	FIBER_REQUIRE(msp0a == msp0b, 'V');
-
-	ctx->msp_top = fiber_stack_align_down((uintptr_t)msp0a);
-#else
-	ctx->msp_policy = FIBER_PORT_MSP_POLICY_VALIDATE;
-	ctx->msp_top    = fiber_stack_align_down((uintptr_t)__get_MSP());
-#endif
-
-	FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-
-	/* MSP must look like RAM. Use [max(msp-4, msp)..msp] slice to avoid underflow. */
-	{
-		const uintptr_t chk = (ctx->msp_top >= 4u) ? (ctx->msp_top - 4u) : ctx->msp_top;
-		FIBER_REQUIRE(fiber_addr_plausible_ram(chk, ctx->msp_top) != 0, 'R');
-	}
-
-	/* No overlap with PSP region [stack_base..stack_top]. */
-	FIBER_REQUIRE(!(ctx->msp_top > ctx->stack_base && ctx->msp_top <= ctx->stack_top),
-			(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND) ? 'O' : 'o');
-
-	/* Minimum gap MSP<->PSP at least red-zone. */
-	{
-		const size_t gap = (ctx->msp_top > ctx->stack_top)
-							 ? (size_t)(ctx->msp_top - ctx->stack_top)
-									 : (size_t)(ctx->stack_base - ctx->msp_top);
-
-		FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES,
-				(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND) ? 'G' : 'g');
-	}
-}
 
 /* -------------------------------------------------------------------------- */
 /* Constructor                                                                */
@@ -381,10 +400,13 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	}
 
-	/* MSP policy planning + checks (same semantics as runtime path) */
-	fiber_port_boot_plan_msp(&ctx);
-
 	/* Seal with metadata (magic/version/canaries/hash) */
+	ctx.abi_port_id = FIBER_PORT_CONTEXT_ABI_PORT_ID;
+	ctx.abi_layout_version = FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION;
+	ctx.abi_context_size = (uint32_t)sizeof(FiberContext);
+	ctx.abi_context_alignment = (uint32_t)_Alignof(FiberContext);
+	ctx.abi_feature_mask = FIBER_PORT_CONTEXT_ABI_FEATURE_MASK;
+	ctx.abi_initial_exc_return = FIBER_PORT_INITIAL_EXC_RETURN;
 	ctx.magic    = FIBER_PORT_BOOT_RECORD_MAGIC;
 	ctx.version  = FIBER_PORT_BOOT_RECORD_VERSION;
 	ctx.sealed   = 0u;                /* not sealed until hash is set */
@@ -458,42 +480,6 @@ void fiber_port_boot_check(const FiberPortBoot* const ctx)
 		FIBER_REQUIRE(ctx->avail >= need, 'h');
 	}
 
-	/* MSP plan invariants */
-	{
-		FIBER_REQUIRE((ctx->msp_policy == FIBER_PORT_MSP_POLICY_VALIDATE) ||
-				(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND), 'p');
-
-		FIBER_REQUIRE(ctx->msp_top != 0u, 'M');
-		FIBER_REQUIRE((ctx->msp_top % FIBER_PORT_STACK_ALIGNMENT) == 0u,
-				'A');
-
-		const uintptr_t chk = (ctx->msp_top >= 4u) ? (ctx->msp_top - 4u) : ctx->msp_top;
-		FIBER_REQUIRE(fiber_addr_plausible_ram(chk, ctx->msp_top) != 0, 'R');
-
-		FIBER_REQUIRE(!(ctx->msp_top > ctx->stack_base && ctx->msp_top <= ctx->stack_top),
-				(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND) ? 'O' : 'o');
-
-		const size_t gap = (ctx->msp_top > ctx->stack_top)
-							 ? (size_t)(ctx->msp_top - ctx->stack_top)
-									 : (size_t)(ctx->stack_base - ctx->msp_top);
-		FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES,
-				(ctx->msp_policy == FIBER_PORT_MSP_POLICY_REWIND) ? 'G' : 'g');
-
-#if FIBER_REWIND_MSP
-		/* Extra paranoia: if we plan to rewind, verify VTOR still points to same MSP. */
-		uint32_t ra = fiber_port_read_initial_msp();
-		__ISB();
-		uint32_t rb = fiber_port_read_initial_msp();
-		if ((ra == 0u) || (ra != rb)) {
-			const uintptr_t fb = fiber_fallback_initial_msp();
-			FIBER_REQUIRE(fb != 0u, 'f');
-			ra = (uint32_t)fb;
-			rb = (uint32_t)fb;
-		}
-		const uintptr_t expected = fiber_stack_align_down((uintptr_t)ra);
-		FIBER_REQUIRE(ctx->msp_top == expected, 'W'); /* plan drifted */
-#endif
-	}
 }
 
 /* -------------------------------------------------------------------------- 	*/
@@ -572,16 +558,35 @@ static FIBER_GENERAL_REGS_ONLY void fiber_port_validate_stack_canary(const Fiber
 #endif
 }
 
+FIBER_GENERAL_REGS_ONLY
+void fiber_port_context_validate_save_current(const FiberContext *ctx)
+{
+	fiber_port_validate_context_pointer(ctx);
+#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+	fiber_port_boot_record_check(&ctx->boot);
+#else
+	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
+	fiber_port_validate_start_msp_for_boot(&ctx->boot);
+
+	/* ctx->sp names the last saved frame and is stale while this fiber runs.
+	 * Validate the live PSP instead, before PendSV assembly reads boot fields. */
+	const uintptr_t psp = (uintptr_t)__get_PSP();
+	FIBER_REQUIRE((psp & ((uintptr_t)sizeof(uint32_t) - 1u)) == 0u, 'A');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
+	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
+}
+
 FIBER_GENERAL_REGS_ONLY void fiber_port_context_validate_restore(FiberContext *ctx)
 {
-	FIBER_REQUIRE(ctx != NULL, 'N');
-	FIBER_REQUIRE(((uintptr_t)ctx & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u, 'A');
+	fiber_port_validate_context_pointer(ctx);
 	FIBER_REQUIRE(ctx->sp != NULL, 'P');
 #if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
 	fiber_port_boot_record_check(&ctx->boot);
 #else
 	fiber_port_boot_record_fast_check(&ctx->boot);
 #endif
+	fiber_port_validate_start_msp_for_boot(&ctx->boot);
 	fiber_port_validate_stack_canary(ctx);
 	const uintptr_t sp = (uintptr_t)ctx->sp;
 	const uintptr_t available_bytes = ctx->boot.stack_top - sp;
@@ -606,21 +611,20 @@ FIBER_GENERAL_REGS_ONLY void fiber_port_context_validate_restore(FiberContext *c
 	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+	FIBER_REQUIRE(fiber_addr_plausible_code((uintptr_t)stacked_pc) != 0, 'c');
 	if ((stacked_xpsr & (1u << 9u)) != 0u) { required_bytes += (uintptr_t)FIBER_EXCEPTION_ALIGNMENT_PAD_BYTES; }
 	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
 }
 
 uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)
 {
-	FIBER_REQUIRE(ctx != NULL, 'N');
-	fiber_port_boot_check(&ctx->boot);
+	fiber_port_context_validate_restore(ctx);
 #if FIBER_PORT_USES_PSPLIM_REGISTER
 	fiber_port_psplim_config((uint32_t)ctx->boot.stack_base);
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(fiber_port_psplim_read() == (uint32_t)ctx->boot.stack_base, 'L');
 #endif
 	const uintptr_t msp_top = fiber_port_boot_prepare_msp_for_start(&ctx->boot);
-	fiber_port_context_validate_restore(ctx);
 	return msp_top;
 }
 

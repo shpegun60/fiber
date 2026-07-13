@@ -1,5 +1,39 @@
 # Fiber Decision Log
 
+## 2026-07-13: Restore Integrity and Common Runtime Safety Baseline
+
+The common runtime and selected ports now use the following non-negotiable
+integrity boundary before additional Cortex-M ports are implemented:
+
+- Common runtime C objects compile without CMSIS or selected context layout.
+  Selected ports provide the CPU barrier and terminal panic-wait ABI, so the
+  weak `fiber_panic()` fallback no longer depends on application `Error_Handler`.
+- `fiber_start()` does not repair a nonzero BASEPRI or FAULTMASK value. Start
+  preconditions fail closed; silently clearing an inherited critical section
+  would violate the caller's interrupt contract.
+- Startup MSP ownership is one runtime-wide selected-port plan built after
+  start preconditions, never a stale field copied into every `FiberContext`.
+- Before a restore validator reads a context or saved frame, it checks context
+  pointer extent and RAM plausibility. Before PENDSVSET, and again inside
+  PendSV before its first current-context field read, the selected port validates
+  the current context seal and live PSP so PendSV assembly never reads
+  unverified current metadata. It seals and fast-checks selected port
+  identity, layout version, context size/alignment, feature mask, and initial
+  EXC_RETURN. The default rehashes immutable boot metadata on every restore.
+- Saved frame validation proves the exact EXC_RETURN, stack bounds, xPSR state,
+  Thumb PC form, and code-address plausibility before exception return.
+- RAM/code plausibility hooks, scheduler bridges, and panic operations reachable
+  from PendSV use the selected general-registers-only ABI. The conservative
+  default requires integration-defined address-map hooks; the permissive weak
+  fallback is an explicit bring-up opt-out. Integration overrides must not
+  execute FP/MVE code or block.
+- Automatic local fiber stacks and the unused heap-only stack helper were
+  removed. A context and its PSP stack require persistent application storage.
+
+The H7 harness now includes a linker-backed saved-PC-address trap mode. H7
+normal and complete trap validation must be rerun after this behavior-affecting
+checkpoint before recording a current runtime-support claim.
+
 ## 2026-07-13: Complete Opaque Common Runtime Boundary
 
 The current v2 source groups now implement the intended three-layer boundary:
@@ -941,7 +975,7 @@ The ARMv7E-M port now has a scheduler-driven PendSV path:
   publishing a target slot.
 - ARMv7E-M PendSV saves the runtime-owned current context, enters the
   handler-side scheduler critical section, calls
-  `fiber_internal_scheduler_pick_next_from_pendsv()`, and restores the returned
+  `fiber_port_scheduler_pick_next_from_pendsv()`, and restores the returned
   context.
 - PendSV refuses to save a source context unless Thread mode is already using
   PSP. A spurious PendSV before the first PSP context is active traps with panic

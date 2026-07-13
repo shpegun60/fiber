@@ -15,6 +15,23 @@
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
 
+FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+void fiber_port_runtime_memory_barrier(void)
+{
+	__DMB();
+	__COMPILER_BARRIER();
+}
+
+FIBER_NORETURN FIBER_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_panic_wait(void)
+{
+	__DSB();
+	__ISB();
+	for (;;) {
+		__WFE();
+	}
+}
+
 #define FBR_STRINGIFY2(x) #x
 #define FBR_STRINGIFY(x) FBR_STRINGIFY2(x)
 
@@ -84,6 +101,8 @@ void fiber_port_require_schedule_environment(void)
 #if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
 #endif
+	fiber_port_context_validate_save_current(
+			fiber_internal_port_current_context);
 }
 
 void fiber_port_request_schedule(void)
@@ -432,6 +451,12 @@ void fiber_pendsv(void)
 			"cmp   r1, #0                           \n"
 			"beq   5f                               \n"
 
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_context_validate_save_current \n"
+			"pop   {r0, r1, r2, r3}                 \n"
+			"mov   lr, r3                           \n"
+
 			"ldr   r2, [r1, %c[offsb]]              \n"
 			"cmp   r0, r2                           \n"
 			"blo   7f                               \n"
@@ -523,6 +548,11 @@ void fiber_pendsv(void)
 			"ldr   r1, [r1]                         \n"
 			"cmp   r1, #0                           \n"
 			"beq   5f                               \n"
+
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_context_validate_save_current \n"
+			"pop   {r0, r1, r2, lr}                 \n"
 
 			"ldr   r2, [r1, %c[offsb]]              \n"
 			"cmp   r0, r2                           \n"

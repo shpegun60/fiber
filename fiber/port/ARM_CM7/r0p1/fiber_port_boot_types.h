@@ -13,11 +13,6 @@
 
 #include "../../../fiber_api_types.h"
 
-typedef enum FiberPortMspPolicy_ {
-	FIBER_PORT_MSP_POLICY_VALIDATE = 0u,
-	FIBER_PORT_MSP_POLICY_REWIND = 1u
-} FiberPortMspPolicy_t;
-
 typedef struct FiberPortBoot {
 	void *begin;
 	void *end;
@@ -26,8 +21,12 @@ typedef struct FiberPortBoot {
 	size_t avail;
 	entry_t entry;
 	void *arg;
-	FiberPortMspPolicy_t msp_policy;
-	uintptr_t msp_top;
+	uint32_t abi_port_id;
+	uint32_t abi_layout_version;
+	uint32_t abi_context_size;
+	uint32_t abi_context_alignment;
+	uint32_t abi_feature_mask;
+	uint32_t abi_initial_exc_return;
 	uint32_t magic;
 	uint16_t version;
 	uint16_t sealed;

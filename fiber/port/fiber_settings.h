@@ -40,6 +40,9 @@
 		defined(FIBER_PORT_HAS_PSPLIM_SLOT) || \
 		defined(FIBER_PORT_HAS_SECURE_CONTEXT_SLOT) || \
 		defined(FIBER_PORT_HAS_PAC_KEY_SLOT) || \
+		defined(FIBER_PORT_CONTEXT_ABI_PORT_ID) || \
+		defined(FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION) || \
+		defined(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK) || \
 		defined(FIBER_PORT_EXC_BASE_BYTES) || \
 		defined(FIBER_PORT_EXC_FP_EXT_BYTES) || \
 		defined(FIBER_PORT_EXC_PER_LEVEL_BYTES) || \
@@ -73,13 +76,23 @@
 # define FIBER_REWIND_MSP 1
 #endif
 
-/* Current ownership and restore-target checks are always active.
- * Set this to 1 to additionally recompute the selected-port boot-record hash on every
- * scheduled restore. Leave 0 to use mandatory metadata and structural checks;
- * full hash checks still run during init/start.
+/* Current ownership and restore-target checks are always active. The safe
+ * default also recomputes the selected-port boot-record hash before every
+ * restore. Set 0 only as a measured performance opt-out: mandatory metadata,
+ * structural, canary, frame, and code-address checks remain active, while full
+ * hash checks still run during init/start.
  */
 #ifndef FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
-# define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
+# define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 1
+#endif
+
+/* Address-map hooks validate context storage, stacks, MSP snapshots, entry
+ * points, and saved PCs before the selected port dereferences them. The safe
+ * default requires an integration-specific RAM and code map. Set 1 only for
+ * constrained bring-up where the selected weak accept-any defaults are an
+ * explicit and temporary trade-off. */
+#ifndef FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS
+# define FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS 0
 #endif
 
 /* -----------------------------------------------------------------------------
@@ -124,6 +137,10 @@
 #if (FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 0) && \
 		(FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH != 1)
 # error "[fiber]: FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"
+#endif
+#if (FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS != 0) && \
+		(FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS != 1)
+# error "[fiber]: FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS must be 0 or 1"
 #endif
 
 /* -----------------------------------------------------------------------------

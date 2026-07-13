@@ -17,7 +17,8 @@ Run the validation first with portable conservative defaults:
 ```c
 #define FIBER_FPU_LAZY 0
 #define FIBER_STACK_CANARY 1
-#define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 0
+#define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 1
+#define FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS 0
 ```
 
 Context barriers, PendSV request serialization, CPACR enable/readback, FPCA
@@ -37,6 +38,11 @@ Before a board run:
 - The STM32H7 application build must pass.
 - `git diff --check` must pass.
 - Source and docs changed by the validation commit must stay ASCII-only.
+- The embedding application must provide general-registers-only RAM and code
+  plausibility hooks backed by the actual linker memory map. The H7 harness
+  validates AXI RAM, non-cacheable AXI RAM, DTCM, SRAMAHB, BKPSRAM, and FLASH.
+  Those hooks must preserve `PRIMASK`, `BASEPRI`, `FAULTMASK`, and `CONTROL`;
+  they can execute from PendSV validation paths.
 - Any behavior-changing first-start or PendSV change must get a fresh board run;
   earlier recorded results become historical until the new checkpoint passes.
 
@@ -99,6 +105,11 @@ The board harness uses compile-time validation modes:
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_PRIMASK_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_FAULTMASK_NEXT
 #define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_BASEPRI_NEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_CONTROL_FIRST
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_HOOK_CONTROL_NEXT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_STACKED_PC_ADDRESS
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_BAD_CURRENT_BOOT
+#define FIBER_VALIDATION_MODE FIBER_VAL_TRAP_DIRECT_PENDSV_BAD_CURRENT_BOOT
 ```
 
 `fiber_live.validation_mode_seen` records the selected mode, and
@@ -131,9 +142,9 @@ Apply the same rule to the hook's complete call graph.
 
 The hook must restore `PRIMASK`, `FAULTMASK`, `BASEPRI`, and `CONTROL` exactly
 to their entry values. The runtime checks this after both
-`pick_next(NULL, user)` and `pick_next(current, user)`. The first/next mask
+`pick_next(NULL, user)` and `pick_next(current, user)`. The first/next hook
 trap modes deliberately violate this contract and must stop with `'r'`, `'t'`,
-or `'B'` respectively.
+`'B'`, or `'l'` respectively.
 
 The first scheduler call comes from `fiber_start()` with `current == NULL`.
 That call selects the first context. Idle and "no work" states must still be
@@ -211,7 +222,7 @@ No real scheduler jump may be silently delayed behind interrupt masks.
 
 During PendSV, the port saves the runtime-owned current context, enters the
 port scheduler critical section, calls
-`fiber_internal_scheduler_pick_next_from_pendsv(current)`, validates the
+`fiber_port_scheduler_pick_next_from_pendsv(current)`, validates the
 returned context, and restores only that context.
 
 Validate these scheduler result cases:
@@ -230,6 +241,8 @@ Validate these scheduler result cases:
   encoding set traps with `'x'`.
 - returned context without `xPSR.T`, with a nonzero stacked IPSR, or with
   stacked PC bit 0 set traps with `'x'`.
+- returned context with a structurally valid stacked PC outside the board's
+  executable code map traps with `'c'`.
 - returned context with insufficient software, hardware, or extended-FP frame
   headroom, including a missing `xPSR.STACKALIGN` word, traps with `'X'` before
   exception return.
@@ -237,6 +250,9 @@ Validate these scheduler result cases:
   also provide PSPLIM.
 - returned context with an unsealed or corrupted boot record traps before PSP is
   restored.
+- corrupting the running context and directly setting `PENDSVSET`, without
+  calling `fiber_schedule()`, traps with `'a'` before PendSV assembly reads
+  current-context metadata for its save path.
 - a scheduler hook that returns with changed `PRIMASK`, `FAULTMASK`, or
   `BASEPRI` traps with `'r'`, `'t'`, or `'B'` before target validation or
   restore. `CONTROL` is also required to remain unchanged and traps with `'l'`.
@@ -250,16 +266,22 @@ The harness keeps first-start and later-PendSV result validation separate:
 - `FIBER_VAL_TRAP_BAD_NEXT` lets first-start enter the first fiber, then traps
   on a later `pick_next(current, user)` with `'P'`.
 - `FIBER_VAL_TRAP_CANARY` damages the running fiber canary and traps with `'c'`
-  when PendSV validates the just-saved current context.
+  in the Thread-mode save-side preflight before `PENDSVSET`.
 - `FIBER_VAL_TRAP_BAD_EXC_RETURN` damages the next saved exception-return word
   and traps with `'x'` before restore.
 - `FIBER_VAL_TRAP_SHORT_FRAME` moves the next saved SP too close to `stack_top`
   and traps with `'X'` before reading or restoring an incomplete frame.
 - `FIBER_VAL_TRAP_BAD_BOOT` corrupts the next context's `avail` relationship
   and traps with `'a'` in the mandatory fast structural boot-record check.
+- `FIBER_VAL_TRAP_BAD_CURRENT_BOOT` corrupts the running context's `avail`
+  relationship and traps with `'a'` in the save-side preflight before PendSV
+  assembly can read that context's metadata.
 - `FIBER_VAL_TRAP_BAD_XPSR_T`, `FIBER_VAL_TRAP_BAD_XPSR_IPSR`, and
   `FIBER_VAL_TRAP_BAD_STACKED_PC` independently damage the saved architectural
   Thread/Thumb frame signature and trap with `'x'`.
+- `FIBER_VAL_TRAP_BAD_STACKED_PC_ADDRESS` supplies an aligned non-Thumb saved
+  PC outside the linker-exported FLASH range and traps with `'c'` through the
+  H7 harness code-address plausibility hook.
 - `FIBER_VAL_TRAP_SHORT_ALIGN_FRAME` supplies a complete base frame whose xPSR
   claims an additional alignment word that is outside the declared stack, and
   traps with `'X'`.
@@ -269,6 +291,8 @@ The harness keeps first-start and later-PendSV result validation separate:
   PendSV scheduler callback and trap with `'t'`.
 - `FIBER_VAL_TRAP_HOOK_BASEPRI_FIRST/NEXT` mutate `BASEPRI` in the first or
   PendSV scheduler callback and trap with `'B'`.
+- `FIBER_VAL_TRAP_HOOK_CONTROL_FIRST/NEXT` mutate `CONTROL` in the first or
+  PendSV scheduler callback and trap with `'l'`.
 
 ## Long-Run H7 Stress
 
@@ -338,6 +362,10 @@ round boundary.
 Status:
 
 - `FIBER_VAL_NORMAL_RUN` passed on the board for this commit.
+
+This record is historical after the port-owned startup-MSP and context-seal ABI
+hardening change. Run the normal mode and the complete trap table again before
+making a current H7 runtime claim for the new revision.
 - Trap modes still need to be rerun after the SVC dispatch hardening before the
   H7 runtime-validation claim is fully restored for `208be61`.
 
@@ -349,8 +377,9 @@ exact CM7 source selection, and initial-frame construction directly from
 state from this older snapshot. Re-run normal mode and all listed trap modes,
 including
 `CANARY`, `BAD_EXC_RETURN`, `SHORT_FRAME`, and `BAD_BOOT`.
-Also run `BAD_XPSR_T`, `BAD_XPSR_IPSR`, `BAD_STACKED_PC`, and
-`SHORT_ALIGN_FRAME` after the saved-frame semantic hardening. The current
+Also run `BAD_XPSR_T`, `BAD_XPSR_IPSR`, `BAD_STACKED_PC`,
+`BAD_STACKED_PC_ADDRESS`, `BAD_CURRENT_BOOT`, and `SHORT_ALIGN_FRAME` after the
+saved-frame semantic hardening. The current
 scheduler-state contract additionally requires all six
 `HOOK_*_FIRST`/`HOOK_*_NEXT` mask-mutation modes.
 

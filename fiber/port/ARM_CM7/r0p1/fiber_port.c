@@ -22,6 +22,23 @@
 FIBER_NORETURN
 void fiber_internal_task_return(void);
 
+FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+void fiber_port_runtime_memory_barrier(void)
+{
+	fiber_portDATA_MEMORY_BARRIER();
+	fiber_portCOMPILER_BARRIER();
+}
+
+FIBER_NORETURN FIBER_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_panic_wait(void)
+{
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	for (;;) {
+		__WFE();
+	}
+}
+
 #define fiber_portSTRINGIFY2(x) #x
 #define fiber_portSTRINGIFY(x) fiber_portSTRINGIFY2(x)
 
@@ -101,6 +118,8 @@ void fiber_port_require_schedule_environment(void)
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	fiber_port_context_validate_save_current(
+			fiber_internal_port_current_context);
 }
 
 void fiber_port_request_schedule(void)
@@ -418,6 +437,13 @@ void fiber_pendsv(void)
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
 			"cmp   r1, #0                           \n"
 			"beq   90f                              \n" /* no current is a fatal port state */
+
+			/* Validate the running context before the assembly reads its fields.
+			 * This also makes an externally pended PendSV fail closed. */
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_context_validate_save_current \n"
+			"pop   {r0, r1, r2, lr}                 \n"
 
 			"ldr   r2, [r1, %c[offsb]]              \n" /* r2 = current->boot.stack_base */
 			"cmp   r0, r2                           \n"

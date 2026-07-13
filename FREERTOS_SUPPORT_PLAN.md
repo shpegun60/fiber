@@ -110,10 +110,10 @@ Closed hardening items from the FreeRTOS comparison:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The
   matrix compiles this source group for Cortex-M7/Cortex-M7F build-selected
   modes with its port-owned errata workaround always enabled;
-- scheduled context restore uses mandatory selected-port boot-record checks by
-  default; the full selected-port boot-record hash is still checked during
-  init/start and is opt-in for every switch through
-  `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1`;
+- scheduled context restore recomputes the selected-port boot-record hash by
+  default; `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0` is an explicit
+  performance opt-out, while mandatory structural, canary, frame, and saved-PC
+  code-address validation remain active;
 - portable FPU policy defaults to `FIBER_FPU_LAZY = 0`; PendSV publication and
   context-boundary DSB/ISB serialization are mandatory selected-port behavior;
 - source comments no longer claim full "all STM32" validation;
@@ -294,7 +294,7 @@ Closed hardening items from the FreeRTOS comparison:
    - scheduler hook storage and current-context ownership policy;
    - CPU-neutral immutable metadata helpers that do not reveal where the
      selected port embeds that metadata;
-   - portable diagnostics and app-provided RAM/code plausibility hooks.
+   - portable diagnostics and integration-defined RAM/code plausibility hooks.
 
    Keep in the selected port:
 

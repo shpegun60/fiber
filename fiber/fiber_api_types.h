@@ -22,7 +22,7 @@ typedef FiberEntryFn entry_t;
 typedef struct FiberContext FiberContext;
 
 /* The callback definition must use FIBER_SCHEDULER_HOOK_ATTR from
- * fiber_compiler.h. GCC does not propagate target("general-regs-only") through
+ * fiber_api_attributes.h. GCC does not propagate target("general-regs-only") through
  * an indirect function-pointer type, so the complete callback call graph remains
  * an integration responsibility. */
 typedef FiberContext *(*FiberSchedulerPickNextFn)(FiberContext *current, void *user);

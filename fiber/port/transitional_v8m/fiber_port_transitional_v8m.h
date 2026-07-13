@@ -223,6 +223,22 @@ FIBER_DIAG_WARN("[fiber] Selected transitional v8-M port has no SCB->VTOR; falli
 #define FIBER_PORT_HAS_SECURE_CONTEXT_SLOT 0
 #define FIBER_PORT_HAS_PAC_KEY_SLOT 0
 
+/* Immutable seal identity. This fixture remains fail-closed until a concrete
+ * v8-M selected port replaces it. */
+#define FIBER_PORT_CONTEXT_ABI_PORT_ID 0x56384D54u
+#define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010001u
+#define FIBER_PORT_CONTEXT_ABI_FEATURE_MASK \
+	((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? 1u : 0u) | \
+	 (FIBER_PORT_USES_PSPLIM_REGISTER ? 2u : 0u) | \
+	 (FIBER_PORT_HAS_CONTROL_SLOT ? 4u : 0u) | \
+	 (FIBER_PORT_HAS_SECURE_CONTEXT_SLOT ? 8u : 0u) | \
+	 (FIBER_PORT_HAS_MVE ? 16u : 0u) | \
+	 (FIBER_PORT_HAS_PAC ? 32u : 0u) | \
+	 (FIBER_PORT_HAS_BTI ? 64u : 0u) | \
+	 (FIBER_PORT_RUNS_NONSECURE ? 128u : 0u) | \
+	 (FIBER_PORT_TARGETS_NS_BANK ? 256u : 0u) | \
+	 (FIBER_PORT_HAS_PAC_KEY_SLOT ? 512u : 0u))
+
 #define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
 #define FIBER_PORT_EXC_FP_EXT_BYTES \
 	(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT ? (18u * 4u) : 0u)

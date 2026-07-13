@@ -14,10 +14,12 @@ now exist. Every current port deliberately preserves an ABI-compatible
 `sp + FiberPortBoot` physical layout, while `fiber_types.h` is only a
 compatibility facade.
 
-`fiber_core.c` and `fiber_runtime_state.c` now use only `FiberContext *` and
-the callable selected-port ABI. They do not dereference, size, align, or inspect
-the context or its boot record. The selected port owns construction, record
-sealing, hash selection, dynamic restore validation, and first-start
+`fiber_core.c`, `fiber_runtime_state.c`, and the default `fiber_panic.c` now
+use only `FiberContext *` and the callable selected-port ABI. They compile
+without CMSIS or a selected complete port header. They do not dereference, size,
+align, or inspect the context or its boot record. The selected port owns
+construction, record sealing, hash selection, dynamic restore validation,
+startup MSP planning, CPU barriers, terminal panic waiting, and first-start
 preparation. This structural move requires a fresh hardware validation run; it
 does not itself expand runtime support claims.
 
@@ -199,6 +201,10 @@ pointers to incomplete `FiberContext` objects. It must not expose context fields
 CPU traits, CMSIS registers, or frame offsets. It is the only selected-port
 header included by common runtime implementation files.
 
+Common runtime code gets its ordering barrier and terminal panic wait through
+this callable ABI. It must not reintroduce CMSIS intrinsics, device headers, or
+special-register declarations merely to implement those two operations.
+
 `fiber_core.h` is the public umbrella. It includes the API types, public
 attributes, selected complete context type, and public declarations.
 
@@ -261,6 +267,18 @@ Every immutable seal present must be checked before a validator dereferences
 untrusted saved-frame addresses. A port may use one final hash over common and
 private immutable fields or two independently checked seals.
 
+Current selected ports seal and fast-check a nonzero port identity, layout
+version, `sizeof(FiberContext)`, alignment, feature mask, and initial
+EXC_RETURN in addition to stack and boot metadata. A context from a different
+selected port, layout revision, or incompatible feature configuration therefore
+fails closed before its saved frame is read.
+
+The conservative default recomputes the immutable boot-record hash before every
+restore. An integration may explicitly select the fast structural-only path,
+but that is a performance trade-off, not a safety-equivalent default. Both paths
+must validate the context identity, stack bounds, canary, saved-frame shape, and
+saved PC code-address policy before exception return.
+
 ## Runtime MSP Ownership
 
 Initial MSP rewind or validation is port-runtime startup policy, not a mandatory
@@ -282,11 +300,14 @@ The selected port owns:
 Common code calls port startup operations but never sees VTOR, `__get_MSP()`, an
 MSP address, or `FIBER_REWIND_MSP`.
 
-The first mechanical opaque-context commit may temporarily retain current
-per-context MSP fields to preserve generated behavior. Those fields are
-transitional and are moved to port-owned startup state in a later, separately
-validated behavior-changing commit. The contract does not require MSP fields in
-future context layouts.
+The initial selected ports keep the plan in port-private runtime state, not in
+`FiberPortBoot`. The plan is created once by `fiber_port_runtime_prepare()`
+after start preconditions are checked and before the first scheduler callback.
+For `FIBER_REWIND_MSP=1`, the vector-table source is sampled twice and checked
+again before transfer. For `FIBER_REWIND_MSP=0`, the selected port preserves
+the current MSP and uses a startup-time geometry check instead of comparing
+against a stale context-init snapshot. The contract does not require MSP fields
+in any context layout.
 
 ## Scheduler Ownership
 
@@ -334,7 +355,13 @@ void fiber_port_context_init(FiberContext *ctx,
                              FiberEntryFn entry,
                              void *arg);
 void fiber_port_context_validate_restore(FiberContext *ctx);
+void fiber_port_context_validate_save_current(const FiberContext *ctx);
 uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
+
+FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_memory_barrier(void);
+FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+void fiber_port_panic_wait(void);
 
 void fiber_port_require_start_environment(void);
 void fiber_port_require_start_interrupt_state(void);
@@ -396,6 +423,29 @@ write through `ctx` or into the supplied stack, it must:
 
 Only after those checks pass may the port normalize stack bounds, construct the
 initial frame, initialize metadata, seal the context, or write a canary.
+
+Before `fiber_port_context_validate_restore()` reads `ctx->sp` or any boot
+field, it must validate the context pointer itself: non-NULL, alignment,
+overflow-free `sizeof(*ctx)` extent, and `fiber_addr_plausible_ram()` policy.
+The conservative default requires integration-defined RAM and code plausibility
+hooks. `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` is an explicit bring-up
+opt-out that enables weak accept-any fallbacks; it is not a production claim.
+
+Before publishing `PENDSVSET`, the selected Thread-mode schedule path calls
+`fiber_port_context_validate_save_current()`. PendSV repeats that preflight
+before its first current-context field access, so an externally pended PendSV
+also fails closed. The preflight validates the runtime-owned current pointer,
+sealed boot record, startup MSP plan, and live PSP bounds. It deliberately does
+not read `ctx->sp`, because that field names an older saved frame while the
+context is executing.
+
+`fiber_addr_plausible_ram()` and `fiber_addr_plausible_code()` can run from the
+PendSV restore path. Their declarations and every override must use the selected
+general-registers-only ABI and must not execute FP, MVE, allocation, blocking,
+or scheduler-recursive code. They must preserve `PRIMASK`, `BASEPRI` where
+present, `FAULTMASK` where present, and `CONTROL` exactly. The code hook
+validates each saved stacked PC after the architectural xPSR/Thumb checks and
+before exception return.
 
 `fiber_scheduler_set_pick_next()` accepts one non-NULL hook before start,
 rejects replacement while selecting or running, and publishes the hook and user

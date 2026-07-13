@@ -9,7 +9,7 @@
 
 #include "fiber_api_attributes.h"
 #include "fiber_api_types.h"
-#include "port/fiber_compiler.h"
+#include "port/fiber_port_runtime_abi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,22 +43,22 @@ void fiber_internal_scheduler_commit_current_context(FiberContext *next);
 FIBER_GENERAL_REGS_ONLY
 void fiber_internal_require_schedule_current(void);
 
-__STATIC_FORCEINLINE FiberContext *fiber_internal_runtime_load_current_context(void)
+static inline FiberContext *fiber_internal_runtime_load_current_context(void)
 {
-	__COMPILER_BARRIER();
+	fiber_port_runtime_memory_barrier();
 	return fiber_internal_port_current_context;
 }
 
-__STATIC_FORCEINLINE void fiber_internal_runtime_seed_current_context(FiberContext *ctx)
+static inline void fiber_internal_runtime_seed_current_context(FiberContext *ctx)
 {
-	__DMB();
+	fiber_port_runtime_memory_barrier();
 	fiber_internal_port_current_context = ctx;
-	__DMB();
+	fiber_port_runtime_memory_barrier();
 }
 
-__STATIC_FORCEINLINE uint32_t fiber_internal_scheduler_is_configured(void)
+static inline uint32_t fiber_internal_scheduler_is_configured(void)
 {
-	__COMPILER_BARRIER();
+	fiber_port_runtime_memory_barrier();
 	return (fiber_internal_port_scheduler_pick_next != 0) ? 1u : 0u;
 }
 

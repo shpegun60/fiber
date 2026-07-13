@@ -181,12 +181,13 @@ But implement those concepts in the native `fiber` runtime contract:
 ```text
 fiber_port_context_init()
 fiber_port_context_validate_restore()
+fiber_port_context_validate_save_current()
 fiber_port_context_prepare_first_start()
 fiber_port_runtime_prepare() / fiber_port_runtime_validate()
 fiber_port_start_first_context(first)
 fiber_svc()
 fiber_pendsv()
-fiber_internal_scheduler_pick_next_from_pendsv()
+fiber_port_scheduler_pick_next_from_pendsv()
 selected-port private context seal and dynamic restore checks
 selected-port traits used inside the port and compile validators
 ```

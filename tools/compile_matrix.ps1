@@ -254,6 +254,53 @@ function Test-ContextPortBoundary {
     }
 }
 
+function Test-CommonRuntimeWithoutCmsis {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$BuildRoot
+    )
+
+    # The common runtime must stay compilation-isolated from CMSIS and selected
+    # port headers. It only needs opaque API types plus callable port ABI.
+    $probeDir = Join-Path $BuildRoot "common-runtime-no-cmsis"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+
+    $sources = @(
+        "fiber\fiber_core.c",
+        "fiber\fiber_runtime_state.c",
+        "fiber\fiber_panic.c"
+    )
+    foreach ($source in $sources) {
+        $sourcePath = Join-Path $RepositoryRoot $source
+        $objectPath = Join-Path $probeDir ((Split-Path $source -Leaf) + ".o")
+        $args = @(
+            "-mcpu=cortex-m7",
+            "-mthumb",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-Wall",
+            "-Wextra",
+            "-Wundef",
+            "-Werror=undef",
+            "-Werror=implicit-function-declaration",
+            "-Werror=return-type",
+            "-I$RepositoryRoot",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-c",
+            $sourcePath,
+            "-o",
+            $objectPath
+        )
+
+        & $Compiler @args
+        if ($LASTEXITCODE -ne 0) {
+            throw "Common runtime unexpectedly requires CMSIS or selected-port headers: $source"
+        }
+    }
+}
+
 function Invoke-CompilerProbe {
     param(
         [string]$Compiler,
@@ -294,7 +341,6 @@ Test-ContextPortBoundary -RepositoryRoot $RepoRoot
 $commonSources = @(
     "fiber\fiber_core.c",
     "fiber\fiber_runtime_state.c",
-    "fiber\fiber_stack.c",
     "fiber\fiber_panic.c"
 )
 
@@ -399,6 +445,7 @@ $requiredPortSymbols = @(
     "fiber_port_init_context_frame",
     "fiber_port_context_init",
     "fiber_port_context_validate_restore",
+    "fiber_port_context_validate_save_current",
     "fiber_port_context_prepare_first_start",
     "fiber_port_require_start_environment",
     "fiber_port_require_start_interrupt_state",
@@ -409,6 +456,8 @@ $requiredPortSymbols = @(
     "fiber_port_boot_record_fast_check",
     "fiber_port_boot_record_check",
     "fiber_port_runtime_prepare",
+    "fiber_port_runtime_memory_barrier",
+    "fiber_port_panic_wait",
     "fiber_port_require_schedule_environment",
     "fiber_port_request_schedule",
     "fiber_port_scheduler_set_pick_next",
@@ -425,6 +474,10 @@ try {
     Write-Host "Compiler: $gcc"
     Write-Host "CMSIS:    $cmsis"
     Write-Host "Build:    $buildRoot"
+
+    Write-Host "== common-runtime / no-cmsis =="
+    Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
+        -BuildRoot $buildRoot
 
     if (-not $SettingsOnly) {
         foreach ($cfg in $configs) {
@@ -869,6 +922,7 @@ void Error_Handler(void);
         [pscustomobject]@{ Name = "invalid-fpu-lazy"; Define = "-DFIBER_FPU_LAZY=2"; Diagnostic = "FIBER_FPU_LAZY must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-rewind-msp"; Define = "-DFIBER_REWIND_MSP=2"; Diagnostic = "FIBER_REWIND_MSP must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-hash-on-switch"; Define = "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=2"; Diagnostic = "FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "invalid-permissive-address-map-hooks"; Define = "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=2"; Diagnostic = "FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-canary-boolean"; Define = "-DFIBER_STACK_CANARY=2"; Diagnostic = "FIBER_STACK_CANARY must be 0 or 1"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-canary-zero-redzone"; Define = "-DFIBER_STACK_REDZONE_BYTES=0"; Diagnostic = "enabled stack canary requires at least 8 bytes of red zone"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "invalid-redzone-alignment"; Define = "-DFIBER_STACK_REDZONE_BYTES=7"; Diagnostic = "FIBER_STACK_REDZONE_BYTES must be a multiple of selected-port stack alignment"; Dir = $probe4Dir; Source = $probeSource },
@@ -881,6 +935,10 @@ void Error_Handler(void);
         [pscustomobject]@{ Name = "invalid-svc-number"; Define = "-DFIBER_SVC_START_NUMBER=256"; Diagnostic = "FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "predefined-port-exc-return"; Define = "-DFIBER_PORT_INITIAL_EXC_RETURN=0xFFFFFFDDu"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "predefined-port-frame-size"; Define = "-DFIBER_PORT_MAX_SAVED_CONTEXT_BYTES=1u"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "predefined-port-faultmask"; Define = "-DFIBER_PORT_HAS_FAULTMASK=0"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "predefined-port-context-id"; Define = "-DFIBER_PORT_CONTEXT_ABI_PORT_ID=1u"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "predefined-port-context-layout"; Define = "-DFIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION=1u"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
+        [pscustomobject]@{ Name = "predefined-port-context-features"; Define = "-DFIBER_PORT_CONTEXT_ABI_FEATURE_MASK=1u"; Diagnostic = "selected-port traits must not be predefined"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-validation-switch"; Define = "-DFIBER_VALIDATE_EXCEPTION_SETUP=0"; Diagnostic = "startup validation is mandatory"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-vector-validation"; Define = "-DFIBER_VALIDATE_VECTOR_WIRING=0"; Diagnostic = "startup validation is mandatory"; Dir = $probe4Dir; Source = $probeSource },
         [pscustomobject]@{ Name = "obsolete-pendsv-validation"; Define = "-DFIBER_VALIDATE_PENDSV_VECTOR=0"; Diagnostic = "startup validation is mandatory"; Dir = $probe4Dir; Source = $probeSource },

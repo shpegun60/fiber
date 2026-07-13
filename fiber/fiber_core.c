@@ -11,7 +11,8 @@
 #include "port/fiber_port_runtime_abi.h"
 
 /* Safety net if a task ever returns from its entry function */
-FIBER_NORETURN FIBER_ATTR_SENSITIVE void fiber_internal_task_return(void) { fiber_panic('R'); }
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE
+void fiber_internal_task_return(void) { fiber_panic('R'); }
 
 /* The selected port owns the complete context layout, boot record, stack
  * geometry, integrity seal, and synthetic frame construction. */
@@ -26,7 +27,7 @@ FiberContext* fiber_current(void)
 	return fiber_internal_runtime_load_current_context();
 }
 
-FIBER_NORETURN
+FIBER_API_NORETURN
 void fiber_start(void)
 {
 	fiber_port_require_start_environment();
@@ -47,7 +48,7 @@ void fiber_start(void)
 
 	fiber_internal_runtime_seed_current_context(first);
 	fiber_port_start_first_context(msp_top);
-	FIBER_UNREACHABLE();
+	FIBER_API_UNREACHABLE();
 }
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user)
