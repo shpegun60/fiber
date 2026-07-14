@@ -471,6 +471,31 @@ function Test-PendSvSaveValidationOrdering {
             if ($currentFieldAccesses.Count -ne 0) {
                 throw "PendSV reads or writes a current-context field before save validation in $path"
             }
+
+            # Before the validator, r1 is the untrusted current-context pointer.
+            # Keep the allowed sequence deliberately narrow: test it, preserve it
+            # across the C call, then pass it as r0. This rejects pointer aliases
+            # such as "mov r3, r1; ldr r2, [r3]" that a base-r1-only scan misses.
+            $r1Instructions = [regex]::Matches($beforeValidation,
+                '"(?<instruction>[^"\r\n]*\br1\b[^"\r\n]*)\\n"')
+            foreach ($match in $r1Instructions) {
+                $instruction = $match.Groups['instruction'].Value.Trim()
+                if ($instruction -notmatch '^(?:cmp\s+r1,\s+#0|cbz\s+r1,\s+\S+|push\s+\{(?=[^}]*\br1\b)[^}]+\}|mov(?:s)?\s+r0,\s*r1)$') {
+                    throw "PendSV uses r1 outside the save-validator preflight contract in ${path}: $instruction"
+                }
+            }
+
+            $nullChecks = [regex]::Matches($beforeValidation,
+                '"\s*(?:cmp\s+r1,\s+#0|cbz\s+r1,\s+\S+)\s*\\n"')
+            $preserveCurrent = [regex]::Matches($beforeValidation,
+                '"\s*push\s+\{(?=[^}]*\br0\b)(?=[^}]*\br1\b)(?=[^}]*\blr\b)[^}]+\}\s*\\n"')
+            $passCurrent = [regex]::Matches($beforeValidation,
+                '"\s*mov(?:s)?\s+r0,\s*r1\s*\\n"')
+            if (($nullChecks.Count -ne 1) -or ($preserveCurrent.Count -ne 1) -or
+                    ($passCurrent.Count -ne 1) -or
+                    ($preserveCurrent[0].Index -ge $passCurrent[0].Index)) {
+                throw "PendSV save-validator preflight must null-check, preserve, and pass current in $path"
+            }
         }
     }
 }
@@ -1138,6 +1163,7 @@ void Error_Handler(void);
         "-Wextra",
         "-Wundef",
         "-Werror=undef",
+        "-Werror=unused-function",
         "-Werror=implicit-function-declaration",
         "-Werror=return-type",
         "-DFIBER_PORT_BUILD_SELECTED=1",
@@ -1212,6 +1238,7 @@ void Error_Handler(void);
     $productionSwitchArgs = $probeCommonArgs + @(
         "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
         "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0",
+        "-DFIBER_REWIND_MSP=0",
         "-I$probe4Dir",
         "-I$RepoRoot",
         "-I$(Join-Path $RepoRoot 'fiber')",

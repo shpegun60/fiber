@@ -42,6 +42,8 @@ integrity boundary before additional Cortex-M ports are implemented:
 - The compile matrix statically proves that every selected PendSV path invokes
   `fiber_port_context_validate_save_current()` before its first current stack
   metadata load, that no current-context field is accessed before that call,
+  and that the untrusted `r1` pointer is used only for its null check,
+  preservation across the C call, and transfer to the validator argument,
   and that map-enabled save/restore preflights retain their canary and CPU-state
   guard ordering. Rare MSP fallback hooks have their own local CPU-state guard.
 - Startup MSP-plan validation remains on every restore. A per-context cached

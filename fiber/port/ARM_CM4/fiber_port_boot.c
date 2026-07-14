@@ -576,6 +576,7 @@ static FIBER_GENERAL_REGS_ONLY void fiber_port_validate_stack_canary(const Fiber
 
 /* Integration hooks must not silently alter selected CPU execution state.
  * Address-map hooks run only when enabled; the MSP fallback is guarded locally. */
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH || FIBER_REWIND_MSP
 typedef struct FiberPortValidationCpuState {
 	uint32_t primask;
 	uint32_t control;
@@ -618,6 +619,7 @@ fiber_port_validate_validation_cpu_state(const FiberPortValidationCpuState *cons
 #endif
 	fiber_portCOMPILER_BARRIER();
 }
+#endif
 
 #if FIBER_REWIND_MSP
 static FIBER_GENERAL_REGS_ONLY
