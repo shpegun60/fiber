@@ -44,14 +44,16 @@ void fiber_init(FiberContext *ctx,
                 entry_t entry,
                 void *arg);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_current(void);
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                    void *user);
 
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_start(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_schedule(void);
 ```
 
@@ -70,22 +72,24 @@ void fiber_port_context_init(
         entry_t entry,
         void *arg);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void);
 
-FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
 void fiber_port_require_scheduler_configuration_environment(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_prepare_start(void);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_runtime_select_first(void);
 
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_start_first(FiberContext *first);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void);
 ```
 
@@ -103,6 +107,38 @@ These declarations are CPU-neutral. The generic ABI must not expose:
 All other port helpers are private to the selected port. They may be split
 across C, inline assembly, dedicated assembly, boot, exception, FPU, MPU,
 security, or errata files without expanding this ABI.
+
+The attributes above are part of the ABI, not optional decoration. The public
+`fiber_current()`, `fiber_start()`, and `fiber_schedule()` entry points use the
+same sensitive, general-registers-only contract. `fiber_current()` needs it so
+an unprivileged MPU profile does not acquire hidden privileged instrumentation.
+So do every common reverse helper and private
+port helper reachable after start reconciliation, from SVC/PendSV, or between a
+schedule-request precondition check and the architectural request. Those paths
+must not acquire function instrumentation, profiling callbacks, sanitizers,
+stack-protector calls, implicit FP/MVE use, or LTO-generated helper calls.
+The public sensitive bundle includes `noipa`/no-clone/no-ICF protection, or the
+toolchain's verified equivalent, whenever available; `noinline` alone is not an
+LTO boundary.
+
+The initial production freeze is limited to GNU Arm Embedded GCC. Every later
+compiler port requires independent attribute mappings, generated-code audits,
+LTO/section-GC proofs, and hardware evidence; evidence from one GCC version or
+compiler family is not inherited automatically by another toolchain.
+
+`FIBER_SCHEDULER_HOOK_ATTR` includes both `FIBER_API_ATTR_SENSITIVE` and
+`FIBER_GENERAL_REGS_ONLY`. Because an indirect function-pointer type does not
+propagate target attributes, the application must compile the complete hook
+call graph under the same restrictions. Port/application integration hooks
+that can run from these paths expose and use an equivalent selected-port
+sensitive hook attribute. A plain `FIBER_GENERAL_REGS_ONLY` declaration is not
+sufficient evidence.
+
+`fiber_api_attributes.h` is the single definition point for the public
+`FIBER_SCHEDULER_HOOK_ATTR` and common ABI attribute bundles. A selected
+`fiber_compiler.h` may provide port-private mappings, but must not independently
+redefine the public macro. This prevents include order from silently changing
+the scheduler callback ABI.
 
 ## Optional Selected-Port Extension ABIs
 
@@ -166,8 +202,10 @@ normative:
   rejected after the context becomes running or immutable;
 - any extension callable from an unprivileged fiber enters privileged port code
   only through a validated port-owned SVC service;
-- extension service numbers share one selected-port SVC dispatch table and are
-  checked for uniqueness at compile time.
+- mandatory start, unprivileged yield, unprivileged task-return, and optional
+  extension service numbers share one selected-port SVC dispatch namespace and
+  are checked for uniqueness at compile time. Unsupported services have no
+  dispatch entry, and an unknown immediate fails closed.
 
 The base CPU port still owns all mechanics required to run the profile. For
 example, an MPU profile always saves/restores its MPU and privilege state, and
@@ -187,13 +225,23 @@ The resulting build model is explicit:
 | Selected profile | Mandatory runtime ABI | Reverse ABI v1 | Optional public extension |
 | --- | --- | --- | --- |
 | CM0/CM3/CM4/CM7 privileged | required | required | none |
-| CM3/CM4 MPU profile | required | required | MPU header/source |
-| CM33 Non-secure with fiber SecureContext | required | required | MPU and/or SecureContext header/source plus Secure companion |
-| CM33/CM55 NTZ with TF-M | required | required | MPU and/or TF-M integration header/source; no fiber Secure companion |
+| CM0/CM3/CM4/M7 MPU profile | required | required | MPU header/source |
+| ARM_CM23/33/35P/52/55/85 Secure-only runtime | required | required | MPU header/source when enabled; no cross-image companion |
+| ARM_CM23/33/35P/52/55/85 Non-secure with fiber SecureContext | required | required | MPU and/or SecureContext header/source plus matching Secure companion |
+| ARM_CM23/33/35P/52/55/85 Non-secure without SecureContext | required | required | MPU header/source when enabled; no Secure companion |
+| ARM_CM23/33/35P/52/55/85 NTZ Non-secure | required | required | MPU header/source when enabled; no fiber Secure companion |
+| ARM_CM33/52/55/85 NTZ source group with TF-M | required | required | MPU and/or TF-M integration header/source; no fiber Secure companion |
 
 This table describes profile ownership, not an automatic hardware probe. A
 future port adds another row/profile rather than making common runtime branch on
 CPU capabilities.
+
+The local FreeRTOS build deliberately reuses each applicable `_NTZ` CPU source
+group for two exact profiles: a non-TrustZone Non-secure build and, for CM33,
+CM52, CM55, and CM85, a TrustZone-enabled TF-M build with an additional TF-M
+wrapper. Reusing source files does not make those profiles ABI-equivalent. Their
+build manifests, configuration values, integration artifacts, and context
+feature identities remain distinct.
 
 When an optional selected-port API mutates a context, it needs one
 common-owned lifecycle decision without gaining access to common scheduler
@@ -252,10 +300,15 @@ The three extension classes have different boundaries:
    its own selected-port integration header; otherwise it remains private to
    `fiber_port_runtime_prepare_start()`.
 
-Static-lifetime fibers do not require a mandatory destroy operation. A future
-dynamic SecureContext or context-deletion feature must define its own optional
-lifecycle ABI and cannot be smuggled into a CPU port or the frozen five-function
-common lifecycle.
+Static-lifetime fibers do not require a mandatory destroy operation. A
+fiber-owned SecureContext profile allocates or binds its Secure stack/context
+once during privileged pre-start configuration and stores only the resulting
+handle in selected-port-private context state. The Secure companion may use a
+fixed pool, application-provided Secure storage, or another explicitly selected
+allocator; the mandatory fiber runtime neither requires nor exports a heap.
+A future dynamic SecureContext free operation or context-deletion feature must
+define its own optional lifecycle ABI and cannot be smuggled into a CPU port or
+the frozen five-function common lifecycle.
 
 ## ABI Function Semantics
 
@@ -399,14 +452,14 @@ fiber_internal_runtime_port_abi_v1_anchor;
  * fiber_internal_runtime_current_context_slot
  */
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_runtime_select_scheduler_candidate(
         FiberContext *current);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_internal_runtime_publish_current_context(FiberContext *next);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_internal_runtime_require_current_context(void);
 
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -422,14 +475,28 @@ available. A selected port includes this one reverse header instead of
 redeclaring common callable symbols locally. The current-slot C declaration is
 kept in a common-private state header that selected ports cannot include.
 
+An application strong override of `fiber_panic()` must include the canonical
+declaration and preserve its exact noreturn, sensitive, and
+general-registers-only contract through the complete override call graph. A
+matching symbol name alone is not sufficient. The generated-code matrix must
+exercise an application override and reject hidden instrumentation, sanitizer,
+stack-protector, profiler, FP, MVE, or returning behavior on that path.
+
 The exact semantics are:
 
-- `fiber_internal_runtime_port_abi_v1_anchor` is a link-time version guard. An
-  object that implements at least one mandatory common-to-port ABI function and
-  is therefore referenced by common runtime must retain a relocation to this
-  exact symbol. The relocation must not depend on handler archive extraction. A
-  v1 port cannot silently link against a differently versioned common runtime,
-  including under section garbage collection or LTO.
+- `fiber_internal_runtime_port_abi_v1_anchor` is the link-time version guard for
+  the complete mandatory bidirectional runtime contract: the eight
+  common-to-port functions, the reverse v1 symbols, their calling conventions,
+  required attributes, and normative semantics. Its declaration lives on the
+  reverse boundary because the common runtime defines it and every selected
+  port must reference it; its version scope is not reverse-only. An object that
+  implements at least one mandatory common-to-port ABI function and is therefore
+  referenced by common runtime must retain a relocation to this exact symbol.
+  The relocation must not depend on handler archive extraction. Any incompatible
+  signature, semantic, calling-convention, or required-attribute change in
+  either direction creates a new anchor spelling and removes the old spelling
+  from that ABI generation. Old-common/new-port and new-common/old-port links
+  must both fail, including under section garbage collection or LTO.
 - `fiber_internal_runtime_current_context_slot` is common-owned storage exposed
   to selected ports only by its frozen assembly symbol name. Selected inline
   assembly or `.S` code may load the slot to obtain the context being saved or
@@ -448,9 +515,14 @@ The exact semantics are:
 - `fiber_internal_runtime_require_current_context()` implements the common
   lifecycle precondition used by the port's Thread-mode schedule request. It
   does not inspect CPU masks or registers.
-- `fiber_internal_task_return()` is the common no-return target seeded into a
-  synthetic context frame. It reports panic code `'R'` if an entry function
-  returns.
+- `fiber_internal_task_return()` is the common no-return sink for an entry
+  function that returns and reports panic code `'R'`. A privileged profile may
+  seed it directly into the synthetic frame. An unprivileged profile must seed
+  a port-owned unprivileged return veneer instead; that veneer issues the
+  selected return SVC, and the validated privileged SVC dispatch calls this
+  common sink. Unprivileged Thread mode never branches directly into privileged
+  common text. This is private port mechanics and does not add a ninth
+  common-to-port operation.
 - `fiber_panic()` is the no-return diagnostic escape used by port C and naked
   assembly. Port callers hold a strong reference. The common fallback definition
   is weak so an application may replace it with one strong definition, but a
@@ -473,6 +545,12 @@ int fiber_addr_plausible_code(uintptr_t address);
 uintptr_t fiber_fallback_initial_msp(void);
 ```
 
+Future selected profiles may add similarly port-owned integration hooks, such
+as a PAC-key generator, Secure-storage provider, or platform vector-remap
+validator. Those hooks are not common reverse ABI. Their exact declarations,
+trust level, sensitive-function attributes, override rules, and state-preservation
+proofs live in the concrete port manifest and parity ledger.
+
 Their weak defaults, override policy, CPU-state preservation checks, and linker
 map semantics belong to the selected port/integration contract. Secure gateway
 symbols similarly belong to a separately versioned cross-image ABI. Neither
@@ -491,9 +569,10 @@ port:
    provides exactly one effective weak-or-application-strong `fiber_panic()`.
 4. A guaranteed always-linked mandatory ABI object, independently of the
    handler object, retains the relocation to
-   `fiber_internal_runtime_port_abi_v1_anchor`. Replacing common runtime with a
-   deliberately mismatched v2-only fixture must fail before handler extraction
-   is considered.
+   `fiber_internal_runtime_port_abi_v1_anchor`. Both mismatch directions are
+   negative-link tests: a v1 port with a v2-only common fixture, and a v2-only
+   port fixture with a v1 common runtime. Both must fail before handler
+   extraction is considered.
 5. The reverse header does not make the current slot a C lvalue. A negative
    selected-port C fixture that attempts to read, assign, or take its address
    without a forbidden redeclaration must fail to compile. A source audit
@@ -509,6 +588,16 @@ port:
    fails; a supported extension fixture links only when its matching selected
    port source/companion, optional common lifecycle object, and ABI identities
    are present.
+9. Adversarial builds with function instrumentation, stack protection,
+   profiling, sanitizers, and LTO prove that the sensitive current/start/schedule,
+   scheduler-hook, reverse-helper, SVC, and PendSV call graph contains no hidden
+   instrumentation/runtime calls and no FP/MVE instructions.
+10. One guaranteed always-linked mandatory port identity object defines the
+    exact selected-profile/context ABI anchor. Every other independently
+    compiled object in the mandatory selected-port source group and the
+    application/build expectation object retain relocations to it. Negative
+    links reject stale object mixtures even when their generic callable symbols
+    and the common runtime ABI version still match.
 
 The reverse ABI is deliberately smaller than the current transitional
 `fiber_runtime_state.h` surface. Mechanical migration collapses begin/end first
@@ -553,7 +642,7 @@ CPU configuration is changed. Trap tests must freeze this precedence.
 The target common flow is equivalent to:
 
 ```c
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_start(void)
 {
     FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');
@@ -627,6 +716,16 @@ runtime ABI. Exactly one selected handler object may define it. The common ABI
 version anchor and the handler extraction anchor are independent proofs and may
 not be combined into one relocation.
 
+The `v1` suffix also identifies the selected port's internal mandatory-object
+to handler-object bundle contract. If their private calling convention, helper
+symbols, frame assumptions, or handler semantics become incompatible, the
+mandatory object must reference a new bundle-anchor spelling and the new handler
+object must define it. This is port-internal versioning, not common ABI
+versioning. A separately compiled handler object that calls any reverse/common
+ABI symbol must additionally retain its own relocation to the matching
+`fiber_internal_runtime_port_abi_vN_anchor`; extraction through the bundle anchor
+does not prove common ABI compatibility.
+
 The build proof must cover:
 
 - a static archive;
@@ -634,6 +733,10 @@ The build proof must cover:
 - LTO where supported;
 - startup weak aliases;
 - no application handler wrappers.
+- stale mandatory-object/new-handler and new-mandatory-object/stale-handler
+  negative-link fixtures;
+- a handler-object/common-runtime ABI mismatch negative-link fixture whenever
+  the handler object calls the reverse ABI.
 
 The selected strong handlers must remain in the final ELF and must satisfy the
 active vector-table relocations. A negative archive fixture with startup weak
@@ -662,6 +765,15 @@ selected port is linked.
 For every selected port, the matrix must prove:
 
 - exactly one definition of each of the eight generic ABI functions;
+- one retained relocation from an always-linked mandatory port object to the
+  matching bidirectional runtime ABI anchor, with both version-mismatch
+  directions failing to link;
+- one exact selected-profile/context ABI definition in an always-linked
+  mandatory port identity object, with matching relocations from every other
+  independently compiled mandatory port object and from the build-owned
+  expectation object;
+- stale selected-port object mixtures fail to link even when the common runtime
+  ABI generation is unchanged;
 - one strong `SVC_Handler` definition;
 - one strong `PendSV_Handler` definition;
 - no application wrappers are required;
@@ -670,10 +782,16 @@ For every selected port, the matrix must prove:
 - a separate handler object, when used, is extracted through
   `fiber_port_handler_bundle_v1_anchor`, not through reliance on generic handler
   names;
+- a separately compiled handler object is version-matched both to its mandatory
+  selected-port object through the bundle anchor and to common runtime through
+  its own runtime ABI relocation when it calls reverse symbols;
 - synthetic vector slots 11 and 14 resolve to the expected selected-port
   handler symbols;
 - `--gc-sections` does not discard required handlers;
 - LTO does not discard or merge away required handler ownership;
+- generated code for every sensitive start/SVC/PendSV-reachable function is
+  free of instrumentation, sanitizer, stack-protector, profiler, FP, and MVE
+  calls/instructions;
 - no removed transitional ABI symbol is referenced by common objects.
 
 ### Board Runtime Proof
@@ -707,7 +825,10 @@ Each slice is independently compile/link checked. Runtime behavior changes are
 not mixed with unrelated layout work.
 
 1. Narrow `fiber_port_runtime_abi.h` to the eight generic functions while
-   adding private selected-port headers for the displaced declarations.
+   adding private selected-port headers for the displaced declarations. Make
+   `fiber_api_attributes.h` the only public scheduler-hook attribute definition
+   and apply the frozen sensitive/general-registers-only attributes to the
+   public and mandatory ABI declarations in the same slice.
 2. Add common-owned `fiber_runtime_port_abi.h`, implement its exact v1 symbols
    and link anchor, then rename common-owned scheduler globals and update exact
    assembly references without changing publication order. Keep the current
@@ -746,18 +867,37 @@ The common runtime boundary is frozen only when:
   this document, and no selected port includes the transitional runtime-state
   header;
 - every selected port retains the v1 link-anchor relocation and passes exact
-  reverse-symbol, application-hook, section-GC, and LTO allowlist proofs;
+  bidirectional-version, reverse-symbol, application-hook, section-GC, and LTO
+  allowlist proofs;
+- one exact selected-profile/context cohort anchor is defined by the mandatory
+  identity object and retained by every other mandatory port object plus the
+  build-owned expectation object; stale mixtures fail to link;
+- every sensitive current, start, schedule, scheduler-hook, SVC, and PendSV call path
+  passes the no-instrumentation, no-stack-protector, no-sanitizer, no-profiler,
+  no-FP, and no-MVE generated-code proof;
+- an application `fiber_panic()` override passes the same canonical declaration
+  and generated-code proof;
 - selected ports have no C declaration or address escape for the common current
   slot, and generated assembly passes the load-only/no-store proof;
 - every selected port provides strong exclusive SVC and PendSV handlers;
 - separately archived handlers are forced into the link through the unique
-  handler-bundle anchor rather than startup handler names;
+  handler-bundle anchor rather than startup handler names, and pass stale
+  mandatory/handler bundle mismatch tests;
+- separately compiled handler objects that call reverse symbols retain the
+  matching runtime ABI relocation themselves;
 - wrapper/direct macros and application wrappers are gone;
 - optional MPU, SecureContext, and TF-M extension ABIs remain outside
   `fiber_core.h` and the mandatory eight-function runtime ABI;
 - unsupported ports do not provide silent extension stubs;
 - context-mutating extensions use the versioned optional context-configuration
   lifecycle ABI, while profiles without them build neither optional source;
+- every exact v8-M security role and every layout/privilege-affecting feature
+  combination has its own build manifest and profile/context identity;
+- unprivileged profiles have collision-free start/yield/return/extension SVC
+  dispatch, a return-SVC veneer, and MPU/linker proof that writable stacks cannot
+  modify context or common runtime state;
+- Secure companions and TF-M artifacts pass their separately versioned
+  cross-image gateway/build-manifest compatibility proof;
 - synthetic archive/link/vector/LTO proofs pass for every compiled port;
 - H7 board validation passes after the final handler migration;
 - existing panic ordering is preserved except for the documented

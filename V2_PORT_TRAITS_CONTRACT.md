@@ -32,17 +32,32 @@ The preferred production workflow mirrors FreeRTOS:
 
 1. The build adds the selected port directory to the include path.
 2. The build defines `FIBER_PORT_BUILD_SELECTED=1`.
-3. `fiber_port_selected.h` includes that directory's `fiber_portmacro.h`.
+3. The public `fiber_port_selected.h` includes only that directory's
+   `fiber_port_types.h`. Selected port sources include their local
+   `fiber_portmacro.h` directly through the selected include path.
 4. Each runtime image compiles exactly one matching runtime port source group.
    If the profile needs Secure or TF-M integration, the build graph binds the
    runtime image to one matching companion component or artifact. That companion
    may be built as a separate Secure target or supplied by TF-M; it must not
    define a second callable fiber runtime ABI in the same runtime image.
 
-Step 3 describes the current transitional facade. After the opaque-context
-split, the same selection result feeds separate selected public-type, internal
-ABI-type, and implementation facades. Only selected port sources include
-`fiber_portmacro.h`; common runtime sources include the callable ABI instead.
+The architecture result macro validates the CPU class only. The production
+manifest additionally records the exact selected include path, source group,
+compiler/toolchain identity and version, CPU/FPU/ABI flags, MPU/privilege policy,
+security-domain role,
+FP/MVE/PAC/BTI policy, errata policy, optional companion artifacts, and context
+layout identity. Profiles that differ in any layout-affecting item are distinct
+selected configurations even when they share implementation files.
+
+Build-selected mode is mandatory for production MPU, unprivileged, Secure-only,
+Non-secure, TrustZone, NTZ, TF-M, MVE, PAC, and BTI profiles. Auto/profile/force
+selection may compile-test an architecture class but cannot supply those facts
+or create a runtime-support claim.
+
+The same build selection feeds separate public-type, internal ABI, and
+implementation boundaries. Only selected port sources and compile-contract
+probes include `fiber_portmacro.h`; common runtime sources include the
+CPU-neutral callable ABI instead.
 
 `fiber_port_select.h` remains an auto-detection and test convenience. Forced or
 profile selection is validated against compiler architecture macros unless the
@@ -50,16 +65,17 @@ explicit mismatch escape hatch is enabled for a controlled compile probe.
 
 ## Include Boundary
 
-The current transitional facade is:
+The public selected-type facade is:
 
 ```c
 #include "port/fiber_port_selected.h"
 ```
 
-It includes shared user settings, compiler support, selection, the selected
-port contract, trait validation, and fail-closed feature policy in that order.
+It performs strict selection and includes exactly one public type-only
+`fiber_port_types.h`. It must not expose the selected complete
+`fiber_portmacro.h`, CMSIS, register helpers, or inline assembly.
 
-The target boundary splits that facade into:
+The implemented public/common split and the frozen target boundary are:
 
 ```text
 public fiber_core.h
@@ -69,17 +85,23 @@ public fiber_core.h
 
 common runtime .c
     -> API forward declarations
-    -> selected internal ABI type-only header
-    -> callable port ABI
+    -> CPU-neutral callable port ABI with incomplete FiberContext pointers
 
 selected port .c
     -> selected complete context type
-    -> fiber_portmacro.h and CPU implementation helpers
+    -> fiber_portmacro.h and port-private implementation headers
+    -> CPU implementation helpers
 ```
 
 Common runtime translation units must not include the selected complete context
 type and must not be able to use `sizeof(FiberContext)`, field access, frame
 offsets, CMSIS registers, or inline port assembly.
+
+There is no global `fiber_port_abi_types_selected.h` or selected internal-type
+facade in the frozen design. Declarations displaced while narrowing the callable
+ABI stay inside each concrete port's `fiber_portmacro.h`, `fiber_portasm.h`,
+boot header, or another explicitly port-private header. Common runtime never
+selects or includes those headers.
 
 A selected port may depend on:
 
@@ -157,6 +179,12 @@ selected source group. Increment the layout version whenever a field offset,
 saved-frame format, required alignment, initial EXC_RETURN semantics, or enabled
 context slot changes. The feature mask records the selected layout facts and may
 legitimately be zero for a minimal port.
+
+The combined port identifier, layout version, and feature mask must also
+distinguish every compiler-port ABI setting that can change context alignment,
+calling convention, FP/MVE use, or generated save/restore assumptions. This
+does not require another generic selector macro; it is part of the exact
+selected-profile manifest and context mismatch guard.
 
 These traits describe the current selected-port contract and remain useful for
 port-local static assertions and compile probes. They do not authorize common
@@ -282,6 +310,11 @@ fiber_port_runtime_start_first
 fiber_port_runtime_schedule
 ```
 
+The sensitive/general-registers-only attributes frozen in
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` are part of these callable signatures.
+Changing a required attribute, calling convention, or semantic requires the
+same mandatory bidirectional ABI version bump as changing a parameter list.
+
 The selected source group defines every mandatory external ABI symbol exactly
 once. Port-private helpers are not part of this global ABI allowlist. The final
 matrix also proves strong selected-port `SVC_Handler` and `PendSV_Handler`
@@ -294,6 +327,14 @@ size, alignment, and feature identity. A real versioned-symbol relocation or
 equivalent negative link probe is required before separately compiled or
 precompiled library objects are claimed safe against header/object layout
 mismatch.
+
+That relocation identifies the complete selected-profile object cohort, not
+only the public structure size. One guaranteed always-linked mandatory port
+identity object defines it without compatibility aliases. Every other
+independently compiled mandatory port object retains it, as does one build-owned
+expectation object compiled through the selected public type header. Any
+exact-profile or context-ABI change uses a new symbol spelling so stale port
+object mixtures fail to link.
 
 ## Source Layout
 
@@ -327,20 +368,35 @@ FreeRTOS parity ledger.
 
 ## Port Completion Checklist
 
-For each new concrete STM32 Cortex-M port:
+For each new concrete STM32 Cortex-M port or exact feature profile:
 
 1. Identify the exact FreeRTOS reference directory and commit.
 2. Inventory every macro, helper, handler, context slot, erratum, and security
    conditional in the reference port.
 3. Record each item as adopted, renamed, intentionally omitted, or hardened.
-4. Define all canonical traits without legacy aliases.
-5. Implement SVC first-start and scheduler-driven PendSV.
-6. Define strong selected-port `SVC_Handler` and `PendSV_Handler` symbols.
-7. Add build-selected source-group coverage.
-8. Relocatable-link and verify one ABI definition per symbol, handler archive
-   extraction, vector slots 11/14, duplicate-handler failure, GC retention, and
-   LTO retention.
-9. Inspect generated assembly for context order and FP-free scheduler bridges.
-10. Run profile-specific hardware normal, FP, mask, frame-corruption, and
+4. Record the exact selected-profile manifest, including toolchain identity and
+   version, compiler flags, privilege/security role, enabled context features,
+   companion artifacts, and context ABI identity.
+5. Define all canonical traits without legacy aliases.
+6. Implement SVC first-start and scheduler-driven PendSV.
+7. Define strong selected-port `SVC_Handler` and `PendSV_Handler` symbols.
+8. Add build-selected source-group coverage.
+9. Relocatable-link and verify one ABI definition per symbol, both directions of
+   the mandatory bidirectional ABI mismatch, handler archive
+   extraction, stale mandatory/handler bundle mismatch, handler/common ABI
+   mismatch where applicable, vector slots 11/14, duplicate-handler failure,
+   GC retention, and LTO retention.
+10. Build adversarial instrumentation/SSP/sanitizer/profile configurations and
+    inspect generated code for context order plus a hidden-call-free, FP/MVE-free
+    sensitive start/SVC/PendSV/scheduler-hook call graph.
+11. Run the selected-context header/object mismatch negative-link probe for
+    every layout-affecting configuration, plus stale selected-port object
+    mixture probes for the complete source group.
+12. For an unprivileged profile, prove collision-free start/yield/return SVC
+    dispatch, return through the selected veneer, and MPU/linker isolation of
+    writable stacks from context/runtime state.
+13. For a SecureContext or TF-M profile, prove the separately versioned
+    cross-image gateway and companion manifest before startup.
+14. Run profile-specific hardware normal, FP, mask, frame-corruption, and
     vector-routing tests.
-11. Only then promote the profile from compile-covered to runtime-supported.
+15. Only then promote the profile from compile-covered to runtime-supported.

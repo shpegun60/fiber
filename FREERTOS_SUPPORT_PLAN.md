@@ -140,7 +140,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M3 | Concrete `port/ARM_CM3` SVC/PendSV/frame code is compile/link-covered | Validate on hardware |
 | Cortex-M4F | Concrete `port/ARM_CM4` source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
 | Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
-| Cortex-M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
+| Cortex-M23 | FreeRTOS reference-portability profile with compile-covered transitional SVC/PendSV/frame code; not a current STM32 MCU hardware claim, and PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
 | Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
 
@@ -320,6 +320,21 @@ Closed hardening items from the FreeRTOS comparison:
    uses its own unique extraction anchor; startup weak handler names are not an
    extraction mechanism.
 
+   The v1 anchor versions the complete mandatory bidirectional contract: all
+   eight common-to-port functions, all reverse v1 symbols, calling conventions,
+   required compiler attributes, and normative semantics. The matrix must fail
+   both old-common/new-port and new-common/old-port combinations. The separate
+   context-layout relocation still proves selected public type/header/object
+   compatibility. One always-linked mandatory port identity object defines the
+   exact profile/context anchor; every other mandatory selected-port object and
+   the build-owned expectation object retain it. Stale object mixtures therefore
+   fail even when the generic runtime ABI generation is unchanged.
+
+   The start, schedule, SVC, PendSV, scheduler-hook, and reverse-helper call
+   graph uses sensitive plus general-registers-only attributes. Adversarial
+   instrumentation, stack-protector, sanitizer, profiler, and LTO builds must
+   prove that no hidden runtime calls or FP/MVE instructions enter those paths.
+
    Keep in the selected port:
 
    - the complete `FiberContext` layout and any port-specific boot data;
@@ -354,6 +369,33 @@ Closed hardening items from the FreeRTOS comparison:
 
    The `fiber/port` helper-root convention is reserved for reusable helper code, not
    selected-port fallback behavior.
+
+   Before bulk porting, add exact build-selected manifests. An architecture
+   macro is only a compatibility gate; each production profile records selected
+   include path, source group, compiler/toolchain identity and version,
+   CPU/FPU/ABI flags, MPU/privilege mode, security-domain role,
+   FP/MVE/PAC/BTI and errata policy, context identity, and companion artifacts.
+   Auto/profile/force modes cannot claim production MPU, unprivileged,
+   TrustZone, NTZ, TF-M, MVE, PAC, or BTI support.
+
+   The concrete roadmap includes both configurations hidden inside some
+   FreeRTOS directories:
+
+   - `ARM_CM0` privileged and `ARM_CM0` MPU/unprivileged;
+   - `ARM_CM3` and `ARM_CM3_MPU`;
+   - `ARM_CM4F` and `ARM_CM4_MPU`;
+   - privileged `ARM_CM7/r0p1` and M7 MPU/unprivileged behavior referenced from
+     `ARM_CM4_MPU` with CPUID-validated errata 837070 policy;
+   - exact CM23 Secure-only, Non-secure with/without a SecureContext companion,
+     and NTZ profiles, plus the corresponding CM33/CM55 roles and their TF-M
+     profiles relevant to current STM32 targets;
+   - CM35P, CM52, and CM85 as reference-portability rows without an STM32
+     hardware claim, including the distinct CM52/CM85 TF-M build profiles in
+     the local FreeRTOS graph.
+
+   Initial production compiler evidence is GNU Arm Embedded GCC only. Other
+   compiler families need their own compiler-port matrix before inheriting a CPU
+   runtime claim.
 
 2. Keep Cortex-M7 r0p1 errata policy explicit.
 
@@ -437,7 +479,8 @@ Closed hardening items from the FreeRTOS comparison:
    void fiber_schedule(void);
    void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                       void *user);
-   FIBER_NORETURN void fiber_start(void);
+   FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+   void fiber_start(void);
    ```
 
    `fiber_start()` calls the configured scheduler hook with `current == NULL`,
@@ -502,6 +545,13 @@ Closed hardening items from the FreeRTOS comparison:
 
    The direct trampoline is no longer available. New ports must add an SVC
    first-start path before they can become runtime-supported.
+
+   MPU/unprivileged ports additionally own yield and task-return SVC services.
+   Their selected service namespace must reject collisions and unknown
+   immediates, and a returned unprivileged fiber must reach the common `'R'`
+   sink through a port-owned veneer rather than branching into privileged
+   common text. Linker/MPU validation must also keep writable stacks separate
+   from writable context and scheduler state.
 
 4. Consider moving PendSV assembly into a dedicated assembly source.
 

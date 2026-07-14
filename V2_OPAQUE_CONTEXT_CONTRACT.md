@@ -71,7 +71,14 @@ The common-core freeze covers:
 - no context deletion or runtime shutdown;
 - no common scheduler queues, lists, priorities, or timing policy;
 - MPU, TrustZone, PAC, and MVE through port-private layout and optional APIs;
-- GCC/Clang-compatible selected-port implementations.
+- GNU Arm Embedded GCC selected-port implementations as the initial production
+  compiler-port scope.
+
+Clang/armclang, Arm Compiler 5/6, and IAR are separate compiler-port validation
+targets. Shared attribute helpers may recognize them, but that does not create a
+support claim. Each compiler needs equivalent naked-assembly, sensitive-function,
+general-registers-only, LTO, archive-extraction, and generated-code proofs before
+it can reuse a CPU-port runtime claim.
 
 Dynamic secure-context cleanup, context deletion, SMP, migration between cores,
 or a new scheduler lifecycle may require an explicit common API extension. Such
@@ -88,14 +95,16 @@ void fiber_init(FiberContext *ctx,
                 FiberEntryFn entry,
                 void *arg);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_current(void);
 
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_start(void);
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                    void *user);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_schedule(void);
 ```
 
@@ -177,6 +186,13 @@ type and `entry_t` remains a source-compatible alias.
 noreturn declaration and `FIBER_SCHEDULER_HOOK_ATTR`. It may detect compiler
 capabilities but must not include CMSIS, CPU feature traits, register helpers,
 or inline assembly.
+
+`FIBER_SCHEDULER_HOOK_ATTR` combines the public sensitive-function bundle with
+the effective general-registers-only compiler mechanism. It is applied to the
+hook definition and its complete call graph, not merely to the function-pointer
+typedef. The same hidden-call restrictions apply to `fiber_current()`,
+`fiber_start()`, `fiber_schedule()`, and every handler/start-reachable runtime
+bridge.
 
 There is no common complete boot-record type. Each selected port's
 `fiber_port_boot_types.h` owns the concrete boot metadata embedded by its
@@ -363,20 +379,22 @@ void fiber_port_context_init(FiberContext *ctx,
                              entry_t entry,
                              void *arg);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void);
-FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
 void fiber_port_require_scheduler_configuration_environment(void);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_prepare_start(void);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_runtime_select_first(void);
 
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_start_first(FiberContext *first);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void);
 ```
 
@@ -390,12 +408,15 @@ not a second supported ABI.
 
 The reverse port-to-common boundary is also explicit. After saving the current
 CPU context, PendSV uses a selected-port private wrapper. That wrapper applies
-selected CPU-state and restore validation, then calls common
-general-registers-only helpers equivalent to:
+selected CPU-state and restore validation, then calls the exact sensitive,
+general-registers-only reverse v1 helpers:
 
 ```c
-FiberContext *fiber_internal_scheduler_invoke_pick_next(FiberContext *current);
-void fiber_internal_scheduler_commit_current_context(FiberContext *next);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_select_scheduler_candidate(
+        FiberContext *current);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_publish_current_context(FiberContext *next);
 ```
 
 The common helpers invoke the application hook and publish the selected current
@@ -461,8 +482,9 @@ deferred until a port explicitly needs that tradeoff.
 With `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`,
 `fiber_addr_plausible_ram()` and `fiber_addr_plausible_code()` can run from the
 PendSV save/restore path. Their declarations and every override must use the
-selected general-registers-only ABI and must not execute FP, MVE, allocation,
-blocking, or scheduler-recursive code. They must preserve `PRIMASK`, `BASEPRI`
+selected sensitive, general-registers-only integration-hook ABI and must not
+acquire instrumentation, profiler, sanitizer, stack-protector, FP, MVE,
+allocation, blocking, or scheduler-recursive code. They must preserve `PRIMASK`, `BASEPRI`
 where present, `FAULTMASK` where present, and `CONTROL` exactly. Save and
 restore preflights enforce that contract with `'r'`, `'B'`, `'t'`, and `'l'`
 before continuing. In that mode the code hook validates each saved stacked PC
@@ -532,6 +554,7 @@ Each selected context layout has immutable identity data:
 
 ```text
 port identifier
+compiler-port ABI identifier
 layout version
 context size
 context alignment
@@ -554,6 +577,27 @@ failure. The compile matrix must include a negative mismatched-header/object
 probe. This guard is mandatory before distributing precompiled library objects.
 Source-integrated builds must compile all library and application translation
 units with the same selected port and configuration until that guard exists.
+
+This context-layout guard is independent of the mandatory bidirectional runtime
+ABI anchor. The runtime anchor versions callable signatures, attributes, and
+semantics; the context guard versions the complete public `FiberContext` type,
+alignment, layout, and enabled saved-state feature set. A profile is not complete
+until both mismatch classes are tested. At minimum, one build-owned expectation
+object compiled through the selected public type header must retain the exact
+context-layout relocation so section GC or LTO cannot erase the proof.
+
+The context guard is also the selected-profile object-cohort guard. Its symbol
+identity covers the exact selected directory, compiler CPU/FPU/ABI settings,
+privilege/security role, saved-state and behavior-affecting feature settings,
+errata policy, expected companion ABI, and context ABI generation. One
+guaranteed always-linked mandatory port identity object defines that exact
+anchor and no compatibility alias. Every other independently compiled mandatory
+selected-port object retains a relocation to it, including a separate handler
+object, as does the build-owned expectation object. This prevents a stale boot,
+exception, FPU, validator, or assembly object from linking silently with a newer
+source group merely because the eight generic function names still match. This
+does not replace the runtime ABI anchor, the handler extraction anchor, or a
+cross-image gateway check; each proves a different relationship.
 
 ## Optional Port Configuration
 
@@ -654,8 +698,13 @@ not sufficient. Every production MPU port must also enforce these rules:
   registers before SVC;
 - an unprivileged `fiber_schedule()` reaches privileged code through a
   port-owned SVC and never writes SCB/NVIC state directly;
-- the yield SVC validates its instruction, service number, frame provenance,
-  allowed origin, and privileged CPU state before pending PendSV;
+- the selected SVC namespace gives distinct compile-time-checked numbers to
+  first start, unprivileged yield, unprivileged task return, and every enabled
+  optional service. The handler validates the instruction, service number,
+  frame provenance, allowed origin, and privileged CPU state before dispatch;
+- an unprivileged synthetic frame returns through a port-owned unprivileged SVC
+  veneer. Only the validated Handler-mode return service calls the common
+  `fiber_internal_task_return()` sink;
 - every restore of an unprivileged context guarantees PRIMASK is zero and,
   where implemented, BASEPRI and FAULTMASK are zero. Unprivileged reads of
   those registers are not accepted as proof of the restored state, and the port
@@ -666,6 +715,10 @@ not sufficient. Every production MPU port must also enforce these rules:
 - common runtime state, scheduler-hook state, immutable context metadata, and
   port-private context state reside in privileged or unprivileged-read-only
   memory. Unprivileged fibers must not be able to modify them directly;
+- writable fiber stacks and application data must not share an MPU region with
+  writable context/runtime state. The selected MPU profile owns linker-section
+  and MPU-region rules that keep context metadata privileged-writable and, only
+  where required by `fiber_current()`, unprivileged-readable;
 - the scheduler hook, its user state, and the complete hook call graph are
   trusted privileged code because PendSV invokes them in Handler mode. A port
   must not call untrusted fiber code while privileged;
@@ -687,15 +740,42 @@ selected-port-private state:
 
 | FreeRTOS reference family | STM32-relevant role | Selected-port ownership |
 | --- | --- | --- |
-| `ARM_CM0` | M0/M0+ | Thumb-1 frame, PRIMASK policy, SVC/PendSV assembly |
+| `ARM_CM0` with MPU disabled | M0/M0+ privileged | Thumb-1 frame, PRIMASK policy, SVC/PendSV assembly |
+| `ARM_CM0` with MPU enabled | optional M0/M0+ MPU/unprivileged profile | MPU regions, privilege/system-call state, SVC yield |
 | `ARM_CM3` | M3 non-MPU | saved PSP and general-register frame |
 | `ARM_CM3_MPU` | M3 MPU/unprivileged | MPU regions, CONTROL/system-call state, SVC yield |
 | `ARM_CM4F` | M4/M4F non-MPU | saved PSP, EXC_RETURN, optional high FP state |
-| `ARM_CM4_MPU` | M4/M4F MPU | MPU regions, CONTROL, FP state, SVC yield |
-| `ARM_CM7/r0p1` | M7/M7F | FP state, BASEPRI policy, errata 837070 handling |
-| `ARM_CM23` and `ARM_CM23_NTZ` | v8-M Baseline profiles | PSPLIM/CONTROL, optional MPU and SecureContext policy |
-| `ARM_CM33`, `ARM_CM33_NTZ`, and TF-M companion | M33/M33F profiles | PSPLIM/CONTROL, MPU, security-domain and optional FP state |
-| `ARM_CM55`, `ARM_CM55_NTZ`, and TF-M companion | M55/MVE profiles | PSPLIM/CONTROL, MPU, MVE/FP, PAC/BTI and security state |
+| `ARM_CM4_MPU` on M4/M4F | M4/M4F MPU | MPU regions, CONTROL, FP state, SVC yield |
+| `ARM_CM4_MPU` on M7/M7F | M7/M7F MPU/unprivileged | the same MPU state plus CPUID-validated errata 837070 policy |
+| `ARM_CM7/r0p1` | M7/M7F privileged | FP state, BASEPRI policy, errata 837070 handling |
+| `ARM_CM23` and `ARM_CM23_NTZ` | v8-M Baseline reference profiles; no current STM32 MCU product claim | PSPLIM/CONTROL, optional MPU and SecureContext policy |
+| `ARM_CM33`, `ARM_CM33_NTZ`, and TF-M integration | M33/M33F profiles | PSPLIM/CONTROL, MPU, security-domain and optional FP state |
+| `ARM_CM35P` and `ARM_CM35P_NTZ` | additional v8-M Mainline reference profiles | the same base runtime ABI with profile-specific capability policy |
+| `ARM_CM52`, `ARM_CM52_NTZ`, and TF-M integration | additional v8.1-M reference profiles | optional MVE plus profile-specific context capability policy |
+| `ARM_CM55`, `ARM_CM55_NTZ`, and TF-M integration | M55/MVE profiles | PSPLIM/CONTROL, MPU, MVE/FP, PAC/BTI and security state |
+| `ARM_CM85`, `ARM_CM85_NTZ`, and TF-M integration | additional v8.1-M reference profiles | PSPLIM/CONTROL, MPU, MVE/FP, PAC/BTI and security state |
+
+For each v8-M/v8.1-M CPU family, the source directory alone is not a profile.
+The valid runtime roles are distinct identities: Secure-only; Non-secure with a
+fiber-owned SecureContext companion; Non-secure without SecureContext; an NTZ
+Non-secure build; and, where the local FreeRTOS graph provides it, an NTZ-source
+TF-M build. MPU, FPU, MVE, PAC, and BTI settings further split identities when
+they change saved state, privilege, generated code, or companion contracts.
+
+The CM35P, CM52, and CM85 rows are reference-portability proofs, not current
+STM32 device or hardware-support claims. In the local tree, the non-NTZ CM33,
+CM35P, CM52, CM55, and CM85 directories share identical `port.c` and
+`portasm.c` content. Their matching NTZ directories share the same `port.c`
+content but use a second common NTZ `portasm.c` implementation. The selected
+`portmacro.h` files encode different capabilities in both families. This is
+direct evidence that the eight-function engine can stay fixed while exact
+selected header/configuration identity remains mandatory.
+
+The local FreeRTOS CMake graph reuses CM33/CM52/CM55/CM85 `_NTZ` runtime files
+for their TF-M targets and adds the TF-M wrapper. The corresponding plain
+`_NTZ_NONSECURE` targets use the same CPU files without that TrustZone/TF-M
+integration. Fiber treats those as distinct exact profiles even when their CPU
+sources are shared.
 
 FreeRTOS secure directories provide companion components, not independent
 cooperative schedulers. Each runtime image selects exactly one runtime port
@@ -787,7 +867,9 @@ behavior-changing refactor.
 
 Only after this evidence passes may the project record a
 `common-core-freeze-v1` architectural checkpoint and port CM0, CM3, CM4, CM23,
-CM33, and CM55 without modifying common context logic.
+CM33, and CM55 profiles without modifying common context logic. MPU variants,
+security-domain variants, and M7 MPU are distinct profiles even when they reuse
+the same common engine.
 
 ## Validation Requirements
 
@@ -795,12 +877,16 @@ The compile matrix must prove:
 
 - exactly one selected context type and runtime source group in each runtime
   image;
+- an exact build-selected profile manifest exists for every layout-, privilege-,
+  or security-affecting production configuration;
 - any required Secure/TF-M companion is identity-matched, may be a separate
   artifact/target, and defines no second callable fiber runtime ABI in that
   runtime image;
 - a separate Secure artifact exposes a versioned gateway ABI and fails build or
   startup compatibility validation when its manifest/service identity differs;
 - exactly one definition of every mandatory callable port ABI symbol;
+- both directions of the mandatory bidirectional runtime ABI mismatch fail to
+  link under normal, section-GC, and LTO builds;
 - common core compiles with incomplete `FiberContext`;
 - forbidden common includes of selected complete type headers fail review/probes;
 - selected public type headers compile without CMSIS;
@@ -813,11 +899,25 @@ The compile matrix must prove:
   PendSV directly from Thread mode;
 - the unprivileged schedule call graph has no privileged register access or
   writeable access to privileged runtime/context state before SVC;
+- MPU/linker proofs keep writable stacks and application data out of every
+  writable privileged context/runtime region, and reject a context placement
+  that an unprivileged fiber could modify;
+- unprivileged entry-return tests reach the port-owned return SVC veneer and
+  common `'R'` sink without direct execution of privileged common text;
+- compile and dispatch probes prove that start, yield, return, and enabled
+  extension SVC numbers are unique and that every unknown service fails closed;
 - unprivileged restore validation proves zero PRIMASK and, where implemented,
   zero BASEPRI and FAULTMASK, while Handler-side yield-SVC tests reject
   corrupted privileged mask state;
 - mismatched context header/object ABI fails before precompiled-object support is
   claimed;
+- stale selected-port object mixtures fail through the exact profile/context
+  relocation, including under section GC and LTO;
+- adversarial instrumentation, stack-protector, sanitizer, profiler, and LTO
+  builds leave the complete sensitive current/start/schedule/SVC/PendSV/scheduler-hook
+  call graph free of hidden runtime calls and FP/MVE instructions;
+- each production compiler port has independent generated-code and hardware
+  evidence; the initial claim is limited to GNU Arm Embedded GCC;
 - all source and documentation remain ASCII-only.
 
 Compile coverage does not create a hardware support claim. Every production port

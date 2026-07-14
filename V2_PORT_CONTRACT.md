@@ -169,6 +169,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
+      optional fiber_port_mpu_abi.h and fiber_port_mpu.c for the MPU profile
     ARM_CM3/
       fiber_port_types.h
       fiber_port_boot_types.h
@@ -179,6 +180,19 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
+    ARM_CM3_MPU/
+      # Same role-file pattern plus the selected MPU extension ABI/source.
+      fiber_port_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
+      fiber_portmacro.h
+      fiber_port.c
+      fiber_port_boot.c
+      fiber_port_exception.c
+      fiber_portasm.h
+      fiber_portasm.c
+      fiber_port_mpu_abi.h
+      fiber_port_mpu.c
     ARM_CM4/
       fiber_port_types.h
       fiber_port_boot_types.h
@@ -189,6 +203,10 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
+    ARM_CM4F/
+      # Final FreeRTOS-parity non-MPU profile; same selected role-file pattern.
+    ARM_CM4_MPU/
+      # Exact M4/M7 MPU profile plus the selected MPU extension ABI/source.
     ARM_CM7/
       r0p1/
         fiber_port_types.h
@@ -208,46 +226,51 @@ fiber/
       fiber_port_transitional_v8m.c
       fiber_port_boot.c
       fiber_port_exception.c
-    armv8m_baseline/
+    ARM_CMxx/
+      # One exact directory for each ARM_CM23, ARM_CM33, ARM_CM35P,
+      # ARM_CM52, ARM_CM55, and ARM_CM85 reference profile.
       non_secure/
         fiber_port_types.h
+        fiber_port_boot_types.h
+        fiber_port_boot.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_boot.c
         fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
+        optional selected feature ABI/source files
       secure/
+        # Present only for the matching fiber-owned SecureContext companion.
         fiber_secure_context.h
         fiber_secure_context.c
         fiber_secure_context_port.c
-    armv8m_mainline/
+        fiber_secure_init.h
+        fiber_secure_init.c
+        selected Secure-storage provider; no mandatory heap contract
+    ARM_CMxx_NTZ/
+      # One exact directory for each matching NTZ reference profile.
       non_secure/
-        fiber_port_types.h
-        fiber_portmacrocommon.h
-        fiber_portmacro.h
-        fiber_port.c
-        fiber_port_exception.c
-        fiber_portasm.h
-        fiber_portasm.c
-      secure/
-        fiber_secure_context.h
-        fiber_secure_context.c
-        fiber_secure_context_port.c
-    armv81m_mainline/
-      non_secure/
-        fiber_port_types.h
-        fiber_portmacrocommon.h
-        fiber_portmacro.h
-        fiber_port.c
-        fiber_port_exception.c
-        fiber_portasm.h
-        fiber_portasm.c
-      secure/
-        fiber_secure_context.h
-        fiber_secure_context.c
-        fiber_secure_context_port.c
+        same selected runtime role-file pattern
+        no fiber-owned secure companion
+      optional TF-M integration artifact in the exact TF-M build profile
 ```
+
+`ARM_CMxx` above is notation for six concrete directories, not one generic
+runtime directory. The final tree must not implement production v8-M profiles
+through a single architecture-class folder. Shared implementations may be
+factored or mechanically synchronized, but every concrete profile keeps its
+own selected `fiber_portmacro.h`, exact build manifest, context identity,
+feature policy, and `FREERTOS_PARITY.md` ledger. The current `ARM_CM4` and
+`transitional_v8m` directories remain migration artifacts; they do not replace
+the final `ARM_CM4F`/`ARM_CM4_MPU` and exact v8-M/v8.1-M profile groups.
+
+An `_NTZ` source directory may be reused by more than one exact build profile,
+as FreeRTOS does for non-TrustZone Non-secure and selected TF-M targets. Those
+profiles still have different manifests, configuration values, companion
+artifacts, and context feature identities. Source reuse is not profile
+identity.
 
 This mirrors the FreeRTOS split conceptually:
 
@@ -341,12 +364,16 @@ The target architecture is a FreeRTOS-style port boundary:
   duplicating that logic inside the selected port.
 
 In the final v2 shape each concrete port exports a public type-only context
-header, an internal type-only ABI header, and a callable port ABI. Public code
-gets the selected complete context type through `fiber_core.h`. Common runtime
+header and implements the frozen callable port ABI. Public code gets the
+selected complete context type through `fiber_core.h`. Common runtime
 translation units compile with an incomplete `FiberContext` and cannot include
 the selected complete type header or branch into architecture-specific
-implementation logic. The current `fiber_port_selected.h` facade is
-transitional and will be split along those boundaries.
+implementation logic. The `fiber_port_selected.h` type-only split is already
+implemented. The remaining migration narrows `fiber_port_runtime_abi.h` to the
+eight frozen functions and moves every displaced declaration into that
+concrete port's private `fiber_portmacro.h`, `fiber_portasm.h`, boot header, or
+another explicitly port-private header. No global selected internal-type facade
+is part of the frozen design.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as
@@ -366,8 +393,8 @@ Required rules:
 
 - support automatic selection from compiler-provided architecture macros for
   small-library convenience;
-- support explicit production selection through `FIBER_PORT_PROFILE`, similar
-  in purpose to FreeRTOS `FREERTOS_PORT`;
+- support explicit architecture-class selection through `FIBER_PORT_PROFILE`
+  for compile tests, bring-up, and unambiguous classic profiles;
 - support build-system selected production mode through
   `FIBER_PORT_BUILD_SELECTED=1`, where the build defines exactly one
   `FIBER_PORT_ARMV*` result macro and includes only the matching source group;
@@ -438,11 +465,43 @@ build sources:
   no second callable fiber runtime ABI exists in the same runtime image
 ```
 
+The selected `FIBER_PORT_ARMV*` result is only an architecture-class
+compatibility check. It is not the exact port identity. Exact production
+identity is the tuple:
+
+```text
+selected fiber_portmacro.h include path
+selected runtime source group
+compiler/toolchain identity and version plus CPU/FPU/ABI flags
+privilege and MPU configuration
+Secure-only, Non-secure, TrustZone, NTZ, or TF-M role
+FP, MVE, PAC, BTI, PSPLIM, and errata policy
+matching optional extension and companion artifacts
+context layout/feature ABI identity
+```
+
+Every production build records that tuple as an auditable build manifest and
+links only its matching objects. This does not require another generic
+`FIBER_PORT_ID_*` selector: the exact selected header/source path, immutable
+context identity, and ABI mismatch guards provide the identity. Architecture
+auto-detection cannot infer MPU enablement, privilege model, security-domain
+role, SecureContext versus TF-M ownership, or PAC/BTI policy.
+
+Therefore `FIBER_PORT_BUILD_SELECTED=1` is mandatory for every production MPU,
+unprivileged, Secure-only, Non-secure, TrustZone, NTZ, TF-M, MVE, PAC, or BTI
+profile, and for every profile whose context layout differs under the same
+architecture macro. `AUTO`, `FIBER_PORT_PROFILE`, and `FIBER_FORCE_PORT_*` are
+compile-matrix, bring-up, or unambiguous classic-profile conveniences only.
+They cannot establish a production support claim for those exact profiles.
+Failing to provide an exact manifest is a configuration error, not permission
+to route silently to a generic privileged port.
+
 During the v2 migration, `fiber_port_select.h` still validates and normalizes
-that build-selected result. The long-term goal is that selected
-`fiber_portmacro.h` headers provide the CPU interface directly, so the core can
-consume only the selected port facade and `fiber_port_select.h` can become a
-development convenience rather than a required production dependency.
+that build-selected result. The long-term selected `fiber_portmacro.h` provides
+the CPU interface directly to selected port sources. Public headers consume only
+the selected type-only facade, and common runtime sources consume only the
+CPU-neutral callable ABI. `fiber_port_select.h` can then remain a development
+convenience rather than a required production dependency.
 
 For Cortex-M7 build-selected matrix runs, the selected group is currently:
 
@@ -469,7 +528,7 @@ The port split is based on architectural behavior:
 | ARMv6-M | STM32F0, STM32G0, STM32C0, STM32L0, STM32U0, STM32WB0 | Thumb-1 assembly, no BASEPRI, no FPU, no mainline registers |
 | ARMv7-M | STM32F1, selected STM32F2 class parts | Mainline PendSV path, no FP high-register context |
 | ARMv7E-M | STM32F3, STM32F4, STM32G4, STM32L4, STM32F7, STM32H7, STM32WB | Mainline path, optional FPU, M7 errata policy |
-| ARMv8-M Baseline | Cortex-M23 based STM32 parts | Baseline path, security state, PSPLIM access gates |
+| ARMv8-M Baseline | Cortex-M23 reference profile; no current STM32 MCU product claim | Baseline path, security state, PSPLIM access gates |
 | ARMv8-M Mainline | STM32L5, STM32U5, STM32H5, STM32WBA | TrustZone, Non-secure EXC_RETURN, PSPLIM, optional FPU |
 | ARMv8.1-M Mainline | STM32N6 class targets | MVE, PAC, BTI, PSPLIM, extended context policy |
 
@@ -540,11 +599,14 @@ void fiber_init(FiberContext *ctx,
                 void *stack_end,
                 entry_t entry,
                 void *arg);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_current(void);
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
                                    void *user);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_schedule(void);
-FIBER_NORETURN void fiber_start(void);
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_start(void);
 ```
 
 Direct target selection from Thread mode is not part of the core API.
@@ -570,10 +632,16 @@ Common scheduler-jump preconditions:
 - the unprivileged `fiber_current()`/`fiber_schedule()` call graph and
   Thread-mode request stub are executable without privileged register or
   privileged-write access. Required common state is mapped read-only;
+- unprivileged context return uses a port-owned return-SVC veneer; it never
+  branches directly from Thread mode into the privileged common task-return
+  sink;
+- writable fiber stacks and application data do not share an MPU region with
+  writable context metadata, scheduler state, or port-private runtime state;
 - the scheduler hook must return a real initialized `FiberContext`;
 - the scheduler hook is exception-path code and must be declared with
-  `FIBER_SCHEDULER_HOOK_ATTR`; it must not use FP, MVE, allocation, blocking,
-  exceptions, or recursive fiber scheduling;
+  `FIBER_SCHEDULER_HOOK_ATTR`, which includes sensitive-function and
+  general-registers-only restrictions; it must not use FP, MVE, allocation,
+  blocking, exceptions, or recursive fiber scheduling;
 - the scheduler hook must preserve PRIMASK, FAULTMASK, BASEPRI, and CONTROL;
 - `fiber_start()` calls the scheduler hook once with `current == NULL` to select
   the first context;
@@ -874,6 +942,8 @@ Hook restrictions:
 - no user callbacks;
 - no throwing C++ exceptions across the C ABI boundary;
 - define the callback with `FIBER_SCHEDULER_HOOK_ATTR`;
+- do not compile the callback or any callee with function instrumentation,
+  profiling, sanitizers, stack protectors, or hidden FP/MVE runtime helpers;
 - no floating-point, MVE, or other extended-context instructions;
 - return with `PRIMASK`, `FAULTMASK`, `BASEPRI`, and `CONTROL` exactly equal to
   their entry values. The common bridge validates this after every callback;
@@ -910,21 +980,23 @@ void fiber_port_context_init(FiberContext *ctx,
                              entry_t entry,
                              void *arg);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void);
 
-FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
 void fiber_port_require_scheduler_configuration_environment(void);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_prepare_start(void);
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_runtime_select_first(void);
 
-FIBER_API_NORETURN
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_start_first(FiberContext *first);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void);
 ```
 
@@ -941,8 +1013,8 @@ change, but ownership must not:
 - mutable saved SP, EXC_RETURN, FP/MVE, and security state is validated
   dynamically rather than included in a fixed hash by default;
 - `fiber/port/fiber_port_select.h` owns strict compile-time profile selection only;
-- selected public type, internal ABI type, and callable ABI facades have
-  separate include boundaries;
+- the selected public type-only facade, CPU-neutral callable ABI, and
+  port-private implementation headers have separate include boundaries;
 - the callable ABI must not expose context fields, frame offsets, or MSP
   addresses to common code;
 - common code decides lifecycle and scheduler-policy preconditions, while the
@@ -1144,11 +1216,15 @@ scheduling by accident.
 
 The SVC path must keep defining:
 
-- the SVC number or dispatch mechanism;
+- one compile-time-checked service namespace for first start, unprivileged
+  yield, unprivileged task return, and every enabled optional MPU/security
+  service. Service numbers must be unique and unknown services fail closed;
 - whether it requires privileged Thread mode before start;
 - how it selects Thread PSP by `EXC_RETURN`, and how it sets or preserves
   `CONTROL.nPRIV` and `CONTROL.FPCA`;
 - how it selects Secure or Non-secure handler state on ARMv8-M;
+- how an unprivileged entry-function return reaches the common no-return sink
+  through a validated port-owned SVC veneer;
 - how it fails when SVC is already owned by another component.
 
 There is no direct trampoline validation path anymore. Adding a new runtime port

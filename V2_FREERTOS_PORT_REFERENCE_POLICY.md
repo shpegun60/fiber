@@ -196,6 +196,27 @@ Selected-port private code still implements context seals, dynamic save/restore
 checks, SVC/PendSV mechanics, scheduler critical envelopes, vector validation,
 and selected traits. Those details do not expand the common callable ABI.
 
+The complete local Cortex-M function-class mapping is:
+
+| FreeRTOS port role | Fiber ownership |
+| --- | --- |
+| `pxPortInitialiseStack` and selected stack layout | `fiber_port_context_init` plus private selected context code |
+| `xPortStartScheduler`, `vStartFirstTask`, and first-start SVC | `fiber_port_runtime_prepare_start`, `fiber_port_runtime_select_first`, and `fiber_port_runtime_start_first` |
+| `pxCurrentTCB`, PendSV save/restore, and `vTaskSwitchContext` | private handler code plus mandatory reverse candidate/publication ABI |
+| `portYIELD` or MPU yield SVC | `fiber_port_runtime_schedule` with a profile-private request mechanism |
+| compiler/CPU memory ordering | `fiber_port_runtime_memory_barrier` |
+| terminal task-return/error wait | direct common sink for privileged profiles; port-owned return-SVC veneer for unprivileged profiles; common panic plus `fiber_port_panic_wait` |
+| MPU region/CONTROL/system-call services | private selected layout plus optional MPU extension ABI |
+| SecureContext bind-or-allocate/load/save and optional free | private TrustZone mechanics plus optional selected/cross-image ABI; free belongs to a future dynamic lifecycle |
+| FPU, PSPLIM, MVE, PAC, BTI, priority, vector, and errata helpers | private selected-port mechanics inside the existing start/switch operations |
+| SysTick, RTOS critical nesting, queues, task lists, timers, FromISR APIs | excluded scheduler policy, not CPU-engine ABI |
+| SMP core ID, cross-core interrupt, and migration services | outside `common-core-freeze-v1` |
+
+Every callable or assembly-visible symbol in a new reference port must reduce to
+one row in this table or receive a documented adopt/adapt/replace/exclude/defer
+decision. A symbol that does not fit is a contract review trigger; it is not
+silently added as a ninth common function.
+
 Benefits:
 
 - `fiber` keeps a clean cooperative API;
@@ -225,8 +246,11 @@ portasm.c or equivalent assembly source
 portasm.h
 portmacro.h
 portmacrocommon.h
+mpu_wrappers_v2_asm.c when present
 secure/non_secure companion files when present
+TF-M integration README, veneers, or wrapper files when present
 README or port notes when present
+required linker sections and linker-provided symbols
 ```
 
 The audit must inventory every relevant CPU-port symbol:
@@ -243,6 +267,9 @@ configuration macros consumed by the port
 errata gates
 priority and vector constants
 FPU/MVE/PSPLIM/security/PAC/BTI policy gates
+MPU privilege, system-call stack, and wrapper-version gates
+single-core/SMP conditionals and external core-interrupt hooks
+compiler attributes, section placement, and linker symbol contracts
 ```
 
 No relevant FreeRTOS CPU-port macro, function, label, or policy gate may vanish
@@ -260,7 +287,9 @@ replace:
 
 exclude:
   not needed because it belongs to FreeRTOS scheduler, tick, task API,
-  queues, semaphores, heap, MPU task management, or FromISR API surface
+  queues, semaphores, heap, or FromISR API surface. FreeRTOS-specific MPU API
+  wrappers may be excluded, but MPU region, privilege, CONTROL, system-call,
+  and yield mechanics must be adopted, adapted, or explicitly deferred
 
 defer:
   needed for future parity, but not implemented in this checkpoint; must have
@@ -294,6 +323,9 @@ PSPLIM register access and saved-context slot policy
 TrustZone secure/non-secure state selection
 MVE/PAC/BTI context policy
 Cortex-M7 r0p0/r0p1 errata workarounds
+MPU region programming, CONTROL privilege transitions, and yield-SVC services
+SecureContext allocation/free/load/save and cross-image service identity
+single-core versus SMP branches; SMP is explicitly excluded by this freeze
 SysTick/tick integration, usually excluded for fiber core
 FreeRTOS task-list scheduling hooks, excluded and replaced by scheduler hook
 ```
@@ -335,7 +367,7 @@ The v2 `fiber` equivalent has two stages:
 ```text
 development/convenience stage:
   fiber_port_select.h can auto-detect or use FIBER_PORT_PROFILE
-  fiber_port_selected.h includes the selected role headers
+  fiber_port_selected.h includes exactly one selected public type-only header
   compile matrix checks all supported selector modes
 
 FreeRTOS-like production stage:
@@ -381,7 +413,8 @@ GCC/ARM_CM23_NTZ/non_secure:
   port.c
   mpu_wrappers_v2_asm.c
 
-GCC/ARM_CM33/non_secure, ARM_CM55/non_secure, ARM_CM85/non_secure:
+GCC/ARM_CM33/non_secure, ARM_CM35P/non_secure, ARM_CM52/non_secure,
+ARM_CM55/non_secure, ARM_CM85/non_secure:
   portmacrocommon.h
   portmacro.h
   portasm.h
@@ -389,7 +422,8 @@ GCC/ARM_CM33/non_secure, ARM_CM55/non_secure, ARM_CM85/non_secure:
   port.c
   mpu_wrappers_v2_asm.c
 
-GCC/ARM_CM33/secure, ARM_CM55/secure, ARM_CM85/secure:
+GCC/ARM_CM33/secure, ARM_CM35P/secure, ARM_CM52/secure,
+ARM_CM55/secure, ARM_CM85/secure:
   secure_context.h
   secure_context.c
   secure_context_port.c
@@ -437,7 +471,7 @@ equivalent remains behind the selected-port schedule ABI: direct PendSV and SVC
 yield are two selected-port implementations of the same common request flow.
 This does not import the FreeRTOS scheduler or MPU wrapper API.
 
-## STM32-Relevant Port Source Groups
+## Cortex-M Reference Source Groups And STM32 Scope
 
 The local FreeRTOS GCC build at commit `a50edad` selects materially different
 source groups rather than one universal Cortex-M implementation. The fiber port
@@ -445,22 +479,65 @@ tree must preserve the same distinctions when they change saved state or
 privilege/security behavior:
 
 ```text
-ARM_CM0
+ARM_CM0 with MPU disabled
+ARM_CM0 with MPU enabled when the target implements the optional MPU
 ARM_CM3
 ARM_CM3_MPU
 ARM_CM4F
-ARM_CM4_MPU
-ARM_CM7/r0p1
+ARM_CM4_MPU on Cortex-M4/M4F
+ARM_CM4_MPU on Cortex-M7/M7F with its CPUID/errata policy
+ARM_CM7/r0p1 privileged runtime
 ARM_CM23/non_secure runtime
+  distinct Secure-only, Non-secure-with-SecureContext, and
+  Non-secure-without-SecureContext manifests
 ARM_CM23/secure companion component, normally a separate Secure target/artifact
 ARM_CM23_NTZ/non_secure
+  reference-portability coverage; no current STM32 MCU hardware claim
 ARM_CM33/non_secure runtime
+  distinct Secure-only, Non-secure-with-SecureContext, and
+  Non-secure-without-SecureContext manifests
 ARM_CM33/secure companion component, normally a separate Secure target/artifact
-ARM_CM33_NTZ/non_secure runtime plus the matching TF-M wrapper when selected
+ARM_CM33_NTZ/non_secure as a non-TrustZone profile
+ARM_CM33_NTZ/non_secure plus the matching TF-M wrapper as a distinct TF-M profile
+ARM_CM35P and ARM_CM35P_NTZ reference profiles
+ARM_CM52/non_secure and ARM_CM52/secure reference components
+ARM_CM52_NTZ/non_secure, with a separate TF-M profile using the matching wrapper
 ARM_CM55/non_secure runtime
+  distinct Secure-only, Non-secure-with-SecureContext, and
+  Non-secure-without-SecureContext manifests
 ARM_CM55/secure companion component, normally a separate Secure target/artifact
-ARM_CM55_NTZ/non_secure runtime plus the matching TF-M wrapper when selected
+ARM_CM55_NTZ/non_secure as non-TrustZone and TF-M profiles with distinct manifests
+ARM_CM85/non_secure and ARM_CM85/secure reference components
+ARM_CM85_NTZ/non_secure, with a separate TF-M profile using the matching wrapper
 ```
+
+The same three role manifests apply to the ARM_CM35P, ARM_CM52, and ARM_CM85
+`non_secure` engines even though those rows are reference-portability targets
+rather than current STM32 hardware claims. The directory name does not override
+`configRUN_FREERTOS_SECURE_ONLY` or the selected security policy.
+
+`ARM_CM0` is one FreeRTOS directory with layout and service behavior controlled
+by `configENABLE_MPU`; those are distinct fiber selected configurations.
+`ARM_CM4_MPU` explicitly supports Cortex-M7 r0p0/r0p1 through CPUID assertions
+and `configENABLE_ERRATA_837070_WORKAROUND`; therefore M7 MPU/unprivileged is a
+required roadmap profile and is not covered by the privileged
+`ARM_CM7/r0p1` row.
+
+CM35P, CM52, and CM85 are retained in the audit as reference-portability rows.
+They do not create an STM32 hardware claim. Within the non-NTZ family, their
+local FreeRTOS `port.c` and `portasm.c` implementations are byte-identical to
+the CM33/CM55 non-NTZ engine. The matching NTZ directories share a second
+common NTZ `portasm.c` implementation rather than the non-NTZ assembly file.
+Their `portmacro.h` files still select different capabilities. The fiber build
+must preserve every distinction through the exact selected header, feature
+manifest, context identity, and optional companion set rather than by adding a
+ninth common runtime operation.
+
+The local FreeRTOS CMake graph proves that source-group identity alone is not a
+complete profile identity. CM33, CM52, CM55, and CM85 TF-M targets reuse their
+matching `_NTZ/non_secure` CPU files and add `ARM_TFM/os_wrapper_freertos.c`,
+while the `_NTZ_NONSECURE` targets use those CPU files without TF-M. Fiber must
+record and version those as separate exact configurations.
 
 The concrete STM32 device selects one of these CPU/security/privilege profiles;
 chip series names do not define context layout by themselves. A Secure companion
@@ -469,6 +546,14 @@ and is not a second scheduler port. It commonly lives in a separate Secure
 image/target. In the TF-M case, the Non-secure runtime includes the matching
 wrapper while TF-M owns the Secure firmware. Each runtime image still contains
 exactly one implementation of the fiber callable port ABI.
+
+Architecture-class auto-detection is not an exact-profile selector. Production
+MPU, unprivileged, Secure-only, Non-secure, TrustZone, NTZ, TF-M, MVE, PAC, and
+BTI builds use build-selected mode and record the precise include path, runtime
+source group, compiler/toolchain identity and version, CPU/FPU/ABI flags,
+feature settings, errata policy,
+context-layout identity, and companion artifacts. Missing exact-profile data is
+a build failure, never a reason to fall back to a generic privileged port.
 
 A separate Secure image cannot share the runtime image's relocation-based ABI
 guard. Its gateway/service ABI must be versioned, and the integration must fail
@@ -518,83 +603,92 @@ fiber/
     fiber_port_select.h
     fiber_port_traits.h
     fiber_port_selected.h
-    fiber_port_abi_types_selected.h
-    fiber_port_abi.h
+    fiber_port_runtime_abi.h
     ARM_CM0/
       fiber_port_types.h
-      fiber_port_abi_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
+      optional fiber_port_mpu_abi.h and fiber_port_mpu.c for the MPU profile
     ARM_CM3/
       fiber_port_types.h
-      fiber_port_abi_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-    ARM_CM4/
+    ARM_CM3_MPU/
+      same selected role-file pattern
+      fiber_port_mpu_abi.h
+      fiber_port_mpu.c
+    ARM_CM4F/
       fiber_port_types.h
-      fiber_port_abi_types.h
+      fiber_port_boot_types.h
+      fiber_port_boot.h
       fiber_portmacro.h
       fiber_port.c
+      fiber_port_boot.c
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
+    ARM_CM4_MPU/
+      same selected role-file pattern
+      fiber_port_mpu_abi.h
+      fiber_port_mpu.c
     ARM_CM7/
       r0p1/
         fiber_port_types.h
-        fiber_port_abi_types.h
+        fiber_port_boot_types.h
+        fiber_port_boot.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_boot.c
         fiber_port_exception.c
         FREERTOS_PARITY.md
-    armv8m_baseline/
+    ARM_CMxx/
+      # Concrete ARM_CM23, ARM_CM33, ARM_CM35P, ARM_CM52, ARM_CM55,
+      # or ARM_CM85 directory; never a generic architecture-class port.
       non_secure/
         fiber_port_types.h
-        fiber_port_abi_types.h
+        fiber_port_boot_types.h
+        fiber_port_boot.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
         fiber_port.c
+        fiber_port_boot.c
         fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
+        optional selected feature ABI/source files
       secure/
         fiber_secure_context.h
         fiber_secure_context.c
         fiber_secure_context_port.c
-    armv8m_mainline/
+        fiber_secure_init.h
+        fiber_secure_init.c
+        selected Secure-storage provider; no mandatory heap contract
+    ARM_CMxx_NTZ/
+      # Concrete matching NTZ directory.
       non_secure/
-        fiber_port_types.h
-        fiber_port_abi_types.h
-        fiber_portmacrocommon.h
-        fiber_portmacro.h
-        fiber_port.c
-        fiber_port_exception.c
-        fiber_portasm.h
-        fiber_portasm.c
-      secure/
-        fiber_secure_context.h
-        fiber_secure_context.c
-        fiber_secure_context_port.c
-    armv81m_mainline/
-      non_secure/
-        fiber_port_types.h
-        fiber_port_abi_types.h
-        fiber_portmacrocommon.h
-        fiber_portmacro.h
-        fiber_port.c
-        fiber_port_exception.c
-        fiber_portasm.h
-        fiber_portasm.c
-      secure/
-        fiber_secure_context.h
-        fiber_secure_context.c
-        fiber_secure_context_port.c
+        same selected runtime role-file pattern
+        no fiber-owned SecureContext companion
+      optional TF-M integration artifact in the exact TF-M build profile
 ```
+
+`ARM_CMxx` is compact notation for separate concrete directories. It is not a
+directory name and does not authorize one universal v8-M implementation to
+select security or context behavior through hidden common macros. Byte-identical
+role files may be generated, shared deliberately, or kept synchronized, but the
+selected `fiber_portmacro.h`, manifest, context ABI identity, companion set, and
+parity ledger remain profile-specific.
 
 This is a direction, not a requirement to split every current file immediately.
 Pure file-layout changes must be separate from behavior changes.
@@ -623,8 +717,9 @@ barriers, diagnostics, and static-assert ABI. The public
 CMSIS-free; they use only public API types, standard integer/size types, and
 port-local type-only records. The matching `fiber_port_boot.c` owns the boot
 record and integrity implementation. The selected `fiber_port.c` includes its
-complete context type, selected internal ABI types, and the common bridge
-declarations it needs. It does not depend on a common boot-record layout.
+complete context type, port-private implementation types, and only the approved
+CPU-neutral common bridge declarations it needs. It does not depend on a common
+boot-record layout.
 Neither selected file should
 include removed target-wide headers merely to inherit CPU policy; CPU policy
 such as BASEPRI, M7 errata, FPU context, frame sizing, exception constants, and
@@ -694,9 +789,9 @@ fiber_feature_policy.h:
 
 fiber_target.h:
   done: deleted
-  current fiber/port/fiber_port_selected.h is the transitional selected facade
-  target selection feeds separate public-type, internal-ABI-type, and callable
-  ABI facades
+  current fiber/port/fiber_port_selected.h is the type-only public facade
+  common runtime uses the CPU-neutral callable ABI with incomplete context
+  port-private declarations stay in each concrete selected source group
 ```
 
 Do not move these helpers all at once. The migration order should be:

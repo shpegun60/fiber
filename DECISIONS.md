@@ -1,5 +1,72 @@
 # Fiber Decision Log
 
+## 2026-07-14: Close Pre-Porting ABI And Profile Gaps
+
+A second contract audit against local FreeRTOS commit `a50edad` covered every
+GCC Cortex-M source group: CM0 with and without MPU, CM3/CM3_MPU, CM4F,
+CM4_MPU, CM7/r0p1, CM23/33/35P/52/55/85, all matching NTZ groups, SecureContext
+companions, TF-M integration, MVE/PAC/BTI conditionals, and the single-core/SMP
+split. No ninth mandatory common-to-port operation is required for the frozen
+single-core static-lifetime cooperative scope.
+
+The frozen `fiber_internal_runtime_port_abi_v1_anchor` target versions the whole
+mandatory bidirectional runtime contract, not only reverse calls. Any
+incompatible change to one of the eight forward functions, a reverse v1 symbol,
+calling convention, required attribute, or normative semantic creates a new
+anchor spelling. Both old-common/new-port and new-common/old-port mismatch links
+are required negative tests. Context layout has its own independent versioned
+relocation and mismatch proof.
+
+When handlers are a separate archive object, the handler-bundle anchor also
+versions that port-internal mandatory-object/handler-object pairing while still
+remaining independent of common ABI versioning. A handler object that calls the
+reverse ABI retains its own runtime-anchor relocation. Stale bundle combinations
+and handler/common ABI mismatches are required negative links.
+
+Current-context access, start, schedule, SVC, PendSV, scheduler-hook, and
+reverse-helper call paths are compiler-sensitive. Their normative attributes
+prevent instrumentation, profiling, sanitizers, stack protectors, implicit
+FP/MVE use, and hidden LTO helpers in addition to enforcing the
+general-registers-only ABI. Adversarial
+generated-code checks are required; the scheduler hook's complete indirect call
+graph remains an application integration obligation.
+
+Architecture-class selection is not exact port identity. Production MPU,
+unprivileged, Secure-only, Non-secure, TrustZone, NTZ, TF-M, MVE, PAC, and BTI
+profiles require build-selected mode plus an exact manifest of selected header,
+source group, compiler/toolchain identity and version, CPU/FPU/ABI flags,
+feature/errata policy, context identity, and companion artifacts.
+Auto/profile/force selection remains a convenience or bring-up path and cannot
+create those production claims.
+
+The final source layout follows concrete FreeRTOS profile directories. CM0+MPU
+and M7+MPU are explicit roadmap profiles; the latter derives its parity baseline
+from `ARM_CM4_MPU`, which contains Cortex-M7 r0p0/r0p1 CPUID checks and errata
+837070 policy. CM35P, CM52, and CM85 remain reference-portability rows rather
+than STM32 hardware claims. Generic `armv8m_*` directories are not the final
+production layout. Initial production compiler scope is GNU Arm Embedded GCC;
+other compilers need separate compiler-port evidence.
+
+The exact profile/context relocation is also the selected-port object-cohort
+guard. One always-linked mandatory port identity object defines it; every other
+mandatory port object and one build-owned expectation object retain it. This
+rejects stale private-object mixtures that the common runtime ABI anchor cannot
+detect. The local FreeRTOS CMake graph also confirms that CM33/CM52/CM55/CM85
+`_NTZ` CPU sources are reused by distinct non-TrustZone and TF-M profiles, so
+shared source files never imply one profile identity.
+
+The v8-M source directory is not the security role. Secure-only, Non-secure
+with a fiber-owned SecureContext companion, Non-secure without that companion,
+NTZ Non-secure, and TF-M are distinct exact manifests even when they reuse CPU
+sources. MPU profiles also prove that unprivileged public calls cannot access
+privileged state directly: yield and task return use distinct validated SVC
+services, writable stacks are isolated from writable context/runtime state, and
+an unprivileged entry return reaches the common task-return sink only through a
+port-owned veneer.
+
+This decision changes documentation and freeze requirements only. Runtime code,
+assembly, and current support labels are unchanged.
+
 ## 2026-07-14: Freeze Reverse Port-to-Common ABI v1 Target
 
 The mandatory reverse port-to-common boundary is frozen as the implementation
@@ -24,17 +91,23 @@ common-private. The candidate-selection helper owns hook/lifecycle/NULL policy
 while the port owns the CPU critical envelope and context validation. Only the
 common-owned publication helper writes a validated candidate to the slot.
 
+`fiber_internal_task_return()` is the common no-return sink, not necessarily
+the literal LR seeded by every profile. Privileged profiles may seed it
+directly. Unprivileged profiles seed a port-owned return-SVC veneer whose
+validated Handler-mode dispatch invokes the common sink.
+
 Port calls to `fiber_panic()` are strong references. The common fallback
 definition remains weak for one application override, so omitting every panic
 implementation is a link failure rather than a nullable weak call.
 
 The v1 anchor is a required retained relocation from an object implementing a
-mandatory ABI function referenced by common runtime. It is independent of
-handler extraction. If strong handlers live in another archive member, that
-object defines `fiber_port_handler_bundle_v1_anchor`, and the always-linked
-mandatory object retains a strong relocation to it. Direct references to generic
-handler names are not accepted as extraction proof when startup weak aliases
-exist.
+mandatory ABI function referenced by common runtime. Its version covers the
+complete mandatory bidirectional ABI even though common owns the anchor symbol.
+It is independent of handler extraction. If strong handlers live in another
+archive member, that object defines `fiber_port_handler_bundle_v1_anchor`, and
+the always-linked mandatory object retains a strong relocation to it. Direct
+references to generic handler names are not accepted as extraction proof when
+startup weak aliases exist.
 
 Exact undefined-symbol allowlists, a deliberate version-mismatch negative link,
 current-slot C-access and generated-assembly store rejection, handler archive
@@ -74,6 +147,11 @@ The static-lifetime common lifecycle gains no destroy function. Dynamic context
 or SecureContext deletion, if ever required, is a separate optional lifecycle
 extension. Every enabled extension participates in context feature/layout
 identity and must fail closed on header/object or cross-image mismatch.
+
+A static-lifetime SecureContext profile binds or allocates its Secure storage
+once during privileged pre-start configuration. Its companion may use a fixed
+pool, application-provided Secure storage, or an explicitly selected allocator;
+the mandatory fiber runtime does not require a heap.
 
 The mandatory reverse ABI is fixed by the preceding decision. It does not
 expand the eight-function common-to-port ABI or any optional feature ABI.
@@ -592,7 +670,12 @@ fiber/target/fiber_settings.h -> fiber/port/fiber_settings.h
 `fiber_settings.h` is now a port-root configuration header because selected
 ports consume those defaults while exporting the CPU contract.
 
-## 2026-07-12: Remove fiber_target.h Facade
+## Historical 2026-07-12: Remove fiber_target.h Facade
+
+This entry records the intermediate facade that replaced `fiber_target.h`.
+Its complete-contract include behavior was superseded by the 2026-07-13 opaque
+common-runtime boundary: `fiber_port_selected.h` is now public and type-only,
+while common runtime uses the CPU-neutral callable ABI.
 
 `fiber/target/fiber_target.h` was removed. The selected-port facade is now:
 
