@@ -440,8 +440,11 @@ Closed hardening items from the FreeRTOS comparison:
    - competing strong definitions intentionally fail the link;
    - wrapper/direct-vector settings are deleted;
    - the matrix proves archive extraction and vector slots 11 and 14;
-   - runtime startup validates the active VTOR slots, priority readback, and
-     actual SVC/PendSV dispatch.
+   - runtime startup validates the selected active vector source, priority
+     readback, and actual SVC/PendSV dispatch;
+   - VTOR-capable ports read back the applicable VTOR bank, while ports without
+     VTOR validate their architecture/platform vector base and remap policy;
+   - H7 validation specifically reads back `SCB->VTOR`.
 
    The current application-wrapper/direct-vector implementation is transitional
    and remains documented only until the mechanical handler migration is

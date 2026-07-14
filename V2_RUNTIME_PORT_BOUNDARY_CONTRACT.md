@@ -384,7 +384,7 @@ The board validation must prove the runtime state after startup and any
 bootloader relocation:
 
 ```text
-SCB->VTOR names the expected active table
+the selected port identifies the expected active vector-table source
 slot 11 resolves to selected-port SVC_Handler
 slot 14 resolves to selected-port PendSV_Handler
 priority readback matches selected-port policy
@@ -393,8 +393,15 @@ the first SVC reaches the selected-port handler
 a later PendSV reaches the selected-port handler
 ```
 
+When VTOR is implemented, the selected port must read back the applicable
+`SCB->VTOR` bank and prove that it names the expected active table. When VTOR
+is not implemented, the port must validate the architecture/platform-defined
+vector base, normally address zero, together with any required memory-remap
+policy. STM32H7 validation always includes direct `SCB->VTOR` readback.
+
 The synthetic ELF proof and board proof are complementary. Linker evidence
-cannot prove that a bootloader did not change VTOR at runtime.
+cannot prove that a bootloader did not change the active vector source or
+platform remapping at runtime.
 
 ## Mechanical Migration Slices
 

@@ -1099,8 +1099,11 @@ Required rules:
 - static archive, `--gc-sections`, and LTO proofs must retain both handlers;
 - vector-table relocation and security-domain vector selection must be explicit
   for ARMv8-M targets;
-- runtime validation proves that active VTOR slots 11 and 14 resolve to the
-  selected strong handlers and that both paths execute on hardware.
+- runtime validation proves that slots 11 and 14 in the selected port's active
+  vector-table source resolve to the strong handlers and that both paths execute
+  on hardware;
+- a VTOR-capable port validates the applicable `SCB->VTOR` bank; a port without
+  VTOR validates its architecture/platform vector base and remap policy.
 
 If another RTOS, bootloader, monitor, or debug framework owns SVC or PendSV,
 `fiber` must require explicit integration instead of assuming ownership.

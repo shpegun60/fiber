@@ -50,13 +50,14 @@ the default contract.
 Compile, synthetic-link/ELF, and board proofs are separate. The linker proves
 strong symbol exclusivity, archive extraction, vector relocations,
 `--gc-sections` retention, and LTO retention. Board validation proves active
-VTOR routing and actual SVC/PendSV execution after startup or bootloader
-relocation.
+selected-port vector-source routing and actual SVC/PendSV execution after
+startup or bootloader relocation. H7 validation specifically reads back
+`SCB->VTOR`.
 
-Implementation proceeds in isolated slices: narrow ABI, rename common state,
-add private port headers, collapse start/schedule choreography, move strong
-handlers, remove wrappers and mode macros, expand matrix proofs, then rerun the
-full H7 hardware suite.
+Implementation proceeds in isolated slices: narrow the ABI while adding private
+port headers for every displaced declaration, rename common state, collapse
+start/schedule choreography, move strong handlers, remove wrappers and mode
+macros, expand matrix proofs, then rerun the full H7 hardware suite.
 
 ## 2026-07-13: Restore Integrity and Common Runtime Safety Baseline
 
