@@ -16,19 +16,29 @@ fiber_internal_task_return
 fiber_panic
 ```
 
-The current-context slot is read-only to selected ports. Hook/user storage,
-first-selection state, and all other lifecycle globals remain common-private.
-The candidate-selection helper owns hook/lifecycle/NULL policy while the port
-owns the CPU critical envelope and context validation. Only the common-owned
-publication helper writes a validated candidate to the slot.
+The current-context slot is not declared as a C object to selected ports.
+Selected inline assembly or `.S` code may load it through its frozen symbol
+name, but port C may not redeclare it, take its address, or write it. Hook/user
+storage, first-selection state, and all other lifecycle globals remain
+common-private. The candidate-selection helper owns hook/lifecycle/NULL policy
+while the port owns the CPU critical envelope and context validation. Only the
+common-owned publication helper writes a validated candidate to the slot.
 
 Port calls to `fiber_panic()` are strong references. The common fallback
 definition remains weak for one application override, so omitting every panic
 implementation is a link failure rather than a nullable weak call.
 
-The v1 anchor is a required retained relocation from an always-linked selected
-port object. Exact undefined-symbol allowlists, a deliberate version-mismatch
-negative link, section garbage collection, and LTO are required freeze proofs.
+The v1 anchor is a required retained relocation from an object implementing a
+mandatory ABI function referenced by common runtime. It is independent of
+handler extraction. If strong handlers live in another archive member, that
+object defines `fiber_port_handler_bundle_v1_anchor`, and the always-linked
+mandatory object retains a strong relocation to it. Direct references to generic
+handler names are not accepted as extraction proof when startup weak aliases
+exist.
+
+Exact undefined-symbol allowlists, a deliberate version-mismatch negative link,
+current-slot C-access and generated-assembly store rejection, handler archive
+extraction, section garbage collection, and LTO are required freeze proofs.
 Address-map and fallback-MSP hooks are port/application integration ABI, not
 reverse common ABI. TrustZone gateway symbols are a separately versioned
 cross-image ABI.

@@ -606,7 +606,8 @@ fiber_port_runtime_abi.h
     eight mandatory common-to-selected-port functions only
 
 fiber_runtime_port_abi.h
-    mandatory internal reverse ABI v1 used by every selected port
+    mandatory internal reverse ABI v1 used by every selected port; the common
+    current slot is assembly-visible but is not a selected-port C lvalue
 
 fiber_runtime_context_configuration_abi.h/.c
     optional common lifecycle service used only by context-mutating extensions

@@ -212,7 +212,8 @@ Closed hardening items from the FreeRTOS comparison:
    transitional handler integration exists. The final contract in
    `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` replaces them with selected-port
    strong `SVC_Handler` and `PendSV_Handler` symbols. At that point the matrix
-   must prove archive extraction, vector-slot relocation, duplicate-strong
+   must prove archive extraction through the unique handler-bundle anchor when
+   handlers are separately archived, vector-slot relocation, duplicate-strong
    failure, `--gc-sections` retention, and LTO retention instead. Passing the
    matrix is compile/link coverage only; runtime support still requires
    profile-specific hardware validation.
@@ -312,9 +313,12 @@ Closed hardening items from the FreeRTOS comparison:
 
    Freeze the reverse dependency before bulk porting. Every selected port uses
    only `fiber_runtime_port_abi.h` to reach common scheduler/current state. Its
-   v1 symbol set, current-slot read-only rule, retained link anchor, exact
-   undefined-symbol allowlist, version-mismatch negative link, section-GC, and
-   LTO proofs are normative in `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`.
+   v1 symbol set, assembly-only current-slot rule, retained link anchor, exact
+   undefined-symbol and no-store allowlists, version-mismatch negative link,
+   section-GC, and LTO proofs are normative in
+   `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`. A separately archived handler bundle
+   uses its own unique extraction anchor; startup weak handler names are not an
+   extraction mechanism.
 
    Keep in the selected port:
 
@@ -467,7 +471,8 @@ Closed hardening items from the FreeRTOS comparison:
    - application and CubeMX strong wrappers are removed or excluded;
    - competing strong definitions intentionally fail the link;
    - wrapper/direct-vector settings are deleted;
-   - the matrix proves archive extraction and vector slots 11 and 14;
+   - the matrix proves archive extraction through the unique handler-bundle
+     anchor when needed, and proves vector slots 11 and 14;
    - runtime startup validates the selected active vector source, priority
      readback, and actual SVC/PendSV dispatch;
    - VTOR-capable ports read back the applicable VTOR bank, while ports without

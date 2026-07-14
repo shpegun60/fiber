@@ -385,7 +385,9 @@ CPU port. It is not an optional MPU or security extension. Its
 fiber/fiber_runtime_port_abi.h
 ```
 
-The v1 header exports exactly this symbol set:
+The v1 boundary contains exactly this symbol set. The header declares the
+anchor and callable functions. The current-context slot is intentionally listed
+as an assembly-visible symbol without a C object declaration:
 
 ```c
 #define FIBER_RUNTIME_PORT_ABI_VERSION 1u
@@ -393,8 +395,9 @@ The v1 header exports exactly this symbol set:
 extern const unsigned char
 fiber_internal_runtime_port_abi_v1_anchor;
 
-extern FiberContext *volatile
-fiber_internal_runtime_current_context_slot;
+/* Assembly-visible only; deliberately no C lvalue declaration here:
+ * fiber_internal_runtime_current_context_slot
+ */
 
 FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_runtime_select_scheduler_candidate(
@@ -416,17 +419,23 @@ void fiber_panic(char code);
 The canonical `fiber_panic()` declaration may remain physically owned by
 `fiber_panic.h`, but `fiber_runtime_port_abi.h` must make that declaration
 available. A selected port includes this one reverse header instead of
-redeclaring common symbols locally.
+redeclaring common callable symbols locally. The current-slot C declaration is
+kept in a common-private state header that selected ports cannot include.
 
 The exact semantics are:
 
 - `fiber_internal_runtime_port_abi_v1_anchor` is a link-time version guard. An
-  always-linked selected-port object must retain a relocation to this exact
-  symbol. A v1 port cannot silently link against a differently versioned common
-  runtime, including under section garbage collection or LTO.
-- `fiber_internal_runtime_current_context_slot` is common-owned storage. Port C
-  or assembly may read it to obtain the context being saved or restored. Only
-  common code may write it; direct port writes are forbidden.
+  object that implements at least one mandatory common-to-port ABI function and
+  is therefore referenced by common runtime must retain a relocation to this
+  exact symbol. The relocation must not depend on handler archive extraction. A
+  v1 port cannot silently link against a differently versioned common runtime,
+  including under section garbage collection or LTO.
+- `fiber_internal_runtime_current_context_slot` is common-owned storage exposed
+  to selected ports only by its frozen assembly symbol name. Selected inline
+  assembly or `.S` code may load the slot to obtain the context being saved or
+  restored. Selected-port C has no declaration, may not redeclare it, take its
+  address, or write it. Only common-private C may access it as an lvalue, and
+  only the common-owned publication helper may write it.
 - `fiber_internal_runtime_select_scheduler_candidate(current)` is the only
   selected-port entry into scheduler policy. `current == NULL` means first
   selection. Common code owns configured-hook checks, the first-selection
@@ -480,14 +489,23 @@ port:
 3. The common runtime defines one strong anchor, one current-context slot, and
    one strong definition of each non-overridable reverse function. It also
    provides exactly one effective weak-or-application-strong `fiber_panic()`.
-4. The selected-port handler object retains a relocation to
-   `fiber_internal_runtime_port_abi_v1_anchor` before final link. Replacing the
-   common runtime with a deliberately mismatched v2-only fixture must fail.
-5. The same checks pass with section garbage collection and LTO enabled.
-6. Optional port-extension objects, application integration hooks, and Secure
+4. A guaranteed always-linked mandatory ABI object, independently of the
+   handler object, retains the relocation to
+   `fiber_internal_runtime_port_abi_v1_anchor`. Replacing common runtime with a
+   deliberately mismatched v2-only fixture must fail before handler extraction
+   is considered.
+5. The reverse header does not make the current slot a C lvalue. A negative
+   selected-port C fixture that attempts to read, assign, or take its address
+   without a forbidden redeclaration must fail to compile. A source audit
+   rejects every selected-port C declaration or address escape of the symbol.
+   Generated assembly audits permit only the exact slot-address/load sequence
+   and reject every store through that address. Only the common runtime object
+   may emit stores to the slot.
+6. The same checks pass with section garbage collection and LTO enabled.
+7. Optional port-extension objects, application integration hooks, and Secure
    gateway objects are checked against their own explicit allowlists and never
    make the base reverse ABI appear larger.
-7. A negative fixture that includes or links an unsupported optional extension
+8. A negative fixture that includes or links an unsupported optional extension
    fails; a supported extension fixture links only when its matching selected
    port source/companion, optional common lifecycle object, and ABI identities
    are present.
@@ -544,15 +562,15 @@ void fiber_start(void)
     fiber_port_runtime_prepare_start();
 
     FiberContext *const first = fiber_port_runtime_select_first();
-    fiber_internal_runtime_seed_current_context(first);
+    fiber_internal_runtime_publish_current_context(first);
 
     fiber_port_runtime_start_first(first);
     FIBER_API_UNREACHABLE();
 }
 ```
 
-This pseudocode freezes ownership and order, not the spelling of private common
-helpers.
+This pseudocode freezes ownership and order. Private common checks may be
+refactored, but the shown v1 publication symbol is fixed.
 
 ## Exception Handler Ownership
 
@@ -590,9 +608,24 @@ mode with clear ownership and rollback rules.
 ## Static Archive and Dead-Code Rules
 
 A startup-file weak alias alone may not extract a handler object from a static
-archive. The selected port must create a strong relocation from an always-used
-port object to its handler object, or place the handlers in an object that is
-already required by the runtime ABI.
+archive. A direct reference to `SVC_Handler` or `PendSV_Handler` is also not a
+sufficient extraction guard when an already-linked startup object provides a
+weak definition with the same name.
+
+The selected port must use one of these two layouts:
+
+1. Define both strong handlers in an object that also implements at least one
+   mandatory common-to-port ABI function referenced by common runtime.
+2. Define both strong handlers and one unique strong
+   `fiber_port_handler_bundle_v1_anchor` in a separate handler object. A
+   guaranteed always-linked mandatory ABI object retains a strong relocation to
+   that unique anchor, forcing archive extraction independently of startup weak
+   aliases.
+
+The handler-bundle anchor is port-owned and is not part of either directional
+runtime ABI. Exactly one selected handler object may define it. The common ABI
+version anchor and the handler extraction anchor are independent proofs and may
+not be combined into one relocation.
 
 The build proof must cover:
 
@@ -603,7 +636,10 @@ The build proof must cover:
 - no application handler wrappers.
 
 The selected strong handlers must remain in the final ELF and must satisfy the
-active vector-table relocations.
+active vector-table relocations. A negative archive fixture with startup weak
+aliases must prove that removing the handler-bundle relocation prevents the
+expected handler extraction, while the production fixture must resolve slots 11
+and 14 to the selected strong handlers.
 
 ## Validation Proofs
 
@@ -631,6 +667,9 @@ For every selected port, the matrix must prove:
 - no application wrappers are required;
 - a deliberate competing strong handler fails to link;
 - handler archive members are extracted;
+- a separate handler object, when used, is extracted through
+  `fiber_port_handler_bundle_v1_anchor`, not through reliance on generic handler
+  names;
 - synthetic vector slots 11 and 14 resolve to the expected selected-port
   handler symbols;
 - `--gc-sections` does not discard required handlers;
@@ -671,15 +710,17 @@ not mixed with unrelated layout work.
    adding private selected-port headers for the displaced declarations.
 2. Add common-owned `fiber_runtime_port_abi.h`, implement its exact v1 symbols
    and link anchor, then rename common-owned scheduler globals and update exact
-   assembly references without changing publication order. Make the port-side
+   assembly references without changing publication order. Keep the current
+   slot out of the selected-port C declaration surface. Make the port-side
    `fiber_panic()` declaration strong while retaining only the common fallback
    definition as weak.
 3. Delete the wider `fiber_runtime_state.h` port surface and add reverse-symbol,
-   integration-hook, section-GC, and LTO allowlist proofs.
+   slot-load-only, integration-hook, section-GC, and LTO allowlist proofs.
 4. Collapse start preparation, first selection, first start, and schedule
    request choreography behind the new generic functions.
 5. Add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
-   preserving the existing validated assembly bodies.
+   preserving the existing validated assembly bodies. Co-locate them with a
+   mandatory ABI definition or add the unique handler-bundle extraction anchor.
 6. Remove CubeMX/application wrappers and delete wrapper/direct configuration
    switches.
 7. Add common compile-isolation and synthetic link/ELF proofs, including the
@@ -706,7 +747,11 @@ The common runtime boundary is frozen only when:
   header;
 - every selected port retains the v1 link-anchor relocation and passes exact
   reverse-symbol, application-hook, section-GC, and LTO allowlist proofs;
+- selected ports have no C declaration or address escape for the common current
+  slot, and generated assembly passes the load-only/no-store proof;
 - every selected port provides strong exclusive SVC and PendSV handlers;
+- separately archived handlers are forced into the link through the unique
+  handler-bundle anchor rather than startup handler names;
 - wrapper/direct macros and application wrappers are gone;
 - optional MPU, SecureContext, and TF-M extension ABIs remain outside
   `fiber_core.h` and the mandatory eight-function runtime ABI;
