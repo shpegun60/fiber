@@ -1,5 +1,73 @@
 # Fiber Decision Log
 
+## 2026-07-14: Freeze Reverse Port-to-Common ABI v1 Target
+
+The mandatory reverse port-to-common boundary is frozen as the implementation
+target for `common-core-freeze-v1`. One common-owned internal header,
+`fiber_runtime_port_abi.h`, exposes only:
+
+```text
+fiber_internal_runtime_port_abi_v1_anchor
+fiber_internal_runtime_current_context_slot
+fiber_internal_runtime_select_scheduler_candidate
+fiber_internal_runtime_publish_current_context
+fiber_internal_runtime_require_current_context
+fiber_internal_task_return
+fiber_panic
+```
+
+The current-context slot is read-only to selected ports. Hook/user storage,
+first-selection state, and all other lifecycle globals remain common-private.
+The candidate-selection helper owns hook/lifecycle/NULL policy while the port
+owns the CPU critical envelope and context validation. Only the common-owned
+publication helper writes a validated candidate to the slot.
+
+Port calls to `fiber_panic()` are strong references. The common fallback
+definition remains weak for one application override, so omitting every panic
+implementation is a link failure rather than a nullable weak call.
+
+The v1 anchor is a required retained relocation from an always-linked selected
+port object. Exact undefined-symbol allowlists, a deliberate version-mismatch
+negative link, section garbage collection, and LTO are required freeze proofs.
+Address-map and fallback-MSP hooks are port/application integration ABI, not
+reverse common ABI. TrustZone gateway symbols are a separately versioned
+cross-image ABI.
+
+## 2026-07-14: Keep Feature Extensions Outside the Mandatory Runtime ABI
+
+The five-function `fiber_core.h` API and eight-function common-to-port runtime
+ABI are sufficient for the CPU engine and remain the mandatory minimum for
+every selected port.
+
+MPU/unprivileged configuration, FreeRTOS-style SecureContext management, and
+TF-M integration use separate selected-port extension headers and sources.
+They are not included by `fiber_core.h` or `fiber_port_runtime_abi.h`, common
+runtime code does not reference them, and unsupported ports provide no silent
+stubs. An application that includes an extension header intentionally accepts a
+selected-port-specific API dependency.
+
+Context-mutating extensions reach common lifecycle through a separate optional
+`fiber_runtime_context_configuration_abi.h` v1 and
+`fiber_runtime_context_configuration.c`, not through the mandatory reverse ABI.
+Its exact service is
+`fiber_internal_runtime_require_context_configuration_open()` with a versioned
+link anchor. Ports without such an extension do not include or build this
+module.
+
+MPU extensions configure same-image region, privilege, system-call-stack, and
+initial CONTROL/frame policy. TrustZone SecureContext support additionally uses
+a separately versioned cross-image gateway ABI and compatibility proof. TF-M
+uses an NTZ-style Non-secure CPU port plus TF-M initialization and veneers; it
+does not also compile the fiber-owned SecureContext companion.
+
+The static-lifetime common lifecycle gains no destroy function. Dynamic context
+or SecureContext deletion, if ever required, is a separate optional lifecycle
+extension. Every enabled extension participates in context feature/layout
+identity and must fail closed on header/object or cross-image mismatch.
+
+The mandatory reverse ABI is fixed by the preceding decision. It does not
+expand the eight-function common-to-port ABI or any optional feature ABI.
+
 ## 2026-07-14: Define CPU-Neutral Runtime Port Boundary
 
 The final common-runtime to selected-port contract is frozen in

@@ -27,6 +27,12 @@ CPU-neutral eight-function ABI and the planned move from application wrappers
 to exclusive selected-port SVC/PendSV handlers. That handler move is documented
 but not yet implemented; the project setup below describes the current tree.
 
+The five functions in `fiber_core.h` are the complete portable common API.
+Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
+selected-port extension headers and sources. Those extensions are not included
+by `fiber_core.h`, are absent from ports that do not implement them, and do not
+expand the mandatory eight-function common-to-port runtime ABI.
+
 ## Project Setup
 
 Add the repository root to the include path, then include the public API:
@@ -76,6 +82,14 @@ is the concrete selected `fiber_portmacro.h`; it is private to selected port
 sources and deliberate low-level integration or test code. Common runtime code
 uses the opaque callable `fiber_port_runtime_abi.h` boundary and does not include
 the selected complete port contract.
+
+The inverse internal dependency is frozen by
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`: selected ports may reach common
+scheduler/current state only through `fiber_runtime_port_abi.h` v1. Optional
+MPU, SecureContext, and TF-M APIs are separate selected-port headers and
+sources. Ports without a feature export no placeholder API, and `fiber_core.h`
+never includes those extensions. Context-mutating extensions link the separate
+common lifecycle module documented in the boundary contract; base ports do not.
 
 The common runtime sources also compile without CMSIS. Selected ports provide
 the required CPU barrier and terminal panic-wait operations through the callable

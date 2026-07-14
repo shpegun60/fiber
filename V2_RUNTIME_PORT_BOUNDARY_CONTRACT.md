@@ -33,9 +33,9 @@ The boundary is intentionally narrower than the current implementation. Common
 code must not transport or interpret MSP, PSP, PSPLIM, EXC_RETURN, CONTROL,
 BASEPRI, VTOR, vector slots, frame offsets, or selected context fields.
 
-## Stable Public API
+## Stable Portable Common API
 
-The public API remains exactly:
+The portable common API exported by `fiber_core.h` remains exactly:
 
 ```c
 void fiber_init(FiberContext *ctx,
@@ -103,6 +103,159 @@ These declarations are CPU-neutral. The generic ABI must not expose:
 All other port helpers are private to the selected port. They may be split
 across C, inline assembly, dedicated assembly, boot, exception, FPU, MPU,
 security, or errata files without expanding this ABI.
+
+## Optional Selected-Port Extension ABIs
+
+The eight functions above are the complete mandatory common-to-port ABI. They
+are sufficient for every privileged, static-lifetime cooperative CPU port and
+remain unconditional for every selected port.
+
+MPU, unprivileged execution, FreeRTOS-style SecureContext management, and TF-M
+integration may require configuration or gateway operations that have no
+meaning for a classic privileged port. Those operations use separate optional
+selected-port extension ABIs. They are not a ninth mandatory runtime function,
+are never declared by `fiber_port_runtime_abi.h`, and are never called by
+common runtime code.
+
+The portable application surface remains the five functions in
+`fiber_core.h`. An application that deliberately uses a selected CPU/security
+feature may additionally include an explicit selected-port extension header,
+for example:
+
+```text
+ARM_CM3_MPU/
+  fiber_port_mpu_abi.h
+  fiber_port_mpu.c
+
+ARM_CM33_NTZ/
+  fiber_port_mpu_abi.h
+  fiber_port_mpu.c
+  fiber_port_tfm_abi.h        # only when an application-facing TF-M hook exists
+  fiber_port_tfm.c
+
+ARM_CM33/
+  fiber_port_mpu_abi.h
+  fiber_port_mpu.c
+  fiber_port_secure_context_abi.h
+  fiber_port_secure_context.c
+  secure/
+    fiber_secure_gateway_abi.h
+    fiber_secure_gateway.c
+```
+
+Names may be specialized by a concrete port, but the ownership rules are
+normative:
+
+- `fiber_core.h` does not include optional extension headers;
+- common runtime objects reference no optional extension symbol;
+- hardware capability alone does not enable an extension: the selected port
+  profile must implement and advertise that exact extension;
+- the build includes an extension source only for a selected port/profile that
+  implements it;
+- a port that does not implement an extension provides neither a silent no-op
+  stub, an empty compatibility header, a placeholder symbol, nor a false
+  capability declaration;
+- including or linking an unsupported extension fails at compile or link time;
+- an application opts into an implemented extension by explicitly including
+  its selected-port extension header and linking its matching source or
+  companion artifact; including `fiber_core.h` alone never opts in;
+- an extension that changes context layout, privilege, CONTROL, PSPLIM, MPU
+  regions, SecureContext state, PAC keys, or frame construction updates the
+  selected context feature/layout identity and rebuilds its immutable seal;
+- pre-start context configuration uses the common-owned lifecycle guard and is
+  rejected after the context becomes running or immutable;
+- any extension callable from an unprivileged fiber enters privileged port code
+  only through a validated port-owned SVC service;
+- extension service numbers share one selected-port SVC dispatch table and are
+  checked for uniqueness at compile time.
+
+The base CPU port still owns all mechanics required to run the profile. For
+example, an MPU profile always saves/restores its MPU and privilege state, and
+an MVE profile always saves/restores its architectural extended context. The
+optional application header exposes only configuration or lifecycle operations
+that an application may deliberately request. It is not a mechanism for common
+runtime code to discover hardware at runtime.
+
+A concrete port with no MPU, Security Extension, SecureContext, or TF-M role
+does not implement the corresponding extension functions. No conditional call
+to those functions exists in common code. A distinct capable profile, such as
+an MPU or Non-secure profile for the same CPU family, owns its different
+`FiberContext` layout and provides the additional API files itself.
+
+The resulting build model is explicit:
+
+| Selected profile | Mandatory runtime ABI | Reverse ABI v1 | Optional public extension |
+| --- | --- | --- | --- |
+| CM0/CM3/CM4/CM7 privileged | required | required | none |
+| CM3/CM4 MPU profile | required | required | MPU header/source |
+| CM33 Non-secure with fiber SecureContext | required | required | MPU and/or SecureContext header/source plus Secure companion |
+| CM33/CM55 NTZ with TF-M | required | required | MPU and/or TF-M integration header/source; no fiber Secure companion |
+
+This table describes profile ownership, not an automatic hardware probe. A
+future port adds another row/profile rather than making common runtime branch on
+CPU capabilities.
+
+When an optional selected-port API mutates a context, it needs one
+common-owned lifecycle decision without gaining access to common scheduler
+globals. That dependency uses a separate optional reverse-extension module:
+
+```text
+application
+  includes selected-port fiber_port_<feature>_abi.h
+
+selected-port fiber_port_<feature>.c
+  includes internal fiber_runtime_context_configuration_abi.h
+
+optional common fiber_runtime_context_configuration.c
+  implements the lifecycle guard
+```
+
+The first optional reverse-extension ABI is frozen as:
+
+```c
+#define FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_VERSION 1u
+
+extern const unsigned char
+fiber_internal_runtime_context_configuration_abi_v1_anchor;
+
+FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_require_context_configuration_open(
+        const FiberContext *ctx);
+```
+
+This helper rejects NULL, a running/started runtime, and selection-time
+reconfiguration. It does not validate or mutate selected-port context fields.
+After it returns, the feature implementation validates its private layout,
+applies the change, rebuilds affected synthetic state, and reseals the context.
+The application contract still forbids mutation after publishing the context
+to its own scheduler data structure because common code cannot observe that
+publication.
+
+The optional common source and selected-port feature source are linked only
+when that feature module is enabled. A port without such an API does not include
+the optional reverse header, does not retain its anchor, and does not build
+either source. This optional ABI therefore does not add a symbol to the base
+reverse v1 allowlist or a function to `fiber_core.h`.
+
+The three extension classes have different boundaries:
+
+1. An MPU/unprivileged extension is an application-to-selected-port ABI in the
+   same runtime image. It may configure regions, privilege, system-call stack,
+   and the initial CONTROL/frame policy.
+2. A FreeRTOS-style TrustZone SecureContext extension has a Non-secure selected
+   port side and a separately built Secure companion. Their cross-image gateway
+   ABI is versioned independently from the eight-function runtime ABI and needs
+   a build-manifest or startup compatibility proof.
+3. A TF-M profile normally uses the matching NTZ-style Non-secure CPU port plus
+   TF-M veneers and initialization. It must not also compile the fiber-owned
+   SecureContext companion. If user-visible TF-M setup is required, it lives in
+   its own selected-port integration header; otherwise it remains private to
+   `fiber_port_runtime_prepare_start()`.
+
+Static-lifetime fibers do not require a mandatory destroy operation. A future
+dynamic SecureContext or context-deletion feature must define its own optional
+lifecycle ABI and cannot be smuggled into a CPU port or the frozen five-function
+common lifecycle.
 
 ## ABI Function Semantics
 
@@ -224,21 +377,127 @@ not give the port ownership of scheduler policy.
 
 ## Reverse Port-to-Common Boundary
 
-The reverse boundary remains internal and CPU-neutral. It provides operations
-equivalent to:
+The reverse boundary is internal, CPU-neutral, and mandatory for every selected
+CPU port. It is not an optional MPU or security extension. Its
+`common-core-freeze-v1` spelling is declared by one common-owned header:
 
 ```text
-begin first selection lifecycle
-end first selection lifecycle
-invoke pick-next policy
-require a current context for scheduling
-commit or seed current context
-load current context with required ordering
-query whether the scheduler hook is configured
+fiber/fiber_runtime_port_abi.h
 ```
 
-Exact internal helper names may change. The selected port must not directly
-reinterpret the common lifecycle flags or duplicate NULL/hot-swap policy.
+The v1 header exports exactly this symbol set:
+
+```c
+#define FIBER_RUNTIME_PORT_ABI_VERSION 1u
+
+extern const unsigned char
+fiber_internal_runtime_port_abi_v1_anchor;
+
+extern FiberContext *volatile
+fiber_internal_runtime_current_context_slot;
+
+FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_select_scheduler_candidate(
+        FiberContext *current);
+
+FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_publish_current_context(FiberContext *next);
+
+FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_require_current_context(void);
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_task_return(void);
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_panic(char code);
+```
+
+The canonical `fiber_panic()` declaration may remain physically owned by
+`fiber_panic.h`, but `fiber_runtime_port_abi.h` must make that declaration
+available. A selected port includes this one reverse header instead of
+redeclaring common symbols locally.
+
+The exact semantics are:
+
+- `fiber_internal_runtime_port_abi_v1_anchor` is a link-time version guard. An
+  always-linked selected-port object must retain a relocation to this exact
+  symbol. A v1 port cannot silently link against a differently versioned common
+  runtime, including under section garbage collection or LTO.
+- `fiber_internal_runtime_current_context_slot` is common-owned storage. Port C
+  or assembly may read it to obtain the context being saved or restored. Only
+  common code may write it; direct port writes are forbidden.
+- `fiber_internal_runtime_select_scheduler_candidate(current)` is the only
+  selected-port entry into scheduler policy. `current == NULL` means first
+  selection. Common code owns configured-hook checks, the first-selection
+  lifecycle guard, hot-swap rejection, hook/user loading, policy invocation,
+  and NULL-result panic semantics. The port owns the CPU critical envelope and
+  validates the returned context before publication.
+- `fiber_internal_runtime_publish_current_context(next)` rejects NULL and
+  publishes only a port-validated candidate with the required ordering. It is
+  used by common first-start choreography and by the selected PendSV path.
+- `fiber_internal_runtime_require_current_context()` implements the common
+  lifecycle precondition used by the port's Thread-mode schedule request. It
+  does not inspect CPU masks or registers.
+- `fiber_internal_task_return()` is the common no-return target seeded into a
+  synthetic context frame. It reports panic code `'R'` if an entry function
+  returns.
+- `fiber_panic()` is the no-return diagnostic escape used by port C and naked
+  assembly. Port callers hold a strong reference. The common fallback definition
+  is weak so an application may replace it with one strong definition, but a
+  missing effective implementation remains a link failure. Its calling
+  convention and no-return/general-registers-only contract are part of this
+  reverse ABI.
+
+No other common scheduler symbol is visible to a selected port. In particular,
+the hook pointer, user pointer, first-selection flag, and direct storage/update
+helpers remain private to common runtime translation units. A selected port
+must not call the five-function public API from SVC/PendSV as a substitute for
+this internal bridge.
+
+Port-owned application integration hooks are a different boundary and are not
+added to the reverse ABI. The current examples are:
+
+```c
+int fiber_addr_plausible_ram(uintptr_t begin, uintptr_t end);
+int fiber_addr_plausible_code(uintptr_t address);
+uintptr_t fiber_fallback_initial_msp(void);
+```
+
+Their weak defaults, override policy, CPU-state preservation checks, and linker
+map semantics belong to the selected port/integration contract. Secure gateway
+symbols similarly belong to a separately versioned cross-image ABI. Neither
+category may be admitted by the reverse common-symbol allowlist accidentally.
+
+The compile/link matrix must prove all of the following for every selected
+port:
+
+1. The mandatory selected-port runtime source group's undefined common-symbol
+   set is exactly the base v1 reverse allowlist, plus explicitly classified
+   toolchain/runtime dependencies. No scheduler global or common private helper
+   appears.
+2. The port defines none of the common-owned reverse symbols.
+3. The common runtime defines one strong anchor, one current-context slot, and
+   one strong definition of each non-overridable reverse function. It also
+   provides exactly one effective weak-or-application-strong `fiber_panic()`.
+4. The selected-port handler object retains a relocation to
+   `fiber_internal_runtime_port_abi_v1_anchor` before final link. Replacing the
+   common runtime with a deliberately mismatched v2-only fixture must fail.
+5. The same checks pass with section garbage collection and LTO enabled.
+6. Optional port-extension objects, application integration hooks, and Secure
+   gateway objects are checked against their own explicit allowlists and never
+   make the base reverse ABI appear larger.
+7. A negative fixture that includes or links an unsupported optional extension
+   fails; a supported extension fixture links only when its matching selected
+   port source/companion, optional common lifecycle object, and ABI identities
+   are present.
+
+The reverse ABI is deliberately smaller than the current transitional
+`fiber_runtime_state.h` surface. Mechanical migration collapses begin/end first
+selection, hook invocation, and NULL handling into
+`fiber_internal_runtime_select_scheduler_candidate()`, renames the current
+slot, and removes every displaced declaration after all ports use the v1
+header.
 
 ## Normative `fiber_start()` Order
 
@@ -410,17 +669,22 @@ not mixed with unrelated layout work.
 
 1. Narrow `fiber_port_runtime_abi.h` to the eight generic functions while
    adding private selected-port headers for the displaced declarations.
-2. Rename common-owned scheduler globals and update exact assembly references
-   without changing publication order.
-3. Collapse start preparation, first selection, first start, and schedule
+2. Add common-owned `fiber_runtime_port_abi.h`, implement its exact v1 symbols
+   and link anchor, then rename common-owned scheduler globals and update exact
+   assembly references without changing publication order. Make the port-side
+   `fiber_panic()` declaration strong while retaining only the common fallback
+   definition as weak.
+3. Delete the wider `fiber_runtime_state.h` port surface and add reverse-symbol,
+   integration-hook, section-GC, and LTO allowlist proofs.
+4. Collapse start preparation, first selection, first start, and schedule
    request choreography behind the new generic functions.
-4. Add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
+5. Add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
    preserving the existing validated assembly bodies.
-5. Remove CubeMX/application wrappers and delete wrapper/direct configuration
+6. Remove CubeMX/application wrappers and delete wrapper/direct configuration
    switches.
-6. Add common compile-isolation and synthetic link/ELF proofs, including the
+7. Add common compile-isolation and synthetic link/ELF proofs, including the
    static-archive extraction and duplicate-handler negative tests.
-7. Run the full H7 normal, FPU, startup, trap, active-VTOR, SVC, and PendSV
+8. Run the full H7 normal, FPU, startup, trap, active-VTOR, SVC, and PendSV
    hardware validation suite.
 
 Strong handler ownership is intentionally after ABI narrowing and private
@@ -431,13 +695,24 @@ exception wiring from changing in one undiagnosable step.
 
 The common runtime boundary is frozen only when:
 
-- the public API still contains exactly five functions;
+- the portable common API in `fiber_core.h` still contains exactly five
+  functions;
 - the common-to-port ABI contains exactly the eight functions in this document;
 - common runtime objects pass the CMSIS-free symbol allowlist;
 - common code transports no CPU register value or frame geometry;
 - common scheduler state has CPU-neutral names and remains common-owned;
+- `fiber_runtime_port_abi.h` exposes exactly the v1 reverse symbols listed in
+  this document, and no selected port includes the transitional runtime-state
+  header;
+- every selected port retains the v1 link-anchor relocation and passes exact
+  reverse-symbol, application-hook, section-GC, and LTO allowlist proofs;
 - every selected port provides strong exclusive SVC and PendSV handlers;
 - wrapper/direct macros and application wrappers are gone;
+- optional MPU, SecureContext, and TF-M extension ABIs remain outside
+  `fiber_core.h` and the mandatory eight-function runtime ABI;
+- unsupported ports do not provide silent extension stubs;
+- context-mutating extensions use the versioned optional context-configuration
+  lifecycle ABI, while profiles without them build neither optional source;
 - synthetic archive/link/vector/LTO proofs pass for every compiled port;
 - H7 board validation passes after the final handler migration;
 - existing panic ordering is preserved except for the documented

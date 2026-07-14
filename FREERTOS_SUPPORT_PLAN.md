@@ -19,6 +19,14 @@ a common FreeRTOS-style MPU task-management API, or the FreeRTOS API surface.
 Selected MPU ports may still own optional pre-start region/privilege
 configuration and an SVC yield path for unprivileged fibers.
 
+The portable API and mandatory CPU runtime ABI stay minimal. Feature-specific
+MPU, SecureContext, and TF-M operations are separate selected-port extension
+ABIs in separate headers and sources. `fiber_core.h` does not include them,
+common runtime objects do not call them, and ports without the feature provide
+no no-op compatibility stubs. TrustZone Secure companion gateways are versioned
+cross-image ABIs; TF-M profiles use the matching NTZ-style CPU port and TF-M
+integration instead of the fiber-owned SecureContext companion.
+
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
 
@@ -302,6 +310,12 @@ Closed hardening items from the FreeRTOS comparison:
      selected port embeds that metadata;
    - portable diagnostics and integration-defined RAM/code plausibility hooks.
 
+   Freeze the reverse dependency before bulk porting. Every selected port uses
+   only `fiber_runtime_port_abi.h` to reach common scheduler/current state. Its
+   v1 symbol set, current-slot read-only rule, retained link anchor, exact
+   undefined-symbol allowlist, version-mismatch negative link, section-GC, and
+   LTO proofs are normative in `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`.
+
    Keep in the selected port:
 
    - the complete `FiberContext` layout and any port-specific boot data;
@@ -309,6 +323,20 @@ Closed hardening items from the FreeRTOS comparison:
    - saved-SP, EXC_RETURN, CONTROL, PSPLIM, MPU, security, PAC, FP, and MVE
      storage as required by that profile;
    - runtime MSP preparation and first-context SVC transfer.
+
+   Do not add MPU, SecureContext, or TF-M functions to either mandatory ABI.
+   FreeRTOS keeps those concerns in MPU port files, Secure companion files, or
+   Non-secure/TF-M variants; fiber follows the same artifact split. A selected
+   profile without a feature exports no extension functions. A capable profile
+   supplies a separate application-included header and matching source or
+   cross-image companion, while its mandatory CPU mechanics remain private to
+   the selected port.
+
+   A context-mutating extension additionally links optional common
+   `fiber_runtime_context_configuration.c` and calls only the versioned guard
+   declared by `fiber_runtime_context_configuration_abi.h`. This preserves
+   common lifecycle ownership without adding MPU/security operations to the
+   base reverse ABI. Profiles without an extension omit both files.
 
    The common metadata hash is not the final context proof. Every production
    port owns an immutable seal over its layout/configuration identity and

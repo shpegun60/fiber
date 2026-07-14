@@ -77,9 +77,9 @@ Dynamic secure-context cleanup, context deletion, SMP, migration between cores,
 or a new scheduler lifecycle may require an explicit common API extension. Such
 an extension is outside this freeze and must not be smuggled into a CPU port.
 
-## Public API
+## Portable Common API
 
-The public cooperative API remains:
+The portable cooperative API exported by `fiber_core.h` remains:
 
 ```c
 void fiber_init(FiberContext *ctx,
@@ -579,10 +579,13 @@ Each selected-port configuration function must:
 6. rebuild the port-private seal;
 7. leave the context fully restorable or explicitly unready.
 
-The lifecycle guard may have a name such as
-`fiber_internal_context_configuration_require_open()`. Its exact name is not
-frozen, but its ownership is: selected ports must not inspect common current,
-scheduler-hook, or runtime-state globals directly.
+The lifecycle guard is frozen as
+`fiber_internal_runtime_require_context_configuration_open()` in the optional
+common-owned `fiber_runtime_context_configuration_abi.h` v1. Its implementation
+lives in optional `fiber_runtime_context_configuration.c`. Ports without a
+context-mutating extension neither include nor link this module. Selected-port
+extensions must not inspect common current, scheduler-hook, or runtime-state
+globals directly.
 
 The library cannot observe when an application inserts a pointer into its own
 scheduler data structure. The application must not mutate a context after making
@@ -592,6 +595,50 @@ not a synchronization API.
 Possible optional APIs include MPU region configuration, privilege/security
 policy, and secure-context allocation. They are selected-port APIs and do not
 expand the five-function common surface.
+
+The physical API split is normative:
+
+```text
+fiber_core.h
+    five portable common functions only
+
+fiber_port_runtime_abi.h
+    eight mandatory common-to-selected-port functions only
+
+fiber_runtime_port_abi.h
+    mandatory internal reverse ABI v1 used by every selected port
+
+fiber_runtime_context_configuration_abi.h/.c
+    optional common lifecycle service used only by context-mutating extensions
+
+selected-port optional headers
+    MPU, privilege, SecureContext, or TF-M integration only where implemented
+```
+
+Optional headers and sources live in the concrete selected port or its matched
+Secure companion. They are not selected by `fiber_core.h`, are not included by
+common runtime translation units, and do not exist as no-op compatibility
+stubs in ports that lack the feature. Applications that include such a header
+are intentionally using a selected-port-specific extension rather than the
+portable five-function API.
+
+Every CPU port implements the mandatory eight-function common-to-port ABI and
+uses the mandatory reverse ABI v1 because every profile needs scheduler policy
+and current-context publication. Optional feature functions are different: a
+profile that does not implement MPU, SecureContext, or TF-M exports no such
+header, source, or symbol. A capable profile owns the extra context layout and
+the application explicitly includes and links its matching extension artifact.
+Common runtime contains no conditional call to an absent extension.
+
+An MPU extension is same-image application-to-port configuration. A
+FreeRTOS-style SecureContext extension also defines a separately versioned
+Non-secure-to-Secure gateway ABI. A TF-M build uses an NTZ-style Non-secure port
+plus the matching TF-M initialization/veneer contract and must not also bind the
+fiber-owned SecureContext companion.
+
+Every enabled extension participates in selected context feature/layout
+identity. Header/object, Non-secure/Secure, or NTZ/TF-M mismatches fail at
+compile, link, manifest validation, or startup before the first context runs.
 
 ## MPU And Unprivileged Runtime Rules
 
@@ -670,6 +717,12 @@ Each family still requires its own line-by-line parity ledger, compile/link
 matrix, generated-assembly audit, trap tests, and board evidence. Dual-core STM32
 devices are supported as one independent single-core fiber runtime per build;
 SMP and cross-core migration remain outside this freeze.
+
+The eight-function mandatory runtime ABI and base reverse ABI v1 are therefore
+sufficient for every row in the table. Rows that enable MPU, SecureContext, or
+TF-M additionally bind the selected-port feature ABI and, when context mutation
+is exposed, the optional common context-configuration lifecycle module. They do
+not modify common runtime choreography.
 
 ## Mechanical Migration Sequence
 
