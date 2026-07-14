@@ -4,11 +4,11 @@ This document defines the selected port's compile-time CPU contract. It is
 modeled after the FreeRTOS selected `portmacro.h` plus one matching port source
 group, but scheduler policy remains application-owned and cooperative.
 
-`V2_OPAQUE_CONTEXT_CONTRACT.md` defines the final common-runtime boundary. The
-current source still consumes some traits directly while the context layout is
-shared. After the opaque-context migration, common translation units consume
-only opaque context pointers, selected internal ABI token types, and callable
-port operations. Frame-layout traits remain selected-port implementation and
+`V2_OPAQUE_CONTEXT_CONTRACT.md` defines the opaque context boundary and
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` defines the final CPU-neutral callable
+ABI. Common translation units consume only opaque context pointers and the
+approved eight callable port operations. They do not allocate selected CPU
+state tokens. Frame-layout traits remain selected-port implementation and
 compile-validation facts.
 
 ## Non-Negotiable Rules
@@ -266,37 +266,28 @@ only in PendSV after the outgoing context has been saved.
 
 ## Required Callable Interface
 
-The common runtime sees the current callable ABI below and no selected layout,
-CMSIS, frame, or CPU-register detail. Selected-port-local FPU, BASEPRI/PRIMASK,
-PSPLIM, vector, frame, and PendSV helpers remain implementation details.
+The common runtime sees the final callable ABI below and no selected layout,
+CMSIS, frame, CPU-state token, or CPU-register detail. Selected-port-local FPU,
+BASEPRI/PRIMASK, PSPLIM, vector, frame, validator, SVC, and PendSV helpers remain
+implementation details.
 
 ```text
 fiber_port_context_init
-fiber_port_context_validate_restore
-fiber_port_context_validate_save_current
-fiber_port_context_prepare_first_start
 fiber_port_runtime_memory_barrier
 fiber_port_panic_wait
-fiber_port_require_start_environment
-fiber_port_require_start_interrupt_state
-fiber_port_require_schedule_environment
-fiber_port_runtime_prepare
-fiber_port_request_schedule
-fiber_port_scheduler_set_pick_next
-fiber_port_scheduler_pick_first_from_start
-fiber_port_scheduler_pick_next_from_pendsv
-fiber_exception_runtime_check
-fiber_pendsv_init_lowest_priority
-fiber_port_start_first_context
-fiber_svc
-fiber_pendsv
+fiber_port_require_scheduler_configuration_environment
+fiber_port_runtime_prepare_start
+fiber_port_runtime_select_first
+fiber_port_runtime_start_first
+fiber_port_runtime_schedule
 ```
 
 The selected source group defines every mandatory external ABI symbol exactly
-once. The compile matrix performs a relocatable link and uses `nm` to prove that
-property, including port-private global boot-record and context-frame helpers.
-Every callable ABI addition or removal updates the audited symbol list in the
-same structural commit.
+once. Port-private helpers are not part of this global ABI allowlist. The final
+matrix also proves strong selected-port `SVC_Handler` and `PendSV_Handler`
+ownership, archive extraction, vector relocations, duplicate-handler failure,
+`--gc-sections` retention, and LTO retention. Every callable ABI addition or
+removal updates the audited symbol list in the same structural commit.
 
 Every context layout also defines immutable port identity, layout version,
 size, alignment, and feature identity. A real versioned-symbol relocation or
@@ -344,9 +335,11 @@ For each new concrete STM32 Cortex-M port:
 3. Record each item as adopted, renamed, intentionally omitted, or hardened.
 4. Define all canonical traits without legacy aliases.
 5. Implement SVC first-start and scheduler-driven PendSV.
-6. Add wrapper and direct-vector compile modes.
+6. Define strong selected-port `SVC_Handler` and `PendSV_Handler` symbols.
 7. Add build-selected source-group coverage.
-8. Relocatable-link and verify one ABI definition per symbol.
+8. Relocatable-link and verify one ABI definition per symbol, handler archive
+   extraction, vector slots 11/14, duplicate-handler failure, GC retention, and
+   LTO retention.
 9. Inspect generated assembly for context order and FP-free scheduler bridges.
 10. Run profile-specific hardware normal, FP, mask, frame-corruption, and
     vector-routing tests.

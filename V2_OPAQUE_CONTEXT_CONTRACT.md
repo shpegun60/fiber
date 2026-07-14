@@ -5,6 +5,12 @@
 This document defines the target common-core boundary that must be completed
 before adding production Cortex-M ports in bulk.
 
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` is the normative follow-on contract for
+the final CPU-neutral callable ABI, common lifecycle order, exclusive
+selected-port exception-handler ownership, and its compile/link/runtime proofs.
+Where an older callable signature or wrapper-vector statement in this document
+conflicts with that follow-on contract, the follow-on contract wins.
+
 It supersedes every older v2 statement that requires one shared, common-known
 `FiberContext` or boot-record layout for all ports. The selected-port context
 and boot ownership phase is implemented: `fiber_api_types.h`, the single
@@ -348,51 +354,44 @@ Common C neither allocates nor interprets them.
 
 ## Callable Port Boundary
 
-The target callable boundary is approximately:
+The final common-to-port callable boundary is exact:
 
 ```c
 void fiber_port_context_init(FiberContext *ctx,
                              void *stack_begin,
                              void *stack_end,
-                             FiberEntryFn entry,
+                             entry_t entry,
                              void *arg);
-void fiber_port_context_validate_restore(FiberContext *ctx);
-void fiber_port_context_validate_save_current(const FiberContext *ctx);
-uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
 
 FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void);
 FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
-void fiber_port_require_start_environment(void);
-void fiber_port_require_start_interrupt_state(void);
-void fiber_port_runtime_prepare(void);
-void fiber_port_require_schedule_environment(void);
-void fiber_port_request_schedule(void);
+void fiber_port_require_scheduler_configuration_environment(void);
+void fiber_port_runtime_prepare_start(void);
 
-void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
-                                         void *user);
-FiberContext *fiber_port_scheduler_pick_first_from_start(void);
-FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
-        FiberContext *current);
+FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_port_runtime_select_first(void);
 
-void fiber_exception_runtime_check(void);
-void fiber_pendsv_init_lowest_priority(void);
 FIBER_API_NORETURN
-void fiber_port_start_first_context(uintptr_t msp_top);
-void fiber_svc(void);
-void fiber_pendsv(void);
+void fiber_port_runtime_start_first(FiberContext *first);
+
+void fiber_port_runtime_schedule(void);
 ```
 
-Exact internal names may evolve during the mechanical split. The ownership and
-the prohibition on common context layout knowledge are frozen.
+Context validators, startup MSP helpers, exception setup, scheduler critical
+state, SVC/PendSV implementation symbols, and vector policy are selected-port
+private. In particular, common code never receives an MSP value.
+
+The current wider `fiber_port_runtime_abi.h` is transitional. Its removal is a
+mechanical migration governed by `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`; it is
+not a second supported ABI.
 
 The reverse port-to-common boundary is also explicit. After saving the current
-CPU context, PendSV calls the selected-port
-`fiber_port_scheduler_pick_next_from_pendsv()` wrapper. That wrapper applies
-selected CPU-state and restore validation, then calls the common
-general-registers-only helpers:
+CPU context, PendSV uses a selected-port private wrapper. That wrapper applies
+selected CPU-state and restore validation, then calls common
+general-registers-only helpers equivalent to:
 
 ```c
 FiberContext *fiber_internal_scheduler_invoke_pick_next(FiberContext *current);
@@ -478,22 +477,28 @@ pointer with the required common ordering barriers.
 
 `fiber_start()` is one-shot and does not return:
 
-1. validate common lifecycle and selected-port start preconditions;
-2. prepare and validate port runtime state before invoking user scheduler code;
-3. call the selected-port first-selection wrapper, which enters its C critical
+1. validate common scheduler configuration and require `current == NULL`;
+2. prepare and validate all port-owned runtime state before invoking user
+   scheduler code;
+3. call the selected-port first-selection operation, which enters its C critical
    section, captures callback CPU state, invokes `pick_next(NULL, user)`, and
    validates the returned context;
 4. leave the exact previous selected critical state restored;
-5. prepare the selected first context and port-owned startup MSP state;
-6. publish the selected context as current;
-7. transfer through the selected port's mandatory SVC first-start path.
+5. publish the selected context as current in common state;
+6. pass the selected context pointer to the selected port and transfer through
+   its mandatory SVC first-start path.
 
-`fiber_schedule()` delegates environment validation and the request through
-`fiber_port_require_schedule_environment()` and
-`fiber_port_request_schedule()`. Common code owns only current-context
-lifecycle validation and does not read IPSR, CONTROL, PRIMASK, BASEPRI,
-FAULTMASK, SCB, or NVIC state. CPU preconditions and the request mechanism are
-selected-port policy:
+The resulting public panic precedence is normative: `'K'` and `'k'` occur
+before selected-port CPU-environment panic codes. Invalid common lifecycle
+state therefore cannot trigger CPU configuration changes.
+
+`fiber_schedule()` delegates the complete CPU request operation through
+`fiber_port_runtime_schedule()`. Common code owns current-context lifecycle
+semantics but does not read IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK, SCB, or
+NVIC state. The selected operation may call the approved reverse common
+current-owner guard at the exact point needed to preserve existing panic
+precedence. CPU preconditions and the request mechanism are selected-port
+policy:
 
 - a privileged non-MPU path validates Thread mode and every readable mask
   invariant, then may publish `PENDSVSET` directly with mandatory barriers;
@@ -668,6 +673,11 @@ SMP and cross-core migration remain outside this freeze.
 
 ## Mechanical Migration Sequence
 
+The opaque context/type migration below is the completed foundation. The
+follow-on callable-ABI and handler-ownership slices are defined in
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`. They must not be collapsed into one
+behavior-changing refactor.
+
 ### Commit 1: Documentation
 
 `Define opaque selected-port context ABI`
@@ -689,10 +699,11 @@ SMP and cross-core migration remain outside this freeze.
 
 ### Commit 3: Common Hardening Cleanup
 
-- schedule-time IPSR, PRIMASK, BASEPRI, FAULTMASK, SCB, and direct-PendSV
-  access now live behind `fiber_port_require_schedule_environment()` and
-  `fiber_port_request_schedule()`; remaining non-schedule common CPU access
-  moves with the opaque context transition;
+- at this historical checkpoint, schedule-time IPSR, PRIMASK, BASEPRI,
+  FAULTMASK, SCB, and direct-PendSV access moved behind
+  `fiber_port_require_schedule_environment()` and
+  `fiber_port_request_schedule()`; the follow-on boundary collapses those
+  transitional calls into `fiber_port_runtime_schedule()`;
 - preserve the generated CM7 direct-request sequence and every existing CM7
   panic code while keeping the common current-owner guard between the IPSR and
   mask checks in the selected CM7 port;

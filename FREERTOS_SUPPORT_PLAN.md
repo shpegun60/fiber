@@ -191,18 +191,22 @@ Closed hardening items from the FreeRTOS comparison:
      `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` compile mode
    - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
      `FIBER_TZ_NS=1` and `-mcmse`
-   - PendSV direct-vector mode with `FIBER_PENDSV_VECTOR_DIRECT=1`
-   - ARMv7E-M PendSV+SVC direct-vector mode with
+   - transitional PendSV direct-vector mode with
+     `FIBER_PENDSV_VECTOR_DIRECT=1`
+   - transitional ARMv7E-M PendSV+SVC direct-vector mode with
      `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
    - build-selected portmacro mode with `FIBER_PORT_BUILD_SELECTED=1`
    - Cortex-M7/Cortex-M7F build-selected source group
      `fiber/port/ARM_CM7/r0p1/fiber_port.c`, including the port-owned errata
      workaround
 
-   Every selected profile must compile in wrapper and direct-vector SVC/PendSV
-   modes. Each mode is then relocatably linked and inspected with `nm`; every
-   mandatory port ABI symbol must have exactly one global definition. Passing
-   the matrix is compile/link coverage only; runtime support still requires
+   Wrapper/direct-vector modes remain compile-covered only while the current
+   transitional handler integration exists. The final contract in
+   `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` replaces them with selected-port
+   strong `SVC_Handler` and `PendSV_Handler` symbols. At that point the matrix
+   must prove archive extraction, vector-slot relocation, duplicate-strong
+   failure, `--gc-sections` retention, and LTO retention instead. Passing the
+   matrix is compile/link coverage only; runtime support still requires
    profile-specific hardware validation.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
@@ -425,25 +429,27 @@ Closed hardening items from the FreeRTOS comparison:
    There is no v2 public API for starting from a caller-provided port boot
    record. Ports without hardware validation are not runtime-supported.
 
-2. Keep vector wiring verification active.
+2. Move vector wiring to exclusive selected-port handler ownership.
 
-   Rationale: FreeRTOS validates critical handler wiring in its startup path.
-   `fiber_exception_runtime_check()` now verifies that the active vector table
-   routes PendSV and SVC to the expected handler symbols. The default PendSV
-   model expects an application wrapper `PendSV_Handler()` that branches to
-   `fiber_pendsv()` without clobbering LR/EXC_RETURN. A normal C wrapper that
-   emits `bl fiber_pendsv` is invalid because `fiber_pendsv()` needs the
-   hardware `EXC_RETURN` in LR. Projects that vector directly to
-   `fiber_pendsv()` must set `FIBER_PENDSV_VECTOR_DIRECT=1`. The SVC first-start
-   path has the same rule: default validation expects an `SVC_Handler()` wrapper,
-   and direct vectoring to `fiber_svc()` requires `FIBER_SVC_VECTOR_DIRECT=1`.
-   SVC vector validation is mandatory because SVC is mandatory for first
-   start.
+   Rationale: FreeRTOS treats exception handlers as part of its CPU-port
+   integration. The final fiber boundary follows the same static ownership
+   discipline while keeping stronger runtime checks:
 
-   This proves vector-table routing. The ARMv7E-M SVC first-start path adds a
-   separate dispatch check by validating MSP-frame alignment and decoding the
-   SVC opcode plus immediate in `fiber_svc()`. It traps with `'u'` when the
-   instruction is not the configured `SVC #FIBER_SVC_START_NUMBER`.
+   - each selected port defines strong `SVC_Handler` and `PendSV_Handler`;
+   - application and CubeMX strong wrappers are removed or excluded;
+   - competing strong definitions intentionally fail the link;
+   - wrapper/direct-vector settings are deleted;
+   - the matrix proves archive extraction and vector slots 11 and 14;
+   - runtime startup validates the active VTOR slots, priority readback, and
+     actual SVC/PendSV dispatch.
+
+   The current application-wrapper/direct-vector implementation is transitional
+   and remains documented only until the mechanical handler migration is
+   complete. Runtime vector-table patching is not a default fallback.
+
+   The selected ARMv7E-M SVC handler must retain the existing dispatch checks:
+   MSP-frame alignment, SVC opcode, and configured immediate. It traps with
+   `'u'` when the instruction is not the selected start service.
 
 3. Keep the ARMv7E-M SVC-based first-fiber start path validated separately.
 

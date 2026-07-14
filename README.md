@@ -22,7 +22,10 @@ scheduler bridge use only callable port ABI functions and do not dereference
 that layout. A future port may therefore change its boot record or use a
 hardware-backed integrity implementation without changing the common core.
 See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary and migration
-sequence.
+sequence. See `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` for the follow-on
+CPU-neutral eight-function ABI and the planned move from application wrappers
+to exclusive selected-port SVC/PendSV handlers. That handler move is documented
+but not yet implemented; the project setup below describes the current tree.
 
 ## Project Setup
 

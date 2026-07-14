@@ -82,6 +82,12 @@ common-known `FiberContext` or boot-record layout. The current selected ports
 own their `FiberPortBoot` record and callable boot ABI; a fresh hardware run is
 still required before this structural change renews any runtime claim.
 
+The final CPU-neutral callable ABI, normative `fiber_start()` order, and
+exclusive selected-port SVC/PendSV handler ownership live in
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`. That document supersedes older
+wrapper/direct-vector alternatives and wider callable ABI examples in this
+contract.
+
 The FreeRTOS reference policy lives in
 `V2_FREERTOS_PORT_REFERENCE_POLICY.md`. FreeRTOS `portable/` is treated as the
 CPU-port reference, not as the default compiled backend for `fiber`.
@@ -510,10 +516,10 @@ The common runtime owns:
 - public API;
 - current-fiber ownership;
 - switch publication state and ordering;
-- switch preconditions;
-- panic behavior;
+- CPU-neutral scheduler lifecycle preconditions;
+- public panic reporting and panic-code precedence;
 - diagnostics;
-- validation hooks;
+- integration validation-hook declarations;
 - documentation-visible settings.
 
 The common runtime does not own:
@@ -891,47 +897,45 @@ on C++ ABI details.
 
 ## Port ABI Contract
 
-The final callable and type boundaries are defined in
-`V2_OPAQUE_CONTEXT_CONTRACT.md`. Common code uses opaque context pointers and a
-selected internal scheduler-state token; frame sizes and offsets remain
+The final callable boundary is defined in
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` and the opaque type boundary is defined
+in `V2_OPAQUE_CONTEXT_CONTRACT.md`. Common code uses opaque context pointers;
+frame sizes, offsets, CPU-state tokens, validators, and exception mechanics are
 port-private implementation facts:
 
 ```c
 void fiber_port_context_init(FiberContext *ctx,
                              void *stack_begin,
                              void *stack_end,
-                             FiberEntryFn entry,
+                             entry_t entry,
                              void *arg);
-void fiber_port_context_validate_restore(const FiberContext *ctx);
-void fiber_port_context_prepare_first_start(const FiberContext *ctx);
 
-void fiber_port_require_start_environment(void);
-void fiber_port_require_schedule_environment(void);
-void fiber_port_runtime_prepare(void);
-void fiber_port_runtime_validate(void);
+FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_memory_barrier(void);
 
-void fiber_port_scheduler_state_capture(FiberPortSchedulerCpuState *state);
-void fiber_port_scheduler_state_validate(
-        const FiberPortSchedulerCpuState *state);
-void fiber_port_scheduler_critical_enter(
-        FiberPortSchedulerCriticalState *state);
-void fiber_port_scheduler_critical_exit(
-        const FiberPortSchedulerCriticalState *state);
+FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+void fiber_port_panic_wait(void);
+
+void fiber_port_require_scheduler_configuration_environment(void);
+void fiber_port_runtime_prepare_start(void);
+
+FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_port_runtime_select_first(void);
 
 FIBER_API_NORETURN
-void fiber_port_start_first_context(FiberContext *first);
-void fiber_port_request_schedule(void);
-void fiber_pendsv(void);
-void fiber_svc(void);
+void fiber_port_runtime_start_first(FiberContext *first);
+
+void fiber_port_runtime_schedule(void);
 ```
 
-Exact names may change, but ownership should not:
+The eight generic ABI names above are frozen. Port-private helper names may
+change, but ownership must not:
 
 - `fiber_api_types.h` owns only tagged forward declarations and callback types;
 - the selected public type-only header completes `FiberContext` for application
   allocation but is not included by common runtime translation units;
-- the selected internal type-only ABI header completes private scheduler
-  CPU-state tokens that common code may allocate and pass without inspecting;
+- selected private headers may complete scheduler CPU-state tokens, but common
+  code never allocates, sizes, or interprets those tokens;
 - the selected port embeds any CPU-neutral metadata at a private offset and
   owns the final immutable context seal plus dynamic restore checks;
 - mutable saved SP, EXC_RETURN, FP/MVE, and security state is validated
@@ -950,10 +954,8 @@ Exact names may change, but ownership should not:
 - common code checks current ownership and calls the selected-port schedule
   request boundary. It does not read IPSR, CONTROL, PRIMASK, BASEPRI, FAULTMASK,
   SCB, or NVIC state;
-- `fiber_port_require_schedule_environment()` and
-  `fiber_port_request_schedule()` may remain separate internally, but their
-  combined selected-port contract is privilege-aware;
-- `fiber_port_request_schedule()` owns the architecture-specific request
+- `fiber_port_runtime_schedule()` owns the complete privilege-aware
+  architecture-specific request
   mechanism. Privileged non-MPU ports may directly publish PendSV with mandatory
   barriers after validating Thread/mask state. Unprivileged or MPU ports perform
   only safely observable pre-SVC checks and issue a port-owned yield SVC, whose
@@ -970,7 +972,8 @@ Exact names may change, but ownership should not:
 - selected-port state capture and validation checks PRIMASK, FAULTMASK,
   BASEPRI, CONTROL, and any profile-specific state around every hook call;
 - common code owns callback invocation, recursion/hot-swap policy, NULL-result
-  handling, selected-port restore validation, and current publication;
+  handling, and current publication; the selected port privately validates every
+  save and restore target around that common policy call;
 - the structural opaque-context move preserves the current critical-section
   placement and must not introduce a second BASEPRI/PRIMASK layer;
 - port code performs CPU-specific save, restore, and exception return;
@@ -1079,27 +1082,31 @@ owner beside PendSV/common state.
 
 ## Handler Wiring Contract
 
-Vector ownership must be explicit.
+The final selected-port model uses exclusive static handler ownership.
 
 Required rules:
 
-- the application must know whether it provides `PendSV_Handler` and
-  `SVC_Handler`, or whether the library provides weak/default handlers;
-- a build must not silently override an application handler;
-- a wrapper for a naked PendSV or SVC body must preserve LR/EXC_RETURN; a
-  normal C wrapper that emits `bl fiber_pendsv` or `bl fiber_svc` is invalid
-  because it overwrites LR with a function return address;
-- direct vectoring to the naked handler body or a naked branch wrapper is the
-  preferred wiring model;
-- if handler chaining is supported, the chaining rule must be documented;
+- every selected port defines strong `SVC_Handler` and `PendSV_Handler` symbols;
+- the application must not define competing strong handlers;
+- duplicate strong definitions are intentional link-time configuration errors;
+- CubeMX-generated strong handler definitions are removed or excluded, not
+  retained as wrappers;
+- the selected strong handler either contains the naked assembly body or branches
+  to a port-private assembly label without losing LR/EXC_RETURN;
+- `fiber_svc` and `fiber_pendsv` are not part of the final generic ABI;
+- wrapper/direct switches and `FIBER_*_WIRED` integration claims are removed
+  after the mechanical migration;
+- static archive, `--gc-sections`, and LTO proofs must retain both handlers;
 - vector-table relocation and security-domain vector selection must be explicit
   for ARMv8-M targets;
-- validation should prove that the expected PendSV/SVC handler path is actually
-  reached on hardware. Vector-table checks prove the first handler symbol, while
-  SVC-start ports should also validate the SVC dispatch value in the handler.
+- runtime validation proves that active VTOR slots 11 and 14 resolve to the
+  selected strong handlers and that both paths execute on hardware.
 
 If another RTOS, bootloader, monitor, or debug framework owns SVC or PendSV,
 `fiber` must require explicit integration instead of assuming ownership.
+Runtime vector-table patching and handler chaining are not default integration
+paths. Either feature requires a separate explicit contract and validation
+record.
 
 ## First-Fiber Start Contract
 
@@ -1356,13 +1363,13 @@ Minimum evidence for stronger labels:
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.
-12. Move schedule-time CPU access behind the selected-port request ABI. Done
-    for current privileged direct-PendSV ports: common `fiber_schedule()` calls
-    `fiber_port_require_schedule_environment()` and
-    `fiber_port_request_schedule()` only, and the selected port preserves its
-    CPU-register checks and PendSV publication. Remaining: remove non-schedule
-    CPU access from the transitional common runtime and add a validated yield
-    SVC path before an MPU or unprivileged support claim.
+12. Move schedule-time CPU access behind the selected-port request ABI. The
+    historical split into `fiber_port_require_schedule_environment()` and
+    `fiber_port_request_schedule()` completed CPU isolation for current
+    privileged ports. The final boundary collapses those calls into
+    `fiber_port_runtime_schedule()` while preserving check order. A validated
+    yield-SVC path is still required before an MPU or unprivileged support
+    claim.
 13. Add full ARMv8-M Baseline/Mainline PSPLIM and security-domain context
     layout before claiming runtime support.
 14. Add full ARMv8.1-M/MVE/PAC/BTI context policy before claiming STM32N6-class
@@ -1432,7 +1439,8 @@ possible.
 - docs, source comments, and compile gates describe the same support level;
 - exactly one port is selected for every supported compile target;
 - unsupported compile targets fail clearly instead of building a wrong port;
-- SVC/PendSV handler ownership is explicit;
-- direct-start and SVC-start paths have separate validation records if both are
-  enabled;
+- each selected port exclusively provides strong SVC/PendSV handlers and
+  competing strong definitions fail the link;
+- the mandatory SVC first-start path and later PendSV path have separate
+  hardware evidence;
 - any copied or closely adapted FreeRTOS code carries the required MIT notice.

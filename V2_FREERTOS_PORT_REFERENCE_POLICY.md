@@ -21,6 +21,8 @@ baseline for proven Cortex-M context-switch behavior.
 The final common/type boundary is defined in
 `V2_OPAQUE_CONTEXT_CONTRACT.md`. It supersedes the older long-term assumption
 that all selected ports share one common-known `FiberContext` layout.
+The final eight-function common-to-port ABI and exclusive strong-handler policy
+are defined in `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`.
 
 ## Why FreeRTOS Portable Is Not a Drop-In Backend
 
@@ -176,21 +178,23 @@ v8-M PSPLIM/security-domain context policy
 MVE/PAC/BTI port split decisions
 ```
 
-But implement those concepts in the native `fiber` runtime contract:
+But implement those concepts behind the native `fiber` runtime boundary. The
+common core sees only:
 
 ```text
 fiber_port_context_init()
-fiber_port_context_validate_restore()
-fiber_port_context_validate_save_current()
-fiber_port_context_prepare_first_start()
-fiber_port_runtime_prepare() / fiber_port_runtime_validate()
-fiber_port_start_first_context(first)
-fiber_svc()
-fiber_pendsv()
-fiber_port_scheduler_pick_next_from_pendsv()
-selected-port private context seal and dynamic restore checks
-selected-port traits used inside the port and compile validators
+fiber_port_runtime_memory_barrier()
+fiber_port_panic_wait()
+fiber_port_require_scheduler_configuration_environment()
+fiber_port_runtime_prepare_start()
+fiber_port_runtime_select_first()
+fiber_port_runtime_start_first(first)
+fiber_port_runtime_schedule()
 ```
+
+Selected-port private code still implements context seals, dynamic save/restore
+checks, SVC/PendSV mechanics, scheduler critical envelopes, vector validation,
+and selected traits. Those details do not expand the common callable ABI.
 
 Benefits:
 
@@ -737,10 +741,11 @@ pxPortInitialiseStack():
   represented by fiber_port_context_init()
 
 prvPortStartFirstTask() / SVC first start:
-  represented by fiber_port_start_first_context(first) and fiber_svc()
+  represented by fiber_port_runtime_start_first(first) and the selected port's
+  strong SVC_Handler
 
 xPortPendSVHandler():
-  represented by fiber_pendsv()
+  represented by the selected port's strong PendSV_Handler
 
 configMAX_SYSCALL_INTERRUPT_PRIORITY:
   represented by selected-port scheduler BASEPRI traits and validation

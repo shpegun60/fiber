@@ -1,5 +1,63 @@
 # Fiber Decision Log
 
+## 2026-07-14: Define CPU-Neutral Runtime Port Boundary
+
+The final common-runtime to selected-port contract is frozen in
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` before its mechanical implementation.
+This is a documentation-only checkpoint; the current wider ABI and application
+handler wrappers remain transitional code.
+
+The stable public API remains the existing five functions. The final generic
+common-to-port ABI contains exactly eight CPU-neutral operations:
+
+```text
+fiber_port_context_init
+fiber_port_runtime_memory_barrier
+fiber_port_panic_wait
+fiber_port_require_scheduler_configuration_environment
+fiber_port_runtime_prepare_start
+fiber_port_runtime_select_first
+fiber_port_runtime_start_first
+fiber_port_runtime_schedule
+```
+
+Common runtime owns scheduler hook/user storage, current-context storage and
+publication, scheduler lifecycle, policy invocation, NULL-result semantics, and
+public panic precedence. Selected ports own context layout, save/restore,
+critical envelopes, startup MSP state, exception mechanics, vector validation,
+FPU/MPU/security policy, and architecture errata. Common-owned scheduler globals
+will lose the misleading `port` component during a mechanical rename.
+
+The normative `fiber_start()` order is:
+
+```text
+common lifecycle validation
+port start preparation
+port-protected first scheduler selection
+common current-context publication
+port SVC first start
+```
+
+Consequently, `'K'` and `'k'` precede CPU-environment panic codes. This is an
+intentional public failure-order decision and requires trap coverage.
+
+Each selected port will exclusively provide strong `SVC_Handler` and
+`PendSV_Handler` symbols. Application/CubeMX competing strong handlers are
+configuration errors, wrappers are removed, and wrapper/direct-vector settings
+are deleted after the migration. Runtime vector-table patching is not part of
+the default contract.
+
+Compile, synthetic-link/ELF, and board proofs are separate. The linker proves
+strong symbol exclusivity, archive extraction, vector relocations,
+`--gc-sections` retention, and LTO retention. Board validation proves active
+VTOR routing and actual SVC/PendSV execution after startup or bootloader
+relocation.
+
+Implementation proceeds in isolated slices: narrow ABI, rename common state,
+add private port headers, collapse start/schedule choreography, move strong
+handlers, remove wrappers and mode macros, expand matrix proofs, then rerun the
+full H7 hardware suite.
+
 ## 2026-07-13: Restore Integrity and Common Runtime Safety Baseline
 
 The common runtime and selected ports now use the following non-negotiable
