@@ -1,5 +1,23 @@
 # Fiber Decision Log
 
+## 2026-07-15: Record The Corrected H7 Extended-FP Normal Run
+
+The STM32H7 board passed `FIBER_VAL_NORMAL_RUN` after source commit
+`7ffe1a9a139acd33dccb609856f0742d62fd3c68` corrected the extended-FP
+hardware-frame geometry. The debugger snapshot recorded
+`validation_flags = 0x1FF`, `validation_failures = 0`, and
+`last_panic_code = 0` after approximately 2.47 million iterations per fiber.
+The saved `f2` EXC_RETURN remained `0xFFFFFFED`, so the run repeatedly exercised
+the real extended-FP save/validate/restore path rather than only the synthetic
+basic startup frame.
+
+The one-iteration counter skew is expected because the debugger stopped in the
+middle of a cooperative round. The FP relationships remained exact for each
+completed fiber iteration. This restores the H7 normal/extended-FP runtime
+result for the corrected source. It does not complete the hardware checkpoint:
+the startup and complete trap suite still require a fresh run before the full
+H7 validation claim is active.
+
 ## 2026-07-15: Correct Cortex-M Extended FP Frame Geometry
 
 An STM32H7 normal-mode run based on `a3d98c7` completed the first

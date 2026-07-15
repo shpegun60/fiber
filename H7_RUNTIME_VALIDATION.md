@@ -417,6 +417,46 @@ xPSR offset.
 The failed run is diagnostic evidence, not a pass. Repeat `NORMAL_RUN`, FP
 stress, and every frame-corruption trap after rebuilding the corrected source.
 
+## Corrected Extended-FP Normal Result: 2026-07-15
+
+Source commit:
+
+```text
+7ffe1a9a139acd33dccb609856f0742d62fd3c68
+```
+
+Observed debugger snapshot after the frame-geometry correction:
+
+```text
+validation_flags    = 0x000001FF
+validation_failures = 0
+last_panic_code     = 0
+
+counter1 = 2475589
+counter2 = 2475589
+counter3 = 2475588
+
+fpu_acc1 = 2475589
+fpu_acc2 = 4951178
+fpu_acc3 = 7426764
+
+f2 saved EXC_RETURN = 0xFFFFFFED
+```
+
+The relationships are exact for completed iterations:
+
+```text
+fpu_acc1 = counter1
+fpu_acc2 = 2 * counter2
+fpu_acc3 = 3 * counter3
+```
+
+The debugger stopped between fiber updates, so a one-count skew is expected.
+This is a board pass for normal cooperative switching and repeated extended-FP
+save/validate/restore on the corrected source. It is not yet the complete H7
+checkpoint: startup traps, the full panic table, active VTOR/slot readback, and
+the remaining explicit handler observations still require fresh board runs.
+
 ## Current Pending Hardware Checkpoint: 2026-07-15
 
 The current working revision changes exception ownership and compiler ABI:
