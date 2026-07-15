@@ -343,10 +343,13 @@ Closed hardening items from the FreeRTOS comparison:
    group has an exact unresolved-symbol allowlist, selected ports define no
    common-owned reverse symbol, C cannot access the current slot, generated
    assembly may only load it through the exact address/load pair, and both v1/v2
-   mismatch directions fail from static archives under section GC and LTO. This
-   does not replace the still-pending exact profile/context cohort anchor, which
-   is the guard against stale private objects with otherwise matching callable
-   ABI symbols.
+   mismatch directions fail from static archives under section GC and LTO.
+   The independent exact profile/context cohort guard is also active: one
+   selected runtime object defines its generated identity, boot and exception
+   retain it, and a separately compiled build-owned expectation is kept outside
+   a precompiled port archive. Real Secure-role/Non-secure-role stale runtime,
+   boot, exception, and complete-archive links fail in both directions under
+   section GC and LTO.
 
    The start, schedule, SVC, PendSV, scheduler-hook, and reverse-helper call
    graph uses sensitive plus general-registers-only attributes. Adversarial

@@ -4,8 +4,8 @@
 
 This document defines the normative target for the final common-runtime to
 selected-port boundary. The architecture was frozen before implementation; the
-status below distinguishes the active forward and reverse ABIs from the
-remaining exact-profile cohort guard and hardware proof.
+status below distinguishes the active software guards from the remaining
+integration and hardware proof.
 
 The current tree has activated the mandatory directional ABI and handler
 ownership:
@@ -40,13 +40,17 @@ ownership:
 - matching v1 and synthetic v2 cohorts link from static archives under section
   GC and LTO, while both crossed v1/v2 combinations fail on the missing runtime
   ABI anchor before handler extraction;
-- the remaining freeze work is the exact selected-profile/context object-cohort
-  anchor with stale-object negative links, plus refreshed hardware validation
-  of the active H7 checkpoint.
+- the exact selected-profile/context object-cohort guard is active: each
+  mandatory private object retains the exact identity defined by its runtime
+  object, while a separately compiled build expectation rejects a complete
+  archive from a different exact cohort;
+- the remaining freeze work is refreshed hardware validation of the active H7
+  checkpoint and integration of the build expectation source plus linker
+  `KEEP` rule in each production build manifest.
 
-The final bullet is remaining migration debt; the preceding bullets describe
-the active contract. Every later mechanical slice must reduce the remaining
-debt without silently changing context layout, save/restore order,
+The final bullet is remaining integration and hardware debt; the preceding
+bullets describe the active contract. Every later mechanical slice must reduce
+that debt without silently changing context layout, save/restore order,
 critical-section placement, or panic behavior.
 
 ## Goal
@@ -705,6 +709,22 @@ port:
     links reject stale object mixtures even when their generic callable symbols
     and the common runtime ABI version still match.
 
+Item 10 is active for every source group in the compile matrix. The runtime
+object defines the exact cohort symbol; boot and exception objects retain it;
+and `fiber/port/fiber_port_context_cohort_expectation.c` independently retains
+the identity selected by the application build. Production build manifests
+must compile that expectation source separately from any precompiled port
+archive and retain its dedicated section with:
+
+```ld
+KEEP(*(.fiber_port_context_cohort_expectation))
+```
+
+The matrix proves matching and stale secure/non-secure ARMv8-M Mainline
+cohorts with real port objects, static archives, section garbage collection,
+and both normal and LTO links. This is a software compatibility proof only; it
+does not promote the transitional v8-M implementation to production support.
+
 The reverse ABI is deliberately smaller than the former selected-port view of
 `fiber_runtime_state.h`. The active implementation collapses first-selection
 lifecycle, hook invocation, and NULL handling into
@@ -955,13 +975,13 @@ not mixed with unrelated layout work.
    mandatory ABI definition or add the unique handler-bundle extraction anchor.
 6. Done: remove CubeMX/application wrappers and delete wrapper/direct configuration
    switches.
-7. In progress: common compile isolation, strong-handler checks for every
+7. Done: common compile isolation, strong-handler checks for every
    compiled profile, CM7 static-archive extraction, vector-slot, duplicate
    handler, section-GC, LTO, adversarial generated-code, reverse v1/v2 mismatch,
-   and current-slot C/generated-assembly proofs are active. The exact
-   selected-profile/context cohort anchor and stale private-object mixture
-   fixtures remain a separate software-freeze item; the generic runtime v1
-   anchor cannot prove context-layout identity.
+   current-slot C/generated-assembly proofs, and the exact selected-profile/
+   context cohort guard are active. Real stale private-object mixtures fail
+   under normal and LTO links; the generic runtime v1 anchor remains a separate
+   directional-ABI proof and is not treated as context-layout identity.
 8. Run the full H7 normal, FPU, startup, trap, active-VTOR, SVC, and PendSV
    hardware validation suite.
 

@@ -1,5 +1,44 @@
 # Fiber Decision Log
 
+## 2026-07-15: Activate The Exact Selected-Port Context Cohort Guard
+
+Every active selected-port source group now has one exact link identity. Its
+mandatory runtime object defines a generated read-only symbol; the matching
+boot and exception objects retain relocations from one-shot init/start paths.
+The symbol spelling encodes the architecture profile, concrete port ID, layout
+version, FPU/extended-frame state, BASEPRI/FAULTMASK/VTOR/PSPLIM capabilities,
+stack alignment, scheduler mask class, FPCA and M7 errata policy, initial
+EXC_RETURN, optional context slots, and MVE/PAC/BTI/security-domain facts. This
+also distinguishes ARM_CM0 builds whose shared source has different M0/M0+
+VTOR capability.
+
+`fiber/port/fiber_port_context_cohort_expectation.c` is the independent
+build-owned side of the guard. A production build compiles it through the
+selected private include path, links it outside any precompiled port archive,
+and keeps `.fiber_port_context_cohort_expectation` in a read-only output
+section. Omitting that object or its linker `KEEP` rule invalidates the
+whole-archive exact-cohort compatibility claim, although the three port objects
+still detect internal mixtures. This identity guard is not a source-revision
+fingerprint: revisions that deliberately preserve the same cohort identity
+remain link-compatible.
+
+The compile matrix requires one definition, two matching private-object
+relocations, and one matching build expectation for every build-selected
+profile. A real Cortex-M33 transitional source group is built in Secure-role
+and Non-secure-role variants. Positive archives link; stale runtime, boot,
+exception, and complete-archive combinations fail in both directions on the
+exact missing cohort symbol, with section GC and with LTO. The transitional
+v8-M trait outputs were normalized to literal tokens so source sharing cannot
+hide profile identity.
+
+This change adds only one-byte reads to one-shot context initialization and
+startup validation. It does not alter synthetic frames, SVC/PendSV assembly,
+save/restore order, or the switch hot path. The software
+`common-core-freeze-v1` guards are now closed for the current source groups;
+the active H7 runtime claim still requires the already-pending fresh board
+suite, and its build manifest must first include the expectation object and
+linker keep rule.
+
 ## 2026-07-15: Close The Reverse Runtime ABI V1 Proof Cohort
 
 The compile matrix now combines every selected port's source group with a
@@ -25,12 +64,9 @@ directions. Matching cohorts link from static archives under
 port with v1-only common both fail on the missing port-version anchor before
 handler extraction can affect the result.
 
-This is a proof-only checkpoint. Runtime C, SVC/PendSV assembly, frame layout,
-and H7 behavior are unchanged. It closes the reverse runtime ABI v1 proof
-cohort, not the whole `common-core-freeze-v1`: the independent exact
-selected-profile/context object-cohort anchor and stale-private-object negative
-links remain unimplemented, and the active H7 code still requires refreshed
-board validation.
+This proof-only checkpoint closed the reverse runtime ABI v1 cohort. The later
+exact selected-profile/context cohort checkpoint closed its then-pending
+stale-private-object guard. Refreshed H7 board validation remains separate.
 
 ## 2026-07-15: Activate Frozen Reverse Runtime ABI V1
 

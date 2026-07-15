@@ -164,6 +164,7 @@ static void fiber_validate_feature_policy(void)
 
 void fiber_exception_runtime_check(void)
 {
+    FIBER_PORT_CONTEXT_COHORT_RETAIN();
     fiber_require_privileged_thread_msp();
 
     fiber_validate_feature_policy();

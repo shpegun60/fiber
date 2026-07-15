@@ -525,6 +525,7 @@ void fiber_port_require_start_environment(void)
 void fiber_port_context_init(FiberContext *const ctx, void *const stack_begin,
 		void *const stack_end, const entry_t entry, void *const arg)
 {
+	FIBER_PORT_CONTEXT_COHORT_RETAIN();
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(stack_begin != NULL, 'B');

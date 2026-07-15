@@ -16,6 +16,8 @@
 #include "../../fiber_runtime_port_abi.h"
 #include "fiber_port_private.h"
 
+FIBER_PORT_CONTEXT_COHORT_DEFINE();
+
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void)
 {

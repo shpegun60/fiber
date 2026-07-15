@@ -2,7 +2,9 @@
 #ifndef FIBER_PORT_ARM_CM7_R0P1_FIBER_PORT_PRIVATE_H_
 #define FIBER_PORT_ARM_CM7_R0P1_FIBER_PORT_PRIVATE_H_
 
+#include "../../fiber_port_select.h"
 #include "fiber_portmacro.h"
+#include "../../fiber_port_context_cohort.h"
 #include "../../fiber_port_runtime_abi.h"
 
 #ifdef __cplusplus

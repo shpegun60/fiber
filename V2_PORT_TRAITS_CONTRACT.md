@@ -336,6 +336,21 @@ expectation object compiled through the selected public type header. Any
 exact-profile or context-ABI change uses a new symbol spelling so stale port
 object mixtures fail to link.
 
+The active implementation is `fiber_port_context_cohort.h`. Port ID and layout
+version must be nonzero single preprocessing tokens, not arithmetic
+expressions. Every fact encoded into the symbol must likewise normalize to a
+single literal token. The identity includes profile, concrete port, layout,
+CPU exception capabilities, stack alignment, scheduler mask class, initial
+EXC_RETURN, FP/context slots, security role, and MVE/PAC/BTI policy. Shared
+source paths do not imply shared identity; for example ARM_CM0 M0/M0+ builds
+are distinguished when their VTOR capability differs.
+
+The runtime object defines the symbol. Boot and exception objects retain it
+from one-shot paths. A production manifest additionally compiles
+`fiber_port_context_cohort_expectation.c` outside any precompiled port archive
+and applies `KEEP(*(.fiber_port_context_cohort_expectation))`. Matrix fixtures
+prove positive and stale-object links with section GC and LTO.
+
 ## Source Layout
 
 The FreeRTOS mapping is:

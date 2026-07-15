@@ -54,6 +54,12 @@ Before a board run:
   scheduler candidate/NULL policy, and added the mandatory link anchor without
   changing frame layout or save/restore order. The already-pending H7 board run
   must use this reverse-ABI checkpoint or later.
+- The H7 build manifest must compile
+  `fiber/port/fiber_port_context_cohort_expectation.c` separately from any port
+  archive with the selected CM7 include/CPU flags, and its linker script must
+  keep `.fiber_port_context_cohort_expectation`. Verify that the final ELF has
+  exactly one `fiber_port_context_cohort_armv7em_*` definition before treating
+  the board run as a current checkpoint.
 
 ## Startup Exception Setup
 

@@ -1921,11 +1921,336 @@ typedef enum IRQn {
     }
 }
 
+function Test-SelectedPortContextCohortMismatch {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Ar,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $startupSource = @"
+#include <stddef.h>
+#include <stdint.h>
+
+extern void fiber_portable_application_fixture(void)
+    __attribute__((noreturn));
+
+void Reset_Handler(void)
+{
+    fiber_portable_application_fixture();
+}
+
+int fiber_addr_plausible_ram(uintptr_t start, uintptr_t end)
+{
+    return (start < end) ? 1 : 0;
+}
+
+int fiber_addr_plausible_code(uintptr_t address)
+{
+    return (address != 0u) ? 1 : 0;
+}
+
+void *memcpy(void *destination, const void *source, size_t count)
+{
+    unsigned char *dst = (unsigned char *)destination;
+    const unsigned char *src = (const unsigned char *)source;
+    while (count-- != 0u) {
+        *dst++ = *src++;
+    }
+    return destination;
+}
+
+void *memset(void *destination, int value, size_t count)
+{
+    unsigned char *dst = (unsigned char *)destination;
+    while (count-- != 0u) {
+        *dst++ = (unsigned char)value;
+    }
+    return destination;
+}
+"@
+    $linkerSource = @"
+ENTRY(Reset_Handler)
+MEMORY
+{
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 256K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
+}
+SECTIONS
+{
+    .text : ALIGN(4)
+    {
+        *(.text*)
+        KEEP(*(.fiber_port_context_cohort_expectation))
+        *(.rodata*)
+    } > FLASH
+    .ARM.extab : ALIGN(4) { *(.ARM.extab*) } > FLASH
+    .ARM.exidx : ALIGN(4)
+    {
+        __exidx_start = .;
+        *(.ARM.exidx*)
+        __exidx_end = .;
+    } > FLASH
+    .data : ALIGN(4) { *(.data*) } > RAM AT > FLASH
+    .bss (NOLOAD) : ALIGN(4) { *(.bss*) *(COMMON) } > RAM
+}
+"@
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 0U
+#define __ICACHE_PRESENT 0U
+#define __DCACHE_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SecureFault_IRQn = -9,
+    SVCall_IRQn = -5, DebugMonitor_IRQn = -4,
+    PendSV_IRQn = -2, SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#endif
+"@
+    $commonSources = @(
+        "fiber\fiber_core.c",
+        "fiber\fiber_runtime_state.c",
+        "fiber\fiber_panic.c"
+    )
+    $portSources = @{
+        Runtime = "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+        Boot = "fiber\port\transitional_v8m\fiber_port_boot.c"
+        Exception = "fiber\port\transitional_v8m\fiber_port_exception.c"
+    }
+    $portableSource = "tools\fixtures\portable_application.c"
+    $expectationSource =
+        "fiber\port\fiber_port_context_cohort_expectation.c"
+    $portCounterFlags = @(
+        "-fno-instrument-functions",
+        "-fno-stack-protector",
+        "-fno-profile-arcs",
+        "-fno-test-coverage",
+        "-fno-sanitize=all",
+        "-mgeneral-regs-only"
+    )
+    $variants = @(
+        [pscustomobject]@{ Name = "secure"; Nonsecure = 0 },
+        [pscustomobject]@{ Name = "nonsecure"; Nonsecure = 1 }
+    )
+
+    foreach ($useLto in @($false, $true)) {
+        $mode = if ($useLto) { "lto" } else { "normal" }
+        $probeDir = Join-Path $BuildRoot "context-cohort-$mode"
+        New-Item -ItemType Directory -Path $probeDir | Out-Null
+        $startupPath = Join-Path $probeDir "startup.c"
+        $linkerPath = Join-Path $probeDir "context-cohort.ld"
+        Set-Content -LiteralPath $startupPath -Value $startupSource `
+            -Encoding ASCII
+        Set-Content -LiteralPath $linkerPath -Value $linkerSource `
+            -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+            -Value $mainHeader -Encoding ASCII
+
+        $ltoArgs = if ($useLto) { @("-flto") } else { @() }
+        $objectNm = if ($useLto) { $GccNm } else { $Nm }
+        $baseArgs = @(
+            "-mcpu=cortex-m33",
+            "-mthumb",
+            "-Os",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-fno-builtin",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables",
+            "-I$probeDir",
+            "-I$RepositoryRoot",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$CmsisPath"
+        ) + $ltoArgs
+
+        $startupObject = Join-Path $probeDir "startup.o"
+        & $Compiler @($baseArgs + @(
+            "-c", $startupPath, "-o", $startupObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Context-cohort startup fixture compile failed ($mode)"
+        }
+
+        $commonObjects = @()
+        foreach ($source in $commonSources) {
+            $object = Join-Path $probeDir `
+                (($source -replace '[\\/]', '_') + ".o")
+            & $Compiler @($baseArgs + @(
+                "-c", (Join-Path $RepositoryRoot $source),
+                "-o", $object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Context-cohort common compile failed ($mode): $source"
+            }
+            $commonObjects += $object
+        }
+
+        $compiled = @{}
+        foreach ($variant in $variants) {
+            $variantDir = Join-Path $probeDir $variant.Name
+            New-Item -ItemType Directory -Path $variantDir | Out-Null
+            $variantArgs = $baseArgs + @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV8M_MAINLINE=1",
+                "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=$($variant.Nonsecure)",
+                "-DFIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME=1",
+                "-DFIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME=1",
+                "-I$(Join-Path $RepositoryRoot 'fiber\port\transitional_v8m')"
+            )
+            $objects = @{}
+            foreach ($role in $portSources.Keys) {
+                $source = $portSources[$role]
+                $object = Join-Path $variantDir `
+                    (($source -replace '[\\/]', '_') + ".o")
+                & $Compiler @($variantArgs + $portCounterFlags + @(
+                    "-c", (Join-Path $RepositoryRoot $source),
+                    "-o", $object))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Context-cohort $($variant.Name) port compile failed ($mode): $source"
+                }
+                $objects[$role] = $object
+            }
+
+            $portableObject = Join-Path $variantDir "portable-application.o"
+            & $Compiler @($variantArgs + @(
+                "-c", (Join-Path $RepositoryRoot $portableSource),
+                "-o", $portableObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Context-cohort portable application compile failed ($mode / $($variant.Name))"
+            }
+
+            $expectationObject = Join-Path $variantDir "expectation.o"
+            & $Compiler @($variantArgs + @(
+                "-c", (Join-Path $RepositoryRoot $expectationSource),
+                "-o", $expectationObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Context-cohort expectation compile failed ($mode / $($variant.Name))"
+            }
+
+            $defined = @(& $objectNm -g --defined-only $objects.Runtime)
+            $cohortDefinitions = @($defined | ForEach-Object {
+                if ($_ -match
+                        '\s[DR]\s+(fiber_port_context_cohort_\S+)$') {
+                    $Matches[1]
+                }
+            })
+            $undefined = @(& $objectNm -u $expectationObject)
+            $cohortExpectations = @($undefined | ForEach-Object {
+                if ($_ -match
+                        '\bU\s+(fiber_port_context_cohort_\S+)$') {
+                    $Matches[1]
+                }
+            })
+            if (($cohortDefinitions.Count -ne 1) -or
+                    ($cohortExpectations.Count -ne 1) -or
+                    ($cohortDefinitions[0] -ne $cohortExpectations[0])) {
+                throw "Context-cohort identity extraction failed ($mode / $($variant.Name))"
+            }
+
+            $objects.Portable = $portableObject
+            $objects.Expectation = $expectationObject
+            $objects.Cohort = $cohortDefinitions[0]
+            $compiled[$variant.Name] = $objects
+        }
+
+        if ($compiled.secure.Cohort -eq $compiled.nonsecure.Cohort) {
+            throw "Secure and Non-secure transitional profiles must have distinct exact cohort symbols ($mode)"
+        }
+
+        $linkBase = @(
+            "-mcpu=cortex-m33",
+            "-mthumb"
+        ) + $ltoArgs + @(
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-T", $linkerPath,
+            $startupObject
+        )
+
+        foreach ($variant in $variants) {
+            $objects = $compiled[$variant.Name]
+            $archivePath = Join-Path $probeDir `
+                "positive-$($variant.Name).a"
+            & $Ar rcs $archivePath @($commonObjects + @(
+                $objects.Runtime, $objects.Boot, $objects.Exception))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Context-cohort positive archive creation failed ($mode / $($variant.Name))"
+            }
+            & $Compiler @($linkBase + @(
+                $objects.Portable,
+                $objects.Expectation,
+                $archivePath,
+                "-o", (Join-Path $probeDir `
+                    "positive-$($variant.Name).elf")))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Matching real selected-port cohort failed link ($mode / $($variant.Name))"
+            }
+        }
+
+        $negativeCases = @(
+            [pscustomobject]@{ Name = "stale-runtime-secure"; Runtime = "secure"; Boot = "nonsecure"; Exception = "nonsecure"; Expected = "nonsecure"; Missing = "nonsecure" },
+            [pscustomobject]@{ Name = "stale-boot-secure"; Runtime = "nonsecure"; Boot = "secure"; Exception = "nonsecure"; Expected = "nonsecure"; Missing = "secure" },
+            [pscustomobject]@{ Name = "stale-exception-secure"; Runtime = "nonsecure"; Boot = "nonsecure"; Exception = "secure"; Expected = "nonsecure"; Missing = "secure" },
+            [pscustomobject]@{ Name = "stale-complete-secure"; Runtime = "secure"; Boot = "secure"; Exception = "secure"; Expected = "nonsecure"; Missing = "nonsecure" },
+            [pscustomobject]@{ Name = "stale-runtime-nonsecure"; Runtime = "nonsecure"; Boot = "secure"; Exception = "secure"; Expected = "secure"; Missing = "secure" },
+            [pscustomobject]@{ Name = "stale-boot-nonsecure"; Runtime = "secure"; Boot = "nonsecure"; Exception = "secure"; Expected = "secure"; Missing = "nonsecure" },
+            [pscustomobject]@{ Name = "stale-exception-nonsecure"; Runtime = "secure"; Boot = "secure"; Exception = "nonsecure"; Expected = "secure"; Missing = "nonsecure" },
+            [pscustomobject]@{ Name = "stale-complete-nonsecure"; Runtime = "nonsecure"; Boot = "nonsecure"; Exception = "nonsecure"; Expected = "secure"; Missing = "secure" }
+        )
+        foreach ($case in $negativeCases) {
+            $archivePath = Join-Path $probeDir ($case.Name + ".a")
+            & $Ar rcs $archivePath @($commonObjects + @(
+                $compiled[$case.Runtime].Runtime,
+                $compiled[$case.Boot].Boot,
+                $compiled[$case.Exception].Exception))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Context-cohort stale archive creation failed ($mode / $($case.Name))"
+            }
+
+            $missingSymbol = $compiled[$case.Missing].Cohort
+            $logPath = Join-Path $probeDir ($case.Name + ".log")
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($linkBase + @(
+                    $compiled[$case.Expected].Portable,
+                    $compiled[$case.Expected].Expectation,
+                    $archivePath,
+                    "-o", (Join-Path $probeDir ($case.Name + ".elf")))) `
+                -LogPath $logPath
+            $normalizedOutput = $result.Output -replace '\s+', ''
+            if (($result.ExitCode -eq 0) -or
+                    ($normalizedOutput -notmatch
+                    [regex]::Escape($missingSymbol))) {
+                throw "Stale selected-port object cohort must fail on $missingSymbol ($mode / $($case.Name)).`n$($result.Output)"
+            }
+        }
+    }
+}
+
 $gcc = Find-ArmGcc
 $cmsis = Find-CmsisCore
 $nm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-nm.exe"
 if (-not (Test-Path $nm)) {
     throw "arm-none-eabi-nm.exe not found next to compiler: $gcc"
+}
+$gccNm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-gcc-nm.exe"
+if (-not (Test-Path $gccNm)) {
+    throw "arm-none-eabi-gcc-nm.exe not found next to compiler: $gcc"
 }
 $objdump = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-objdump.exe"
 if (-not (Test-Path $objdump)) {
@@ -1958,6 +2283,8 @@ $commonSources = @(
 )
 
 $portableApplicationFixture = "tools\fixtures\portable_application.c"
+$selectedPortContextCohortExpectationFixture =
+    "fiber\port\fiber_port_context_cohort_expectation.c"
 $portableApplicationApiSymbols = @(
     "fiber_current",
     "fiber_init",
@@ -2195,6 +2522,10 @@ try {
     Test-Cm7StrongHandlerElfOwnership -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objcopy $objcopy -Ar $ar `
         -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== exact selected-port context-cohort contract =="
+    Test-SelectedPortContextCohortMismatch -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
 
     if (-not $SettingsOnly) {
         foreach ($cfg in $configs) {
@@ -2361,12 +2692,18 @@ void Error_Handler(void);
 
             $sources = $commonSources + $mode.PortSources
             if ($mode.Name -eq "build-selected") {
-                $sources += $portableApplicationFixture
+                $sources += @(
+                    $portableApplicationFixture,
+                    $selectedPortContextCohortExpectationFixture
+                )
             }
             $objects = @()
             $portObjects = @()
             $runtimeAbiAnchorReferenceCount = 0
             $strongPortPanicReferenceCount = 0
+            $portCohortDefinitions = @()
+            $portCohortReferences = @()
+            $expectationCohortReferences = @()
 
             foreach ($source in $sources) {
                 $srcPath = Join-Path $RepoRoot $source
@@ -2459,6 +2796,47 @@ void Error_Handler(void);
                     }
                 }
 
+                if (($mode.PortSources -contains $source) -or
+                        ($source -eq
+                        $selectedPortContextCohortExpectationFixture)) {
+                    $cohortDefinedOutput = @(
+                        & $nm -g --defined-only $objPath)
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Context-cohort definition scan failed for $($cfg.Name) / $($mode.Name): $source"
+                    }
+                    $cohortUndefinedOutput = @(& $nm -u $objPath)
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Context-cohort relocation scan failed for $($cfg.Name) / $($mode.Name): $source"
+                    }
+
+                    $definitions = @($cohortDefinedOutput |
+                        ForEach-Object {
+                            if ($_ -match
+                                    '\sR\s+(fiber_port_context_cohort_\S+)$') {
+                                $Matches[1]
+                            }
+                        })
+                    $references = @($cohortUndefinedOutput |
+                        ForEach-Object {
+                            if ($_ -match
+                                    '\bU\s+(fiber_port_context_cohort_\S+)$') {
+                                $Matches[1]
+                            }
+                        })
+
+                    if ($source -eq
+                            $selectedPortContextCohortExpectationFixture) {
+                        if ($definitions.Count -ne 0) {
+                            throw "Build-owned context-cohort expectation must not define a cohort symbol for $($cfg.Name)"
+                        }
+                        $expectationCohortReferences += $references
+                    }
+                    else {
+                        $portCohortDefinitions += $definitions
+                        $portCohortReferences += $references
+                    }
+                }
+
                 if ($mandatoryPortRuntimeSources -contains $source) {
                     $portUndefinedOutput = & $nm -u $objPath
                     if ($LASTEXITCODE -ne 0) {
@@ -2490,6 +2868,28 @@ void Error_Handler(void);
             }
             if ($strongPortPanicReferenceCount -ne 1) {
                 throw "Expected one active selected-port strong panic reference for $($cfg.Name) / $($mode.Name); found $strongPortPanicReferenceCount"
+            }
+
+            if ($portCohortDefinitions.Count -ne 1) {
+                throw "Expected one exact selected-port context-cohort definition for $($cfg.Name) / $($mode.Name); found $($portCohortDefinitions.Count)"
+            }
+            if ($portCohortReferences.Count -ne 2) {
+                throw "Expected boot and exception context-cohort relocations for $($cfg.Name) / $($mode.Name); found $($portCohortReferences.Count)"
+            }
+            foreach ($reference in $portCohortReferences) {
+                if ($reference -ne $portCohortDefinitions[0]) {
+                    throw "Selected-port private object expects stale context cohort for $($cfg.Name) / $($mode.Name): $reference"
+                }
+            }
+            if ($mode.Name -eq "build-selected") {
+                if (($expectationCohortReferences.Count -ne 1) -or
+                        ($expectationCohortReferences[0] -ne
+                        $portCohortDefinitions[0])) {
+                    throw "Build-owned object must expect the exact selected context cohort for $($cfg.Name): $($expectationCohortReferences -join ', ')"
+                }
+            }
+            elseif ($expectationCohortReferences.Count -ne 0) {
+                throw "Non-build-selected mode unexpectedly compiled a context-cohort expectation object for $($cfg.Name) / $($mode.Name)"
             }
 
             if ($portObjects.Count -eq 0) {
@@ -2529,6 +2929,17 @@ void Error_Handler(void);
                     throw "Selected port must not define common-owned reverse symbol for $($cfg.Name) / $($mode.Name): $symbol"
                 }
             }
+            $linkedPortCohorts = @($portDefinedSymbols | ForEach-Object {
+                if ($_ -match
+                        '\sR\s+(fiber_port_context_cohort_\S+)$') {
+                    $Matches[1]
+                }
+            })
+            if (($linkedPortCohorts.Count -ne 1) -or
+                    ($linkedPortCohorts[0] -ne
+                    $portCohortDefinitions[0])) {
+                throw "Selected-port group does not retain exactly one context cohort for $($cfg.Name) / $($mode.Name)"
+            }
 
             # A relocatable link catches duplicate port implementations while
             # allowing application-owned wrapper symbols to remain unresolved.
@@ -2557,6 +2968,17 @@ void Error_Handler(void);
                 if ($definitions.Count -ne 1) {
                     throw "Expected exactly one $symbol definition for $($cfg.Name) / $($mode.Name); found $($definitions.Count)"
                 }
+            }
+
+            $linkedCohorts = @($definedSymbols | ForEach-Object {
+                if ($_ -match
+                        '\sR\s+(fiber_port_context_cohort_\S+)$') {
+                    $Matches[1]
+                }
+            })
+            if (($linkedCohorts.Count -ne 1) -or
+                    ($linkedCohorts[0] -ne $portCohortDefinitions[0])) {
+                throw "Final matrix link does not contain the exact selected context cohort for $($cfg.Name) / $($mode.Name)"
             }
 
             foreach ($handler in @("SVC_Handler", "PendSV_Handler")) {
@@ -2642,6 +3064,34 @@ void Error_Handler(void);
             if ($normalizedOutput -notmatch [regex]::Escape($normalizedDiagnostic)) {
                 throw "Invalid transitional v8-M setting failed for the wrong reason: $($case.Name)`n$($result.Output)"
             }
+        }
+
+        Write-Host "== cortex-m33 / transitional-contract-normalized-role-token =="
+        $normalizedRoleArgs = $v8ProbeCfg.CpuArgs + @("-mthumb") +
+            $v8ProbeCfg.Extra + @(
+                "-std=gnu11",
+                "-ffreestanding",
+                "-fno-common",
+                "-Wall",
+                "-Wextra",
+                "-Wundef",
+                "-Werror=undef",
+                "-Werror=implicit-function-declaration",
+                "-Werror=return-type",
+                "-DFIBER_PORT_PROFILE=$v8ProbeProfile",
+                "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=(1)",
+                "-I$v8ProbeDir",
+                "-I$RepoRoot",
+                "-I$(Join-Path $RepoRoot 'fiber')",
+                "-I$cmsis",
+                "-c",
+                (Join-Path $RepoRoot "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"),
+                "-o",
+                (Join-Path $v8ProbeDir "normalized-role-token.o")
+            )
+        & $gcc @normalizedRoleArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Valid parenthesized transitional v8-M role did not normalize to one cohort token"
         }
     }
 

@@ -390,10 +390,12 @@ longer include the common-private `fiber_runtime_state.h`; their only common
 call surface is reverse ABI v1, while assembly may only load the frozen current
 slot symbol. Strong handler ownership, wrapper/direct-vector removal, exact
 reverse-symbol allowlists, current-slot load-only checks, and bidirectional
-runtime-ABI mismatch links are active. The remaining software-freeze guard is
-the exact selected-profile/context object-cohort anchor and its stale-object
-negative links; refreshed hardware evidence remains separate. No global
-selected internal-type facade is part of the frozen design.
+runtime-ABI mismatch links are active. The exact selected-profile/context
+object-cohort anchor is also active: mandatory private objects retain one exact
+identity, and the build-owned expectation source rejects a complete archive
+from a different exact cohort when its dedicated section is kept by the linker.
+It is not a source-revision fingerprint. Refreshed hardware evidence remains
+separate. No global selected internal-type facade is part of the frozen design.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as

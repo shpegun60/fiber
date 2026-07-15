@@ -29,8 +29,9 @@ implemented. The matrix proves CM7 static-archive extraction, vector-slot
 resolution, duplicate-handler failure, section-GC retention, and LTO retention.
 It also proves the exact selected-port unresolved reverse surface, C-hidden and
 generated-assembly-load-only current-slot access, and both runtime ABI v1/v2
-mismatch directions. The independent selected-profile/context object-cohort
-anchor and refreshed H7 board evidence remain freeze requirements.
+mismatch directions. The exact selected-profile/context object-cohort anchor,
+build-owned expectation, and stale private-object negative links are active.
+Refreshed H7 board evidence remains the outstanding validation requirement.
 
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
@@ -86,6 +87,28 @@ v8-M fixture:  fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
                fiber/port/transitional_v8m/fiber_port_boot.c
                fiber/port/transitional_v8m/fiber_port_exception.c
 ```
+
+Every build-selected target must also compile this source separately from any
+precompiled selected-port archive, using the same selected private include
+path and CPU/ABI flags:
+
+```text
+fiber/port/fiber_port_context_cohort_expectation.c
+```
+
+Keep its input section in a read-only linker output section:
+
+```ld
+KEEP(*(.fiber_port_context_cohort_expectation))
+```
+
+The selected runtime object defines the exact profile/context symbol; boot,
+exception, and the build-owned expectation object retain matching relocations.
+This makes both mixed private objects and a complete precompiled port archive
+from a different exact cohort fail to link. Without the separately compiled
+expectation plus `KEEP`, the latter whole-archive compatibility check is not
+active. This guard does not identify arbitrary source revisions that preserve
+the same declared exact cohort identity.
 
 Do not add every port source directory to a production target. The compile
 matrix deliberately compiles selector-guarded alternatives to audit selection,
