@@ -609,6 +609,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -620,6 +621,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -634,6 +636,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -649,6 +652,7 @@ fiber/
         fiber_port_boot_types.h
         fiber_port_boot.h
         fiber_portmacro.h
+        fiber_port_private.h
         fiber_port.c
         fiber_port_boot.c
         fiber_port_exception.c
@@ -662,6 +666,7 @@ fiber/
         fiber_port_boot.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
+        fiber_port_private.h
         fiber_port.c
         fiber_port_boot.c
         fiber_port_exception.c

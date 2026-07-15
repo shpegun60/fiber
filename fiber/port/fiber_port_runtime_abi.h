@@ -32,6 +32,25 @@ void fiber_port_runtime_memory_barrier(void);
 FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
+/* Frozen common-core-freeze-v1 runtime operations. The current common runtime
+ * does not call these adapters until the choreography migration checkpoint. */
+void fiber_port_require_scheduler_configuration_environment(void);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_prepare_start(void);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_port_runtime_select_first(void);
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_start_first(FiberContext *first);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_schedule(void);
+
+/* Transitional declarations below remain visible only until fiber_core.c and
+ * PendSV use the frozen forward and reverse runtime boundaries. */
+
 FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_restore(FiberContext *ctx);
 

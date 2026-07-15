@@ -40,7 +40,6 @@
 # include "../fiber_port_traits.h"
 # include "../fiber_port_geometry.h"
 # include "../fiber_feature_policy.h"
-# include "../fiber_port_runtime_abi.h"
 #endif
 
 #ifndef FIBER_SVC_START_NUMBER

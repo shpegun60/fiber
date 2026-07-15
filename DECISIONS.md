@@ -1,5 +1,36 @@
 # Fiber Decision Log
 
+## 2026-07-15: Stage Final Forward ABI Adapters Without Activating Them
+
+CM0, CM3, CM4, CM7/r0p1, and the transitional v8-M fixture now define the five
+new operations that complete the final eight-function forward ABI:
+
+```text
+fiber_port_require_scheduler_configuration_environment
+fiber_port_runtime_prepare_start
+fiber_port_runtime_select_first
+fiber_port_runtime_start_first
+fiber_port_runtime_schedule
+```
+
+Each is a thin composition of the existing validated environment, startup,
+scheduler bridge, restore, and request helpers. `fiber_core.c` does not call
+these adapters in this checkpoint. Therefore startup ordering, current-context
+publication, SVC/PendSV assembly, panic precedence, and context layout remain
+unchanged. The H7 linker removes the unreferenced adapter sections.
+
+Every current port also owns a `fiber_port_private.h` containing its cross-file
+save/restore, startup-MSP, scheduler-bridge, exception, and handler
+declarations. Those declarations were removed from `fiber_portmacro.h` and
+boot-record headers. The generic runtime ABI remains wider only because common
+runtime still uses its transitional calls; narrowing and activation occur in a
+separate behavior-changing checkpoint.
+
+The compile matrix requires exactly one global definition of every adapter,
+checks adapter composition and call order, proves that common runtime does not
+reference them yet, and rejects leakage of private declarations back into
+portmacro or boot headers.
+
 ## 2026-07-14: Close Pre-Porting ABI And Profile Gaps
 
 A second contract audit against local FreeRTOS commit `a50edad` covered every

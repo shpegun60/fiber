@@ -11,9 +11,10 @@
 
 #include "../../fiber_runtime_state.h"
 #include "../fiber_port_select.h"
-#include "fiber_portmacro.h"
 
 #if FIBER_PORT_ARMV8M_BASELINE || FIBER_PORT_ARMV8M_MAINLINE || FIBER_PORT_ARMV81M_MAINLINE
+
+#include "fiber_port_private.h"
 
 FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
 void fiber_port_runtime_memory_barrier(void)
@@ -30,6 +31,50 @@ void fiber_port_panic_wait(void)
 	for (;;) {
 		__WFE();
 	}
+}
+
+/*
+ * Frozen forward-ABI adapters.
+ *
+ * They are intentionally not used by common runtime until the choreography
+ * migration checkpoint. Keeping them as thin compositions makes this slice
+ * compile/link observable without changing the validated execution path.
+ */
+void fiber_port_require_scheduler_configuration_environment(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_prepare_start(void)
+{
+	fiber_port_require_start_environment();
+	fiber_port_require_start_interrupt_state();
+	fiber_pendsv_init_lowest_priority();
+	fiber_port_runtime_prepare();
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_port_runtime_select_first(void)
+{
+	return fiber_port_scheduler_pick_first_from_start();
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_start_first(FiberContext *first)
+{
+	const uintptr_t msp_top = fiber_port_context_prepare_first_start(first);
+
+	fiber_port_require_start_interrupt_state();
+	fiber_port_start_first_context(msp_top);
+	FIBER_API_UNREACHABLE();
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_schedule(void)
+{
+	fiber_port_require_schedule_environment();
+	fiber_port_request_schedule();
 }
 
 #define FBR_STRINGIFY2(x) #x

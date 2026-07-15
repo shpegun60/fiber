@@ -234,6 +234,20 @@ function Test-ContextPortBoundary {
         }
     }
 
+    $futureForwardAdapters = @(
+        "fiber_port_require_scheduler_configuration_environment(",
+        "fiber_port_runtime_prepare_start(",
+        "fiber_port_runtime_select_first(",
+        "fiber_port_runtime_start_first(",
+        "fiber_port_runtime_schedule("
+    )
+    foreach ($adapter in $futureForwardAdapters) {
+        if ($sources[$corePath].IndexOf($adapter,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Adapter checkpoint must not change common runtime choreography: $adapter"
+        }
+    }
+
     $requiredRuntimeCalls = @(
         "fiber_internal_scheduler_invoke_pick_next(",
         "fiber_internal_scheduler_commit_current_context("
@@ -254,6 +268,11 @@ function Test-ContextPortBoundary {
     )
     $requiredPortBridgeSymbols = @(
         "FiberPortSchedulerCpuState",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule",
         "fiber_port_scheduler_set_pick_next",
         "fiber_port_scheduler_pick_first_from_start",
         "fiber_port_scheduler_pick_next_from_pendsv",
@@ -267,6 +286,174 @@ function Test-ContextPortBoundary {
             if ($source.IndexOf($requiredSymbol,
                     [System.StringComparison]::Ordinal) -lt 0) {
                 throw "Selected port must own scheduler CPU-state validation: missing $requiredSymbol in $path"
+            }
+        }
+
+        $configurationBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_require_scheduler_configuration_environment(void)" `
+            -Path $path
+        if (($configurationBody.IndexOf("FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($configurationBody.IndexOf("fiber_internal_scheduler_",
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+            throw "Scheduler-configuration adapter must validate only its CPU environment: $path"
+        }
+
+        $prepareBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_runtime_prepare_start(void)" -Path $path
+        $prepareCalls = @(
+            "fiber_port_require_start_environment();",
+            "fiber_port_require_start_interrupt_state();",
+            "fiber_pendsv_init_lowest_priority();",
+            "fiber_port_runtime_prepare();"
+        )
+        $lastIndex = -1
+        foreach ($call in $prepareCalls) {
+            $callIndex = $prepareBody.IndexOf($call,
+                [System.StringComparison]::Ordinal)
+            if ($callIndex -le $lastIndex) {
+                throw "Start-preparation adapter call order is incomplete: $call in $path"
+            }
+            $lastIndex = $callIndex
+        }
+
+        $selectBody = Get-CFunctionBody -Source $source `
+            -Signature "FiberContext *fiber_port_runtime_select_first(void)" `
+            -Path $path
+        if ($selectBody.IndexOf(
+                "return fiber_port_scheduler_pick_first_from_start();",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "First-selection adapter must delegate to the validated bridge: $path"
+        }
+
+        $startBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_runtime_start_first(FiberContext *first)" `
+            -Path $path
+        $startPrepare = $startBody.IndexOf(
+            "fiber_port_context_prepare_first_start(first)",
+            [System.StringComparison]::Ordinal)
+        $startMasks = $startBody.IndexOf(
+            "fiber_port_require_start_interrupt_state();",
+            [System.StringComparison]::Ordinal)
+        $startTransfer = $startBody.IndexOf(
+            "fiber_port_start_first_context(msp_top);",
+            [System.StringComparison]::Ordinal)
+        if (($startPrepare -lt 0) -or ($startMasks -le $startPrepare) -or
+                ($startTransfer -le $startMasks)) {
+            throw "First-start adapter must preserve validation and transfer order: $path"
+        }
+
+        $scheduleBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_runtime_schedule(void)" -Path $path
+        $scheduleRequire = $scheduleBody.IndexOf(
+            "fiber_port_require_schedule_environment();",
+            [System.StringComparison]::Ordinal)
+        $scheduleRequest = $scheduleBody.IndexOf(
+            "fiber_port_request_schedule();",
+            [System.StringComparison]::Ordinal)
+        if (($scheduleRequire -lt 0) -or ($scheduleRequest -le $scheduleRequire)) {
+            throw "Schedule adapter must preserve environment-before-request order: $path"
+        }
+    }
+}
+
+function Test-SelectedPortPrivateDeclarations {
+    param([string]$RepositoryRoot)
+
+    $privateHeaders = @(
+        "fiber\port\ARM_CM0\fiber_port_private.h",
+        "fiber\port\ARM_CM3\fiber_port_private.h",
+        "fiber\port\ARM_CM4\fiber_port_private.h",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_private.h",
+        "fiber\port\transitional_v8m\fiber_port_private.h"
+    )
+    $requiredPrivateSymbols = @(
+        "fiber_internal_task_return",
+        "fiber_port_init_context_frame",
+        "fiber_port_context_validate_restore",
+        "fiber_port_context_validate_save_current",
+        "fiber_port_context_prepare_first_start",
+        "fiber_port_require_start_environment",
+        "fiber_port_require_start_interrupt_state",
+        "fiber_port_runtime_prepare",
+        "fiber_port_require_schedule_environment",
+        "fiber_port_request_schedule",
+        "fiber_port_scheduler_set_pick_next",
+        "fiber_port_scheduler_pick_first_from_start",
+        "fiber_port_scheduler_pick_next_from_pendsv",
+        "fiber_exception_runtime_check",
+        "fiber_pendsv_init_lowest_priority",
+        "fiber_port_start_first_context",
+        "fiber_svc",
+        "fiber_pendsv"
+    )
+
+    foreach ($relativePath in $privateHeaders) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+
+        if ($source.IndexOf("fiber_port_runtime_abi.h",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Selected-port private header must import the generic runtime ABI: $path"
+        }
+        foreach ($symbol in $requiredPrivateSymbols) {
+            if (-not [regex]::IsMatch($source,
+                    "\b$([regex]::Escape($symbol))\s*\(")) {
+                throw "Selected-port private header is missing ${symbol}: $path"
+            }
+        }
+    }
+
+    $implementationSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM0\fiber_port_boot.c",
+        "fiber\port\ARM_CM0\fiber_port_exception.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port_boot.c",
+        "fiber\port\ARM_CM3\fiber_port_exception.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port_boot.c",
+        "fiber\port\ARM_CM4\fiber_port_exception.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c",
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_exception.c"
+    )
+    foreach ($relativePath in $implementationSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        if ($source.IndexOf('#include "fiber_port_private.h"',
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Selected-port implementation must include its private declarations: $path"
+        }
+    }
+
+    $legacyDeclarationHeaders = @(
+        "fiber\port\ARM_CM0\fiber_portmacro.h",
+        "fiber\port\ARM_CM0\fiber_port_boot.h",
+        "fiber\port\ARM_CM3\fiber_portmacro.h",
+        "fiber\port\ARM_CM3\fiber_port_boot.h",
+        "fiber\port\ARM_CM4\fiber_portmacro.h",
+        "fiber\port\ARM_CM4\fiber_port_boot.h",
+        "fiber\port\ARM_CM7\r0p1\fiber_portmacro.h",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.h",
+        "fiber\port\transitional_v8m\fiber_portmacro.h",
+        "fiber\port\transitional_v8m\fiber_port_boot.h",
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.h"
+    )
+    foreach ($relativePath in $legacyDeclarationHeaders) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        if ($source.IndexOf("fiber_port_runtime_abi.h",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Port macro/boot headers must not expose the generic callable ABI: $path"
+        }
+        foreach ($symbol in $requiredPrivateSymbols) {
+            if ([regex]::IsMatch($source,
+                    "\b$([regex]::Escape($symbol))\s*\(")) {
+                throw "Port-private declaration leaked into legacy header: $symbol in $path"
             }
         }
     }
@@ -630,6 +817,7 @@ if (-not (Test-Path $nm)) {
 
 Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
 Test-ContextPortBoundary -RepositoryRoot $RepoRoot
+Test-SelectedPortPrivateDeclarations -RepositoryRoot $RepoRoot
 Test-SelectedPortIntegrityPreflight -RepositoryRoot $RepoRoot
 Test-PendSvSaveValidationOrdering -RepositoryRoot $RepoRoot
 Test-ScheduleValidationOwnership -RepositoryRoot $RepoRoot
@@ -788,6 +976,11 @@ $requiredPortSymbols = @(
     "fiber_port_runtime_prepare",
     "fiber_port_runtime_memory_barrier",
     "fiber_port_panic_wait",
+    "fiber_port_require_scheduler_configuration_environment",
+    "fiber_port_runtime_prepare_start",
+    "fiber_port_runtime_select_first",
+    "fiber_port_runtime_start_first",
+    "fiber_port_runtime_schedule",
     "fiber_port_require_schedule_environment",
     "fiber_port_request_schedule",
     "fiber_port_scheduler_set_pick_next",

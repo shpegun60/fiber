@@ -164,6 +164,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -175,6 +176,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -186,6 +188,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -198,6 +201,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port.c
       fiber_port_boot.c
       fiber_port_exception.c
@@ -213,6 +217,7 @@ fiber/
         fiber_port_boot_types.h
         fiber_port_boot.h
         fiber_portmacro.h
+        fiber_port_private.h
         fiber_port.c
         fiber_port_boot.c
         fiber_port_exception.c
@@ -222,6 +227,7 @@ fiber/
       fiber_port_boot_types.h
       fiber_port_boot.h
       fiber_portmacro.h
+      fiber_port_private.h
       fiber_port_transitional_v8m.h
       fiber_port_transitional_v8m.c
       fiber_port_boot.c
@@ -235,6 +241,7 @@ fiber/
         fiber_port_boot.h
         fiber_portmacrocommon.h
         fiber_portmacro.h
+        fiber_port_private.h
         fiber_port.c
         fiber_port_boot.c
         fiber_port_exception.c
@@ -282,6 +289,8 @@ FreeRTOS portasm.h/.c      -> fiber_portasm.h/.c
 FreeRTOS secure_context.*  -> fiber_secure_context.*
 FreeRTOS mpu_wrappers*     -> fiber_mpu_wrappers* only if MPU task isolation
                               becomes an explicit feature
+fiber-only private declarations -> fiber_port_private.h; no public FreeRTOS
+                                   contract counterpart
 ```
 
 Every production port directory must provide its selected public context type,
@@ -290,7 +299,10 @@ ledger. The profile name belongs to the directory. Current concrete
 source groups use the role names `fiber_port.c`, `fiber_port_boot.c`, and
 `fiber_port_exception.c`. The selected `fiber_portmacro.h` is the only
 port-wide CPU-contract facade; do not add a second selected-port header such as
-`fiber_port.h`. Behavior must not change during a pure file-layout split.
+`fiber_port.h`. `fiber_port_private.h` is not a facade or selected include: it
+is included only by the concrete port's implementation files to share private
+cross-file declarations. Behavior must not change during a pure file-layout
+split.
 
 The first FreeRTOS-style source-group workflow is:
 

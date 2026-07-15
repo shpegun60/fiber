@@ -38,23 +38,7 @@ FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_boot_record_compute_hash(const Fiber
 FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_check(const FiberPortBoot *ctx);
 FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx);
 
-FIBER_NORETURN void fiber_internal_task_return(void);
-
-void fiber_port_runtime_prepare(void);
 uintptr_t fiber_port_boot_prepare_msp_for_start(const FiberPortBoot *ctx);
-
-void fiber_port_context_init(FiberContext *ctx,
-		void *stack_begin,
-		void *stack_end,
-		entry_t entry,
-		void *arg);
-FIBER_GENERAL_REGS_ONLY
-void fiber_port_context_validate_restore(FiberContext *ctx);
-FIBER_GENERAL_REGS_ONLY
-void fiber_port_context_validate_save_current(const FiberContext *ctx);
-uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
-void fiber_port_require_start_environment(void);
-void fiber_port_require_start_interrupt_state(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -109,12 +109,14 @@ Closed hardening items from the FreeRTOS comparison:
   `EXC_RETURN` word selection now come from selected port traits instead of a
   common hard-coded 36-byte assumption;
 - each current selected port now owns `fiber_port_types.h`,
-  `fiber_port_boot_types.h`, `fiber_port_boot.h`, and `fiber_port_boot.c`;
+  `fiber_port_boot_types.h`, `fiber_port_boot.h`, `fiber_port_private.h`, and
+  `fiber_port_boot.c`;
   `fiber_port_selected.h` is the sole public type selector and selects one
-  local `fiber_port_types.h`. The matching selected `fiber_portmacro.h` is the
-  private complete CPU contract. `fiber_types.h` remains a source-compatible
-  facade. The physical `sp + FiberPortBoot` layout is transitional, while
-  common sources already use the opaque callable ABI;
+  local `fiber_port_types.h`. The matching selected `fiber_portmacro.h` owns CPU
+  traits and inline mechanics, while `fiber_port_private.h` shares cross-file
+  implementation declarations only inside that concrete port. `fiber_types.h`
+  remains a source-compatible facade. The physical `sp + FiberPortBoot` layout
+  is transitional, while common sources already use the opaque callable ABI;
 - build-selected portmacro workflow exists for the first FreeRTOS-referenced
   Cortex-M7 source group:
   `fiber/port/ARM_CM7/r0p1/fiber_portmacro.h` and `fiber_port.c`. The

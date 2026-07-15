@@ -8,7 +8,7 @@
 
 #if FIBER_PORT_ARMV6M
 
-#include "fiber_portmacro.h"
+#include "fiber_port_private.h"
 
 extern void PendSV_Handler(void);
 extern void SVC_Handler(void);

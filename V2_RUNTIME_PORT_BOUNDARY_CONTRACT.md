@@ -3,12 +3,17 @@
 ## Status
 
 This document defines the normative target for the final common-runtime to
-selected-port boundary. It is a documentation-only architecture checkpoint.
-It does not claim that the current source tree already implements every rule.
+selected-port boundary. The architecture was frozen before implementation; the
+status below distinguishes staged adapters from the active runtime path.
 
 The current tree is transitional:
 
 - `fiber_port_runtime_abi.h` still exposes more than the final eight functions;
+- every current port defines the five new final runtime adapters, but common
+  runtime deliberately does not call them before the choreography checkpoint;
+- cross-file save/restore, MSP, scheduler-bridge, exception, and handler
+  declarations now live in each port's `fiber_port_private.h`, outside
+  `fiber_portmacro.h` and boot-record headers;
 - `fiber_start()` still coordinates port-private startup stages and transports
   an MSP value through common code;
 - application-owned SVC and PendSV wrappers are still supported;

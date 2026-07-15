@@ -291,27 +291,6 @@ fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 	{ __DSB(); __ISB(); }
 }
 
-void fiber_port_init_context_frame(FiberContext *ctx);
-
-FIBER_NOINLINE
-void fiber_port_require_schedule_environment(void);
-
-FIBER_NOINLINE
-void fiber_port_request_schedule(void);
-
-void fiber_exception_runtime_check(void);
-
-void fiber_pendsv_init_lowest_priority(void);
-
-FIBER_NORETURN
-void fiber_port_start_first_context(uintptr_t msp_top);
-
-FIBER_ATTR_NAKED_ASM
-void fiber_svc(void);
-
-FIBER_ATTR_NAKED_ASM
-void fiber_pendsv(void);
-
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -322,7 +301,6 @@ void fiber_pendsv(void);
 # include "../fiber_port_traits.h"
 # include "../fiber_port_geometry.h"
 # include "../fiber_feature_policy.h"
-# include "../fiber_port_runtime_abi.h"
 #endif
 
 #ifndef FIBER_SVC_START_NUMBER

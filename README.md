@@ -86,11 +86,17 @@ It will be deleted when concrete v8-M and ARMv8.1-M ports replace it.
 
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
 selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h` completes
-only the selected public `FiberContext` storage type. The complete CPU contract
-is the concrete selected `fiber_portmacro.h`; it is private to selected port
-sources and deliberate low-level integration or test code. Common runtime code
-uses the opaque callable `fiber_port_runtime_abi.h` boundary and does not include
-the selected complete port contract.
+only the selected public `FiberContext` storage type. CPU traits, constants, and
+inline mechanics live in the concrete selected `fiber_portmacro.h`; it is
+private to selected port sources and deliberate low-level integration or test
+code. Common runtime code uses the opaque callable `fiber_port_runtime_abi.h`
+boundary and does not include the selected CPU contract.
+
+Cross-file implementation declarations are additionally isolated in the
+concrete port's `fiber_port_private.h`. Current ports compile and link the five
+new final runtime adapters, while `fiber_core.c` intentionally remains on the
+validated transitional choreography until the separate ABI-switch checkpoint.
+Unused adapters are removed from the H7 image by section garbage collection.
 
 The inverse internal dependency is frozen by
 `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`: selected ports may reach common

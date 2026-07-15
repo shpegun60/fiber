@@ -610,30 +610,6 @@ fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_yield_request(void)
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_geometry.h"
 #include "../../fiber_feature_policy.h"
-#include "../../fiber_port_runtime_abi.h"
-
-struct FiberContext;
-
-void fiber_port_init_context_frame(struct FiberContext *ctx);
-
-/* Thread-mode schedule boundary. These are selected-port ABI entry points,
- * deliberately out-of-line so common runtime objects do not inherit CPU
- * register access or direct ICSR writes. */
-FIBER_NOINLINE
-void fiber_port_require_schedule_environment(void);
-
-FIBER_NOINLINE
-void fiber_port_request_schedule(void);
-
-void fiber_exception_runtime_check(void);
-
-void fiber_pendsv_init_lowest_priority(void);
-
-void fiber_port_start_first_context(uintptr_t msp_top);
-
-void fiber_svc(void);
-
-void fiber_pendsv(void);
 
 #if !FIBER_PENDSV_VECTOR_DIRECT && !defined(FIBER_PENDSV_WIRED)
 FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to branch to fiber_pendsv without clobbering LR; define FIBER_PENDSV_WIRED=1 after you do it");

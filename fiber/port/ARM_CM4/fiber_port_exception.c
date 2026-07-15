@@ -9,7 +9,7 @@
 
 #if FIBER_PORT_ARMV7EM && defined(__CORTEX_M) && (__CORTEX_M == 4)
 
-#include "fiber_portmacro.h"
+#include "fiber_port_private.h"
 
 extern void PendSV_Handler(void);
 extern void SVC_Handler(void);
