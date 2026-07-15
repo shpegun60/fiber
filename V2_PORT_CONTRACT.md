@@ -380,12 +380,13 @@ header and implements the frozen callable port ABI. Public code gets the
 selected complete context type through `fiber_core.h`. Common runtime
 translation units compile with an incomplete `FiberContext` and cannot include
 the selected complete type header or branch into architecture-specific
-implementation logic. The `fiber_port_selected.h` type-only split is already
-implemented. The remaining migration narrows `fiber_port_runtime_abi.h` to the
-eight frozen functions and moves every displaced declaration into that
-concrete port's private `fiber_portmacro.h`, `fiber_portasm.h`, boot header, or
-another explicitly port-private header. No global selected internal-type facade
-is part of the frozen design.
+implementation logic. The `fiber_port_selected.h` type-only split and the exact
+eight-function `fiber_port_runtime_abi.h` boundary are implemented. Every
+displaced declaration lives in the concrete port's private `fiber_portmacro.h`,
+`fiber_portasm.h`, boot header, or `fiber_port_private.h`. The remaining common
+boundary migration is the frozen reverse ABI, strong handler ownership, and
+removal of wrapper/direct-vector compatibility. No global selected internal-type
+facade is part of the frozen design.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as

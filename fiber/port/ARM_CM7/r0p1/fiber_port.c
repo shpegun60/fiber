@@ -37,11 +37,10 @@ void fiber_port_panic_wait(void)
 }
 
 /*
- * Frozen forward-ABI adapters.
+ * Frozen forward-ABI implementation.
  *
- * They are intentionally not used by common runtime until the choreography
- * migration checkpoint. Keeping them as thin compositions makes this slice
- * compile/link observable without changing the validated execution path.
+ * Common runtime calls only these CPU-neutral operations. Port-private helpers
+ * retain the established validation and first-start mechanics below.
  */
 void fiber_port_require_scheduler_configuration_environment(void)
 {
@@ -71,13 +70,6 @@ void fiber_port_runtime_start_first(FiberContext *first)
 	fiber_port_require_start_interrupt_state();
 	fiber_port_start_first_context(msp_top);
 	FIBER_API_UNREACHABLE();
-}
-
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-void fiber_port_runtime_schedule(void)
-{
-	fiber_port_require_schedule_environment();
-	fiber_port_request_schedule();
 }
 
 #define fiber_portSTRINGIFY2(x) #x
@@ -152,17 +144,14 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
  * access and ICSR publication inside the selected port ABI.
  *----------------------------------------------------------*/
 
-void fiber_port_require_schedule_environment(void)
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_schedule(void)
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	fiber_internal_require_schedule_current();
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-}
-
-void fiber_port_request_schedule(void)
-{
 	fiber_arm_cm7_r0p1_yield_request();
 }
 
@@ -209,13 +198,6 @@ fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
 #endif
 	fiber_portCOMPILER_BARRIER();
-}
-
-void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
-		void *user)
-{
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	fiber_internal_scheduler_store_pick_next(pick_next, user);
 }
 
 FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE

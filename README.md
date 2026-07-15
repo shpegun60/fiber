@@ -93,10 +93,11 @@ code. Common runtime code uses the opaque callable `fiber_port_runtime_abi.h`
 boundary and does not include the selected CPU contract.
 
 Cross-file implementation declarations are additionally isolated in the
-concrete port's `fiber_port_private.h`. Current ports compile and link the five
-new final runtime adapters, while `fiber_core.c` intentionally remains on the
-validated transitional choreography until the separate ABI-switch checkpoint.
-Unused adapters are removed from the H7 image by section garbage collection.
+concrete port's `fiber_port_private.h`. `fiber_core.c` now calls exactly the
+eight CPU-neutral operations in `fiber_port_runtime_abi.h`; it does not transport
+MSP values or call selected-port-private startup, validation, scheduler, SVC, or
+PendSV helpers. This activation changes first-start ordering and requires a
+fresh H7 hardware run before restoring the runtime-validation claim.
 
 The inverse internal dependency is frozen by
 `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`: selected ports may reach common

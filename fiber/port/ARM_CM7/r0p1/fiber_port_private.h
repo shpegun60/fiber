@@ -21,10 +21,6 @@ void fiber_port_require_start_environment(void);
 void fiber_port_require_start_interrupt_state(void);
 void fiber_port_runtime_prepare(void);
 
-FIBER_NOINLINE void fiber_port_require_schedule_environment(void);
-FIBER_NOINLINE void fiber_port_request_schedule(void);
-void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
-		void *user);
 FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_scheduler_pick_first_from_start(void);
 FIBER_GENERAL_REGS_ONLY

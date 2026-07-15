@@ -4,18 +4,22 @@
 
 This document defines the normative target for the final common-runtime to
 selected-port boundary. The architecture was frozen before implementation; the
-status below distinguishes staged adapters from the active runtime path.
+status below distinguishes the active forward ABI from remaining reverse-ABI
+and handler-ownership migration work.
 
 The current tree is transitional:
 
-- `fiber_port_runtime_abi.h` still exposes more than the final eight functions;
-- every current port defines the five new final runtime adapters, but common
-  runtime deliberately does not call them before the choreography checkpoint;
+- `fiber_port_runtime_abi.h` exposes exactly the final eight functions and
+  common runtime uses them for context creation, scheduler configuration,
+  startup, first selection, first transfer, schedule requests, barriers, and
+  terminal panic wait;
 - cross-file save/restore, MSP, scheduler-bridge, exception, and handler
   declarations now live in each port's `fiber_port_private.h`, outside
   `fiber_portmacro.h` and boot-record headers;
-- `fiber_start()` still coordinates port-private startup stages and transports
-  an MSP value through common code;
+- `fiber_start()` no longer transports MSP or invokes port-private startup
+  stages;
+- the reverse port-to-common surface and common-owned scheduler state names are
+  still transitional and have not yet moved to the frozen reverse ABI v1;
 - application-owned SVC and PendSV wrappers are still supported;
 - wrapper/direct-vector configuration macros still exist;
 - common-owned scheduler globals still contain `port` in their names.
@@ -882,7 +886,7 @@ platform remapping at runtime.
 Each slice is independently compile/link checked. Runtime behavior changes are
 not mixed with unrelated layout work.
 
-1. Narrow `fiber_port_runtime_abi.h` to the eight generic functions while
+1. Done: narrow `fiber_port_runtime_abi.h` to the eight generic functions while
    adding private selected-port headers for the displaced declarations. Make
    `fiber_api_attributes.h` the only public scheduler-hook attribute definition
    and apply the frozen sensitive/general-registers-only attributes to the
@@ -895,8 +899,9 @@ not mixed with unrelated layout work.
    definition as weak.
 3. Delete the wider `fiber_runtime_state.h` port surface and add reverse-symbol,
    slot-load-only, integration-hook, section-GC, and LTO allowlist proofs.
-4. Collapse start preparation, first selection, first start, and schedule
-   request choreography behind the new generic functions.
+4. Done: collapse start preparation, first selection, first start, and schedule
+   request choreography behind the new generic functions. Hardware validation
+   remains pending for this behavior-changing checkpoint.
 5. Add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
    preserving the existing validated assembly bodies. Co-locate them with a
    mandatory ABI definition or add the unique handler-bundle extraction anchor.

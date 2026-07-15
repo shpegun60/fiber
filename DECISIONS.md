@@ -1,5 +1,38 @@
 # Fiber Decision Log
 
+## 2026-07-15: Activate The Frozen Eight-Function Forward ABI
+
+Common runtime now calls exactly the eight operations declared by
+`fiber_port_runtime_abi.h`. The displaced startup, scheduler-bridge, exception,
+frame-validation, and handler declarations remain selected-port-private.
+`fiber_port_scheduler_set_pick_next()` was removed: the selected port validates
+the CPU environment, then common runtime performs the hook/user lifecycle store.
+
+The active `fiber_start()` order is now the frozen order:
+
+```text
+common K/k lifecycle checks
+selected-port startup preparation
+port-protected first scheduler selection
+common current-context publication
+selected-port first-context validation and SVC transfer
+```
+
+Therefore `K/k` deliberately precede CPU-environment panic codes, and the first
+context is published before the selected port performs its final first-restore
+validation. Panic remains terminal, so a failed first start cannot resume with a
+partially started runtime.
+
+`fiber_schedule()` is a single common-to-port call. Each port implements the
+complete `IPSR -> current -> PRIMASK -> BASEPRI -> FAULTMASK -> request` path in
+one function, preserving existing failure order without adding a hot-path
+adapter call. SVC/PendSV assembly, frame layout, scheduler critical sections,
+and vector ownership are unchanged.
+
+This checkpoint changes startup choreography and panic precedence. Compile/link
+proofs do not renew the STM32H7 runtime claim; the normal, FPU, startup, and trap
+suite must pass on hardware again.
+
 ## 2026-07-15: Stage Final Forward ABI Adapters Without Activating Them
 
 CM0, CM3, CM4, CM7/r0p1, and the transitional v8-M fixture now define the five

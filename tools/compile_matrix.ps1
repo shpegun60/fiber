@@ -143,10 +143,7 @@ function Test-SchedulePortBoundary {
     $scheduleBody = Get-CFunctionBody -Source $coreSource `
         -Signature "void fiber_schedule(void)" -Path $corePath
 
-    $requiredCalls = @(
-        "fiber_port_require_schedule_environment();",
-        "fiber_port_request_schedule();"
-    )
+    $requiredCalls = @("fiber_port_runtime_schedule();")
     foreach ($requiredCall in $requiredCalls) {
         if ($scheduleBody.IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
             throw "fiber_schedule must delegate through selected-port ABI: missing $requiredCall"
@@ -166,6 +163,45 @@ function Test-SchedulePortBoundary {
         if ($scheduleBody.IndexOf($forbidden, [System.StringComparison]::Ordinal) -ge 0) {
             throw "fiber_schedule must not contain CPU-specific schedule access: $forbidden"
         }
+    }
+
+    $forbiddenTransitionalCalls = @(
+        "fiber_port_require_schedule_environment();",
+        "fiber_port_request_schedule();"
+    )
+    foreach ($forbidden in $forbiddenTransitionalCalls) {
+        if ($scheduleBody.IndexOf($forbidden,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "fiber_schedule must use only the frozen schedule ABI: $forbidden"
+        }
+    }
+}
+
+function Test-FinalForwardPortAbi {
+    param([string]$RepositoryRoot)
+
+    $abiPath = Join-Path $RepositoryRoot "fiber\port\fiber_port_runtime_abi.h"
+    $abiSource = Get-Content -LiteralPath $abiPath -Raw
+    $expectedSymbols = @(
+        "fiber_port_context_init",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule"
+    ) | Sort-Object
+    $actualSymbols = @([regex]::Matches(
+        $abiSource,
+        '\b(fiber_port_[A-Za-z0-9_]+)\s*\(') | ForEach-Object {
+            $_.Groups[1].Value
+        } | Sort-Object -Unique)
+
+    if (($actualSymbols.Count -ne $expectedSymbols.Count) -or
+            (Compare-Object -ReferenceObject $expectedSymbols `
+                -DifferenceObject $actualSymbols)) {
+        throw "Generic forward port ABI must expose exactly the frozen eight symbols; found: $($actualSymbols -join ', ')"
     }
 }
 
@@ -221,12 +257,13 @@ function Test-ContextPortBoundary {
 
     $requiredCoreCalls = @(
         "fiber_port_context_init(",
-        "fiber_port_require_start_environment();",
-        "fiber_port_require_start_interrupt_state();",
-        "fiber_port_runtime_prepare();",
-        "fiber_port_context_prepare_first_start(",
-        "fiber_port_scheduler_pick_first_from_start();",
-        "fiber_port_scheduler_set_pick_next("
+        "fiber_port_require_scheduler_configuration_environment();",
+        "fiber_internal_scheduler_store_pick_next(",
+        "fiber_port_runtime_prepare_start();",
+        "fiber_port_runtime_select_first();",
+        "fiber_internal_runtime_seed_current_context(first);",
+        "fiber_port_runtime_start_first(first);",
+        "fiber_port_runtime_schedule();"
     )
     foreach ($requiredCall in $requiredCoreCalls) {
         if ($sources[$corePath].IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
@@ -234,18 +271,56 @@ function Test-ContextPortBoundary {
         }
     }
 
-    $futureForwardAdapters = @(
-        "fiber_port_require_scheduler_configuration_environment(",
-        "fiber_port_runtime_prepare_start(",
-        "fiber_port_runtime_select_first(",
-        "fiber_port_runtime_start_first(",
-        "fiber_port_runtime_schedule("
+    $transitionalCoreCalls = @(
+        "fiber_port_require_start_environment(",
+        "fiber_port_require_start_interrupt_state(",
+        "fiber_pendsv_init_lowest_priority(",
+        "fiber_port_runtime_prepare(",
+        "fiber_port_context_prepare_first_start(",
+        "fiber_port_scheduler_pick_first_from_start(",
+        "fiber_port_scheduler_set_pick_next(",
+        "fiber_port_require_schedule_environment(",
+        "fiber_port_request_schedule(",
+        "fiber_port_start_first_context("
     )
-    foreach ($adapter in $futureForwardAdapters) {
-        if ($sources[$corePath].IndexOf($adapter,
+    foreach ($call in $transitionalCoreCalls) {
+        if ($sources[$corePath].IndexOf($call,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "Adapter checkpoint must not change common runtime choreography: $adapter"
+            throw "fiber_core.c must not use displaced transitional port ABI: $call"
         }
+    }
+
+    $startBody = Get-CFunctionBody -Source $sources[$corePath] `
+        -Signature "void fiber_start(void)" -Path $corePath
+    $startSteps = @(
+        "FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');",
+        "FIBER_REQUIRE(fiber_current() == 0, 'k');",
+        "fiber_port_runtime_prepare_start();",
+        "FiberContext *const first = fiber_port_runtime_select_first();",
+        "fiber_internal_runtime_seed_current_context(first);",
+        "fiber_port_runtime_start_first(first);"
+    )
+    $lastIndex = -1
+    foreach ($step in $startSteps) {
+        $stepIndex = $startBody.IndexOf($step,
+            [System.StringComparison]::Ordinal)
+        if ($stepIndex -le $lastIndex) {
+            throw "fiber_start must preserve frozen lifecycle and panic order: $step"
+        }
+        $lastIndex = $stepIndex
+    }
+
+    $setBody = Get-CFunctionBody -Source $sources[$corePath] `
+        -Signature "void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user)" `
+        -Path $corePath
+    $setEnvironment = $setBody.IndexOf(
+        "fiber_port_require_scheduler_configuration_environment();",
+        [System.StringComparison]::Ordinal)
+    $setStore = $setBody.IndexOf(
+        "fiber_internal_scheduler_store_pick_next(pick_next, user);",
+        [System.StringComparison]::Ordinal)
+    if (($setEnvironment -lt 0) -or ($setStore -le $setEnvironment)) {
+        throw "Scheduler hook installation must validate the port environment before common-owned storage"
     }
 
     $requiredRuntimeCalls = @(
@@ -273,7 +348,6 @@ function Test-ContextPortBoundary {
         "fiber_port_runtime_select_first",
         "fiber_port_runtime_start_first",
         "fiber_port_runtime_schedule",
-        "fiber_port_scheduler_set_pick_next",
         "fiber_port_scheduler_pick_first_from_start",
         "fiber_port_scheduler_pick_next_from_pendsv",
         "fiber_port_context_validate_restore",
@@ -345,14 +419,43 @@ function Test-ContextPortBoundary {
 
         $scheduleBody = Get-CFunctionBody -Source $source `
             -Signature "void fiber_port_runtime_schedule(void)" -Path $path
-        $scheduleRequire = $scheduleBody.IndexOf(
-            "fiber_port_require_schedule_environment();",
-            [System.StringComparison]::Ordinal)
-        $scheduleRequest = $scheduleBody.IndexOf(
-            "fiber_port_request_schedule();",
-            [System.StringComparison]::Ordinal)
-        if (($scheduleRequire -lt 0) -or ($scheduleRequest -le $scheduleRequire)) {
-            throw "Schedule adapter must preserve environment-before-request order: $path"
+        $scheduleSteps = @(
+            "FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+            "fiber_internal_require_schedule_current();",
+            "FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');"
+        )
+        $lastScheduleIndex = -1
+        foreach ($step in $scheduleSteps) {
+            $stepIndex = $scheduleBody.IndexOf($step,
+                [System.StringComparison]::Ordinal)
+            if ($stepIndex -le $lastScheduleIndex) {
+                throw "Schedule adapter must preserve i/G/p validation order: $step in $path"
+            }
+            $lastScheduleIndex = $stepIndex
+        }
+        foreach ($optionalMask in @(
+                "fiber_port_basepri_read() == 0u",
+                "__get_FAULTMASK() == 0u")) {
+            $maskIndex = $scheduleBody.IndexOf($optionalMask,
+                [System.StringComparison]::Ordinal)
+            if (($maskIndex -ge 0) -and ($maskIndex -le $lastScheduleIndex)) {
+                throw "Optional schedule mask validation must follow i/G/p: $optionalMask in $path"
+            }
+            if ($maskIndex -ge 0) {
+                $lastScheduleIndex = $maskIndex
+            }
+        }
+        $requestIndexes = @(@(
+            $scheduleBody.IndexOf("fiber_portNVIC_INT_CTRL_REG =",
+                [System.StringComparison]::Ordinal),
+            $scheduleBody.IndexOf("fiber_arm_cm7_r0p1_yield_request();",
+                [System.StringComparison]::Ordinal),
+            $scheduleBody.IndexOf("SCB->ICSR =",
+                [System.StringComparison]::Ordinal)
+        ) | Where-Object { $_ -ge 0 })
+        if (($requestIndexes.Count -ne 1) -or
+                ($requestIndexes[0] -le $lastScheduleIndex)) {
+            throw "Schedule adapter must issue exactly one request after all validation: $path"
         }
     }
 }
@@ -376,9 +479,6 @@ function Test-SelectedPortPrivateDeclarations {
         "fiber_port_require_start_environment",
         "fiber_port_require_start_interrupt_state",
         "fiber_port_runtime_prepare",
-        "fiber_port_require_schedule_environment",
-        "fiber_port_request_schedule",
-        "fiber_port_scheduler_set_pick_next",
         "fiber_port_scheduler_pick_first_from_start",
         "fiber_port_scheduler_pick_next_from_pendsv",
         "fiber_exception_runtime_check",
@@ -702,7 +802,7 @@ function Test-ScheduleValidationOwnership {
         $path = Join-Path $RepositoryRoot $relativePath
         $source = Get-Content -LiteralPath $path -Raw
         $scheduleBody = Get-CFunctionBody -Source $source `
-            -Signature "void fiber_port_require_schedule_environment(void)" `
+            -Signature "void fiber_port_runtime_schedule(void)" `
             -Path $path
         $bridgeBody = Get-CFunctionBody -Source $source `
             -Signature "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)" `
@@ -816,6 +916,7 @@ if (-not (Test-Path $nm)) {
 }
 
 Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
+Test-FinalForwardPortAbi -RepositoryRoot $RepoRoot
 Test-ContextPortBoundary -RepositoryRoot $RepoRoot
 Test-SelectedPortPrivateDeclarations -RepositoryRoot $RepoRoot
 Test-SelectedPortIntegrityPreflight -RepositoryRoot $RepoRoot
@@ -981,9 +1082,6 @@ $requiredPortSymbols = @(
     "fiber_port_runtime_select_first",
     "fiber_port_runtime_start_first",
     "fiber_port_runtime_schedule",
-    "fiber_port_require_schedule_environment",
-    "fiber_port_request_schedule",
-    "fiber_port_scheduler_set_pick_next",
     "fiber_port_scheduler_pick_first_from_start",
     "fiber_port_scheduler_pick_next_from_pendsv",
     "fiber_port_start_first_context",

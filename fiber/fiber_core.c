@@ -30,30 +30,21 @@ FiberContext* fiber_current(void)
 FIBER_API_NORETURN
 void fiber_start(void)
 {
-	fiber_port_require_start_environment();
-
 	FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == 0, 'k');
-	fiber_port_require_start_interrupt_state();
+	fiber_port_runtime_prepare_start();
 
-	/* FreeRTOS-style ownership: first start configures and validates its handlers. */
-	fiber_pendsv_init_lowest_priority();
-
-	fiber_port_runtime_prepare();
-
-	FiberContext *const first = fiber_port_scheduler_pick_first_from_start();
-
-	const uintptr_t msp_top = fiber_port_context_prepare_first_start(first);
-	fiber_port_require_start_interrupt_state();
-
+	FiberContext *const first = fiber_port_runtime_select_first();
 	fiber_internal_runtime_seed_current_context(first);
-	fiber_port_start_first_context(msp_top);
+
+	fiber_port_runtime_start_first(first);
 	FIBER_API_UNREACHABLE();
 }
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user)
 {
-	fiber_port_scheduler_set_pick_next(pick_next, user);
+	fiber_port_require_scheduler_configuration_environment();
+	fiber_internal_scheduler_store_pick_next(pick_next, user);
 }
 
 /* --------------------------------------------------------------------------
@@ -67,8 +58,5 @@ void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *use
 
 void fiber_schedule(void)
 {
-	/* The selected port invokes the common current-owner guard in historical
-	 * failure order between its Thread-mode and interrupt-mask checks. */
-	fiber_port_require_schedule_environment();
-	fiber_port_request_schedule();
+	fiber_port_runtime_schedule();
 }

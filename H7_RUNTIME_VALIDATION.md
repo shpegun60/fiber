@@ -47,12 +47,16 @@ Before a board run:
   validation paths.
 - Any behavior-changing first-start or PendSV change must get a fresh board run;
   earlier recorded results become historical until the new checkpoint passes.
+- Activating the frozen eight-function forward ABI changed `fiber_start()`
+  ordering and common/port publication ownership. Its compile and ELF proofs do
+  not renew the H7 claim without this full board checklist.
 
 ## Startup Exception Setup
 
-`fiber_start()` calls `fiber_pendsv_init_lowest_priority()` automatically. It
-must complete without panic on the validated STM32H7 build; the application
-does not need a separate initialization call.
+`fiber_start()` calls `fiber_port_runtime_prepare_start()`, and the selected CM7
+port configures PendSV to the lowest priority as part of that operation. It must
+complete without panic on the validated STM32H7 build; the application does not
+need a separate initialization call.
 
 The runtime check must cover:
 

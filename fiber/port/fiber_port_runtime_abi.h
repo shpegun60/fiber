@@ -32,8 +32,7 @@ void fiber_port_runtime_memory_barrier(void);
 FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
-/* Frozen common-core-freeze-v1 runtime operations. The current common runtime
- * does not call these adapters until the choreography migration checkpoint. */
+/* Frozen common-core-freeze-v1 runtime operations. */
 void fiber_port_require_scheduler_configuration_environment(void);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -47,44 +46,6 @@ void fiber_port_runtime_start_first(FiberContext *first);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void);
-
-/* Transitional declarations below remain visible only until fiber_core.c and
- * PendSV use the frozen forward and reverse runtime boundaries. */
-
-FIBER_GENERAL_REGS_ONLY
-void fiber_port_context_validate_restore(FiberContext *ctx);
-
-/* Validate the running context metadata and live PSP before PendSV assembly
- * reads selected context fields to save it. This deliberately does not read
- * ctx->sp: while a context is running, that field names its older saved frame. */
-FIBER_GENERAL_REGS_ONLY
-void fiber_port_context_validate_save_current(const FiberContext *ctx);
-
-uintptr_t fiber_port_context_prepare_first_start(FiberContext *ctx);
-void fiber_port_require_start_environment(void);
-void fiber_port_require_start_interrupt_state(void);
-void fiber_port_runtime_prepare(void);
-
-void fiber_port_require_schedule_environment(void);
-void fiber_port_request_schedule(void);
-
-void fiber_port_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
-		void *user);
-
-FIBER_GENERAL_REGS_ONLY
-FiberContext *fiber_port_scheduler_pick_first_from_start(void);
-
-FIBER_GENERAL_REGS_ONLY
-FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current);
-
-void fiber_exception_runtime_check(void);
-void fiber_pendsv_init_lowest_priority(void);
-
-FIBER_API_NORETURN
-void fiber_port_start_first_context(uintptr_t msp_top);
-
-void fiber_svc(void);
-void fiber_pendsv(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
