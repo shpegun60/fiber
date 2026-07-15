@@ -20,12 +20,14 @@ Selected MPU ports may still own optional pre-start region/privilege
 configuration and an SVC yield path for unprivileged fibers.
 
 The portable API and mandatory CPU runtime ABI stay minimal. Feature-specific
-MPU, SecureContext, and TF-M operations are separate selected-port extension
+MPU, SecureContext, and TF-M operations are separate selected-port integration
 ABIs in separate headers and sources. `fiber_core.h` does not include them,
 common runtime objects do not call them, and ports without the feature provide
-no no-op compatibility stubs. TrustZone Secure companion gateways are versioned
-cross-image ABIs; TF-M profiles use the matching NTZ-style CPU port and TF-M
-integration instead of the fiber-owned SecureContext companion.
+no no-op compatibility stubs. Every production profile supplies a safe default
+that runs feature-blind portable application code without an extension call.
+TrustZone Secure companion gateways are versioned cross-image ABIs; TF-M
+profiles use the matching NTZ-style CPU port and TF-M integration instead of the
+fiber-owned SecureContext companion.
 
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
@@ -347,9 +349,11 @@ Closed hardening items from the FreeRTOS comparison:
    FreeRTOS keeps those concerns in MPU port files, Secure companion files, or
    Non-secure/TF-M variants; fiber follows the same artifact split. A selected
    profile without a feature exports no extension functions. A capable profile
-   supplies a separate application-included header and matching source or
+   supplies a separate integration-only header and matching source or
    cross-image companion, while its mandatory CPU mechanics remain private to
-   the selected port.
+   the selected port. Portable application code includes only `fiber_core.h`;
+   profile integration uses an extension header only for a deliberate
+   non-default, non-portable policy.
 
    A context-mutating extension additionally links optional common
    `fiber_runtime_context_configuration.c` and calls only the versioned guard

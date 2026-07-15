@@ -206,8 +206,8 @@ The complete local Cortex-M function-class mapping is:
 | `portYIELD` or MPU yield SVC | `fiber_port_runtime_schedule` with a profile-private request mechanism |
 | compiler/CPU memory ordering | `fiber_port_runtime_memory_barrier` |
 | terminal task-return/error wait | direct common sink for privileged profiles; port-owned return-SVC veneer for unprivileged profiles; common panic plus `fiber_port_panic_wait` |
-| MPU region/CONTROL/system-call services | private selected layout plus optional MPU extension ABI |
-| SecureContext bind-or-allocate/load/save and optional free | private TrustZone mechanics plus optional selected/cross-image ABI; free belongs to a future dynamic lifecycle |
+| MPU region/CONTROL/system-call services | private selected layout plus optional integration-only MPU policy ABI |
+| SecureContext bind-or-allocate/load/save and optional free | private TrustZone mechanics plus a profile-mandatory cross-image companion and optional integration policy ABI; free belongs to a future dynamic lifecycle |
 | FPU, PSPLIM, MVE, PAC, BTI, priority, vector, and errata helpers | private selected-port mechanics inside the existing start/switch operations |
 | SysTick, RTOS critical nesting, queues, task lists, timers, FromISR APIs | excluded scheduler policy, not CPU-engine ABI |
 | SMP core ID, cross-core interrupt, and migration services | outside `common-core-freeze-v1` |

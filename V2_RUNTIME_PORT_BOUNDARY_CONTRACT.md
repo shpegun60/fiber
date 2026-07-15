@@ -154,9 +154,39 @@ are never declared by `fiber_port_runtime_abi.h`, and are never called by
 common runtime code.
 
 The portable application surface remains the five functions in
-`fiber_core.h`. An application that deliberately uses a selected CPU/security
-feature may additionally include an explicit selected-port extension header,
-for example:
+`fiber_core.h`. Optional extension ABIs are integration-facing by default; they
+are not an additional portable application tier. A production selected profile
+must provide a safe complete profile policy that can initialize and run fibers
+when the application includes only `fiber_core.h` and calls only those five
+functions. That policy may be completed by build-owned board, linker, Secure
+image, or TF-M integration, but it must not require a feature-specific call from
+portable application source and must not silently weaken the selected profile's
+declared isolation. The same portable application source must compile and link
+unchanged for privileged, MPU, SecureContext, NTZ, and TF-M profiles.
+
+The API has three intentionally separate portability tiers:
+
+1. Portable application code includes only `fiber_core.h`, contains no
+   feature-specific `#if`, type, macro, or extension call, and is portable
+   between all production profiles whose platform services it otherwise uses.
+2. Profile integration code may include a selected-port extension header to
+   replace the profile default policy or configure profile-specific resources.
+   This code is deliberately non-portable and belongs beside the build manifest,
+   linker policy, Secure image, or board integration rather than in upper
+   application logic.
+3. Cross-image companion code implements a versioned Secure gateway or TF-M
+   veneer contract and is never visible through `fiber_core.h`.
+
+Header exposure enforces the tiers. `fiber_core.h` may transitively include the
+selected `fiber_port_types.h` only to complete opaque `FiberContext` storage;
+that type header exports no feature operation, service declaration, or policy
+macro. Concrete port directories and extension headers are private include
+paths for port/profile integration targets and are not exported by the portable
+application target. Accessing one requires an explicit integration dependency,
+so an accidental optional-ABI dependency cannot arrive through normal public
+includes.
+
+Examples of integration artifacts are:
 
 ```text
 ARM_CM3_MPU/
@@ -166,7 +196,7 @@ ARM_CM3_MPU/
 ARM_CM33_NTZ/
   fiber_port_mpu_abi.h
   fiber_port_mpu.c
-  fiber_port_tfm_abi.h        # only when an application-facing TF-M hook exists
+  fiber_port_tfm_abi.h        # only when explicit integration-facing TF-M setup exists
   fiber_port_tfm.c
 
 ARM_CM33/
@@ -184,6 +214,10 @@ normative:
 
 - `fiber_core.h` does not include optional extension headers;
 - common runtime objects reference no optional extension symbol;
+- portable application translation units include no optional extension header
+  and reference no optional extension symbol;
+- every production profile supplies a safe default policy and remains runnable
+  without an application reference to an optional extension;
 - hardware capability alone does not enable an extension: the selected port
   profile must implement and advertise that exact extension;
 - the build includes an extension source only for a selected port/profile that
@@ -192,9 +226,10 @@ normative:
   stub, an empty compatibility header, a placeholder symbol, nor a false
   capability declaration;
 - including or linking an unsupported extension fails at compile or link time;
-- an application opts into an implemented extension by explicitly including
-  its selected-port extension header and linking its matching source or
-  companion artifact; including `fiber_core.h` alone never opts in;
+- profile integration opts into a non-default implemented extension policy by
+  explicitly including its selected-port extension header and linking its
+  matching source or companion artifact; code that does so is intentionally
+  outside the portable application tier;
 - an extension that changes context layout, privilege, CONTROL, PSPLIM, MPU
   regions, SecureContext state, PAC keys, or frame construction updates the
   selected context feature/layout identity and rebuilds its immutable seal;
@@ -210,9 +245,27 @@ normative:
 The base CPU port still owns all mechanics required to run the profile. For
 example, an MPU profile always saves/restores its MPU and privilege state, and
 an MVE profile always saves/restores its architectural extended context. The
-optional application header exposes only configuration or lifecycle operations
-that an application may deliberately request. It is not a mechanism for common
-runtime code to discover hardware at runtime.
+optional integration header exposes only configuration or lifecycle operations
+that profile integration may deliberately request. It is not required by the
+portable application and is not a mechanism for common runtime code to discover
+hardware at runtime.
+
+Abstraction cannot infer heterogeneous policy. If every fiber in a profile uses
+the same MPU, privilege, or SecureContext policy, the selected profile applies
+that policy automatically. If fibers require different policies, profile
+integration must provide that mapping through a selected-port extension before
+the contexts become scheduler-visible. Such heterogeneous policy is an explicit
+non-portable integration concern; it cannot leak feature-specific calls into the
+portable upper layer and cannot be guessed safely by common runtime code.
+
+The portability guarantee covers fiber execution mechanics, not arbitrary
+platform services. A fiber that directly calls PSA, TF-M, a Secure gateway, or
+an MPU-profile-only service has an intentional dependency on that service even
+though its scheduling code remains portable. Applications that need the same
+business operation on profiles with different service providers define their
+own service-level interface above fiber and select a PSA, TF-M, Secure companion,
+software, or unsupported backend in platform integration. Selected-port feature
+ABIs configure execution policy; they do not become a general secure-service API.
 
 A concrete port with no MPU, Security Extension, SecureContext, or TF-M role
 does not implement the corresponding extension functions. No conditional call
@@ -222,15 +275,15 @@ an MPU or Non-secure profile for the same CPU family, owns its different
 
 The resulting build model is explicit:
 
-| Selected profile | Mandatory runtime ABI | Reverse ABI v1 | Optional public extension |
+| Selected profile | Mandatory runtime ABI | Reverse ABI v1 | Optional integration artifact |
 | --- | --- | --- | --- |
 | CM0/CM3/CM4/CM7 privileged | required | required | none |
-| CM0/CM3/CM4/M7 MPU profile | required | required | MPU header/source |
-| ARM_CM23/33/35P/52/55/85 Secure-only runtime | required | required | MPU header/source when enabled; no cross-image companion |
-| ARM_CM23/33/35P/52/55/85 Non-secure with fiber SecureContext | required | required | MPU and/or SecureContext header/source plus matching Secure companion |
-| ARM_CM23/33/35P/52/55/85 Non-secure without SecureContext | required | required | MPU header/source when enabled; no Secure companion |
-| ARM_CM23/33/35P/52/55/85 NTZ Non-secure | required | required | MPU header/source when enabled; no fiber Secure companion |
-| ARM_CM33/52/55/85 NTZ source group with TF-M | required | required | MPU and/or TF-M integration header/source; no fiber Secure companion |
+| CM0/CM3/CM4/M7 MPU profile | required | required | MPU mechanics are profile-mandatory; optional non-default policy API |
+| ARM_CM23/33/35P/52/55/85 Secure-only runtime | required | required | profile-mandatory MPU/security mechanics; optional policy API; no cross-image companion |
+| ARM_CM23/33/35P/52/55/85 Non-secure with fiber SecureContext | required | required | matched Secure companion is profile-mandatory; optional MPU/SecureContext policy API |
+| ARM_CM23/33/35P/52/55/85 Non-secure without SecureContext | required | required | profile-mandatory MPU mechanics when selected; optional policy API; no Secure companion |
+| ARM_CM23/33/35P/52/55/85 NTZ Non-secure | required | required | profile-mandatory MPU/NTZ mechanics; optional policy API; no fiber Secure companion |
+| ARM_CM33/52/55/85 NTZ source group with TF-M | required | required | TF-M integration and veneers are profile-mandatory; optional policy API; no fiber Secure companion |
 
 This table describes profile ownership, not an automatic hardware probe. A
 future port adds another row/profile rather than making common runtime branch on
@@ -248,7 +301,7 @@ common-owned lifecycle decision without gaining access to common scheduler
 globals. That dependency uses a separate optional reverse-extension module:
 
 ```text
-application
+profile integration
   includes selected-port fiber_port_<feature>_abi.h
 
 selected-port fiber_port_<feature>.c
@@ -287,9 +340,9 @@ reverse v1 allowlist or a function to `fiber_core.h`.
 
 The three extension classes have different boundaries:
 
-1. An MPU/unprivileged extension is an application-to-selected-port ABI in the
-   same runtime image. It may configure regions, privilege, system-call stack,
-   and the initial CONTROL/frame policy.
+1. An MPU/unprivileged extension is a profile-integration-to-selected-port ABI
+   in the same runtime image. It may replace the safe profile default for
+   regions, privilege, system-call stack, and the initial CONTROL/frame policy.
 2. A FreeRTOS-style TrustZone SecureContext extension has a Non-secure selected
    port side and a separately built Secure companion. Their cross-image gateway
    ABI is versioned independently from the eight-function runtime ABI and needs
@@ -888,6 +941,18 @@ The common runtime boundary is frozen only when:
 - wrapper/direct macros and application wrappers are gone;
 - optional MPU, SecureContext, and TF-M extension ABIs remain outside
   `fiber_core.h` and the mandatory eight-function runtime ABI;
+- the feature-blind `tools/fixtures/portable_application.c` fixture includes
+  only `fiber_core.h`, compiles and links unchanged against every production
+  profile, references no extension symbol, and needs no feature-specific
+  pre-start call;
+- the portable fixture's dependency output contains no optional extension
+  header, and the exported portable include target exposes no concrete-port
+  integration directory;
+- each production profile is closed under its safe default policy: selecting it
+  pulls in all mandatory mechanics and companion artifacts required to reach
+  `fiber_start()` without an optional application call;
+- profile-integration fixtures separately prove each supported non-default MPU,
+  SecureContext, or TF-M policy and are labelled non-portable;
 - unsupported ports do not provide silent extension stubs;
 - context-mutating extensions use the versioned optional context-configuration
   lifecycle ABI, while profiles without them build neither optional source;

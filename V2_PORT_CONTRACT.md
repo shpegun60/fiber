@@ -169,7 +169,7 @@ fiber/
       fiber_port_exception.c
       fiber_portasm.h
       fiber_portasm.c
-      optional fiber_port_mpu_abi.h and fiber_port_mpu.c for the MPU profile
+      optional integration-only fiber_port_mpu_abi.h and fiber_port_mpu.c
     ARM_CM3/
       fiber_port_types.h
       fiber_port_boot_types.h
@@ -181,7 +181,7 @@ fiber/
       fiber_portasm.h
       fiber_portasm.c
     ARM_CM3_MPU/
-      # Same role-file pattern plus the selected MPU extension ABI/source.
+      # Same role-file pattern plus any integration-only MPU policy ABI/source.
       fiber_port_types.h
       fiber_port_boot_types.h
       fiber_port_boot.h
@@ -240,7 +240,7 @@ fiber/
         fiber_port_exception.c
         fiber_portasm.h
         fiber_portasm.c
-        optional selected feature ABI/source files
+        optional integration-only selected feature ABI/source files
       secure/
         # Present only for the matching fiber-owned SecureContext companion.
         fiber_secure_context.h
@@ -254,7 +254,7 @@ fiber/
       non_secure/
         same selected runtime role-file pattern
         no fiber-owned secure companion
-      optional TF-M integration artifact in the exact TF-M build profile
+      profile-mandatory TF-M companion/veneers and optional integration policy API
 ```
 
 `ARM_CMxx` above is notation for six concrete directories, not one generic
@@ -476,7 +476,7 @@ compiler/toolchain identity and version plus CPU/FPU/ABI flags
 privilege and MPU configuration
 Secure-only, Non-secure, TrustZone, NTZ, or TF-M role
 FP, MVE, PAC, BTI, PSPLIM, and errata policy
-matching optional extension and companion artifacts
+matching mandatory companion artifacts and optional integration extensions
 context layout/feature ABI identity
 ```
 

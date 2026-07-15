@@ -29,9 +29,18 @@ but not yet implemented; the project setup below describes the current tree.
 
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
-selected-port extension headers and sources. Those extensions are not included
-by `fiber_core.h`, are absent from ports that do not implement them, and do not
-expand the mandatory eight-function common-to-port runtime ABI.
+selected-port integration headers and sources. Those extensions are not
+included by `fiber_core.h`, are absent from ports that do not implement them,
+and do not expand the mandatory eight-function common-to-port runtime ABI. Every
+production profile must provide a safe default that runs the same feature-blind
+application source without any extension call; optional headers are for
+deliberate non-portable profile integration only.
+
+This portability guarantee covers the fiber lifecycle and context-switch
+mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another
+profile-only service still depends on that service. Applications requiring the
+same operation across profiles keep it behind a separate application-level
+service interface; fiber feature ABIs are not general service APIs.
 
 ## Project Setup
 
@@ -90,11 +99,25 @@ MPU, SecureContext, and TF-M APIs are separate selected-port headers and
 sources. Ports without a feature export no placeholder API, and `fiber_core.h`
 never includes those extensions. Context-mutating extensions link the separate
 common lifecycle module documented in the boundary contract; base ports do not.
+Portable application translation units include only `fiber_core.h`. Board,
+linker, Secure-image, or profile integration may include an extension header to
+replace a selected profile's default policy, accepting that this integration
+code is not portable to profiles without that extension.
+The selected `fiber_port_types.h` reached through `fiber_core.h` completes only
+opaque `FiberContext` storage and must not expose feature operations. Concrete
+port extension directories are private integration include paths, not part of
+the exported portable include surface.
 
 The common runtime sources also compile without CMSIS. Selected ports provide
 the required CPU barrier and terminal panic-wait operations through the callable
 ABI, so device headers and special-register access stay out of `fiber_core.c`,
 runtime state, and the default panic fallback.
+
+`tools/fixtures/portable_application.c` is the build-contract proof for the
+portable tier. The compile matrix requires that it directly include only
+`fiber_core.h`, contain no profile conditional or selected-port name, reference
+exactly the five public API symbols, and link unchanged against every selected
+build profile without an optional feature header.
 
 The conservative default also requires the integration to define both selected
 general-registers-only address-map hooks:

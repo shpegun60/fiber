@@ -640,6 +640,40 @@ $commonSources = @(
     "fiber\fiber_panic.c"
 )
 
+$portableApplicationFixture = "tools\fixtures\portable_application.c"
+$portableApplicationApiSymbols = @(
+    "fiber_current",
+    "fiber_init",
+    "fiber_schedule",
+    "fiber_scheduler_set_pick_next",
+    "fiber_start"
+)
+$forbiddenPortableApplicationHeaders = @(
+    "fiber_port_mpu_abi.h",
+    "fiber_port_secure_context_abi.h",
+    "fiber_port_tfm_abi.h",
+    "fiber_runtime_context_configuration_abi.h"
+)
+
+$portableApplicationSourcePath = Join-Path $RepoRoot $portableApplicationFixture
+$portableApplicationSource = Get-Content -LiteralPath $portableApplicationSourcePath -Raw
+$portableApplicationIncludes = [regex]::Matches(
+    $portableApplicationSource,
+    '(?m)^\s*#\s*include\s*([<"][^>"]+[>"])')
+
+if (($portableApplicationIncludes.Count -ne 1) -or
+        ($portableApplicationIncludes[0].Groups[1].Value -ne '"fiber/fiber_core.h"')) {
+    throw "Portable application fixture must directly include only fiber/fiber_core.h"
+}
+if ([regex]::IsMatch($portableApplicationSource,
+        '(?m)^\s*#\s*(if|ifdef|ifndef|elif)\b')) {
+    throw "Portable application fixture must not contain profile conditionals"
+}
+if ([regex]::IsMatch($portableApplicationSource,
+        '\b(FIBER_PORT_|fiber_port_)')) {
+    throw "Portable application fixture must not reference selected-port names"
+}
+
 $selectorPortSources = @(
     "fiber\port\ARM_CM7\r0p1\fiber_port.c",
     "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
@@ -977,12 +1011,22 @@ void Error_Handler(void);
             Write-Host "== $($cfg.Name) / $($mode.Name) =="
 
             $sources = $commonSources + $mode.PortSources
+            if ($mode.Name -eq "build-selected") {
+                $sources += $portableApplicationFixture
+            }
             $objects = @()
 
             foreach ($source in $sources) {
                 $srcPath = Join-Path $RepoRoot $source
                 $objName = ($source -replace '[\\/]', '_') + ".o"
                 $objPath = Join-Path $cfgDir $objName
+
+                $dependencyPath = $null
+                $dependencyArgs = @()
+                if ($source -eq $portableApplicationFixture) {
+                    $dependencyPath = Join-Path $cfgDir "portable-application.d"
+                    $dependencyArgs = @("-MMD", "-MF", $dependencyPath)
+                }
 
                 $args = $cfg.CpuArgs + $mode.ExtraArgs + @(
                     "-mthumb"
@@ -997,7 +1041,7 @@ void Error_Handler(void);
                     "-Werror=undef",
                     "-Werror=implicit-function-declaration",
                     "-Werror=return-type"
-                ) + $mode.Defines + @(
+                ) + $mode.Defines + $dependencyArgs + @(
                     "-I$cfgDir",
                     "-I$RepoRoot",
                     "-I$(Join-Path $RepoRoot 'fiber')",
@@ -1011,6 +1055,41 @@ void Error_Handler(void);
                 & $gcc @args
                 if ($LASTEXITCODE -ne 0) {
                     throw "Compile failed for $($cfg.Name) / $($mode.Name): $source"
+                }
+
+                if ($source -eq $portableApplicationFixture) {
+                    if (-not (Test-Path $dependencyPath)) {
+                        throw "Portable application dependency output missing for $($cfg.Name)"
+                    }
+
+                    $dependencies = Get-Content -LiteralPath $dependencyPath -Raw
+                    foreach ($forbiddenHeader in $forbiddenPortableApplicationHeaders) {
+                        if ($dependencies.IndexOf($forbiddenHeader,
+                                [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                            throw "Portable application depends on optional header for $($cfg.Name): $forbiddenHeader"
+                        }
+                    }
+
+                    $undefinedOutput = & $nm -u $objPath
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Portable application symbol scan failed for $($cfg.Name)"
+                    }
+
+                    $undefinedSymbols = @($undefinedOutput | ForEach-Object {
+                        if ($_ -match '\bU\s+(\S+)$') {
+                            $Matches[1]
+                        }
+                    })
+                    foreach ($symbol in $undefinedSymbols) {
+                        if ($portableApplicationApiSymbols -notcontains $symbol) {
+                            throw "Portable application references non-public symbol for $($cfg.Name): $symbol"
+                        }
+                    }
+                    foreach ($symbol in $portableApplicationApiSymbols) {
+                        if ($undefinedSymbols -notcontains $symbol) {
+                            throw "Portable application does not exercise public API for $($cfg.Name): $symbol"
+                        }
+                    }
                 }
 
                 $objects += $objPath

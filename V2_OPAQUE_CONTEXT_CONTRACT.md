@@ -605,7 +605,7 @@ The default lifecycle is:
 
 ```text
 fiber_init()
-optional selected-port context configuration
+optional profile-integration context configuration
 make the context visible to the user scheduler
 fiber_scheduler_set_pick_next()
 fiber_start()
@@ -636,9 +636,18 @@ scheduler data structure. The application must not mutate a context after making
 it visible to the scheduler. Restore validation is the final fail-closed defense,
 not a synchronization API.
 
-Possible optional APIs include MPU region configuration, privilege/security
-policy, and secure-context allocation. They are selected-port APIs and do not
-expand the five-function common surface.
+Possible optional integration APIs include MPU region configuration,
+privilege/security policy, and secure-context allocation. They are selected-port
+integration APIs and do not expand the five-function common surface. A
+production profile must also provide a safe default that needs none of these
+calls from portable application code.
+
+This guarantees portability of the fiber lifecycle and context-switch surface,
+not the existence of every external platform service. Direct PSA, TF-M, Secure
+gateway, or MPU-profile-only service calls are deliberate service dependencies.
+Portable upper logic that needs equivalent behavior across profiles uses its own
+service-level abstraction and keeps the backend selection in platform
+integration rather than exposing selected-port feature APIs to business code.
 
 The physical API split is normative:
 
@@ -657,25 +666,27 @@ fiber_runtime_context_configuration_abi.h/.c
     optional common lifecycle service used only by context-mutating extensions
 
 selected-port optional headers
-    MPU, privilege, SecureContext, or TF-M integration only where implemented
+    integration-only MPU, privilege, SecureContext, or TF-M policy where implemented
 ```
 
 Optional headers and sources live in the concrete selected port or its matched
 Secure companion. They are not selected by `fiber_core.h`, are not included by
 common runtime translation units, and do not exist as no-op compatibility
-stubs in ports that lack the feature. Applications that include such a header
-are intentionally using a selected-port-specific extension rather than the
-portable five-function API.
+stubs in ports that lack the feature. Profile integration that includes such a
+header is intentionally selected-port-specific. Portable application code does
+not include it and remains on the five-function API.
 
 Every CPU port implements the mandatory eight-function common-to-port ABI and
 uses the mandatory reverse ABI v1 because every profile needs scheduler policy
 and current-context publication. Optional feature functions are different: a
 profile that does not implement MPU, SecureContext, or TF-M exports no such
 header, source, or symbol. A capable profile owns the extra context layout and
-the application explicitly includes and links its matching extension artifact.
-Common runtime contains no conditional call to an absent extension.
+its build manifest links all mechanics required by the safe default policy.
+Profile integration explicitly includes an extension header only to request a
+supported non-default policy. Common runtime contains no conditional call to an
+absent extension.
 
-An MPU extension is same-image application-to-port configuration. A
+An MPU extension is same-image profile-integration-to-port configuration. A
 FreeRTOS-style SecureContext extension also defines a separately versioned
 Non-secure-to-Secure gateway ABI. A TF-M build uses an NTZ-style Non-secure port
 plus the matching TF-M initialization/veneer contract and must not also bind the
@@ -801,9 +812,17 @@ SMP and cross-core migration remain outside this freeze.
 
 The eight-function mandatory runtime ABI and base reverse ABI v1 are therefore
 sufficient for every row in the table. Rows that enable MPU, SecureContext, or
-TF-M additionally bind the selected-port feature ABI and, when context mutation
-is exposed, the optional common context-configuration lifecycle module. They do
-not modify common runtime choreography.
+TF-M bind all mechanics and companions required by their safe default policy.
+When a non-default context mutation is exposed to profile integration, they also
+bind the selected-port feature ABI and optional common context-configuration
+lifecycle module. They do not modify common runtime choreography or require a
+feature-specific call from portable application code.
+
+The freeze matrix compiles and links one identical feature-blind application
+fixture, including only `fiber_core.h`, against every production profile. The
+fixture must reference no optional extension symbol and contain no profile
+conditional. Separate integration fixtures cover non-default feature policy;
+passing those fixtures does not make their source portable across profiles.
 
 ## Mechanical Migration Sequence
 

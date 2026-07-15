@@ -126,8 +126,31 @@ MPU/unprivileged configuration, FreeRTOS-style SecureContext management, and
 TF-M integration use separate selected-port extension headers and sources.
 They are not included by `fiber_core.h` or `fiber_port_runtime_abi.h`, common
 runtime code does not reference them, and unsupported ports provide no silent
-stubs. An application that includes an extension header intentionally accepts a
-selected-port-specific API dependency.
+stubs. These extension headers are profile-integration-facing by default, not a
+second portable application API. Code that includes one intentionally accepts a
+selected-port-specific dependency and belongs outside portable upper logic.
+
+Every production profile supplies a safe complete default policy. Identical
+application source that includes only `fiber_core.h` and calls only its five
+functions must compile and link unchanged for privileged, MPU, SecureContext,
+NTZ, and TF-M profiles without feature-specific pre-start calls. The build and
+selected port automatically bind all CPU mechanics and required companions for
+that default. Build-owned board, linker, Secure-image, or TF-M configuration may
+complete the policy, but portable application source does not call it and the
+default must not weaken the selected profile's declared isolation. A separate
+matrix fixture proves this profile portability.
+
+When fibers require heterogeneous MPU, privilege, or SecureContext policy, a
+profile integration module may configure them through the optional extension
+before scheduler publication. Common runtime cannot infer that intent. Such
+configuration is deliberately non-portable and must not leak into the portable
+application tier.
+
+This decision abstracts execution mechanics, not external service semantics.
+Direct PSA, TF-M, Secure gateway, or MPU-profile-only service calls remain
+intentional platform dependencies. Portable business logic places such
+operations behind its own service interface; selected-port extension ABIs are
+not general application service APIs.
 
 Context-mutating extensions reach common lifecycle through a separate optional
 `fiber_runtime_context_configuration_abi.h` v1 and
