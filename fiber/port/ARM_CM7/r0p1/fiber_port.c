@@ -15,11 +15,11 @@
 #if FIBER_PORT_BUILD_SELECTED || \
 		(FIBER_PORT_ARMV7EM && (__CORTEX_M == 7))
 
-#include "../../../fiber_runtime_state.h"
+#include "../../../fiber_runtime_port_abi.h"
 #include "fiber_port_private.h"
 #include "../../fiber_port_traits.h"
 
-FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void)
 {
 	fiber_portDATA_MEMORY_BARRIER();
@@ -50,6 +50,7 @@ void fiber_port_require_scheduler_configuration_environment(void)
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_prepare_start(void)
 {
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	fiber_port_require_start_environment();
 	fiber_port_require_start_interrupt_state();
 	fiber_pendsv_init_lowest_priority();
@@ -148,7 +149,7 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void)
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	fiber_internal_require_schedule_current();
+	fiber_internal_runtime_require_current_context();
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
@@ -168,7 +169,7 @@ typedef struct FiberPortSchedulerCpuState {
 #endif
 } FiberPortSchedulerCpuState;
 
-static FIBER_GENERAL_REGS_ONLY void
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void
 fiber_port_capture_scheduler_cpu_state(FiberPortSchedulerCpuState *state)
 {
 	FIBER_REQUIRE(state != 0, 'C');
@@ -184,7 +185,7 @@ fiber_port_capture_scheduler_cpu_state(FiberPortSchedulerCpuState *state)
 	fiber_portCOMPILER_BARRIER();
 }
 
-static FIBER_GENERAL_REGS_ONLY void
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void
 fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before)
 {
 	FIBER_REQUIRE(before != 0, 'C');
@@ -200,33 +201,33 @@ fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before
 	fiber_portCOMPILER_BARRIER();
 }
 
-FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_scheduler_pick_first_from_start(void)
 {
-	fiber_internal_scheduler_begin_first_selection();
 	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
 	FiberPortSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
-	FiberContext *const first = fiber_internal_scheduler_invoke_pick_next(0);
+	FiberContext *const first =
+			fiber_internal_runtime_select_scheduler_candidate(0);
 	fiber_port_validate_scheduler_cpu_state(&cpu_state);
 	fiber_port_context_validate_restore(first);
 	fiber_port_scheduler_critical_exit(critical_state);
-	fiber_internal_scheduler_end_first_selection();
 	return first;
 }
 
-FIBER_GENERAL_REGS_ONLY FIBER_NOINLINE
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)
 {
 	FIBER_REQUIRE(current != 0, 'C');
 	FiberPortSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
-	FiberContext *const next = fiber_internal_scheduler_invoke_pick_next(current);
+	FiberContext *const next =
+			fiber_internal_runtime_select_scheduler_candidate(current);
 	fiber_port_validate_scheduler_cpu_state(&cpu_state);
 	/* PendSV preflight validated and saved current. Validate only the context
 	 * selected for restore; this also covers next == current. */
 	fiber_port_context_validate_restore(next);
-	fiber_internal_scheduler_commit_current_context(next);
+	fiber_internal_runtime_publish_current_context(next);
 	return next;
 }
 
@@ -239,7 +240,8 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)
 
 FIBER_NORETURN
 FIBER_ATTR_NAKED_ASM
-void fiber_port_start_first_context(uintptr_t msp_top)
+void fiber_port_start_first_context(
+		uintptr_t msp_top FIBER_ATTR_UNUSED_PARAM)
 {
 	__ASM volatile(
 			".syntax unified                         \n"
@@ -297,7 +299,7 @@ void fiber_port_start_first_context(uintptr_t msp_top)
  *----------------------------------------------------------*/
 
 FIBER_ATTR_NAKED_ASM
-void fiber_svc(void)
+void SVC_Handler(void)
 {
 	__ASM volatile(
 			".syntax unified                         \n"
@@ -342,7 +344,7 @@ void fiber_svc(void)
 			fiber_portASM_WRITE_BASEPRI_R0_SYNC
 #endif
 
-			"ldr   r0, =fiber_internal_port_current_context \n"
+			"ldr   r0, =fiber_internal_runtime_current_context_slot \n"
 			"ldr   r0, [r0]                         \n"
 			"cmp   r0, #0                           \n"
 			"beq   90f                              \n"
@@ -416,7 +418,7 @@ void fiber_svc(void)
  * preselected target from Thread mode.
  *----------------------------------------------------------*/
 FIBER_ATTR_NAKED_ASM
-void fiber_pendsv(void)
+void PendSV_Handler(void)
 {
 	__ASM volatile(
 			".syntax unified                         \n"
@@ -455,7 +457,7 @@ void fiber_pendsv(void)
 			"tst   lr, #4                           \n" /* interrupted Thread context must use PSP */
 			"beq   91f                              \n" /* foreign/pre-start PendSV used MSP */
 
-			"ldr   r1, =fiber_internal_port_current_context \n" /* r1 = &current context */
+			"ldr   r1, =fiber_internal_runtime_current_context_slot \n" /* r1 = &current context */
 			"ldr   r1, [r1]                         \n" /* r1 = current context */
 			"cmp   r1, #0                           \n"
 			"beq   90f                              \n" /* no current is a fatal port state */
@@ -590,11 +592,5 @@ void fiber_pendsv(void)
 
 #undef fiber_portSTRINGIFY
 #undef fiber_portSTRINGIFY2
-
-#if !FIBER_SVC_VECTOR_DIRECT
-# ifndef FIBER_SVC_WIRED
-FIBER_DIAG_WARN("[fiber]: user must wire SVC_Handler to branch to fiber_svc without clobbering LR; define FIBER_SVC_WIRED=1 after you do it");
-# endif /* FIBER_SVC_WIRED */
-#endif /* !FIBER_SVC_VECTOR_DIRECT */
 
 #endif /* FIBER_PORT_BUILD_SELECTED */

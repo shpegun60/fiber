@@ -50,6 +50,10 @@ Before a board run:
 - Activating the frozen eight-function forward ABI changed `fiber_start()`
   ordering and common/port publication ownership. Its compile and ELF proofs do
   not renew the H7 claim without this full board checklist.
+- Activating reverse ABI v1 renamed the assembly current slot, centralized
+  scheduler candidate/NULL policy, and added the mandatory link anchor without
+  changing frame layout or save/restore order. The already-pending H7 board run
+  must use this reverse-ABI checkpoint or later.
 
 ## Startup Exception Setup
 
@@ -62,8 +66,10 @@ The runtime check must cover:
 
 - PendSV priority reads back as the lowest priority.
 - SVCall priority reads back as highest priority.
-- PendSV vector routing matches the configured wrapper/direct mode.
-- SVC vector routing matches the configured policy.
+- PendSV vector slot 14 resolves directly to the selected port's strong
+  `PendSV_Handler`.
+- SVC vector slot 11 resolves directly to the selected port's strong
+  `SVC_Handler`.
 - the selected port scheduler BASEPRI threshold uses only implemented NVIC
   priority bits.
 - `AIRCR.PRIGROUP` is compatible with the scheduler `BASEPRI` policy.
@@ -136,7 +142,7 @@ Validate these cases from Thread mode:
 
 - `fiber_scheduler_set_pick_next(valid_hook, user)` before start succeeds.
 - `fiber_scheduler_set_pick_next(NULL, user)` traps with `'K'`.
-- changing the hook after `fiber_start()` has seeded the current context traps
+- changing the hook after `fiber_start()` has published the current context traps
   with `'k'`.
 
 The hook must be a bounded scheduler picker. It must not block, allocate, throw
@@ -160,28 +166,16 @@ critical-section policy used for PendSV scheduler calls.
 
 ## First Start
 
-On ARMv7E-M, the default first-start path is SVC-based. The application must
-provide a naked `SVC_Handler()` branch wrapper that reaches `fiber_svc()` while
-preserving the original SVC handler LR/EXC_RETURN:
+On ARMv7E-M, first start is SVC-based. The selected CM7 port directly owns the
+strong naked `SVC_Handler()` and `PendSV_Handler()` definitions. The H7
+application must not define wrappers or competing handlers; CubeMX-generated
+definitions must be removed or excluded from the build.
 
-```c
-/* Vector wrappers intentionally use the selected CM7 port naked-ASM ABI. */
-#include "fiber/port/ARM_CM7/r0p1/fiber_portmacro.h"
-
-FIBER_ATTR_NAKED_ASM
-void SVC_Handler(void)
-{
-	__ASM volatile("b fiber_svc");
-}
-```
-
-If the vector table points directly to `fiber_svc()` instead of an application
-wrapper, define `FIBER_SVC_VECTOR_DIRECT=1`. SVC vector validation is mandatory
-because SVC is the only first-start path.
-
-The compile matrix covers both wrapper-vector and direct-vector configurations.
-This is a build guard only. If a board uses direct vectoring to `fiber_pendsv()`
-or `fiber_svc()`, record a separate hardware validation result for that wiring.
+The compile matrix proves static-archive extraction with startup weak aliases,
+strong vector-slot resolution, duplicate-strong failure, `--gc-sections`, and
+LTO retention. Board validation remains separate: read `SCB->VTOR`, verify
+slots 11 and 14 against the selected handler addresses, and observe actual SVC
+and PendSV execution after startup.
 
 Validate these cases:
 
@@ -376,6 +370,26 @@ Status:
 This record is historical after the port-owned startup-MSP and context-seal ABI
 hardening change. Run the normal mode and the complete trap table again before
 making a current H7 runtime claim for the new revision.
+
+## Current Pending Hardware Checkpoint: 2026-07-15
+
+The current working revision changes exception ownership and compiler ABI:
+
+- the selected CM7 port directly defines strong `SVC_Handler` and
+  `PendSV_Handler` symbols;
+- the H7 application wrappers were removed;
+- public/runtime ABI-sensitive functions use the canonical no-instrumentation,
+  no-stack-protector, no-sanitizer, no-profile, noipa, and
+  general-registers-only contract;
+- the compile matrix proves CM7 static-archive extraction, vector-slot
+  relocation, duplicate-handler failure, section-GC retention, LTO retention,
+  and adversarial generated-code hygiene;
+- the H7 Debug ELF build resolves slot 11 to `SVC_Handler` and slot 14 to
+  `PendSV_Handler` with the required Thumb bit.
+
+This is compile/link evidence, not a board result. Run `NORMAL_RUN`, FPU stress,
+the full trap table, active `SCB->VTOR` readback, and observed SVC/PendSV entry
+before recording a new active H7 runtime claim.
 - Trap modes still need to be rerun after the SVC dispatch hardening before the
   H7 runtime-validation claim is fully restored for `208be61`.
 

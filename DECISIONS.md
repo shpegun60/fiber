@@ -1,5 +1,41 @@
 # Fiber Decision Log
 
+## 2026-07-15: Activate Frozen Reverse Runtime ABI V1
+
+The common-owned `fiber_runtime_port_abi.h` now exposes exactly the frozen
+port-to-common v1 boundary: one version anchor, scheduler candidate selection,
+current-context publication, the current-context lifecycle guard, task-return
+sink, and canonical panic declaration. Selected ports no longer include
+`fiber_runtime_state.h` or see scheduler hook/user storage and first-selection
+state.
+
+`fiber_internal_runtime_current_context_slot` replaces the transitional current
+symbol. It has no declaration in the reverse header: selected-port inline
+assembly may only materialize and load its exact symbol name, while only common
+runtime C can publish it. All current port sources were moved together so no
+old and new slot spelling can coexist.
+
+Every selected `fiber_port.c` retains a real relocation to
+`fiber_internal_runtime_port_abi_v1_anchor` through a one-shot volatile read in
+`fiber_port_runtime_prepare_start()`. This keeps ABI-version retention out of
+PendSV. Port calls to `fiber_panic()` are now strong references; the bundled
+common implementation alone remains weak so one application strong override
+still works.
+
+The first-selection marker is fail-closed and one-way. Once the first scheduler
+selection begins, hook replacement remains forbidden even before current
+publication. A `NULL` scheduler result now terminates inside the common selector
+with `'N'`, as required by reverse ABI ownership. Context validation and current
+publication remain port-validated and ordered exactly as before. SVC/PendSV
+assembly save/restore instructions, frame layout, scheduler critical envelopes,
+and handler ownership are unchanged.
+
+The compile matrix requires one active anchor relocation and one strong port
+panic reference, exact strong reverse definitions and one weak fallback,
+assembly-only slot references, absence of transitional symbols, and all current
+CPU/profile selection modes. The larger mismatch/static-archive/GC/LTO proof
+suite remains the next isolated slice.
+
 ## 2026-07-15: Activate The Frozen Eight-Function Forward ABI
 
 Common runtime now calls exactly the eight operations declared by
@@ -502,10 +538,11 @@ selected-port ABI in two steps:
   Thread-mode and interrupt-mask rules;
 - `fiber_port_request_schedule()` performs the selected request mechanism.
 
-The common runtime retains current-context lifecycle ownership through
-`fiber_internal_require_schedule_current()`. Direct privileged ports call that
-guard after the IPSR check and before PRIMASK, BASEPRI, and FAULTMASK checks, so
-the CM7 failure order remains `i -> G -> p -> b -> f -> PENDSVSET`.
+At that checkpoint, the common runtime retained current-context lifecycle
+ownership through `fiber_internal_require_schedule_current()`. The frozen
+reverse ABI later replaced that helper with
+`fiber_internal_runtime_require_current_context()` without changing the CM7
+failure order `i -> G -> p -> b -> f -> PENDSVSET`.
 
 The compile matrix now proves exactly one definition of both selected-port ABI
 symbols and rejects CPU-specific access in the body of `fiber_schedule()`.
@@ -969,7 +1006,7 @@ later switches:
 - `fiber_start()` calls the hook once with `current == NULL`;
 - the returned first context must be non-NULL, initialized, sealed, aligned, and
   valid for restore;
-- only after that validation does the runtime seed the current context and enter
+- only after that validation does the runtime publish the current context and enter
   the selected port first-start path.
 
 This keeps direct task selection out of the core API. It mirrors the FreeRTOS
@@ -1145,7 +1182,7 @@ The ARMv7E-M port now starts the first fiber through SVC by default:
 - `fiber_svc()` rejects SVC entry from PSP or an unaligned SVC MSP frame with
   `'l'`, validates the SVC opcode and immediate, traps with `'u'` on mismatch,
   clears `BASEPRI` like the
-  FreeRTOS SVC first-task handler, validates the seeded current context,
+  FreeRTOS SVC first-task handler, validates the published current context,
   restores the synthetic software frame, sets PSP, verifies `CONTROL.FPCA` when
   configured, and enters the first fiber by exception return. The SVC handler
   does not set `CONTROL.SPSEL` from Handler mode; Thread PSP selection comes
@@ -1458,3 +1495,31 @@ Known limits:
 - `tools/compile_matrix.ps1` provides the compile-only sanity matrix. It does
   not replace hardware tests, but it must stay green before widening support
   claims beyond STM32H7/Cortex-M7.
+
+## 2026-07-15: Activate sensitive compiler ABI and strong handlers
+
+- `fiber_api_attributes.h` is the single public definition point for the
+  sensitive compiler bundle. It includes no-instrumentation, no-stack-
+  protector, no-sanitizer, no-profile/coverage, `noipa`, no-clone, and no-ICF
+  mappings where GNU Arm Embedded GCC supports them.
+- `fiber_current()`, `fiber_start()`, `fiber_schedule()`, both runtime ABI
+  directions, and the scheduler hook use the canonical sensitive plus
+  general-registers-only contract.
+- Selected-port compiler mappings import that bundle instead of independently
+  defining the scheduler-hook ABI.
+- CMSIS force-inline helpers cannot inherit all caller attributes. A build that
+  globally enables instrumentation, stack protection, profiling, coverage, or
+  sanitizers must apply the selected-port counter-flags documented in
+  `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`.
+- Every current selected port directly defines strong naked `SVC_Handler` and
+  `PendSV_Handler` symbols in the same object as mandatory runtime ABI
+  functions. Application wrappers and wrapper/direct routing macros are gone.
+- The matrix rejects obsolete routing macros, requires one strong handler pair
+  per profile, and proves CM7 archive extraction, vector slots 11/14,
+  duplicate-strong failure, section-GC retention, LTO retention, and
+  adversarial generated-code hygiene.
+- The H7 host application no longer defines SVC/PendSV wrappers. Its current
+  Debug ELF resolves both vector slots directly to selected-port handlers.
+- This is behavior-affecting exception ownership. Compile/ELF evidence is
+  complete for the implemented slice, but a fresh H7 normal/FPU/trap/VTOR run
+  is still required before restoring the current hardware-validation claim.

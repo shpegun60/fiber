@@ -160,6 +160,7 @@ fiber/
   fiber_api_attributes.h
   fiber_api_decl.h
   fiber_core.h
+  fiber_runtime_port_abi.h
   fiber_runtime_state.h
 
   port/
@@ -402,9 +403,12 @@ Context validators, startup MSP helpers, exception setup, scheduler critical
 state, SVC/PendSV implementation symbols, and vector policy are selected-port
 private. In particular, common code never receives an MSP value.
 
-The current wider `fiber_port_runtime_abi.h` is transitional. Its removal is a
-mechanical migration governed by `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`; it is
-not a second supported ABI.
+`fiber_port_runtime_abi.h` now contains exactly the frozen eight-function
+forward ABI. `fiber_runtime_port_abi.h` contains the active reverse ABI v1;
+selected ports no longer include the common-private `fiber_runtime_state.h`.
+The remaining mechanical migration governed by
+`V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` concerns strong handler ownership and
+the final archive/ELF proof suite, not another callable runtime ABI.
 
 The reverse port-to-common boundary is also explicit. After saving the current
 CPU context, PendSV uses a selected-port private wrapper. That wrapper applies

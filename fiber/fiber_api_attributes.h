@@ -44,6 +44,35 @@
 # endif
 #endif
 
+/* Prevent interprocedural cloning/folding from changing the shape or identity
+ * of control-transfer-sensitive runtime functions. GCC's noipa is the
+ * strongest available contract and implies noinline, noclone, and no_icf;
+ * the narrower mappings remain useful on compilers without noipa. */
+#ifndef FIBER_API_NOIPA
+# if (defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 8)) || \
+		FIBER_API_HAS_ATTRIBUTE(noipa)
+#  define FIBER_API_NOIPA __attribute__((noipa))
+# else
+#  define FIBER_API_NOIPA
+# endif
+#endif
+
+#ifndef FIBER_API_NOCLONE
+# if FIBER_API_HAS_ATTRIBUTE(noclone)
+#  define FIBER_API_NOCLONE __attribute__((noclone))
+# else
+#  define FIBER_API_NOCLONE
+# endif
+#endif
+
+#ifndef FIBER_API_NOICF
+# if FIBER_API_HAS_ATTRIBUTE(no_icf)
+#  define FIBER_API_NOICF __attribute__((no_icf))
+# else
+#  define FIBER_API_NOICF
+# endif
+#endif
+
 #ifndef FIBER_API_USED
 # if defined(__GNUC__) || defined(__clang__)
 #  define FIBER_API_USED __attribute__((used))
@@ -84,10 +113,20 @@
 # endif
 #endif
 
+#ifndef FIBER_API_NOCOVERAGE
+# if FIBER_API_HAS_ATTRIBUTE(no_sanitize_coverage)
+#  define FIBER_API_NOCOVERAGE __attribute__((no_sanitize_coverage))
+# else
+#  define FIBER_API_NOCOVERAGE
+# endif
+#endif
+
 #ifndef FIBER_API_ATTR_SENSITIVE
 # define FIBER_API_ATTR_SENSITIVE \
-		FIBER_API_NOINLINE FIBER_API_USED FIBER_API_NOINSTR \
-		FIBER_API_NOSSP FIBER_API_NOSAN FIBER_API_NOPROF
+		FIBER_API_NOINLINE FIBER_API_NOIPA FIBER_API_NOCLONE \
+		FIBER_API_NOICF FIBER_API_USED FIBER_API_NOINSTR \
+		FIBER_API_NOSSP FIBER_API_NOSAN FIBER_API_NOPROF \
+		FIBER_API_NOCOVERAGE
 #endif
 
 #ifndef FIBER_API_UNREACHABLE
@@ -113,7 +152,8 @@
 #endif
 
 #ifndef FIBER_SCHEDULER_HOOK_ATTR
-# define FIBER_SCHEDULER_HOOK_ATTR FIBER_GENERAL_REGS_ONLY
+# define FIBER_SCHEDULER_HOOK_ATTR \
+		FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 #endif
 
 #endif /* FIBER_FIBER_API_ATTRIBUTES_H_ */

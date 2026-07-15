@@ -11,9 +11,6 @@
 #include "fiber_port_private.h"
 #include "../fiber_feature_policy.h"
 
-extern void PendSV_Handler(void);
-extern void SVC_Handler(void);
-
 #ifndef __NVIC_PRIO_BITS
 #  error "__NVIC_PRIO_BITS must be defined by the CMSIS device header"
 #endif /* __NVIC_PRIO_BITS */
@@ -198,17 +195,8 @@ void fiber_exception_runtime_check(void)
     fiber_validate_pendsv_priority();
     fiber_validate_svc_priority();
 
-# if FIBER_PENDSV_VECTOR_DIRECT
-    fiber_validate_vector_entry(14u, fiber_pendsv, 'Y');
-# else
     fiber_validate_vector_entry(14u, PendSV_Handler, 'Y');
-# endif
-
-# if FIBER_SVC_VECTOR_DIRECT
-    fiber_validate_vector_entry(11u, fiber_svc, 'y');
-# else
     fiber_validate_vector_entry(11u, SVC_Handler, 'y');
-# endif
 
 #if FIBER_PORT_HAS_BASEPRI
     const uint8_t implemented_mask = fiber_probe_implemented_priority_mask();

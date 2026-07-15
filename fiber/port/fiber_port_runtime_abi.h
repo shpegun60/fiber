@@ -26,10 +26,10 @@ void fiber_port_context_init(FiberContext *ctx,
 
 /* CPU barriers and terminal wait behavior are port-owned so common runtime
  * objects remain buildable without CMSIS or special-register declarations. */
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void);
 
-FIBER_API_NORETURN FIBER_GENERAL_REGS_ONLY
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
 /* Frozen common-core-freeze-v1 runtime operations. */

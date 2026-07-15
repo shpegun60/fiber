@@ -144,6 +144,7 @@ fiber/
   fiber_platform_policy.h
   fiber_panic.c
   fiber_panic.h
+  fiber_runtime_port_abi.h
   fiber_runtime_state.c
   fiber_runtime_state.h
   port/
@@ -380,12 +381,15 @@ header and implements the frozen callable port ABI. Public code gets the
 selected complete context type through `fiber_core.h`. Common runtime
 translation units compile with an incomplete `FiberContext` and cannot include
 the selected complete type header or branch into architecture-specific
-implementation logic. The `fiber_port_selected.h` type-only split and the exact
-eight-function `fiber_port_runtime_abi.h` boundary are implemented. Every
+implementation logic. The `fiber_port_selected.h` type-only split, exact
+eight-function `fiber_port_runtime_abi.h` boundary, and frozen reverse
+`fiber_runtime_port_abi.h` v1 boundary are implemented. Every
 displaced declaration lives in the concrete port's private `fiber_portmacro.h`,
-`fiber_portasm.h`, boot header, or `fiber_port_private.h`. The remaining common
-boundary migration is the frozen reverse ABI, strong handler ownership, and
-removal of wrapper/direct-vector compatibility. No global selected internal-type
+`fiber_portasm.h`, boot header, or `fiber_port_private.h`. Selected ports no
+longer include the common-private `fiber_runtime_state.h`; their only common
+call surface is reverse ABI v1, while assembly may only load the frozen current
+slot symbol. The remaining common boundary migration is strong handler
+ownership, wrapper/direct-vector removal, and final archive/ELF proofs. No global selected internal-type
 facade is part of the frozen design.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
@@ -868,11 +872,11 @@ exit port scheduler critical section
 restore next context
 ```
 
-`fiber_runtime_state.h` should remain as the narrow internal scheduler/port
-runtime-state header. Its normal scheduler-driven contents are the current
-context, the stable scheduler bridge declaration, the pick-next function
-pointer, and the user context pointer. Do not reintroduce `from/to` slots as a
-competing switch mechanism.
+`fiber_runtime_state.h` is common-private scheduler state. Selected-port C must
+include `fiber_runtime_port_abi.h` instead and cannot see the hook pointer, user
+pointer, first-selection marker, or current slot as a C lvalue. Selected
+assembly may only load the exact current-slot symbol. Do not reintroduce
+`from/to` slots as a competing switch mechanism.
 
 The selected-port scheduler wrapper has this shape:
 
@@ -1033,7 +1037,7 @@ change, but ownership must not:
 - common code decides lifecycle and scheduler-policy preconditions, while the
   selected port owns privilege-aware CPU mode/mask validation across the direct
   request path, yield-SVC Handler path, and context-restore boundary;
-- common code seeds the current context and scheduler hook before a
+- common code publishes the current context and installs the scheduler hook before a
   scheduler-driven switch can run;
 - common code owns the current-context policy;
 - common code checks current ownership and calls the selected-port schedule
@@ -1178,7 +1182,8 @@ Required rules:
   retained as wrappers;
 - the selected strong handler either contains the naked assembly body or branches
   to a port-private assembly label without losing LR/EXC_RETURN;
-- `fiber_svc` and `fiber_pendsv` are not part of the final generic ABI;
+- `fiber_svc` and `fiber_pendsv` have been removed; selected ports directly
+  own strong `SVC_Handler` and `PendSV_Handler` symbols;
 - wrapper/direct switches and `FIBER_*_WIRED` integration claims are removed
   after the mechanical migration;
 - static archive, `--gc-sections`, and LTO proofs must retain both handlers;
@@ -1216,7 +1221,7 @@ The current ARMv7E-M SVC path:
 - rejects SVC entry from PSP;
 - validates the SVC MSP-frame alignment, opcode, and immediate before restoring
   the first context;
-- validates the seeded current `FiberContext` before PSP is restored;
+- validates the published current `FiberContext` before PSP is restored;
 - clears BASEPRI in the SVC handler before the first context is restored;
 - sets PSP before exception return; Thread PSP selection comes from the
   `EXC_RETURN` value, not from writing `CONTROL.SPSEL` in Handler mode;

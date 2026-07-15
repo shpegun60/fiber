@@ -4,10 +4,11 @@
 
 This document defines the normative target for the final common-runtime to
 selected-port boundary. The architecture was frozen before implementation; the
-status below distinguishes the active forward ABI from remaining reverse-ABI
-and handler-ownership migration work.
+status below distinguishes the active forward and reverse ABIs from remaining
+proof and handler-ownership migration work.
 
-The current tree is transitional:
+The current tree has activated the mandatory directional ABI and handler
+ownership:
 
 - `fiber_port_runtime_abi.h` exposes exactly the final eight functions and
   common runtime uses them for context creation, scheduler configuration,
@@ -18,15 +19,26 @@ The current tree is transitional:
   `fiber_portmacro.h` and boot-record headers;
 - `fiber_start()` no longer transports MSP or invokes port-private startup
   stages;
-- the reverse port-to-common surface and common-owned scheduler state names are
-  still transitional and have not yet moved to the frozen reverse ABI v1;
-- application-owned SVC and PendSV wrappers are still supported;
-- wrapper/direct-vector configuration macros still exist;
-- common-owned scheduler globals still contain `port` in their names.
+- `fiber_runtime_port_abi.h` exposes exactly reverse ABI v1; every current port
+  uses only its selector, publisher, current guard, task-return sink, panic, and
+  version anchor instead of including common-private scheduler state;
+- the current-context slot has its frozen assembly-only name, selected-port C
+  has no lvalue declaration, and common runtime alone publishes it;
+- every current mandatory port object retains a relocation to
+  `fiber_internal_runtime_port_abi_v1_anchor`, while port panic calls are strong
+  references to the canonical declaration and only the common fallback
+  definition is weak;
+- every current selected port owns strong `SVC_Handler` and `PendSV_Handler`
+  definitions; application wrappers and routing-selection macros are rejected;
+- archive extraction, vector-slot resolution, duplicate-handler failure,
+  section-GC, and LTO proofs are active in the compile matrix;
+- the remaining freeze work is the complete reverse-symbol/slot-load negative
+  proof cohort and refreshed hardware validation of the active H7 checkpoint;
 
-Those facts are migration debt, not alternative long-term contracts. Every
-mechanical slice below must reduce that debt without silently changing context
-layout, save/restore order, critical-section placement, or panic behavior.
+The final bullet is remaining migration debt; the preceding bullets describe
+the active contract. Every later mechanical slice must reduce the remaining
+debt without silently changing context layout, save/restore order,
+critical-section placement, or panic behavior.
 
 ## Goal
 
@@ -129,6 +141,29 @@ stack-protector calls, implicit FP/MVE use, or LTO-generated helper calls.
 The public sensitive bundle includes `noipa`/no-clone/no-ICF protection, or the
 toolchain's verified equivalent, whenever available; `noinline` alone is not an
 LTO boundary.
+
+Function attributes are necessary but are not sufficient for selected-port
+translation units that include CMSIS `always_inline` helpers. GCC may instrument
+an inlined helper even when the outer caller has `no_instrument_function`.
+Therefore an integration that enables instrumentation, stack protection,
+profiling, coverage, or sanitizers globally must compile every selected-port
+translation unit with explicit counter-options. The GNU Arm Embedded GCC v1
+proof uses:
+
+```text
+-fno-instrument-functions
+-fno-stack-protector
+-fno-profile-arcs
+-fno-test-coverage
+-fno-sanitize=all
+-mgeneral-regs-only
+```
+
+These flags supplement rather than replace the canonical source attributes.
+The matrix first compiles common ABI functions and a scheduler-hook fixture
+under adversarial flags without counter-options, then compiles the complete CM7
+selected-port source group with the required counter-options placed last and
+audits generated objects for forbidden compiler-runtime references.
 
 The initial production freeze is limited to GNU Arm Embedded GCC. Every later
 compiler port requires independent attribute mappings, generated-code audits,
@@ -661,12 +696,12 @@ port:
     links reject stale object mixtures even when their generic callable symbols
     and the common runtime ABI version still match.
 
-The reverse ABI is deliberately smaller than the current transitional
-`fiber_runtime_state.h` surface. Mechanical migration collapses begin/end first
-selection, hook invocation, and NULL handling into
-`fiber_internal_runtime_select_scheduler_candidate()`, renames the current
-slot, and removes every displaced declaration after all ports use the v1
-header.
+The reverse ABI is deliberately smaller than the former selected-port view of
+`fiber_runtime_state.h`. The active implementation collapses first-selection
+lifecycle, hook invocation, and NULL handling into
+`fiber_internal_runtime_select_scheduler_candidate()`, uses the frozen current
+slot name, and keeps every scheduler global plus direct storage helper
+common-private.
 
 ## Normative `fiber_start()` Order
 
@@ -741,16 +776,17 @@ Duplicate strong definitions are intentional link-time configuration failures.
 CubeMX-generated strong definitions must be removed or excluded from the build;
 they must not remain as another wrapper layer.
 
-The final contract has no wrapper/direct selection:
+The active contract has no wrapper/direct selection and therefore does not
+provide:
 
-- remove `FIBER_SVC_VECTOR_DIRECT`;
-- remove `FIBER_PENDSV_VECTOR_DIRECT`;
-- remove `FIBER_SVC_WIRED`;
-- remove `FIBER_PENDSV_WIRED`;
-- remove application SVC/PendSV branch wrappers.
+- `FIBER_SVC_VECTOR_DIRECT`;
+- `FIBER_PENDSV_VECTOR_DIRECT`;
+- `FIBER_SVC_WIRED`;
+- `FIBER_PENDSV_WIRED`;
+- application SVC/PendSV branch wrappers.
 
-These names may remain only during the mechanical migration. They are not
-supported alternatives after every selected port owns its handlers.
+These names have been removed from the active implementation. Defining any of
+them is an intentional compile-time configuration error.
 
 Runtime vector-table patching is not part of the default contract. A future
 dynamic-vector policy would be an explicit, separately validated integration
@@ -891,24 +927,28 @@ not mixed with unrelated layout work.
    `fiber_api_attributes.h` the only public scheduler-hook attribute definition
    and apply the frozen sensitive/general-registers-only attributes to the
    public and mandatory ABI declarations in the same slice.
-2. Add common-owned `fiber_runtime_port_abi.h`, implement its exact v1 symbols
-   and link anchor, then rename common-owned scheduler globals and update exact
-   assembly references without changing publication order. Keep the current
-   slot out of the selected-port C declaration surface. Make the port-side
-   `fiber_panic()` declaration strong while retaining only the common fallback
-   definition as weak.
-3. Delete the wider `fiber_runtime_state.h` port surface and add reverse-symbol,
-   slot-load-only, integration-hook, section-GC, and LTO allowlist proofs.
+2. Done: add common-owned `fiber_runtime_port_abi.h`, implement its exact v1
+   symbols and link anchor, rename common-owned scheduler globals, and update
+   exact assembly references without changing publication order. The current
+   slot is absent from selected-port C declarations. Port panic references are
+   strong while only the common fallback definition is weak.
+3. Add the remaining reverse-symbol, slot-load-only, version-mismatch,
+   integration-hook, static-archive, section-GC, and LTO allowlist proofs. The
+   existing `fiber_runtime_state.h` remains common-private and is forbidden to
+   selected ports.
 4. Done: collapse start preparation, first selection, first start, and schedule
    request choreography behind the new generic functions. Hardware validation
    remains pending for this behavior-changing checkpoint.
-5. Add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
+5. Done: add strong selected-port `SVC_Handler` and `PendSV_Handler` definitions while
    preserving the existing validated assembly bodies. Co-locate them with a
    mandatory ABI definition or add the unique handler-bundle extraction anchor.
-6. Remove CubeMX/application wrappers and delete wrapper/direct configuration
+6. Done: remove CubeMX/application wrappers and delete wrapper/direct configuration
    switches.
-7. Add common compile-isolation and synthetic link/ELF proofs, including the
-   static-archive extraction and duplicate-handler negative tests.
+7. In progress: common compile isolation, strong-handler checks for every
+   compiled profile, and CM7 static-archive extraction, vector-slot, duplicate
+   handler, section-GC, LTO, and adversarial generated-code proofs are active.
+   Remaining bidirectional version-mismatch and stale-cohort negative fixtures
+   stay part of slice 3.
 8. Run the full H7 normal, FPU, startup, trap, active-VTOR, SVC, and PendSV
    hardware validation suite.
 

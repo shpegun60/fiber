@@ -594,6 +594,7 @@ fiber/
   fiber_api_attributes.h
   fiber_api_decl.h
   fiber_core.h
+  fiber_runtime_port_abi.h
   internal/
     fiber_core_internal.h
     fiber_runtime_state.h

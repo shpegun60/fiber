@@ -301,11 +301,10 @@ fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 #ifndef FIBER_SVC_START_NUMBER
 # define FIBER_SVC_START_NUMBER 70
 #endif
-#ifndef FIBER_PENDSV_VECTOR_DIRECT
-# define FIBER_PENDSV_VECTOR_DIRECT 0
-#endif
-#ifndef FIBER_SVC_VECTOR_DIRECT
-# define FIBER_SVC_VECTOR_DIRECT 0
+
+#if defined(FIBER_PENDSV_VECTOR_DIRECT) || defined(FIBER_SVC_VECTOR_DIRECT) || \
+		defined(FIBER_PENDSV_WIRED) || defined(FIBER_SVC_WIRED)
+# error "[fiber]: vector routing macros were removed; the selected port owns strong SVC_Handler and PendSV_Handler symbols"
 #endif
 
 #if defined(FIBER_FORCE_PRIGROUP) || defined(FIBER_TUNE_SYSTICK) || \
@@ -327,15 +326,5 @@ fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
 FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 		(FIBER_SVC_START_NUMBER <= 255),
 		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
-FIBER_STATIC_ASSERT((FIBER_PENDSV_VECTOR_DIRECT == 0) ||
-		(FIBER_PENDSV_VECTOR_DIRECT == 1),
-		"[fiber]: FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_SVC_VECTOR_DIRECT == 0) ||
-		(FIBER_SVC_VECTOR_DIRECT == 1),
-		"[fiber]: FIBER_SVC_VECTOR_DIRECT must be 0 or 1");
-
-#if !FIBER_PENDSV_VECTOR_DIRECT && !defined(FIBER_PENDSV_WIRED)
-FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to branch to fiber_pendsv without clobbering LR; define FIBER_PENDSV_WIRED=1 after you do it");
-#endif
 
 #endif /* FIBER_PORT_ARM_CM0_FIBER_PORTMACRO_H_ */

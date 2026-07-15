@@ -51,6 +51,7 @@ fiber/port/ARM_CM7/r0p1/fiber_port_boot.h
 fiber/port/fiber_port_selected.h
 fiber/fiber_api_types.h
 fiber/fiber_types.h (compatibility facade)
+fiber/fiber_runtime_port_abi.h
 fiber/fiber_runtime_state.h
 fiber/port/fiber_static_assert.h
 ```
@@ -189,14 +190,14 @@ user/build option      -> FIBER_XXX
 | --- | --- | --- |
 | `pxPortInitialiseStack()` | `fiber_port_init_context_frame()` | Adapted and hardened. Fiber validates/seals boot metadata, builds the synthetic frame directly down from `stack_top`, clears stacked PC bit 0, stores a task-return panic LR, and preserves platform `r9`. The selected port exports exact initial/maximum saved-context geometry instead of using a separate top guard. |
 | `prvTaskExitError()` | `fiber_internal_task_return()` | Replaced. A returned fiber panics; there is no task-delete API in the CPU port. |
-| `vPortSVCHandler()` | `fiber_svc()` | Adapted and hardened. Fiber validates SVCall identity, exact incoming EXC_RETURN, MSP origin, 8-byte SVC frame alignment, stacked Thread/Thumb state, stacked PC, SVC opcode/immediate, current context, restore context, FPCA state, and BASEPRI clear through errata-safe macros. |
+| `vPortSVCHandler()` | strong `SVC_Handler()` | Adapted and hardened. Fiber validates SVCall identity, exact incoming EXC_RETURN, MSP origin, 8-byte SVC frame alignment, stacked Thread/Thumb state, stacked PC, SVC opcode/immediate, current context, restore context, FPCA state, and BASEPRI clear through errata-safe macros. The selected port owns the vector symbol directly. |
 | `prvPortStartFirstTask()` | `fiber_port_start_first_context()` | Adapted and hardened. Fiber starts only via SVC, validates Thread/MSP state, uses a one-shot port-runtime MSP plan rather than per-context MSP state, clears pending PendSV, enables faults/IRQs, and panics if SVC returns. |
 | `xPortStartScheduler()` | `fiber_start()` plus port start helper and exception validation | Split. `fiber_start()` now owns idempotent PendSV/SVCall setup and validation, matching the FreeRTOS startup responsibility. Fiber has no tick setup, internal priority scheduler, or critical nesting setup; the user hook selects the first context. |
 | `vPortEndScheduler()` | none | Excluded. A Cortex-M bare-metal fiber runtime does not implement scheduler shutdown. |
 | `vPortEnterCritical()` / `vPortExitCritical()` | none public; internal scheduler critical helpers only | Excluded from public API. |
-| `xPortPendSVHandler()` | `fiber_pendsv()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. |
+| `xPortPendSVHandler()` | strong `PendSV_Handler()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. The selected port owns the vector symbol directly. |
 | `vTaskSwitchContext()` call | `fiber_port_scheduler_pick_next_from_pendsv()` | Replaced. User scheduler hook picks the next context; NULL and invalid contexts panic, and PRIMASK/FAULTMASK/BASEPRI/CONTROL must be unchanged on return. |
-| `pxCurrentTCB` first field | `fiber_internal_port_current_context` and `FiberContext.sp` | Adapted. Saved SP is updated only when saving the current context, matching the FreeRTOS invariant. |
+| `pxCurrentTCB` first field | assembly-load-only `fiber_internal_runtime_current_context_slot` and `FiberContext.sp` | Adapted. Common runtime alone publishes the current slot through reverse ABI v1; selected-port C has no lvalue declaration. Saved SP is updated only when saving the current context, matching the FreeRTOS invariant. |
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
 | `vPortSuppressTicksAndSleep()` | user scheduler/platform | Excluded. |
 | `vPortSetupTimerInterrupt()` | user scheduler/platform | Excluded. |

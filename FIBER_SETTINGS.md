@@ -78,8 +78,11 @@ CPU contract:
 | --- | ---: | --- |
 | `FIBER_SCHEDULER_BASEPRI` | first safe nonzero preemption priority | Protect the user scheduler hook. Only implemented preemption-priority bits are accepted. The default masks every configurable priority except priority zero. An override may leave higher-urgency ISRs running, but those ISRs must not touch scheduler state or call fiber APIs. |
 | `FIBER_SVC_START_NUMBER` | `70` | Reserved first-start SVC immediate. The handler validates opcode and immediate. |
-| `FIBER_PENDSV_VECTOR_DIRECT` | `0` | `1` means vector 14 points directly to `fiber_pendsv`; `0` validates a naked tail-branch wrapper. |
-| `FIBER_SVC_VECTOR_DIRECT` | `0` | `1` means vector 11 points directly to `fiber_svc`; `0` validates a naked tail-branch wrapper. |
+
+SVC/PendSV routing is not configurable. The selected port owns strong
+`SVC_Handler` and `PendSV_Handler` symbols, and startup validates that active
+vector slots 11 and 14 resolve to them. The removed `FIBER_*_WIRED` and
+`FIBER_*_VECTOR_DIRECT` names are compile errors.
 
 The non-production `transitional_v8m` port additionally accepts explicitly
 named bring-up inputs:

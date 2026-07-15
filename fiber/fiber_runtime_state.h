@@ -1,7 +1,8 @@
 /*
  * fiber_runtime_state.h
  *
- * Internal runtime state shared by common runtime and port code.
+ * Common-private scheduler/runtime state. Selected ports must include only
+ * fiber_runtime_port_abi.h and may not include this header.
  */
 
 #ifndef FIBER_FIBER_RUNTIME_STATE_H_
@@ -16,51 +17,20 @@ extern "C" {
 #endif
 
 /*
- * Scheduler-driven v2 state.
- *
- * The port owns CPU save/restore. The scheduler hook owns the policy that
- * chooses the next context. A NULL hook or NULL hook result is a panic condition
- * in the scheduler-driven PendSV/SVC path.
+ * The slot declaration is intentionally common-private. Selected-port C has
+ * no lvalue declaration and assembly may only load the frozen symbol name.
  */
-extern FiberContext *volatile fiber_internal_port_current_context;
-extern FiberSchedulerPickNextFn volatile fiber_internal_port_scheduler_pick_next;
-extern void *volatile fiber_internal_port_scheduler_user;
+extern FiberContext *volatile
+fiber_internal_runtime_current_context_slot;
 
 void fiber_internal_scheduler_store_pick_next(FiberSchedulerPickNextFn pick_next,
 		void *user);
 
-void fiber_internal_scheduler_begin_first_selection(void);
-void fiber_internal_scheduler_end_first_selection(void);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_load_current_context(void);
 
-FIBER_GENERAL_REGS_ONLY
-FiberContext *fiber_internal_scheduler_invoke_pick_next(FiberContext *current);
-
-void fiber_internal_scheduler_commit_current_context(FiberContext *next);
-
-/* Common-owned lifecycle guard used by selected ports before they request a
- * scheduler exception. Ports must call this helper instead of inspecting the
- * current-context global directly. */
-FIBER_GENERAL_REGS_ONLY
-void fiber_internal_require_schedule_current(void);
-
-static inline FiberContext *fiber_internal_runtime_load_current_context(void)
-{
-	fiber_port_runtime_memory_barrier();
-	return fiber_internal_port_current_context;
-}
-
-static inline void fiber_internal_runtime_seed_current_context(FiberContext *ctx)
-{
-	fiber_port_runtime_memory_barrier();
-	fiber_internal_port_current_context = ctx;
-	fiber_port_runtime_memory_barrier();
-}
-
-static inline uint32_t fiber_internal_scheduler_is_configured(void)
-{
-	fiber_port_runtime_memory_barrier();
-	return (fiber_internal_port_scheduler_pick_next != 0) ? 1u : 0u;
-}
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_internal_scheduler_is_configured(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

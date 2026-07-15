@@ -204,24 +204,28 @@ Closed hardening items from the FreeRTOS comparison:
      `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` compile mode
    - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
      `FIBER_TZ_NS=1` and `-mcmse`
-   - transitional PendSV direct-vector mode with
-     `FIBER_PENDSV_VECTOR_DIRECT=1`
-   - transitional ARMv7E-M PendSV+SVC direct-vector mode with
-     `FIBER_PENDSV_VECTOR_DIRECT=1` and `FIBER_SVC_VECTOR_DIRECT=1`
    - build-selected portmacro mode with `FIBER_PORT_BUILD_SELECTED=1`
    - Cortex-M7/Cortex-M7F build-selected source group
      `fiber/port/ARM_CM7/r0p1/fiber_port.c`, including the port-owned errata
      workaround
+   - exact eight-function forward ABI and reverse ABI v1 symbol sets
+   - exactly one active selected-port relocation to
+     `fiber_internal_runtime_port_abi_v1_anchor`
+   - strong selected-port `fiber_panic()` references with one weak common
+     fallback definition
+   - assembly-only current-slot references and rejection of transitional
+     reverse symbol names
+   - exactly one strong selected-port `SVC_Handler` and `PendSV_Handler` for
+     every compiled profile
+   - CM7 static-archive extraction with startup weak aliases
+   - CM7 vector slots 11/14 resolving to selected strong handlers
+   - deliberate competing strong-handler link failure
+   - CM7 handler retention under `--gc-sections` and LTO
+   - adversarial generated-code checks for the public sensitive ABI, scheduler
+     hook, and selected-port build counter-flags
 
-   Wrapper/direct-vector modes remain compile-covered only while the current
-   transitional handler integration exists. The final contract in
-   `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` replaces them with selected-port
-   strong `SVC_Handler` and `PendSV_Handler` symbols. At that point the matrix
-   must prove archive extraction through the unique handler-bundle anchor when
-   handlers are separately archived, vector-slot relocation, duplicate-strong
-   failure, `--gc-sections` retention, and LTO retention instead. Passing the
-   matrix is compile/link coverage only; runtime support still requires
-   profile-specific hardware validation.
+   Passing the matrix is compile/link coverage only; runtime support still
+   requires profile-specific hardware validation.
 
 2. Keep expanding the focused STM32H7 runtime stress tests.
 
@@ -234,7 +238,7 @@ Closed hardening items from the FreeRTOS comparison:
    - normal scheduler-driven `fiber_schedule()`;
    - missing scheduler hook traps with `'K'`;
    - `NULL` scheduler hook traps with `'K'`;
-   - changing the scheduler hook after the current context is seeded traps with
+   - changing the scheduler hook after the current context is published traps with
      `'k'`;
    - scheduler jump with `PRIMASK != 0` must trap;
    - scheduler jump with `BASEPRI != 0` must trap on BASEPRI-capable cores;
@@ -298,7 +302,7 @@ Closed hardening items from the FreeRTOS comparison:
    Move out of common code:
 
    - transitional fallback `fiber_port_init_context_frame()`;
-   - transitional fallback `fiber_pendsv()`;
+   - any transitional common PendSV implementation;
    - direct startup trampoline mechanics;
    - SVC first-start mechanics;
    - CONTROL/PSP/MSP programming;
@@ -491,7 +495,8 @@ Closed hardening items from the FreeRTOS comparison:
    ```
 
    `fiber_start()` calls the configured scheduler hook with `current == NULL`,
-   validates the returned first context, and seeds it as the current context.
+   the selected port validates the returned first context, and common runtime
+   publishes it through reverse ABI v1.
    PendSV later saves that context, asks the scheduler bridge for the next
    context, and restores only the returned context. The core API does not
    accept `from` or `to` from Thread mode.
@@ -529,9 +534,9 @@ Closed hardening items from the FreeRTOS comparison:
      VTOR validate their architecture/platform vector base and remap policy;
    - H7 validation specifically reads back `SCB->VTOR`.
 
-   The current application-wrapper/direct-vector implementation is transitional
-   and remains documented only until the mechanical handler migration is
-   complete. Runtime vector-table patching is not a default fallback.
+   The handler migration is complete for every current selected port. Runtime
+   vector-table patching and application-owned branch wrappers are not fallback
+   paths.
 
    The selected ARMv7E-M SVC handler must retain the existing dispatch checks:
    MSP-frame alignment, SVC opcode, and configured immediate. It traps with

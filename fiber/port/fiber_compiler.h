@@ -12,6 +12,7 @@
 #include "fiber_static_assert.h"
 #include "fiber_diagnostics.h"
 #include "mcu_core.h"
+#include "../fiber_api_attributes.h"
 
 /* ---- Cross-toolchain attribute mapping (STM32 toolchains) ------------------ */
 /* Supported: GCC (arm-none-eabi-gcc), Clang/armclang (Keil AC6), ARMCC5 (Keil), IAR (ICCARM) */
@@ -269,12 +270,16 @@
 
 /* GCC >=8 only: prevent IPA transforms that can mangle ABI-sensitive glue */
 #ifndef FIBER_NOIPA
-# if (defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 8))
-#  define FIBER_NOIPA __attribute__((noipa))
-# elif FIBER_HAS_ATTR(noipa)
-#  define FIBER_NOIPA __attribute__((noipa))
+# define FIBER_NOIPA FIBER_API_NOIPA
+#endif
+
+/* Parameters consumed only through their fixed ABI register in naked assembly
+ * are intentionally invisible to the C frontend. */
+#ifndef FIBER_ATTR_UNUSED_PARAM
+# if FIBER_HAS_ATTR(unused) || defined(__GNUC__) || defined(__clang__)
+#  define FIBER_ATTR_UNUSED_PARAM __attribute__((unused))
 # else
-#  define FIBER_NOIPA
+#  define FIBER_ATTR_UNUSED_PARAM
 # endif
 #endif
 
@@ -336,9 +341,8 @@
 
 
 #ifndef FIBER_ATTR_SENSITIVE
-/* Non-naked sensitive routines: keep symbol, avoid inlining/instrumentation/sanitizers/SSP */
-# define FIBER_ATTR_SENSITIVE \
-		FIBER_NOINSTR FIBER_NOINLINE FIBER_USED FIBER_ATTR_KEEP
+/* Keep the private spelling as an exact alias of the public ABI bundle. */
+# define FIBER_ATTR_SENSITIVE FIBER_API_ATTR_SENSITIVE
 #endif
 
 #ifndef FIBER_ATTR_NAKED_ASM
@@ -362,10 +366,6 @@
 # else
 #  define FIBER_GENERAL_REGS_ONLY
 # endif
-#endif
-
-#ifndef FIBER_SCHEDULER_HOOK_ATTR
-# define FIBER_SCHEDULER_HOOK_ATTR FIBER_GENERAL_REGS_ONLY
 #endif
 
 #endif /* FIBER_FIBER_COMPILER_H_ */

@@ -4,10 +4,10 @@ Small cooperative fiber switcher for STM32/Cortex-M projects.
 
 The context switch is requested from Thread mode with `fiber_schedule()` and is
 performed by PendSV through an application-provided scheduler hook. The
-application must wire `PendSV_Handler()` so it branches to `fiber_pendsv()`
-without clobbering LR/EXC_RETURN. The active v2 runtime start is FreeRTOS-like:
-`fiber_start()` enters the first context through SVC and an exception return, so
-the application must also wire `SVC_Handler()` to branch to `fiber_svc()`.
+selected port owns strong `PendSV_Handler()` and `SVC_Handler()` definitions;
+the application must not provide competing handlers or wrapper functions. The
+active v2 runtime start is FreeRTOS-like: `fiber_start()` enters the first
+context through SVC and an exception return.
 
 ## Architecture Direction
 
@@ -22,10 +22,11 @@ scheduler bridge use only callable port ABI functions and do not dereference
 that layout. A future port may therefore change its boot record or use a
 hardware-backed integrity implementation without changing the common core.
 See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary and migration
-sequence. See `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` for the follow-on
-CPU-neutral eight-function ABI and the planned move from application wrappers
-to exclusive selected-port SVC/PendSV handlers. That handler move is documented
-but not yet implemented; the project setup below describes the current tree.
+sequence. See `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` for the active CPU-neutral
+eight-function forward ABI, frozen reverse ABI v1, and exclusive selected-port
+SVC/PendSV ownership. Both directional ABIs and strong handler ownership are
+implemented. The matrix proves CM7 static-archive extraction, vector-slot
+resolution, duplicate-handler failure, section-GC retention, and LTO retention.
 
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
@@ -57,6 +58,10 @@ fiber/fiber_core.c
 fiber/fiber_runtime_state.c
 fiber/fiber_panic.c
 ```
+
+The common runtime and selected port include the internal
+`fiber/fiber_runtime_port_abi.h` reverse boundary themselves; it is not a
+separate translation unit.
 
 Then compile exactly one matching port source group:
 
@@ -192,15 +197,8 @@ documented board rerun; every other profile remains compile/link-covered only
 until its own hardware validation is recorded.
 
 `fiber_start()` initializes and validates PendSV/SVCall priority automatically.
-The current transitional selected-port integration also exposes the idempotent
-diagnostic below for early bring-up checks. It is not part of the frozen
-five-function cooperative API and will be replaced by the internal selected-port
-runtime prepare/validate boundary. A direct transitional call requires
-privileged Thread mode on MSP with PRIMASK, BASEPRI, and FAULTMASK clear:
-
-```c
-fiber_pendsv_init_lowest_priority();
-```
+Exception setup is private selected-port work performed through the frozen
+runtime prepare boundary; applications must not call port diagnostics directly.
 
 ## Basic Example
 
@@ -287,7 +285,7 @@ void app_main(void)
 
 `fiber_scheduler_set_pick_next()` must be called from Thread mode before
 `fiber_start()`. A `NULL` hook traps with `'K'`; changing the hook after the
-runtime-owned current context is seeded traps with `'k'`. `fiber_start()`
+runtime-owned current context is published traps with `'k'`. `fiber_start()`
 requires a configured hook and calls it once with `current == NULL`; the hook
 must return the first initialized `FiberContext`. A missing hook traps with
 `'K'`, and a `NULL` first context traps with `'N'`.
@@ -304,11 +302,12 @@ returning; the runtime snapshots and validates those registers around every
 first and PendSV scheduler call. The same restrictions apply to every function
 reachable from the hook, not only to the top-level thunk.
 
-`fiber_start()` first verifies privileged Thread mode on MSP, then configures
-and validates PendSV/SVCall,
-asks the scheduler for the first context, validates it, seeds the runtime-owned
-current context, prepares the platform, and does not return. The first scheduler
-hook call is protected with
+`fiber_start()` first performs the common `K/k` lifecycle checks. The selected
+port then validates and prepares privileged Thread/MSP state, PendSV/SVCall,
+interrupt masks, CPU policy, and the startup MSP plan. The port-protected
+scheduler call selects and validates the first context, common runtime publishes
+it through the frozen reverse ABI, and the port performs the final SVC transfer.
+The function does not return. The first scheduler hook call is protected with
 the same port scheduler critical-section policy as PendSV: BASEPRI on
 BASEPRI-capable ports, or saved PRIMASK on baseline ports. `fiber_start()`
 resets the first-start CPU state to privileged Thread/MSP, optionally rewinds
@@ -327,9 +326,10 @@ invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
 traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 `FiberContext`, not by returning `NULL`.
 
-Restore-target validation is mandatory and has no performance-disable switch.
-It checks the current context after save and every scheduler-selected target
-before restore. `EXC_RETURN` must match one of the exact encodings allowed by
+Save preflight and restore-target validation are mandatory and have no
+performance-disable switch. PendSV validates the running context and live PSP
+before reading its metadata or saving it; every scheduler-selected target is
+validated once before restore. `EXC_RETURN` must match one of the exact encodings allowed by
 the selected port; checking only the Thread/PSP bits is not sufficient. The
 saved hardware frame must also contain `xPSR.T`, stacked Thread-mode IPSR state,
 a PC with bit 0 clear, and enough space for the optional `xPSR.STACKALIGN` word.
@@ -370,47 +370,27 @@ void fiber_fpu_stress_entry(void*)
 
 ## Exception Handlers
 
-In `stm32xxx_it.c`:
+The selected port directly defines naked strong `SVC_Handler()` and
+`PendSV_Handler()` symbols. The startup vector table may retain its normal weak
+aliases; the selected strong definitions override them at link time. Remove or
+exclude CubeMX/application strong definitions for these two handlers. A
+competing definition is an intentional multiple-definition link failure.
 
-```c
-#include "fiber/fiber_core.h"
-/* Example for the concrete STM32H7/Cortex-M7 selected port. */
-#include "fiber/port/ARM_CM7/r0p1/fiber_portmacro.h"
+The SVC handler validates the original handler LR/EXC_RETURN, MSP frame,
+configured SVC instruction, and first restore context. PendSV preserves the
+original EXC_RETURN while saving current state and restoring the context chosen
+by the scheduler hook. There is no wrapper/direct routing mode. Defining any
+removed `FIBER_*_WIRED` or `FIBER_*_VECTOR_DIRECT` macro is a compile error.
 
-FIBER_ATTR_NAKED_ASM
-void PendSV_Handler(void)
-{
-	__ASM volatile("b fiber_pendsv");
-}
-
-FIBER_ATTR_NAKED_ASM
-void SVC_Handler(void)
-{
-	__ASM volatile("b fiber_svc");
-}
-```
-
-For wrapper mode, define these after the handlers are wired in the embedding
-application:
-
-```c
-#define FIBER_PENDSV_WIRED 1
-#define FIBER_SVC_WIRED 1
-```
-
-`fiber_pendsv()` is a naked exception handler body. It must see the original
-handler LR value, which is the hardware `EXC_RETURN`. Do not use a normal C
-wrapper that emits `bl fiber_pendsv`; that overwrites LR with a function return
-address. Direct vectoring to `fiber_pendsv()` is also valid when
-`FIBER_PENDSV_VECTOR_DIRECT=1` is set.
-
-`fiber_svc()` is also a naked handler body. The ARMv7E-M SVC start path checks
-that SVC arrived from MSP, verifies the MSP frame alignment, decodes the SVC
-opcode plus configured immediate, validates the seeded current context, switches
-to PSP, and returns through the synthetic exception frame. A normal C wrapper is
-not valid for the same LR/EXC_RETURN
-reason. Direct vectoring to `fiber_svc()` is valid when
-`FIBER_SVC_VECTOR_DIRECT=1` is set.
+ABI-sensitive common functions and scheduler hooks use the canonical
+`FIBER_API_ATTR_SENSITIVE` plus `FIBER_GENERAL_REGS_ONLY` bundle. If an
+integration globally enables function instrumentation, stack protection,
+profiling, or sanitizers, selected-port translation units must add equivalent
+counter-options: `-fno-instrument-functions`, `-fno-stack-protector`,
+`-fno-profile-arcs`, `-fno-test-coverage`, `-fno-sanitize=all`, and
+`-mgeneral-regs-only`. CMSIS `always_inline` helpers cannot inherit a caller's
+function attributes, so source attributes alone cannot prove the full port
+call graph. The matrix audits both layers under adversarial compiler flags.
 
 ## Safety Defaults
 
@@ -443,9 +423,8 @@ switch cannot be silently delayed out of a masked interrupt region. On cores
 with BASEPRI, a real scheduler jump also requires `BASEPRI == 0`. On cores with
 FAULTMASK, `FAULTMASK` must also be clear.
 
-The transitional `fiber_pendsv_init_lowest_priority()` diagnostic and the public
-`fiber_start()` entry run the runtime exception setup check by default. The
-diagnostic is not part of the frozen five-function cooperative API. The check
+The selected port's private start preparation, invoked by public
+`fiber_start()`, runs the runtime exception setup check by default. The check
 verifies:
 
 - PendSV priority reads back as the lowest priority;
@@ -460,13 +439,10 @@ verifies:
   and PAC/BTI scenarios require an explicit `FIBER_ALLOW_UNVALIDATED_*` opt-in
   before runtime use.
 
-The default vector check expects application wrappers named `PendSV_Handler()`
-and `SVC_Handler()`. Each wrapper must be a naked branch/tail branch that
-preserves LR/EXC_RETURN. If the vector table points directly to
-`fiber_pendsv()`, define `FIBER_PENDSV_VECTOR_DIRECT=1`. If it points directly
-to `fiber_svc()`, define `FIBER_SVC_VECTOR_DIRECT=1`. SVC vector validation is
-enabled by default because SVC is the only first-start path. The SVC start path
-also checks at runtime that the instruction is the configured
+The vector check requires slots 11 and 14 to resolve directly to the selected
+port's strong `SVC_Handler()` and `PendSV_Handler()`. SVC vector validation is
+mandatory because SVC is the only first-start path. The SVC start path also
+checks at runtime that the instruction is the configured
 `SVC #FIBER_SVC_START_NUMBER`; a wrong SVC dispatch traps with `'u'`, and an
 SVC that returns to `fiber_port_start_first_context()` traps with `'y'`.
 
@@ -565,9 +541,10 @@ Run the compile-only Cortex-M matrix after changing target gates or assembly:
 
 This compiles and relocatable-links every selected profile and verifies exactly
 one definition of each port ABI symbol. It covers selector and build-selected
-modes, wrapper/direct vectors, v8-M bring-up scenarios, and negative settings
-contracts. Compile coverage does not replace hardware tests or promote a
-transitional profile to a runtime-supported port.
+modes, strong selected-port handler ownership, archive extraction, vector-slot
+resolution, section GC and LTO, v8-M bring-up scenarios, adversarial compiler
+flags, and negative settings contracts. Compile coverage does not replace
+hardware tests or promote a transitional profile to a runtime-supported port.
 
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,

@@ -26,7 +26,8 @@
  * Keep this header close to the FreeRTOS portmacro.h model: selected-port CPU
  * facts, CMSIS view, compiler helpers, and the panic/require diagnostic
  * contract live here. The matching fiber_port.c includes only root runtime
- * headers it needs for FiberContext, boot records, and scheduler bridge state.
+ * headers it needs for FiberContext, boot records, and frozen reverse runtime
+ * services.
  */
 #ifndef fiber_portFORCE_INLINE
 # if defined(__GNUC__) || defined(__clang__)
@@ -53,12 +54,9 @@
 # define FIBER_SVC_START_NUMBER 70
 #endif
 
-#ifndef FIBER_PENDSV_VECTOR_DIRECT
-# define FIBER_PENDSV_VECTOR_DIRECT 0
-#endif
-
-#ifndef FIBER_SVC_VECTOR_DIRECT
-# define FIBER_SVC_VECTOR_DIRECT 0
+#if defined(FIBER_PENDSV_VECTOR_DIRECT) || defined(FIBER_SVC_VECTOR_DIRECT) || \
+		defined(FIBER_PENDSV_WIRED) || defined(FIBER_SVC_WIRED)
+# error "[fiber]: vector routing macros were removed; the selected port owns strong SVC_Handler and PendSV_Handler symbols"
 #endif
 
 #if defined(FIBER_FORCE_PRIGROUP) || defined(FIBER_TUNE_SYSTICK) || \
@@ -84,13 +82,6 @@ FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
 #if (FIBER_FPU_LAZY != 0) && (FIBER_FPU_LAZY != 1)
 # error "[fiber]: ARM_CM7/r0p1 FIBER_FPU_LAZY must be 0 or 1"
 #endif
-#if (FIBER_PENDSV_VECTOR_DIRECT != 0) && (FIBER_PENDSV_VECTOR_DIRECT != 1)
-# error "[fiber]: ARM_CM7/r0p1 FIBER_PENDSV_VECTOR_DIRECT must be 0 or 1"
-#endif
-#if (FIBER_SVC_VECTOR_DIRECT != 0) && (FIBER_SVC_VECTOR_DIRECT != 1)
-# error "[fiber]: ARM_CM7/r0p1 FIBER_SVC_VECTOR_DIRECT must be 0 or 1"
-#endif
-
 #ifndef FIBER_PORT_MASK_PRIMASK
 # define FIBER_PORT_MASK_PRIMASK 1
 #endif
@@ -610,10 +601,6 @@ fiber_portFORCE_INLINE void fiber_arm_cm7_r0p1_yield_request(void)
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_geometry.h"
 #include "../../fiber_feature_policy.h"
-
-#if !FIBER_PENDSV_VECTOR_DIRECT && !defined(FIBER_PENDSV_WIRED)
-FIBER_DIAG_WARN("[fiber]: user must wire PendSV_Handler to branch to fiber_pendsv without clobbering LR; define FIBER_PENDSV_WIRED=1 after you do it");
-#endif
 
 #ifdef __cplusplus
 } /* extern "C" */
