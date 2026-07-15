@@ -1,5 +1,37 @@
 # Fiber Decision Log
 
+## 2026-07-15: Close The Reverse Runtime ABI V1 Proof Cohort
+
+The compile matrix now combines every selected port's source group with a
+relocatable link and requires one exact unresolved-symbol set. The set contains
+only reverse runtime ABI v1, the explicitly classified RAM/code address-map
+integration hooks, and the freestanding `memcpy`/`memset` toolchain
+dependencies. A selected-port group that adds another common helper, scheduler
+global, compiler helper, or accidental integration symbol fails the matrix.
+The same group is forbidden to define the common-owned anchor, current slot,
+scheduler bridge, task-return sink, or panic symbol.
+
+The current-context slot is now protected at three levels. A source ownership
+audit confines its selected-port spelling to the five mandatory runtime source
+files. Negative C fixtures prove that the reverse header cannot read, assign,
+or take the address of the slot. Build-selected generated assembly must contain
+every slot reference only as an immediately adjacent `ldr reg, =slot` followed
+by an `ldr reg, [reg]` pair; any alternate reference or store through the slot
+address fails.
+
+Synthetic v1 and v2 port/common cohorts prove runtime ABI versioning in both
+directions. Matching cohorts link from static archives under
+`--gc-sections`, with and without LTO. A v1 port with v2-only common and a v2
+port with v1-only common both fail on the missing port-version anchor before
+handler extraction can affect the result.
+
+This is a proof-only checkpoint. Runtime C, SVC/PendSV assembly, frame layout,
+and H7 behavior are unchanged. It closes the reverse runtime ABI v1 proof
+cohort, not the whole `common-core-freeze-v1`: the independent exact
+selected-profile/context object-cohort anchor and stale-private-object negative
+links remain unimplemented, and the active H7 code still requires refreshed
+board validation.
+
 ## 2026-07-15: Activate Frozen Reverse Runtime ABI V1
 
 The common-owned `fiber_runtime_port_abi.h` now exposes exactly the frozen

@@ -428,6 +428,26 @@ function Test-ContextPortBoundary {
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
+    $expectedSlotOwners = @($portSources | ForEach-Object {
+        (Join-Path $RepositoryRoot $_).ToLowerInvariant()
+    } | Sort-Object)
+    $actualSlotOwners = @(
+        Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot "fiber\port") `
+            -Recurse -File | Where-Object {
+                $_.Extension -in @(".c", ".h", ".s", ".S")
+            } | Where-Object {
+                (Get-Content -LiteralPath $_.FullName -Raw).IndexOf(
+                    "fiber_internal_runtime_current_context_slot",
+                    [System.StringComparison]::Ordinal) -ge 0
+            } | ForEach-Object {
+                $_.FullName.ToLowerInvariant()
+            } | Sort-Object
+    )
+    if (($expectedSlotOwners.Count -ne $actualSlotOwners.Count) -or
+            (Compare-Object -ReferenceObject $expectedSlotOwners `
+                -DifferenceObject $actualSlotOwners)) {
+        throw "The assembly-only current slot must appear only in selected-port runtime sources.`nExpected: $($expectedSlotOwners -join ', ')`nActual: $($actualSlotOwners -join ', ')"
+    }
     $requiredPortBridgeSymbols = @(
         "FiberPortSchedulerCpuState",
         "fiber_port_require_scheduler_configuration_environment",
@@ -1025,6 +1045,276 @@ function Invoke-CompilerProbe {
     return [pscustomobject]@{
         ExitCode = $exitCode
         Output = $output
+    }
+}
+
+function Get-NmUndefinedSymbolNames {
+    param(
+        [string[]]$NmOutput,
+        [string]$Path
+    )
+
+    $symbols = @()
+    foreach ($line in $NmOutput) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+        if ($line -notmatch '^\s*U\s+(?<symbol>\S+)\s*$') {
+            throw "Unexpected nm -u output for ${Path}: $line"
+        }
+        $symbols += $Matches['symbol']
+    }
+
+    return @($symbols | Sort-Object -Unique)
+}
+
+function Assert-ExactSymbolSet {
+    param(
+        [string[]]$Expected,
+        [string[]]$Actual,
+        [string]$Description
+    )
+
+    $expectedSet = @($Expected | Sort-Object -Unique)
+    $actualSet = @($Actual | Sort-Object -Unique)
+    $difference = @(Compare-Object -ReferenceObject $expectedSet `
+        -DifferenceObject $actualSet)
+    if (($expectedSet.Count -ne $actualSet.Count) -or
+            ($difference.Count -ne 0)) {
+        throw "$Description does not match the frozen allowlist.`nExpected: $($expectedSet -join ', ')`nActual:   $($actualSet -join ', ')"
+    }
+}
+
+function Test-ReverseAbiSlotCIsolation {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$BuildRoot
+    )
+
+    $probeDir = Join-Path $BuildRoot "reverse-slot-c-isolation"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $cases = @(
+        [pscustomobject]@{
+            Name = "read"
+            Body = "return fiber_internal_runtime_current_context_slot;"
+            ReturnType = "FiberContext *"
+            Argument = "void"
+        },
+        [pscustomobject]@{
+            Name = "write"
+            Body = "fiber_internal_runtime_current_context_slot = ctx;"
+            ReturnType = "void"
+            Argument = "FiberContext *ctx"
+        },
+        [pscustomobject]@{
+            Name = "address"
+            Body = "return &fiber_internal_runtime_current_context_slot;"
+            ReturnType = "void *"
+            Argument = "void"
+        }
+    )
+
+    foreach ($case in $cases) {
+        $source = @"
+#include "fiber/fiber_runtime_port_abi.h"
+
+$($case.ReturnType) fiber_reverse_slot_$($case.Name)($($case.Argument))
+{
+    $($case.Body)
+}
+"@
+        $sourcePath = Join-Path $probeDir ($case.Name + ".c")
+        $objectPath = Join-Path $probeDir ($case.Name + ".o")
+        $logPath = Join-Path $probeDir ($case.Name + ".log")
+        Set-Content -LiteralPath $sourcePath -Value $source -Encoding ASCII
+
+        $args = @(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-Wall",
+            "-Wextra",
+            "-Werror=implicit-function-declaration",
+            "-I$RepositoryRoot",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-c",
+            $sourcePath,
+            "-o",
+            $objectPath
+        )
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $args -LogPath $logPath
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output -notmatch 'fiber_internal_runtime_current_context_slot') -or
+                ($result.Output -notmatch 'undeclared')) {
+            throw "Reverse current slot must be unavailable as a C lvalue ($($case.Name)).`n$($result.Output)"
+        }
+    }
+}
+
+function Test-GeneratedCurrentSlotLoadOnly {
+    param([string]$AssemblyPath)
+
+    if (-not (Test-Path $AssemblyPath)) {
+        throw "Selected-port generated assembly is missing: $AssemblyPath"
+    }
+
+    $assembly = Get-Content -LiteralPath $AssemblyPath -Raw
+    $symbol = "fiber_internal_runtime_current_context_slot"
+    $occurrences = [regex]::Matches($assembly, "\b$symbol\b")
+    $pairPattern = '(?im)^[ \t]*ldr[ \t]+(?<register>r[01]),[ \t]*=' +
+        [regex]::Escape($symbol) +
+        '[ \t]*(?:@.*)?\r?\n[ \t]*ldr[ \t]+\k<register>,[ \t]*\[\k<register>\][ \t]*(?:@.*)?\r?$'
+    $loadPairs = [regex]::Matches($assembly, $pairPattern)
+    if (($occurrences.Count -eq 0) -or
+            ($occurrences.Count -ne $loadPairs.Count)) {
+        throw "Generated selected-port assembly may only load the current slot through an immediate address/load pair: $AssemblyPath"
+    }
+}
+
+function Test-ReverseAbiVersionMismatch {
+    param(
+        [string]$Compiler,
+        [string]$Ar,
+        [string]$BuildRoot
+    )
+
+    $portTemplate = @"
+extern const unsigned char fiber_internal_runtime_port_abi_vVERSION_anchor;
+
+__attribute__((noinline, used))
+void fiber_port_runtime_prepare_start(void)
+{
+    __asm volatile ("" : : "r"(&fiber_internal_runtime_port_abi_vVERSION_anchor) : "memory");
+}
+"@
+    $commonTemplate = @"
+__attribute__((used))
+const unsigned char fiber_internal_runtime_port_abi_vVERSION_anchor = VERSION;
+"@
+    $startupSource = @"
+extern void fiber_port_runtime_prepare_start(void);
+
+void Reset_Handler(void)
+{
+    fiber_port_runtime_prepare_start();
+    for (;;) {
+        __asm volatile ("wfe");
+    }
+}
+"@
+    $linkerSource = @"
+ENTRY(Reset_Handler)
+SECTIONS
+{
+    . = 0x08000000;
+    .text : { *(.text*) *(.rodata*) }
+    .data : { *(.data*) }
+    .bss (NOLOAD) : { *(.bss*) *(COMMON) }
+}
+"@
+
+    foreach ($useLto in @($false, $true)) {
+        $mode = if ($useLto) { "lto" } else { "normal" }
+        $probeDir = Join-Path $BuildRoot "reverse-abi-version-$mode"
+        New-Item -ItemType Directory -Path $probeDir | Out-Null
+        $startupPath = Join-Path $probeDir "startup.c"
+        $linkerPath = Join-Path $probeDir "reverse-abi.ld"
+        Set-Content -LiteralPath $startupPath -Value $startupSource -Encoding ASCII
+        Set-Content -LiteralPath $linkerPath -Value $linkerSource -Encoding ASCII
+
+        $ltoArgs = if ($useLto) { @("-flto") } else { @() }
+        $baseArgs = @(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-O2",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables"
+        ) + $ltoArgs
+
+        $startupObject = Join-Path $probeDir "startup.o"
+        & $Compiler @($baseArgs + @("-c", $startupPath, "-o", $startupObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Reverse ABI startup fixture compile failed ($mode)"
+        }
+
+        $commonObjects = @{}
+        $portArchives = @{}
+        foreach ($version in @(1, 2)) {
+            $portPath = Join-Path $probeDir "port-v$version.c"
+            $commonPath = Join-Path $probeDir "common-v$version.c"
+            $portObject = Join-Path $probeDir "port-v$version.o"
+            $commonObject = Join-Path $probeDir "common-v$version.o"
+            $archivePath = Join-Path $probeDir "libport-v$version.a"
+            Set-Content -LiteralPath $portPath `
+                -Value ($portTemplate.Replace("VERSION", [string]$version)) `
+                -Encoding ASCII
+            Set-Content -LiteralPath $commonPath `
+                -Value ($commonTemplate.Replace("VERSION", [string]$version)) `
+                -Encoding ASCII
+
+            foreach ($compile in @(
+                    [pscustomobject]@{ Source = $portPath; Object = $portObject },
+                    [pscustomobject]@{ Source = $commonPath; Object = $commonObject })) {
+                & $Compiler @($baseArgs + @(
+                    "-c", $compile.Source, "-o", $compile.Object))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Reverse ABI v$version fixture compile failed ($mode): $($compile.Source)"
+                }
+            }
+
+            & $Ar rcs $archivePath $portObject
+            if ($LASTEXITCODE -ne 0) {
+                throw "Reverse ABI v$version archive creation failed ($mode)"
+            }
+            $commonObjects[$version] = $commonObject
+            $portArchives[$version] = $archivePath
+        }
+
+        $linkBase = @(
+            "-mcpu=cortex-m3",
+            "-mthumb"
+        ) + $ltoArgs + @(
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-T", $linkerPath,
+            $startupObject
+        )
+
+        foreach ($version in @(1, 2)) {
+            $positivePath = Join-Path $probeDir "positive-v$version.elf"
+            & $Compiler @($linkBase + @(
+                $commonObjects[$version], $portArchives[$version],
+                "-o", $positivePath))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Matching reverse ABI v$version cohort failed link ($mode)"
+            }
+        }
+
+        foreach ($pair in @(
+                [pscustomobject]@{ Port = 1; Common = 2 },
+                [pscustomobject]@{ Port = 2; Common = 1 })) {
+            $missingAnchor = "fiber_internal_runtime_port_abi_v$($pair.Port)_anchor"
+            $logPath = Join-Path $probeDir `
+                "mismatch-port-v$($pair.Port)-common-v$($pair.Common).log"
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($linkBase + @(
+                    $commonObjects[$pair.Common], $portArchives[$pair.Port],
+                    "-o", (Join-Path $probeDir "mismatch.elf"))) `
+                -LogPath $logPath
+            if (($result.ExitCode -eq 0) -or
+                    ($result.Output -notmatch [regex]::Escape($missingAnchor))) {
+                throw "Mismatched reverse ABI cohort must fail on $missingAnchor ($mode).`n$($result.Output)"
+            }
+        }
     }
 }
 
@@ -1846,6 +2136,32 @@ $requiredReverseSymbolTypes = @{
     "fiber_internal_task_return"                      = "T"
 }
 
+$commonOwnedReverseSymbols = @(
+    "fiber_internal_runtime_port_abi_v1_anchor",
+    "fiber_internal_runtime_current_context_slot",
+    "fiber_internal_runtime_select_scheduler_candidate",
+    "fiber_internal_runtime_publish_current_context",
+    "fiber_internal_runtime_require_current_context",
+    "fiber_internal_task_return",
+    "fiber_panic"
+)
+
+# This is the complete selected-port-to-outside symbol surface after all
+# objects from one selected port are combined with a relocatable link.
+$selectedPortUndefinedSymbols = @(
+    "fiber_addr_plausible_code",
+    "fiber_addr_plausible_ram",
+    "fiber_internal_runtime_current_context_slot",
+    "fiber_internal_runtime_port_abi_v1_anchor",
+    "fiber_internal_runtime_publish_current_context",
+    "fiber_internal_runtime_require_current_context",
+    "fiber_internal_runtime_select_scheduler_candidate",
+    "fiber_internal_task_return",
+    "fiber_panic",
+    "memcpy",
+    "memset"
+)
+
 $forbiddenTransitionalReverseSymbols = @(
     "fiber_internal_port_current_context",
     "fiber_internal_port_scheduler_pick_next",
@@ -1864,6 +2180,12 @@ try {
 
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
+        -BuildRoot $buildRoot
+    Write-Host "== reverse ABI current-slot C isolation =="
+    Test-ReverseAbiSlotCIsolation -RepositoryRoot $RepoRoot -Compiler $gcc `
+        -BuildRoot $buildRoot
+    Write-Host "== reverse ABI version mismatch contract =="
+    Test-ReverseAbiVersionMismatch -Compiler $gcc -Ar $ar `
         -BuildRoot $buildRoot
     Write-Host "== sensitive generated-code contract =="
     Test-AdversarialSensitiveGeneratedCode -RepositoryRoot $RepoRoot `
@@ -2042,6 +2364,7 @@ void Error_Handler(void);
                 $sources += $portableApplicationFixture
             }
             $objects = @()
+            $portObjects = @()
             $runtimeAbiAnchorReferenceCount = 0
             $strongPortPanicReferenceCount = 0
 
@@ -2057,6 +2380,15 @@ void Error_Handler(void);
                     $dependencyArgs = @("-MMD", "-MF", $dependencyPath)
                 }
 
+                $generatedAssemblyPath = $null
+                $generatedAssemblyArgs = @()
+                if (($mode.Name -eq "build-selected") -and
+                        ($mandatoryPortRuntimeSources -contains $source)) {
+                    $generatedAssemblyPath = [IO.Path]::ChangeExtension(
+                        $objPath, ".s")
+                    $generatedAssemblyArgs = @("-save-temps=obj")
+                }
+
                 $args = $cfg.CpuArgs + $mode.ExtraArgs + @(
                     "-mthumb"
                 ) + $cfg.Extra + @(
@@ -2070,7 +2402,8 @@ void Error_Handler(void);
                     "-Werror=undef",
                     "-Werror=implicit-function-declaration",
                     "-Werror=return-type"
-                ) + $mode.Defines + $dependencyArgs + @(
+                ) + $mode.Defines + $dependencyArgs +
+                $generatedAssemblyArgs + @(
                     "-I$cfgDir",
                     "-I$RepoRoot",
                     "-I$(Join-Path $RepoRoot 'fiber')",
@@ -2084,6 +2417,11 @@ void Error_Handler(void);
                 & $gcc @args
                 if ($LASTEXITCODE -ne 0) {
                     throw "Compile failed for $($cfg.Name) / $($mode.Name): $source"
+                }
+
+                if ($null -ne $generatedAssemblyPath) {
+                    Test-GeneratedCurrentSlotLoadOnly `
+                        -AssemblyPath $generatedAssemblyPath
                 }
 
                 if ($source -eq $portableApplicationFixture) {
@@ -2142,6 +2480,9 @@ void Error_Handler(void);
                 }
 
                 $objects += $objPath
+                if ($mode.PortSources -contains $source) {
+                    $portObjects += $objPath
+                }
             }
 
             if ($runtimeAbiAnchorReferenceCount -ne 1) {
@@ -2149,6 +2490,44 @@ void Error_Handler(void);
             }
             if ($strongPortPanicReferenceCount -ne 1) {
                 throw "Expected one active selected-port strong panic reference for $($cfg.Name) / $($mode.Name); found $strongPortPanicReferenceCount"
+            }
+
+            if ($portObjects.Count -eq 0) {
+                throw "Selected-port object group is empty for $($cfg.Name) / $($mode.Name)"
+            }
+
+            $portGroupObject = Join-Path $cfgDir "selected-port-group.o"
+            $portGroupLinkArgs = $cfg.CpuArgs + $mode.ExtraArgs +
+                @("-mthumb") + $cfg.Extra + @(
+                    "-nostdlib",
+                    "-r",
+                    "-o",
+                    $portGroupObject
+                ) + $portObjects
+            & $gcc @portGroupLinkArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "Selected-port relocatable link failed for $($cfg.Name) / $($mode.Name)"
+            }
+
+            $portUndefinedOutput = @(& $nm -u $portGroupObject)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Selected-port unresolved-symbol scan failed for $($cfg.Name) / $($mode.Name)"
+            }
+            $portUndefinedSymbols = @(Get-NmUndefinedSymbolNames `
+                -NmOutput $portUndefinedOutput -Path $portGroupObject)
+            Assert-ExactSymbolSet -Expected $selectedPortUndefinedSymbols `
+                -Actual $portUndefinedSymbols `
+                -Description "Selected-port unresolved ABI for $($cfg.Name) / $($mode.Name)"
+
+            $portDefinedSymbols = @(& $nm -g --defined-only $portGroupObject)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Selected-port defined-symbol scan failed for $($cfg.Name) / $($mode.Name)"
+            }
+            foreach ($symbol in $commonOwnedReverseSymbols) {
+                if ($portDefinedSymbols -match
+                        "\s[A-Za-z]\s+$([regex]::Escape($symbol))$") {
+                    throw "Selected port must not define common-owned reverse symbol for $($cfg.Name) / $($mode.Name): $symbol"
+                }
             }
 
             # A relocatable link catches duplicate port implementations while

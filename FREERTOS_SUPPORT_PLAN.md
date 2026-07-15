@@ -339,6 +339,15 @@ Closed hardening items from the FreeRTOS comparison:
    the build-owned expectation object retain it. Stale object mixtures therefore
    fail even when the generic runtime ABI generation is unchanged.
 
+   The reverse-runtime proof cohort is active: every selected-port relocatable
+   group has an exact unresolved-symbol allowlist, selected ports define no
+   common-owned reverse symbol, C cannot access the current slot, generated
+   assembly may only load it through the exact address/load pair, and both v1/v2
+   mismatch directions fail from static archives under section GC and LTO. This
+   does not replace the still-pending exact profile/context cohort anchor, which
+   is the guard against stale private objects with otherwise matching callable
+   ABI symbols.
+
    The start, schedule, SVC, PendSV, scheduler-hook, and reverse-helper call
    graph uses sensitive plus general-registers-only attributes. Adversarial
    instrumentation, stack-protector, sanitizer, profiler, and LTO builds must

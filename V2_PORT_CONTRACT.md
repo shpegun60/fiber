@@ -388,9 +388,12 @@ displaced declaration lives in the concrete port's private `fiber_portmacro.h`,
 `fiber_portasm.h`, boot header, or `fiber_port_private.h`. Selected ports no
 longer include the common-private `fiber_runtime_state.h`; their only common
 call surface is reverse ABI v1, while assembly may only load the frozen current
-slot symbol. The remaining common boundary migration is strong handler
-ownership, wrapper/direct-vector removal, and final archive/ELF proofs. No global selected internal-type
-facade is part of the frozen design.
+slot symbol. Strong handler ownership, wrapper/direct-vector removal, exact
+reverse-symbol allowlists, current-slot load-only checks, and bidirectional
+runtime-ABI mismatch links are active. The remaining software-freeze guard is
+the exact selected-profile/context object-cohort anchor and its stale-object
+negative links; refreshed hardware evidence remains separate. No global
+selected internal-type facade is part of the frozen design.
 
 Temporary transitional fallback code is allowed only while splitting ports. It
 must live under an explicitly transitional directory such as

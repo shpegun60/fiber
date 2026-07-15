@@ -27,6 +27,10 @@ eight-function forward ABI, frozen reverse ABI v1, and exclusive selected-port
 SVC/PendSV ownership. Both directional ABIs and strong handler ownership are
 implemented. The matrix proves CM7 static-archive extraction, vector-slot
 resolution, duplicate-handler failure, section-GC retention, and LTO retention.
+It also proves the exact selected-port unresolved reverse surface, C-hidden and
+generated-assembly-load-only current-slot access, and both runtime ABI v1/v2
+mismatch directions. The independent selected-profile/context object-cohort
+anchor and refreshed H7 board evidence remain freeze requirements.
 
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit

@@ -4,8 +4,8 @@
 
 This document defines the normative target for the final common-runtime to
 selected-port boundary. The architecture was frozen before implementation; the
-status below distinguishes the active forward and reverse ABIs from remaining
-proof and handler-ownership migration work.
+status below distinguishes the active forward and reverse ABIs from the
+remaining exact-profile cohort guard and hardware proof.
 
 The current tree has activated the mandatory directional ABI and handler
 ownership:
@@ -32,8 +32,17 @@ ownership:
   definitions; application wrappers and routing-selection macros are rejected;
 - archive extraction, vector-slot resolution, duplicate-handler failure,
   section-GC, and LTO proofs are active in the compile matrix;
-- the remaining freeze work is the complete reverse-symbol/slot-load negative
-  proof cohort and refreshed hardware validation of the active H7 checkpoint;
+- the selected-port relocatable group passes an exact unresolved-symbol
+  allowlist and defines no common-owned reverse symbol in every matrix mode;
+- negative C fixtures reject reading, writing, or taking the address of the
+  current slot, while generated assembly permits only the exact address/load
+  sequence and no selected-port store;
+- matching v1 and synthetic v2 cohorts link from static archives under section
+  GC and LTO, while both crossed v1/v2 combinations fail on the missing runtime
+  ABI anchor before handler extraction;
+- the remaining freeze work is the exact selected-profile/context object-cohort
+  anchor with stale-object negative links, plus refreshed hardware validation
+  of the active H7 checkpoint.
 
 The final bullet is remaining migration debt; the preceding bullets describe
 the active contract. Every later mechanical slice must reduce the remaining
@@ -932,10 +941,12 @@ not mixed with unrelated layout work.
    exact assembly references without changing publication order. The current
    slot is absent from selected-port C declarations. Port panic references are
    strong while only the common fallback definition is weak.
-3. Add the remaining reverse-symbol, slot-load-only, version-mismatch,
-   integration-hook, static-archive, section-GC, and LTO allowlist proofs. The
-   existing `fiber_runtime_state.h` remains common-private and is forbidden to
-   selected ports.
+3. Done: add exact reverse-symbol, integration-hook, and slot-load-only
+   allowlists plus static-archive, section-GC, and LTO version-mismatch proofs.
+   The existing `fiber_runtime_state.h` remains common-private and is forbidden
+   to selected ports. The selected-port object group has one exact unresolved
+   allowlist: reverse ABI v1, explicitly classified address-map integration
+   hooks, and the `memcpy`/`memset` freestanding toolchain dependencies.
 4. Done: collapse start preparation, first selection, first start, and schedule
    request choreography behind the new generic functions. Hardware validation
    remains pending for this behavior-changing checkpoint.
@@ -945,10 +956,12 @@ not mixed with unrelated layout work.
 6. Done: remove CubeMX/application wrappers and delete wrapper/direct configuration
    switches.
 7. In progress: common compile isolation, strong-handler checks for every
-   compiled profile, and CM7 static-archive extraction, vector-slot, duplicate
-   handler, section-GC, LTO, and adversarial generated-code proofs are active.
-   Remaining bidirectional version-mismatch and stale-cohort negative fixtures
-   stay part of slice 3.
+   compiled profile, CM7 static-archive extraction, vector-slot, duplicate
+   handler, section-GC, LTO, adversarial generated-code, reverse v1/v2 mismatch,
+   and current-slot C/generated-assembly proofs are active. The exact
+   selected-profile/context cohort anchor and stale private-object mixture
+   fixtures remain a separate software-freeze item; the generic runtime v1
+   anchor cannot prove context-layout identity.
 8. Run the full H7 normal, FPU, startup, trap, active-VTOR, SVC, and PendSV
    hardware validation suite.
 
