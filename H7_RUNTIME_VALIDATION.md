@@ -61,6 +61,19 @@ Before a board run:
   exactly one `fiber_port_context_cohort_armv7em_*` definition before treating
   the board run as a current checkpoint.
 
+The current STM32H7 host application satisfies that build prerequisite for
+both CubeIDE Debug and Release configurations. Its managed-build manifest uses
+the concrete `ARM_CM7/r0p1` private include path and explicit build-selected
+CM7 defines, compiles the expectation source outside the port source group, and
+excludes alternate ports and `fiber/tools` fixtures. Its linker script keeps
+the expectation input in a read-only FLASH output section. Fresh managed builds
+completed with zero errors and zero warnings, and both final ELFs contain one
+exact CM7 cohort definition, a four-byte non-writable expectation section,
+strong selected-port SVC/PendSV handlers, and matching vector slots 11/14. Each
+separately compiled expectation object has one undefined reference to that
+exact cohort symbol. These are build and ELF facts only; they do not replace
+any hardware item in this checklist.
+
 ## Startup Exception Setup
 
 `fiber_start()` calls `fiber_port_runtime_prepare_start()`, and the selected CM7

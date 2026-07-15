@@ -1,5 +1,35 @@
 # Fiber Decision Log
 
+## 2026-07-15: Integrate The Exact Cohort Expectation In H7 Manifests
+
+The STM32H7 CubeIDE Debug and Release configurations now compile
+`fiber/port/fiber_port_context_cohort_expectation.c` as an application-owned
+translation unit outside the selected port archive. Both configurations define
+`FIBER_PORT_BUILD_SELECTED=1` and `FIBER_PORT_ARMV7EM=1`, use the concrete
+`ARM_CM7/r0p1` private include path, and exclude all non-CM7 port source groups,
+the transitional v8-M fixture, legacy architecture folders, and `fiber/tools`
+fixtures from managed-build source discovery.
+
+The H7 linker script keeps `.fiber_port_context_cohort_expectation` in a
+read-only FLASH output section. Fresh CubeIDE managed builds completed for
+Debug and Release with zero errors and zero warnings. The expectation-object
+and final-ELF audit for both configurations proved:
+
+- exactly one `fiber_port_context_cohort_armv7em_*` definition;
+- exactly one undefined expectation-object reference to that same symbol;
+- a four-byte, four-byte-aligned, allocatable and non-writable expectation
+  output section whose contents are the cohort-symbol pointer;
+- exactly one strong `SVC_Handler` and one strong `PendSV_Handler`;
+- vector slots 11 and 14 resolve to those handlers with the Thumb bit set.
+
+This closes the whole-archive exact-cohort integration debt for the current H7
+application manifests at library commit `3b05aa8`. The CubeIDE project and
+linker script live in the host application tree outside this repository, so
+this decision records their verified integration state but does not make them
+part of the fiber repository commit. It is a build/link proof only: the active
+H7 runtime claim remains suspended until the current normal, FPU, startup,
+trap, VTOR, SVC, and PendSV hardware checklist passes on the board.
+
 ## 2026-07-15: Activate The Exact Selected-Port Context Cohort Guard
 
 Every active selected-port source group now has one exact link identity. Its
@@ -34,10 +64,10 @@ hide profile identity.
 This change adds only one-byte reads to one-shot context initialization and
 startup validation. It does not alter synthetic frames, SVC/PendSV assembly,
 save/restore order, or the switch hot path. The software
-`common-core-freeze-v1` guards are now closed for the current source groups;
-the active H7 runtime claim still requires the already-pending fresh board
-suite, and its build manifest must first include the expectation object and
-linker keep rule.
+`common-core-freeze-v1` guards are now closed for the current source groups.
+The later H7 manifest-integration checkpoint added the expectation object and
+linker keep rule; the active H7 runtime claim still requires the already-pending
+fresh board suite.
 
 ## 2026-07-15: Close The Reverse Runtime ABI V1 Proof Cohort
 

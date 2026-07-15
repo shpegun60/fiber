@@ -31,7 +31,10 @@ It also proves the exact selected-port unresolved reverse surface, C-hidden and
 generated-assembly-load-only current-slot access, and both runtime ABI v1/v2
 mismatch directions. The exact selected-profile/context object-cohort anchor,
 build-owned expectation, and stale private-object negative links are active.
-Refreshed H7 board evidence remains the outstanding validation requirement.
+The current H7 CubeIDE Debug and Release manifests also compile the expectation
+outside the port source group, retain its read-only linker section, and pass the
+final-ELF cohort and vector audit. Refreshed H7 board evidence remains the
+outstanding validation requirement.
 
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
@@ -109,6 +112,12 @@ from a different exact cohort fail to link. Without the separately compiled
 expectation plus `KEEP`, the latter whole-archive compatibility check is not
 active. This guard does not identify arbitrary source revisions that preserve
 the same declared exact cohort identity.
+
+The current STM32H7 host application tree, which lives outside this repository,
+implements this rule in both CubeIDE Debug and Release manifests. Both final
+ELFs have one exact CM7 cohort, one four-byte read-only expectation section,
+strong selected-port SVC/PendSV handlers, and vector slots 11/14 resolving to
+those handlers. This is integration evidence, not a hardware runtime claim.
 
 Do not add every port source directory to a production target. The compile
 matrix deliberately compiles selector-guarded alternatives to audit selection,

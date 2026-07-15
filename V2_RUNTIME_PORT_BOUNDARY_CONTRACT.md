@@ -44,14 +44,17 @@ ownership:
   mandatory private object retains the exact identity defined by its runtime
   object, while a separately compiled build expectation rejects a complete
   archive from a different exact cohort;
-- the remaining freeze work is refreshed hardware validation of the active H7
-  checkpoint and integration of the build expectation source plus linker
-  `KEEP` rule in each production build manifest.
+- the current STM32H7 CubeIDE Debug and Release manifests compile the build
+  expectation separately with the selected CM7 contract, keep its read-only
+  linker section, and pass the exact final-ELF cohort/vector audit;
+- the remaining H7 freeze work is refreshed hardware validation of the active
+  checkpoint. Every future production profile must independently add and prove
+  its own expectation source and linker `KEEP` integration.
 
-The final bullet is remaining integration and hardware debt; the preceding
-bullets describe the active contract. Every later mechanical slice must reduce
-that debt without silently changing context layout, save/restore order,
-critical-section placement, or panic behavior.
+The final bullet is remaining hardware and future-manifest debt; the preceding
+bullets describe the active software and current H7 integration contract. Every
+later mechanical slice must reduce that debt without silently changing context
+layout, save/restore order, critical-section placement, or panic behavior.
 
 ## Goal
 
