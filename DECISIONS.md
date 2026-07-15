@@ -1,5 +1,45 @@
 # Fiber Decision Log
 
+## 2026-07-15: Correct Cortex-M Extended FP Frame Geometry
+
+An STM32H7 normal-mode run based on `a3d98c7` completed the first
+`f2 -> f1 -> f3` cycle, then stopped with panic `'x'` while validating the
+saved extended-FP frame for `f2`. The saved context provided the decisive
+evidence: EXC_RETURN was `0xFFFFFFED`, while the old validator interpreted
+word 49 (`FPSCR = 0x10`) as stacked PC and word 50 (the reserved FP word) as
+stacked xPSR.
+
+For the observed unpadded CM7 frame, the saved layout from `FiberContext.sp`
+is:
+
+```text
+0..8    software r4-r11 and EXC_RETURN
+9..24   software-saved s16-s31
+25..32  hardware r0-r3, r12, LR, PC, xPSR
+33..48  hardware-saved s0-s15
+49      FPSCR
+50      reserved
+```
+
+This matches the local FreeRTOS ARM_CM4_MPU reference, which advances the
+hardware PSP by `0x20` bytes to reach `s0`: the basic core frame begins at PSP
+and the low-FP extension follows it. The old fiber validator incorrectly added
+the low-FP extension size before locating PC/xPSR. CM7 PendSV made the same
+mistake when reading `xPSR.STACKALIGN` at `PSP + 100` for an extended frame;
+the architectural xPSR offset is always `PSP + 28`.
+
+All selected-port restore validators now distinguish core-frame offset from
+total frame extent. A high-FP software save moves the hardware core frame; the
+low-FP hardware extension increases only the required total extent. CM7
+PendSV uses one xPSR offset for basic and extended frames. The external H7 trap
+harness uses the same corrected geometry when corrupting stacked PC or xPSR.
+The compile matrix rejects any port that moves PC/xPSR by
+`FIBER_EXC_FP_EXT_BYTES` and rejects a second CM7 extended xPSR offset.
+
+This is a behavior-changing frame-validation fix. The H7 runtime claim remains
+suspended until normal mode, FP stress, and the complete trap suite pass on the
+corrected revision.
+
 ## 2026-07-15: Integrate The Exact Cohort Expectation In H7 Manifests
 
 The STM32H7 CubeIDE Debug and Release configurations now compile

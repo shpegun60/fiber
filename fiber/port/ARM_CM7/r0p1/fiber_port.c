@@ -87,9 +87,7 @@ enum {
 		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
 	fiber_portOFFSET_STACK_TOP =
 		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top),
-	fiber_portOFFSET_BASIC_STACKED_XPSR = 7u * 4u,
-	fiber_portOFFSET_EXTENDED_STACKED_XPSR =
-		FIBER_PORT_EXC_FP_EXT_BYTES + (7u * 4u)
+	fiber_portOFFSET_STACKED_XPSR = 7u * 4u
 };
 
 FIBER_STATIC_ASSERT(fiber_portOFFSET_STACK_BASE < 4096,
@@ -494,20 +492,13 @@ void PendSV_Handler(void)
 			"bne   81f                              \n"
 			"subs  r2, #%c[hwfp]                    \n" /* extended FP HW frame */
 			"bcc   92f                              \n"
-			"cmp   r0, r2                           \n"
-			"bhi   92f                              \n"
-			"ldr   r3, [r0, %c[xpsrext]]            \n"
-			"b     82f                              \n"
 			"81:                                    \n"
-			"cmp   r0, r2                           \n"
-			"bhi   92f                              \n"
-			"ldr   r3, [r0, %c[xpsrbasic]]          \n"
-#else
-			"cmp   r0, r2                           \n"
-			"bhi   92f                              \n"
-			"ldr   r3, [r0, %c[xpsrbasic]]          \n"
 #endif
-			"82:                                    \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			/* The core frame is always at PSP. In an extended frame the
+			 * hardware-saved s0-s15/FPSCR block follows xPSR. */
+			"ldr   r3, [r0, %c[xpsr]]               \n"
 			"tst   r3, #0x200                       \n" /* xPSR.STACKALIGN */
 			"beq   83f                              \n"
 			"subs  r2, #%c[alignpad]                \n"
@@ -581,10 +572,9 @@ void PendSV_Handler(void)
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
 			  [alignpad] "I" (FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
-			  [xpsrbasic] "I" (fiber_portOFFSET_BASIC_STACKED_XPSR),
+			  [xpsr] "I" (fiber_portOFFSET_STACKED_XPSR),
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 			  [hwfp] "I" (FIBER_PORT_EXC_FP_EXT_BYTES),
-			  [xpsrext] "I" (fiber_portOFFSET_EXTENDED_STACKED_XPSR),
 #endif
 			  [offsb] "I" (fiber_portOFFSET_STACK_BASE),
 			  [offtop] "I" (fiber_portOFFSET_STACK_TOP)

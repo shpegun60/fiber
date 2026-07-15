@@ -390,6 +390,33 @@ This record is historical after the port-owned startup-MSP and context-seal ABI
 hardening change. Run the normal mode and the complete trap table again before
 making a current H7 runtime claim for the new revision.
 
+## Hardware Finding: Extended FP Frame Geometry
+
+The first current-checkpoint `NORMAL_RUN` attempt reached every fiber once,
+set `validation_flags` to `0x1FF`, and preserved the first `1/2/3` FP results,
+but then panicked with `'x'` when restoring the first previously saved
+extended-FP context. The captured frame had EXC_RETURN `0xFFFFFFED`, FPSCR at
+saved word 49, and the reserved FP word at saved word 50. The restore validator
+had incorrectly treated those last two words as PC/xPSR.
+
+The corrected contract is:
+
+```text
+hardware PSP + 0..31:   r0-r3, r12, LR, PC, xPSR
+hardware PSP + 32..95:  s0-s15, when EXC_RETURN bit 4 is clear
+hardware PSP + 96:      FPSCR
+hardware PSP + 100:     reserved
+```
+
+An optional STKALIGN word increases total extent but does not move stacked PC
+or xPSR. The CM7 PendSV source must therefore read xPSR at `PSP + 28` for both
+basic and extended frames. The compile matrix enforces this geometry in every
+selected-port restore validator and specifically rejects an extended-only CM7
+xPSR offset.
+
+The failed run is diagnostic evidence, not a pass. Repeat `NORMAL_RUN`, FP
+stress, and every frame-corruption trap after rebuilding the corrected source.
+
 ## Current Pending Hardware Checkpoint: 2026-07-15
 
 The current working revision changes exception ownership and compiler ABI:

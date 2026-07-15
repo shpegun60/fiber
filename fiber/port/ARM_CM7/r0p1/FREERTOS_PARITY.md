@@ -195,7 +195,7 @@ user/build option      -> FIBER_XXX
 | `xPortStartScheduler()` | `fiber_start()` plus port start helper and exception validation | Split. `fiber_start()` now owns idempotent PendSV/SVCall setup and validation, matching the FreeRTOS startup responsibility. Fiber has no tick setup, internal priority scheduler, or critical nesting setup; the user hook selects the first context. |
 | `vPortEndScheduler()` | none | Excluded. A Cortex-M bare-metal fiber runtime does not implement scheduler shutdown. |
 | `vPortEnterCritical()` / `vPortExitCritical()` | none public; internal scheduler critical helpers only | Excluded from public API. |
-| `xPortPendSVHandler()` | strong `PendSV_Handler()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. The selected port owns the vector symbol directly. |
+| `xPortPendSVHandler()` | strong `PendSV_Handler()` | Adapted and hardened. Save/restore order matches the FreeRTOS core pattern: PSP, optional high-FP save, `r4-r11` plus EXC_RETURN, scheduler call under BASEPRI, restore core frame, optional high-FP restore, PSP, exception return. Fiber additionally validates PendSV identity, exact live EXC_RETURN, source bounds, and the optional stacked alignment word before saving. PC/xPSR remain in the basic core frame at hardware PSP offsets 24/28; the low-FP hardware extension follows xPSR and changes total extent only. The selected port owns the vector symbol directly. |
 | `vTaskSwitchContext()` call | `fiber_port_scheduler_pick_next_from_pendsv()` | Replaced. User scheduler hook picks the next context; NULL and invalid contexts panic, and PRIMASK/FAULTMASK/BASEPRI/CONTROL must be unchanged on return. |
 | `pxCurrentTCB` first field | assembly-load-only `fiber_internal_runtime_current_context_slot` and `FiberContext.sp` | Adapted. Common runtime alone publishes the current slot through reverse ABI v1; selected-port C has no lvalue declaration. Saved SP is updated only when saving the current context, matching the FreeRTOS invariant. |
 | `xPortSysTickHandler()` | user scheduler/platform | Excluded. No preemptive tick in core. |
@@ -253,6 +253,12 @@ Fiber: selected-port validation additionally seals context ABI identity,
        address-map hook CPU-state
        preservation plus the saved stacked PC against the integration
        code-address policy when `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1`.
+
+FreeRTOS: the ARM_CM4_MPU reference advances hardware PSP by 0x20 to reach s0,
+          proving that the basic core frame starts at PSP.
+Fiber: restore validation and CM7 PendSV preserve that geometry explicitly;
+       the low-FP extension contributes to frame extent but never to the
+       stacked PC/xPSR offset. The compile matrix freezes this invariant.
 ```
 
 ## Current Status

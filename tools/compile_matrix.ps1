@@ -850,6 +850,72 @@ function Test-SelectedPortIntegrityPreflight {
     }
 }
 
+function Test-SelectedPortExceptionFrameGeometry {
+    param([string]$RepositoryRoot)
+
+    $bootSources = @(
+        "fiber\port\ARM_CM0\fiber_port_boot.c",
+        "fiber\port\ARM_CM3\fiber_port_boot.c",
+        "fiber\port\ARM_CM4\fiber_port_boot.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c"
+    )
+
+    foreach ($relativePath in $bootSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $restoreBody = Get-CFunctionBody -Source $source `
+            -Signature "void fiber_port_context_validate_restore(FiberContext *ctx)" `
+            -Path $path
+
+        $coreOffset = $restoreBody.IndexOf(
+            "uintptr_t core_frame_offset = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;",
+            [System.StringComparison]::Ordinal)
+        $pcOffset = $restoreBody.IndexOf(
+            "stacked_pc_offset = core_frame_offset +",
+            [System.StringComparison]::Ordinal)
+        $xpsrOffset = $restoreBody.IndexOf(
+            "stacked_xpsr_offset = core_frame_offset +",
+            [System.StringComparison]::Ordinal)
+        $requiredBytes = $restoreBody.IndexOf(
+            "required_bytes = core_frame_offset +",
+            [System.StringComparison]::Ordinal)
+        $fpExtent = $restoreBody.IndexOf(
+            "required_bytes += (uintptr_t)FIBER_EXC_FP_EXT_BYTES;",
+            [System.StringComparison]::Ordinal)
+        $extentCheck = $restoreBody.IndexOf(
+            "FIBER_REQUIRE(available_bytes >= required_bytes, 'X');",
+            [System.StringComparison]::Ordinal)
+
+        if (($coreOffset -lt 0) -or ($pcOffset -le $coreOffset) -or
+                ($xpsrOffset -le $pcOffset) -or
+                ($requiredBytes -le $xpsrOffset) -or
+                ($fpExtent -le $requiredBytes) -or
+                ($extentCheck -le $fpExtent) -or
+                $restoreBody.Contains("hardware_frame_offset") -or
+                [regex]::IsMatch($restoreBody,
+                    'core_frame_offset\s*\+=\s*\(uintptr_t\)FIBER_EXC_FP_EXT_BYTES')) {
+            throw "Selected port must keep the hardware core frame at PSP and apply the FP extension only to total saved-frame extent: $path"
+        }
+    }
+
+    $cm7Path = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c"
+    $cm7Source = Get-Content -LiteralPath $cm7Path -Raw
+    $cm7PendSv = Get-CFunctionBody -Source $cm7Source `
+        -Signature "void PendSV_Handler(void)" -Path $cm7Path
+    $xpsrLoads = [regex]::Matches($cm7PendSv,
+        'ldr\s+r3,\s*\[r0,\s*%c\[xpsr\]\]')
+
+    if (($cm7Source.IndexOf("fiber_portOFFSET_STACKED_XPSR = 7u * 4u",
+                [System.StringComparison]::Ordinal) -lt 0) -or
+            ($xpsrLoads.Count -ne 1) -or
+            [regex]::IsMatch($cm7Source, 'xpsr(?:basic|ext)') -or
+            $cm7Source.Contains("fiber_portOFFSET_EXTENDED_STACKED_XPSR")) {
+        throw "CM7 PendSV must read xPSR at PSP+28 for both basic and extended FP hardware frames"
+    }
+}
+
 function Test-PendSvSaveValidationOrdering {
     param([string]$RepositoryRoot)
 
@@ -2273,6 +2339,7 @@ Test-StrongHandlerSourceOwnership -RepositoryRoot $RepoRoot
 Test-ContextPortBoundary -RepositoryRoot $RepoRoot
 Test-SelectedPortPrivateDeclarations -RepositoryRoot $RepoRoot
 Test-SelectedPortIntegrityPreflight -RepositoryRoot $RepoRoot
+Test-SelectedPortExceptionFrameGeometry -RepositoryRoot $RepoRoot
 Test-PendSvSaveValidationOrdering -RepositoryRoot $RepoRoot
 Test-ScheduleValidationOwnership -RepositoryRoot $RepoRoot
 

@@ -720,19 +720,22 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
 	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
 
-	uintptr_t hardware_frame_offset = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
+	/* The core hardware frame starts immediately after the port software
+	 * frame. For an extended FP context, s16-s31 are software-saved before
+	 * that core frame; the hardware-saved s0-s15/FPSCR block follows it. */
+	uintptr_t core_frame_offset = (uintptr_t)FIBER_PORT_SOFTWARE_FRAME_BYTES;
 #if FIBER_PORT_HAS_EXTENDED_FP_CONTEXT
 	if ((exc_return & 0x10u) == 0u) {
-		hardware_frame_offset += (uintptr_t)FIBER_HIGH_FP_SOFTWARE_BYTES;
+		core_frame_offset += (uintptr_t)FIBER_HIGH_FP_SOFTWARE_BYTES;
 	}
 #endif
-	if ((exc_return & 0x10u) == 0u) {
-		hardware_frame_offset += (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
-	}
 
-	const uintptr_t stacked_pc_offset = hardware_frame_offset + (6u * 4u);
-	const uintptr_t stacked_xpsr_offset = hardware_frame_offset + (7u * 4u);
-	uintptr_t required_bytes = hardware_frame_offset + (uintptr_t)FIBER_EXC_BASE_BYTES;
+	const uintptr_t stacked_pc_offset = core_frame_offset + (6u * 4u);
+	const uintptr_t stacked_xpsr_offset = core_frame_offset + (7u * 4u);
+	uintptr_t required_bytes = core_frame_offset + (uintptr_t)FIBER_EXC_BASE_BYTES;
+	if ((exc_return & 0x10u) == 0u) {
+		required_bytes += (uintptr_t)FIBER_EXC_FP_EXT_BYTES;
+	}
 	FIBER_REQUIRE(available_bytes >= required_bytes, 'X');
 
 	const uint32_t stacked_pc = *(const uint32_t *)(sp + stacked_pc_offset);
