@@ -305,6 +305,16 @@ is included only by the concrete port's implementation files to share private
 cross-file declarations. Behavior must not change during a pure file-layout
 split.
 
+The private header connects that profile's runtime, boot/frame, exception, and
+optional assembly role files. It may declare profile-mandatory CPU helpers such
+as save/restore validation, first-start preparation, MPU/CONTROL restoration,
+or SecureContext dispatch when those mechanics belong to the selected profile.
+It must not be used as an application-facing feature API. MPU, SecureContext,
+and TF-M profiles are separate exact port identities with their own private
+headers and context layouts; any non-default integration policy is exposed by a
+separate `fiber_port_<feature>_abi.h`, never by widening common runtime or the
+privileged profile beside it.
+
 The first FreeRTOS-style source-group workflow is:
 
 ```text

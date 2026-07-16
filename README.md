@@ -140,6 +140,15 @@ MSP values or call selected-port-private startup, validation, scheduler, SVC, or
 PendSV helpers. This activation changes first-start ordering and requires a
 fresh H7 hardware run before restoring the runtime-validation claim.
 
+`fiber_port_private.h` is included only by that concrete profile's own role
+files (`fiber_port.c`, `fiber_port_boot.c`, `fiber_port_exception.c`, and any
+profile-specific assembly source). It is not selected by
+`fiber_port_selected.h` and is not part of the user API. A capable profile keeps
+mandatory MPU, CONTROL, PSPLIM, SecureContext, MVE, or security-domain mechanics
+behind the same eight runtime operations in its private implementation. A
+separate optional feature ABI exists only when board/profile integration needs
+to customize the safe profile default.
+
 The inverse internal dependency is frozen by
 `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md`: selected ports may reach common
 scheduler/current state only through `fiber_runtime_port_abi.h` v1. Optional

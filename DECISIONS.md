@@ -1679,3 +1679,24 @@ Known limits:
 - This is behavior-affecting exception ownership. Compile/ELF evidence is
   complete for the implemented slice, but a fresh H7 normal/FPU/trap/VTOR run
   is still required before restoring the current hardware-validation claim.
+
+## 2026-07-16: Clarify private port and optional feature ownership
+
+- `fiber_port_private.h` is the internal declaration surface shared only by the
+  runtime, boot/frame, exception, and assembly files of one exact selected
+  profile. It is not selected by `fiber_port_selected.h`, exported to common
+  runtime, or exposed as a user feature API.
+- `fiber_port_selected.h` selects only the public type-completion header, while
+  `fiber_core.c` reaches the selected CPU engine exclusively through the frozen
+  eight-function `fiber_port_runtime_abi.h` boundary.
+- Profile-mandatory CPU mechanics remain private behind those eight operations.
+  An MPU profile owns MPU/CONTROL state and its yield-SVC path; a TrustZone
+  profile owns its security context mechanics and matched Secure companion; a
+  TF-M profile owns the matching NTZ runtime and TF-M veneers.
+- Capable variants are separate exact profile directories and context
+  identities. A privileged `ARM_CM3` build does not conditionally become
+  `ARM_CM3_MPU`, and neither profile includes the other's private header.
+- Optional `fiber_port_<feature>_abi.h` files exist only for deliberate,
+  non-portable profile-policy customization. They do not contain mandatory
+  safety mechanics, are not called by common runtime, and are not required by
+  portable application code using only `fiber_core.h`.

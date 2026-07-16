@@ -145,6 +145,83 @@ All other port helpers are private to the selected port. They may be split
 across C, inline assembly, dedicated assembly, boot, exception, FPU, MPU,
 security, or errata files without expanding this ABI.
 
+## Concrete-Port Private Implementation Boundary
+
+`fiber_port_private.h` is the internal cross-file declaration surface of one
+concrete selected port. It is not a public header, a selected facade, a ninth
+runtime ABI operation, or an optional feature API. It is included directly only
+by that concrete port's implementation translation units. Common runtime code,
+portable application code, and implementation files from another profile must
+not include it.
+
+The selected-header and private-header paths have deliberately different jobs:
+
+```text
+fiber_port_selected.h
+  selects exactly one public fiber_port_types.h
+  completes opaque FiberContext storage for fiber_core.h
+
+fiber_port_runtime_abi.h
+  declares the eight CPU-neutral operations used by fiber_core.c
+
+<concrete-profile>/fiber_port_private.h
+  includes that profile's fiber_portmacro.h and frozen runtime ABI headers
+  shares only private declarations across that profile's source files
+```
+
+For the current role-file layout, ownership is:
+
+```text
+fiber_port.c
+  eight runtime-ABI adapters, scheduler critical envelope, first-start
+  transfer, SVC_Handler, PendSV_Handler, and save/restore assembly
+
+fiber_port_boot.c
+  context construction, synthetic frame, immutable seal, stack/frame
+  validation, and first-start context preparation
+
+fiber_port_exception.c
+  active-vector source, handler wiring checks, exception priorities, and
+  profile-specific exception-environment validation
+
+fiber_portmacro.h
+  selected CPU traits, register primitives, critical-section helpers, and
+  verified inline assembly fragments
+```
+
+The exact file split may grow for a complex profile, but the dependency shape
+does not change:
+
+```text
+fiber_core.c
+  -> fiber_port_runtime_abi.h
+  -> selected profile implementation
+  -> profile-private helpers declared by fiber_port_private.h
+```
+
+For example, the current privileged `ARM_CM3` private header connects
+`fiber_port.c`, `fiber_port_boot.c`, and `fiber_port_exception.c`; it is neither
+included nor selected for CM7 or a future `ARM_CM3_MPU` build. A production
+build compiles exactly one complete profile source group. Merely including a
+private header never selects a port.
+
+Mandatory processor mechanics belong behind the same eight runtime operations
+inside the exact capable profile. Therefore a future `ARM_CM3_MPU` port owns an
+MPU-aware `FiberContext`, initial `CONTROL` and region state, MPU save/restore,
+an unprivileged yield-SVC path, and privileged exception validation in its own
+private files. A TrustZone profile similarly owns its security-domain context
+mechanics, and a TF-M profile owns the matching NTZ runtime plus TF-M veneers.
+None of those mechanics adds a branch to common runtime or expands the eight
+function ABI.
+
+An optional `fiber_port_<feature>_abi.h` has a narrower purpose: deliberate
+profile integration may use it to replace or configure a safe profile default,
+such as assigning heterogeneous MPU regions. It does not contain the mandatory
+mechanics needed to make the profile safe, and portable application code does
+not include it. Thus `fiber_port_private.h` answers "how this selected CPU
+profile runs", while an optional feature ABI answers "how non-portable profile
+integration customizes a supported policy".
+
 The attributes above are part of the ABI, not optional decoration. The public
 `fiber_current()`, `fiber_start()`, and `fiber_schedule()` entry points use the
 same sensitive, general-registers-only contract. `fiber_current()` needs it so
