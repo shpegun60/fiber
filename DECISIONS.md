@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-07-17: Add ARM_CM4_MPU Context Construction
+
+Implementation slice 2 adds the port-owned `fiber_port_boot.h/.c` construction
+boundary without making `ARM_CM4_MPU` selectable. `fiber_port_context_init()`
+now validates exact linker-owned privileged/unprivileged ranges, encodes the
+stack supplied through the portable `fiber_init()` API, disables every unused
+per-context region, seeds the FreeRTOS-compatible basic protected frame, and
+seals all immutable boot and MPU fields. Each context therefore owns a distinct
+RBAR/RASR image even though the future handler will reuse the same hardware MPU
+register bank for whichever fiber is current.
+
+The region encoder deliberately rejects non-power-of-two extents, insufficient
+alignment, access encodings outside the selected policy, and any request that
+would require widening a region. This is stricter than the reference helper,
+which rounds a requested size upward. Context storage must be inside exact
+privileged data, stacks inside exact unprivileged RAM, and entries inside exact
+unprivileged executable text. The current-context aperture and the other three
+global policy regions are also constructed from mandatory linker boundaries.
+
+The construction source compiles and links for Cortex-M4F and Cortex-M7F with
+both eight- and sixteen-region manifests. Matrix proofs require distinct exact
+cohorts, privileged function placement, every linker-boundary relocation,
+negative links for each missing boundary, no unexpected undefined symbol, and
+no handler or forward-runtime definition. Protected SVC/PendSV switching,
+MPU register programming/readback, FPU startup policy, exact selection, and
+hardware support claims remain later slices.
+
 ## 2026-07-17: Stage ARM_CM4_MPU Protected Layout
 
 Implementation slice 1 adds a deliberately non-selectable `ARM_CM4_MPU`

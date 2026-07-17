@@ -1,10 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * Compile-only ARM_CM4_MPU dictionary, implementation slice 1. The directory
- * deliberately provides no runtime source or handlers yet. Both Cortex-M4F
- * and Cortex-M7F manifests are accepted because the pinned FreeRTOS port owns
- * both cases; their exact cohort identities remain distinct.
+ * ARM_CM4_MPU dictionary through implementation slice 2. The directory owns
+ * context construction and exact MPU/linker geometry, but deliberately has no
+ * switch runtime or handlers yet. Both Cortex-M4F and Cortex-M7F manifests are
+ * accepted because the pinned FreeRTOS port owns both cases; their exact
+ * cohort identities remain distinct.
  */
 
 #ifndef FIBER_PORT_ARM_CM4_MPU_FIBER_PORTMACRO_H_
@@ -22,6 +23,15 @@
 #include "../fiber_settings.h"
 #include "../fiber_compiler.h"
 #include "fiber_port_types.h"
+
+#ifndef fiber_portFORCE_INLINE
+# define fiber_portFORCE_INLINE \
+	static inline __attribute__((always_inline))
+#endif
+
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
 
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM4_MPU is build-selected only"
@@ -106,6 +116,38 @@
 #define fiber_portMPU_REGION_EXECUTE_NEVER 0x10000000u
 #define fiber_portMPU_RASR_TEX_S_C_B_LOCATION 16u
 #define fiber_portMPU_RASR_TEX_S_C_B_MASK 0x3Fu
+
+/* ARMv7E-M MPU register encodings retained from the audited FreeRTOS port. */
+#define fiber_portMPU_MIN_REGION_SIZE 32u
+#define fiber_portMPU_MAX_REGION_SIZE UINT32_C(0x80000000)
+#define fiber_portMPU_REGION_NUMBER_MASK 0x0Fu
+#define fiber_portMPU_REGION_VALID 0x10u
+#define fiber_portMPU_REGION_ADDRESS_MASK UINT32_C(0xFFFFFFE0)
+#define fiber_portMPU_REGION_ENABLE 0x01u
+#define fiber_portMPU_REGION_SIZE_MASK 0x3Eu
+#define fiber_portMPU_REGION_SUBREGION_MASK 0x0000FF00u
+#define fiber_portMPU_REGION_MEMORY_MASK 0x003F0000u
+#define fiber_portMPU_REGION_ACCESS_MASK 0x07000000u
+
+#define fiber_portXPSR_IPSR_MASK 0x000001FFu
+#define fiber_portXPSR_STACK_ALIGN_BIT (1u << 9u)
+#define fiber_portXPSR_THUMB_BIT (1u << 24u)
+
+/* Exact linker sections consumed by the future ARM_CM4_MPU runtime. */
+#define fiber_portPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_privileged_functions")))
+#define fiber_portUNPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_unprivileged_functions")))
+#define fiber_portPRIVILEGED_DATA \
+	__attribute__((section(".fiber_port_privileged_data")))
+
+/* Preserve the platform/static-base register in the synthetic first context. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
 
 #define fiber_portPROTECTED_CONTEXT_WORDS 53u
 #define fiber_portPROTECTED_HIGH_FP_WORDS 16u
@@ -294,10 +336,27 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM4_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM4_MPU slice 1 must remain non-selectable");
+		"[fiber]: ARM_CM4_MPU slice 2 must remain non-selectable");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		FIBER_PORT_CM4_MPU_CONTEXT_REGION_COUNT,
 		"[fiber]: ARM_CM4_MPU per-context region count changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CONFIGURABLE_REGION_COUNT ==
+		(fiber_portMPU_LAST_CONFIGURABLE_REGION + 1u),
+		"[fiber]: ARM_CM4_MPU configurable-region geometry changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_STACK_REGION ==
+		fiber_portMPU_CONFIGURABLE_REGION_COUNT,
+		"[fiber]: ARM_CM4_MPU stack-region number changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_REGION ==
+		fiber_portMPU_CONTEXT_REGION_COUNT,
+		"[fiber]: ARM_CM4_MPU global-region boundary changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_DATA_REGION ==
+		(fiber_portMPU_TOTAL_REGIONS - 1u),
+		"[fiber]: ARM_CM4_MPU final region number changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_DATA_REGION <=
+		fiber_portMPU_REGION_NUMBER_MASK,
+		"[fiber]: ARM_CM4_MPU region number exceeds RBAR encoding");
+FIBER_STATIC_ASSERT(fiber_portMPU_GLOBAL_REGION_COUNT == 4u,
+		"[fiber]: ARM_CM4_MPU global region count changed");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 53u,
 		"[fiber]: ARM_CM4_MPU protected context must contain 53 words");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C05u,

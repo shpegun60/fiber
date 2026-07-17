@@ -2,11 +2,12 @@
 
 ## Status
 
-This is implementation slice 1 for the exact `ARM_CM4_MPU` profile. It freezes
-the public type layout, MPU geometry, protected basic/FP context views, port
-traits, and exact cohort identity. It deliberately contains no runtime source,
-SVC/PendSV handler, forward ABI implementation, selector route, or hardware
-support claim.
+Implementation slices 1-2 are complete for the exact `ARM_CM4_MPU` profile.
+They freeze the public type layout, MPU geometry, protected basic/FP context
+views, traits, and exact cohort identity, then add port-owned context
+construction, exact linker ranges, default MPU-image encoding, and immutable
+sealing. The profile deliberately contains no SVC/PendSV handler, switch
+runtime, forward ABI implementation, selector route, or hardware support claim.
 
 The directory name follows the pinned FreeRTOS GCC port. That reference accepts
 both Cortex-M4F and Cortex-M7F. Fiber therefore freezes both manifests while
@@ -27,7 +28,7 @@ a50edad08b29052631aa469d4df6e6ec7ff68878
 | `portable/GCC/ARM_CM4_MPU/port.c` | 1738 | `cc9b731bc23e52a91d7d37b5dda16d7b501cfb4d3b3a3c8229c355c66662bf59` |
 | `portable/GCC/ARM_CM4_MPU/mpu_wrappers_v2_asm.c` | 2067 | `6b5110e0c14ba78c20d43c1edf17e5ac2311a6af0413d6aaab5df59edb2655c2` |
 
-## Exact Slice-1 Manifest
+## Exact Slice-2 Manifest
 
 ```text
 architecture        ARMv7E-M
@@ -36,7 +37,7 @@ compiler ABI        GCC-compatible Thumb with FP registers enabled
 MPU                 present; total regions explicitly 8 or 16
 VTOR                present
 FPU                 present and used
-selection           build-selected header compile only
+selection           build-selected construction compile/link proof only
 runtime selectable  no
 ```
 
@@ -107,9 +108,41 @@ frame, and unprivileged execution. M4 and M7, 8 and 16 regions, NVIC priority
 width, BASEPRI threshold, and M7 errata policy all participate in the exact
 cohort symbol.
 
+## Construction Policy
+
+The portable call remains unchanged:
+
+```c
+fiber_init(&context, stack_begin, stack_end, entry, arg);
+```
+
+The selected constructor interprets that range as one exact MPU stack region.
+It requires a power-of-two extent, alignment to that extent, containment in the
+linker-owned unprivileged RAM range, no overlap with privileged context data,
+RW access, and execute-never policy. It never rounds outward and never exposes
+adjacent memory. Every configurable region starts disabled; only the dedicated
+stack region differs per context until a later optional MPU API exists.
+
+The initial protected image uses the basic 19-word FreeRTOS layout with a
+one-past cursor at word 19. CONTROL starts unprivileged with PSP selected, r9 is
+copied from the live platform/static base, EXC_RETURN selects a basic Thread/PSP
+return, and the copied hardware frame contains argument, port-owned return
+veneer, entry PC, and Thumb xPSR. All remaining protected words are zeroed.
+
+The boot seal covers every immutable ABI field plus all per-context RBAR/RASR
+pairs. The protected register image, cursor, and runtime flags remain mutable.
+Four linker-derived global images cover the read-only current-context slot,
+unprivileged code, privileged code, and privileged data. Slice 2 constructs and
+validates these images but does not write hardware MPU registers.
+
+Compile/link proofs cover M4F/M7F with both 8 and 16 regions. They verify exact
+cohort separation, privileged placement, the complete undefined linker-boundary
+surface, successful synthetic placement, failure for every missing boundary,
+and continued absence of SVC, PendSV, and mandatory runtime symbols.
+
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slice-1 mapping | Decision |
+| FreeRTOS family | Fiber slice-2 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs | public fiber API types | Kernel-specific typedefs excluded. |
 | `portUSING_MPU_WRAPPERS`, privilege bit | future optional MPU API | Deferred; no false wrapper support claim. |
@@ -123,7 +156,7 @@ cohort symbol.
 | task padding/privilege flags | `runtime_flags` bits | Retained as mutable port state. |
 | stack growth/alignment | port traits | Retained. |
 | SVC 100..103 | future port-owned SVC namespace | Deferred; numbers are not copied before dispatcher design. |
-| yield/from-ISR macros | C++ scheduler/ISR boundary | Deferred outside slice 1. |
+| yield/from-ISR macros | C++ scheduler/ISR boundary | Deferred outside slice 2. |
 | critical-section macros | future selected-port scheduler envelope | Deferred to runtime slice. |
 | optimized priority bitmap | C++ scheduler policy | Excluded from CPU port. |
 | interrupt-priority assertion | future ISR API validation | Deferred until an ISR-safe API exists. |
@@ -132,16 +165,16 @@ cohort symbol.
 
 ## `port.c` Function Ledger
 
-| FreeRTOS path | Planned fiber owner | Slice-1 decision |
+| FreeRTOS path | Fiber owner | Slice-2 decision |
 | --- | --- | --- |
-| `pxPortInitialiseStack` | selected-port context constructor | Layout frozen; code deferred. |
+| `pxPortInitialiseStack` | selected-port context constructor | Implemented for the unprivileged basic initial image; r9 is preserved and all unused protected words are zeroed. |
 | `prvRestoreContextOfFirstTask` | selected-port first-context restore | Deferred. |
 | `vPortSVCHandler`, `vSVCHandler_C` | strong selected-port SVC handler/dispatcher | Deferred. |
 | `xPortPendSVHandler` | strong selected-port PendSV handler | Protected geometry frozen; code deferred. |
 | `vTaskSwitchContext` | common scheduler callback bridge | Replaced, as in existing ports. |
-| `prvSetupMPU` | selected-port global MPU startup | Deferred with exact type/readback checks. |
-| `prvGetMPURegionSizeSetting` | selected-port MPU encoder | Deferred with overflow/alignment validation. |
-| `vPortStoreTaskMPUSettings` | base constructor plus optional MPU API | Register image is base; user configuration/access metadata is optional. |
+| `prvSetupMPU` | selected-port global MPU startup | Four exact global images and linker checks implemented; hardware programming/type/readback deferred. |
+| `prvGetMPURegionSizeSetting` | selected-port MPU encoder | Replaced by stricter exact encoder that rejects rounding, overflow, bad alignment, region number, and access policy. |
+| `vPortStoreTaskMPUSettings` | base constructor plus optional MPU API | Safe default implemented: configurable regions disabled and exact stack enabled; user configuration/access metadata remains optional. |
 | `xIsPrivileged`, `vResetPrivilege`, `vPortSwitchToUserMode`, `xPortIsTaskPrivileged` | optional MPU API and validated SVC paths | Deferred; no public stubs. |
 | VFP enable and FPCCR setup | selected-port startup | Deferred with mandatory readback. |
 | `xPortStartScheduler` | common start plus selected-port operations | Internal FreeRTOS scheduler/tick state excluded. |
@@ -165,10 +198,11 @@ that wrapper-v2 services exist.
 
 ## Required Later Slices
 
-1. Port-owned boot construction, linker ranges, MPU encoding, sealing, and
-   initial basic/extended protected images.
+1. Completed: port-owned boot construction, linker ranges, exact MPU encoding,
+   sealing, and the initial basic protected image.
 2. Strong SVC first-start and controlled unprivileged yield/return services.
-3. Strong PendSV protected save/copy/scheduler/MPU/restore path.
+3. Strong PendSV protected save/copy/scheduler/MPU/restore path, including the
+   dynamic extended FP image.
 4. Frozen eight-function runtime ABI integration, archive/cohort/ELF proofs,
    and exact build selection.
 5. M4F and M7F hardware validation for 8-region devices; 16-region hardware

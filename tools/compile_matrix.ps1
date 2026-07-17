@@ -2557,11 +2557,12 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm4MpuSlice1Contract {
+function Test-ArmCm4MpuSlice2Contract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
         [string]$Nm,
+        [string]$Objdump,
         [string]$CmsisPath,
         [string]$BuildRoot
     )
@@ -2569,7 +2570,7 @@ function Test-ArmCm4MpuSlice1Contract {
     $profileDir = Join-Path $RepositoryRoot "fiber\port\ARM_CM4_MPU"
     $probeSource = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm4_mpu_layout_probe.c"
-    $probeDir = Join-Path $BuildRoot "arm-cm4-mpu-slice1"
+    $probeDir = Join-Path $BuildRoot "arm-cm4-mpu-slice2"
     New-Item -ItemType Directory -Path $probeDir | Out-Null
     Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
         -Value "#ifndef MAIN_H_`n#define MAIN_H_`n#endif`n" -Encoding ASCII
@@ -2578,23 +2579,23 @@ function Test-ArmCm4MpuSlice1Contract {
             "fiber_port_boot_types.h",
             "fiber_port_types.h",
             "fiber_portmacro.h",
+            "fiber_port_boot.h",
+            "fiber_port_boot.c",
             "FREERTOS_PARITY.md")) {
         if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
-            throw "ARM_CM4_MPU slice 1 is missing required file: $requiredFile"
+            throw "ARM_CM4_MPU slice 2 is missing required file: $requiredFile"
         }
     }
     if (-not (Test-Path $probeSource)) {
-        throw "ARM_CM4_MPU slice 1 layout fixture is missing"
+        throw "ARM_CM4_MPU slice 2 layout fixture is missing"
     }
 
     foreach ($forbiddenFile in @(
-            "fiber_port_boot.h",
-            "fiber_port_boot.c",
             "fiber_port_private.h",
             "fiber_port.c",
             "fiber_port_exception.c")) {
         if (Test-Path (Join-Path $profileDir $forbiddenFile)) {
-            throw "ARM_CM4_MPU slice 1 must not provide runtime source: $forbiddenFile"
+            throw "ARM_CM4_MPU slice 2 must not provide switch runtime source: $forbiddenFile"
         }
     }
 
@@ -2604,7 +2605,7 @@ function Test-ArmCm4MpuSlice1Contract {
         $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
         if ($selectorSource.IndexOf("ARM_CM4_MPU",
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM4_MPU slice 1 must have no global selector route: $selectorPath"
+            throw "ARM_CM4_MPU slice 2 must have no global selector route: $selectorPath"
         }
     }
 
@@ -2781,12 +2782,12 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
         )
         & $Compiler @compileArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM4_MPU slice-1 variant failed compile: $($variant.Name)"
+            throw "ARM_CM4_MPU slice-2 layout variant failed compile: $($variant.Name)"
         }
 
         $nmOutput = & $Nm --defined-only $objectPath
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM4_MPU slice-1 variant: $($variant.Name)"
+            throw "nm failed for ARM_CM4_MPU slice-2 layout variant: $($variant.Name)"
         }
         $variantCohorts = @()
         foreach ($line in $nmOutput) {
@@ -2794,7 +2795,7 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
                 $variantCohorts += $Matches['symbol']
             }
             if ($line -match '\b(SVC_Handler|PendSV_Handler|fiber_port_runtime_)\S*\s*$') {
-                throw "ARM_CM4_MPU slice 1 unexpectedly defines runtime symbol: $line"
+                throw "ARM_CM4_MPU slice 2 unexpectedly defines runtime symbol: $line"
             }
         }
         if ($variantCohorts.Count -ne 1) {
@@ -2862,6 +2863,269 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM4_MPU negative manifest failed for the wrong reason: $($case.Name)`n$($negativeResult.Output)"
         }
+    }
+
+    $bootSource = Join-Path $profileDir "fiber_port_boot.c"
+    $bootHeader = Join-Path $profileDir "fiber_port_boot.h"
+    $bootFixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm4_mpu_boot_probe.c"
+    $bootLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm4_mpu_boot.ld"
+    foreach ($requiredPath in @($bootSource, $bootHeader,
+            $bootFixture, $bootLinker)) {
+        if (-not (Test-Path $requiredPath)) {
+            throw "ARM_CM4_MPU slice 2 construction proof is missing: $requiredPath"
+        }
+    }
+
+    $bootText = Get-Content -LiteralPath $bootSource -Raw
+    foreach ($requiredText in @(
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            "fiber_port_mpu_try_encode_exact_region",
+            "fiber_port_mpu_linker_layout_check",
+            "fiber_port_mpu_build_global_regions",
+            "fiber_port_context_compute_seal",
+            "fiber_port_context_seal_check",
+            "fiber_port_context_init",
+            "ctx->mpu_regions[fiber_portMPU_STACK_REGION] = stack_region;",
+            "ctx->protected_context.basic.core.r9 = fiber_port_read_r9();",
+            "&ctx->protected_context.basic.cursor_limit",
+            "ctx->runtime_flags = 0u;")) {
+        if ($bootText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM4_MPU slice 2 lost construction invariant: $requiredText"
+        }
+    }
+    foreach ($forbiddenText in @(
+            "void SVC_Handler(",
+            "void PendSV_Handler(",
+            "fiber_port_runtime_prepare_start(",
+            "fiber_port_runtime_schedule(")) {
+        if ($bootText.IndexOf($forbiddenText,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM4_MPU slice 2 activated runtime too early: $forbiddenText"
+        }
+    }
+
+    $boundarySymbols = @(
+        "__fiber_mpu_unprivileged_code_start__",
+        "__fiber_mpu_unprivileged_code_end__",
+        "__fiber_mpu_privileged_code_start__",
+        "__fiber_mpu_privileged_code_end__",
+        "__fiber_mpu_privileged_data_start__",
+        "__fiber_mpu_privileged_data_end__",
+        "__fiber_mpu_current_context_slot_start__",
+        "__fiber_mpu_current_context_slot_end__",
+        "__fiber_mpu_unprivileged_ram_start__",
+        "__fiber_mpu_unprivileged_ram_end__"
+    )
+    $linkerText = Get-Content -LiteralPath $bootLinker -Raw
+    $constructionCohorts = @()
+
+    foreach ($variant in $variants) {
+        $variantDir = Join-Path $probeDir "construction-$($variant.Name)"
+        New-Item -ItemType Directory -Path $variantDir | Out-Null
+        $coreHeader = if ($variant.Core -eq 4) { "core_cm4.h" } else { "core_cm7.h" }
+        $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 1U
+#define __FPU_USED 1U
+#define __DSP_PRESENT 1U
+#define __ICACHE_PRESENT 0U
+#define __DCACHE_PRESENT 0U
+#define __DTCM_PRESENT 0U
+#define __ITCM_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SVCall_IRQn = -5,
+    DebugMonitor_IRQn = -4, PendSV_IRQn = -2,
+    SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "$coreHeader"
+#endif
+"@
+        Set-Content -LiteralPath (Join-Path $variantDir "main.h") `
+            -Value $mainHeader -Encoding ASCII
+
+        $constructionDefines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV7EM=1",
+            "-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=$($variant.Regions)"
+        )
+        $constructionIncludes = @(
+            "-I$variantDir",
+            "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot",
+            "-I$CmsisPath"
+        )
+        $constructionBase = @(
+            "-mcpu=$($variant.Cpu)",
+            "-mthumb",
+            "-mfpu=$($variant.Fpu)",
+            "-mfloat-abi=hard",
+            "-std=gnu11",
+            "-O2",
+            "-ffreestanding",
+            "-fno-common",
+            "-fno-builtin",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wundef",
+            "-Werror=undef",
+            "-Werror=implicit-function-declaration",
+            "-Werror=return-type"
+        ) + $constructionDefines + $constructionIncludes
+
+        $bootObject = Join-Path $variantDir "fiber_port_boot.o"
+        & $Compiler @($constructionBase + @(
+            "-c", $bootSource, "-o", $bootObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU construction source failed compile: $($variant.Name)"
+        }
+
+        $bootDefined = @(& $Nm -g --defined-only $bootObject)
+        foreach ($line in $bootDefined) {
+            if ($line -match '\b(SVC_Handler|PendSV_Handler|fiber_port_runtime_)\S*\s*$') {
+                throw "ARM_CM4_MPU slice 2 unexpectedly defines runtime symbol: $line"
+            }
+        }
+        $bootUndefined = @(& $Nm -u $bootObject)
+        $undefinedNames = @($bootUndefined | ForEach-Object {
+            if ($_ -match '\bU\s+(\S+)$') { $Matches[1] }
+        })
+        foreach ($boundary in $boundarySymbols) {
+            if ($undefinedNames -notcontains $boundary) {
+                throw "ARM_CM4_MPU construction lost linker boundary relocation: $boundary / $($variant.Name)"
+            }
+        }
+        foreach ($requiredUndefined in @(
+                "fiber_panic", "fiber_port_unprivileged_task_return")) {
+            if ($undefinedNames -notcontains $requiredUndefined) {
+                throw "ARM_CM4_MPU construction lost required dependency: $requiredUndefined / $($variant.Name)"
+            }
+        }
+        $variantCohort = @($undefinedNames | Where-Object {
+            $_ -match '^fiber_port_context_cohort_'
+        })
+        if ($variantCohort.Count -ne 1) {
+            throw "ARM_CM4_MPU construction must retain one exact cohort: $($variant.Name)"
+        }
+        $constructionCohorts += $variantCohort[0]
+        $allowedUndefined = @($boundarySymbols + @(
+            "fiber_panic",
+            "fiber_port_unprivileged_task_return",
+            $variantCohort[0]
+        ))
+        foreach ($symbol in $undefinedNames) {
+            if ($allowedUndefined -notcontains $symbol) {
+                throw "ARM_CM4_MPU construction acquired unexpected dependency: $symbol / $($variant.Name)"
+            }
+        }
+
+        $symbolTable = & $Objdump -t $bootObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM4_MPU construction: $($variant.Name)"
+        }
+        $privilegedMatches = 0
+        foreach ($line in $symbolTable) {
+            if ($line -match '\bF\s+(?<section>\S+)\s+[0-9a-fA-F]+\s+(?<symbol>fiber_port_\S+)$') {
+                ++$privilegedMatches
+                if ($Matches['section'] -ne '.fiber_port_privileged_functions') {
+                    throw "ARM_CM4_MPU construction function escaped privileged text: $($Matches['symbol']) -> $($Matches['section'])"
+                }
+            }
+        }
+        if ($privilegedMatches -eq 0) {
+            throw "ARM_CM4_MPU construction section proof matched no functions"
+        }
+
+        $fixtureObject = Join-Path $variantDir "boot_probe.o"
+        & $Compiler @($constructionBase + @(
+            "-c", $bootFixture, "-o", $fixtureObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU construction fixture failed compile: $($variant.Name)"
+        }
+
+        $elfPath = Join-Path $variantDir "boot_probe.elf"
+        & $Compiler @(
+            "-mcpu=$($variant.Cpu)",
+            "-mthumb",
+            "-mfpu=$($variant.Fpu)",
+            "-mfloat-abi=hard",
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-T", $bootLinker,
+            $fixtureObject,
+            $bootObject,
+            "-o", $elfPath
+        )
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU synthetic construction linker contract failed: $($variant.Name)"
+        }
+
+        $elfSymbols = @(& $Nm -g --defined-only $elfPath)
+        foreach ($requiredSymbol in @(
+                "fiber_port_context_init",
+                "fiber_port_context_compute_seal",
+                "fiber_port_context_seal_check",
+                "fiber_port_mpu_try_encode_exact_region",
+                "fiber_port_mpu_build_global_regions",
+                "fiber_port_unprivileged_task_return")) {
+            if (-not ($elfSymbols -match "\b$([regex]::Escape($requiredSymbol))$")) {
+                throw "ARM_CM4_MPU synthetic ELF lost symbol: $requiredSymbol / $($variant.Name)"
+            }
+        }
+        if ($elfSymbols -match '\b(SVC_Handler|PendSV_Handler)$') {
+            throw "ARM_CM4_MPU slice 2 synthetic ELF must not provide handlers: $($variant.Name)"
+        }
+
+        if ($variant.Name -eq "m4-r8") {
+            foreach ($boundary in $boundarySymbols) {
+                $negativeLinker = Join-Path $variantDir `
+                    "missing-$($boundary.Trim('_')).ld"
+                $negativeText = $linkerText -replace
+                    "(?m)^$([regex]::Escape($boundary))\s*=\s*[^;]+;\r?\n", ""
+                Set-Content -LiteralPath $negativeLinker `
+                    -Value $negativeText -Encoding ASCII
+                $negativeLog = Join-Path $variantDir `
+                    "missing-$($boundary.Trim('_')).log"
+                $negativeResult = Invoke-CompilerProbe -Compiler $Compiler `
+                    -Arguments @(
+                        "-mcpu=$($variant.Cpu)",
+                        "-mthumb",
+                        "-mfpu=$($variant.Fpu)",
+                        "-mfloat-abi=hard",
+                        "-nostdlib",
+                        "-Wl,--gc-sections",
+                        "-T", $negativeLinker,
+                        $fixtureObject,
+                        $bootObject,
+                        "-o", (Join-Path $variantDir `
+                            "missing-$($boundary.Trim('_')).elf")
+                    ) -LogPath $negativeLog
+                if (($negativeResult.ExitCode -eq 0) -or
+                        ($negativeResult.Output.IndexOf($boundary,
+                        [System.StringComparison]::Ordinal) -lt 0)) {
+                    throw "ARM_CM4_MPU missing linker boundary must fail on $boundary`n$($negativeResult.Output)"
+                }
+            }
+        }
+    }
+
+    if ((@($constructionCohorts | Sort-Object -Unique)).Count -ne
+            $variants.Count) {
+        throw "ARM_CM4_MPU construction objects collapsed distinct exact cohorts"
     }
 }
 
@@ -4626,9 +4890,10 @@ try {
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM4_MPU slice-1 layout/trait contract =="
-    Test-ArmCm4MpuSlice1Contract -RepositoryRoot $RepoRoot `
-        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM4_MPU slice-2 construction contract =="
+    Test-ArmCm4MpuSlice2Contract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump `
+        -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM3_MPU construction/SVC/PendSV contract =="
     Test-ArmCm3MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `
