@@ -109,6 +109,10 @@ KEEP(*(.fiber_port_context_cohort_expectation))
 
 The selected runtime object defines the exact profile/context symbol; boot,
 exception, and the build-owned expectation object retain matching relocations.
+That identity includes the implemented NVIC priority-bit count and every bit of
+the effective scheduler BASEPRI threshold, in addition to frame, FPU, security,
+and selected-port traits. A threshold or priority-width mismatch is therefore
+a link-time cohort mismatch, not merely a startup policy difference.
 This makes both mixed private objects and a complete precompiled port archive
 from a different exact cohort fail to link. Without the separately compiled
 expectation plus `KEEP`, the latter whole-archive compatibility check is not

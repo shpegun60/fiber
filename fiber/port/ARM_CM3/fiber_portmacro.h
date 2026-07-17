@@ -89,14 +89,20 @@
 #define FIBER_PORT_INITIAL_EXC_RETURN fiber_portINITIAL_EXC_RETURN
 #define FIBER_PORT_SCHEDULER_MASK_KIND FIBER_PORT_MASK_BASEPRI
 
+#if !defined(__NVIC_PRIO_BITS) || (__NVIC_PRIO_BITS < 1) || \
+		(__NVIC_PRIO_BITS > 8)
+# error "[fiber]: ARM_CM3 requires CMSIS __NVIC_PRIO_BITS in [1, 8]"
+#endif
+
 #ifndef FIBER_PORT_SCHEDULER_BASEPRI
 # ifdef FIBER_SCHEDULER_BASEPRI
 #  define FIBER_PORT_SCHEDULER_BASEPRI FIBER_SCHEDULER_BASEPRI
 # else
-#  ifndef __NVIC_PRIO_BITS
-#   error "[fiber]: __NVIC_PRIO_BITS is required to default ARMv7-M scheduler BASEPRI"
+#  if __NVIC_PRIO_BITS == 8
+#   define FIBER_PORT_SCHEDULER_BASEPRI 2u
+#  else
+#   define FIBER_PORT_SCHEDULER_BASEPRI (1u << (8u - __NVIC_PRIO_BITS))
 #  endif
-#  define FIBER_PORT_SCHEDULER_BASEPRI (1u << (8u - __NVIC_PRIO_BITS))
 # endif
 #endif
 
@@ -110,6 +116,14 @@
 
 #if FIBER_PORT_SCHEDULER_BASEPRI > 255u
 # error "[fiber]: ARMv7-M scheduler BASEPRI threshold must fit in 8 bits"
+#endif
+
+FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI &
+		((1u << (8u - __NVIC_PRIO_BITS)) - 1u)) == 0u,
+		"[fiber]: ARMv7-M scheduler BASEPRI uses unimplemented priority bits");
+#if __NVIC_PRIO_BITS == 8
+FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
+		"[fiber]: ARMv7-M BASEPRI bit 0 is subpriority when all 8 bits exist");
 #endif
 
 #define FIBER_PORT_SUPPORTS_M7_R0P1_ERRATA_WORKAROUND 0

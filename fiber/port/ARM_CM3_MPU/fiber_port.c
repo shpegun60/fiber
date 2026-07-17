@@ -307,6 +307,7 @@ void fiber_port_validate_svc_frame_shape(const uint32_t *hardware_frame)
 	FIBER_REQUIRE((((uintptr_t)hardware_frame) & 7u) == 0u, 'A');
 	const uint32_t stacked_pc = hardware_frame[6];
 	const uint32_t stacked_xpsr = hardware_frame[7];
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_THUMB_BIT) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');

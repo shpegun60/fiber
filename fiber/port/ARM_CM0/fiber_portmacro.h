@@ -150,6 +150,10 @@ FIBER_DIAG_WARN("[fiber] Selected ARMv6-M port has no SCB->VTOR; falling back to
 # define FIBER_SCHEDULER_BASEPRI 0u
 #endif
 
+#if FIBER_SCHEDULER_BASEPRI != 0u
+# error "[fiber]: ARM_CM0 has no BASEPRI; FIBER_SCHEDULER_BASEPRI must be zero"
+#endif
+
 #define fiber_portASM_ENTER_SCHEDULER_CRITICAL \
 	"mrs   r3, primask                    \n" \
 	"cpsid i                              \n" \

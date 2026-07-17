@@ -707,6 +707,7 @@ FIBER_GENERAL_REGS_ONLY void fiber_port_context_validate_restore(FiberContext *c
 	const uint32_t stacked_xpsr = *(const uint32_t *)(sp + stacked_xpsr_offset);
 	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
 #if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 	FIBER_REQUIRE(fiber_addr_plausible_code((uintptr_t)stacked_pc) != 0, 'c');

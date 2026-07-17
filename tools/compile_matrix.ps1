@@ -902,20 +902,141 @@ function Test-SelectedPortExceptionFrameGeometry {
         }
     }
 
-    $cm7Path = Join-Path $RepositoryRoot `
+    $saveSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c"
-    $cm7Source = Get-Content -LiteralPath $cm7Path -Raw
-    $cm7PendSv = Get-CFunctionBody -Source $cm7Source `
-        -Signature "void PendSV_Handler(void)" -Path $cm7Path
-    $xpsrLoads = [regex]::Matches($cm7PendSv,
-        'ldr\s+r3,\s*\[r0,\s*%c\[xpsr\]\]')
+    )
 
-    if (($cm7Source.IndexOf("fiber_portOFFSET_STACKED_XPSR = 7u * 4u",
-                [System.StringComparison]::Ordinal) -lt 0) -or
-            ($xpsrLoads.Count -ne 1) -or
-            [regex]::IsMatch($cm7Source, 'xpsr(?:basic|ext)') -or
-            $cm7Source.Contains("fiber_portOFFSET_EXTENDED_STACKED_XPSR")) {
-        throw "CM7 PendSV must read xPSR at PSP+28 for both basic and extended FP hardware frames"
+    foreach ($relativePath in $saveSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $pendsvBody = Get-CFunctionBody -Source $source `
+            -Signature "void PendSV_Handler(void)" -Path $path
+        $xpsrLoads = [regex]::Matches($pendsvBody,
+            'ldr\s+r3,\s*\[r0,\s*%c\[xpsr\]\]')
+
+        if (($source.IndexOf("fiber_portOFFSET_STACKED_XPSR = 7u * 4u",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($xpsrLoads.Count -ne 1) -or
+                ($pendsvBody.IndexOf("[alignpad]", [System.StringComparison]::Ordinal) -lt 0) -or
+                ($pendsvBody.IndexOf("FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                [regex]::IsMatch($source, 'xpsr(?:basic|ext)') -or
+                $source.Contains("fiber_portOFFSET_EXTENDED_STACKED_XPSR")) {
+            throw "PendSV must include xPSR.STACKALIGN in the hardware-frame upper bound: $path"
+        }
+    }
+
+    $restorePcSources = @(
+        "fiber\port\ARM_CM0\fiber_port_boot.c",
+        "fiber\port\ARM_CM3\fiber_port_boot.c",
+        "fiber\port\ARM_CM4\fiber_port_boot.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
+        "fiber\port\ARM_CM3_MPU\fiber_port_boot.c"
+    )
+    foreach ($relativePath in $restorePcSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        if ($source.IndexOf("FIBER_REQUIRE(stacked_pc >= 2u, 'x');",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Restore validation must reject null and underflowing stacked PC values: $path"
+        }
+    }
+
+    $mpuRuntimePath = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM3_MPU\fiber_port.c"
+    $mpuRuntimeSource = Get-Content -LiteralPath $mpuRuntimePath -Raw
+    $mpuSvcFrameBody = Get-CFunctionBody -Source $mpuRuntimeSource `
+        -Signature "void fiber_port_validate_svc_frame_shape(const uint32_t *hardware_frame)" `
+        -Path $mpuRuntimePath
+    if ($mpuSvcFrameBody.IndexOf("FIBER_REQUIRE(stacked_pc >= 2u, 'x');",
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "ARM_CM3_MPU SVC frame validation must reject null stacked PC"
+    }
+}
+
+function Test-SelectedPortHandlerHardening {
+    param([string]$RepositoryRoot)
+
+    $portSources = @(
+        "fiber\port\ARM_CM0\fiber_port.c",
+        "fiber\port\ARM_CM3\fiber_port.c",
+        "fiber\port\ARM_CM4\fiber_port.c",
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c"
+    )
+
+    foreach ($relativePath in $portSources) {
+        $path = Join-Path $RepositoryRoot $relativePath
+        $source = Get-Content -LiteralPath $path -Raw
+        $svcBody = Get-CFunctionBody -Source $source `
+            -Signature "void SVC_Handler(void)" -Path $path
+        $pendsvBody = Get-CFunctionBody -Source $source `
+            -Signature "void PendSV_Handler(void)" -Path $path
+
+        $svcIpsrMatch = [regex]::Match($svcBody, 'mrs\s+r[0-3],\s*ipsr')
+        $svcNumberMatch = [regex]::Match($svcBody, 'cmp\s+r[0-3],\s*#11')
+        $svcIpsr = $svcIpsrMatch.Index
+        $svcNumber = $svcNumberMatch.Index
+        $svcExcReturn = $svcBody.IndexOf("0xFFFFFFF9",
+            [System.StringComparison]::Ordinal)
+        $svcMsp = [regex]::Match($svcBody, 'mrs\s+r0,\s*msp').Index
+        $svcXpsr = $svcBody.IndexOf("[r0, #28]",
+            [System.StringComparison]::Ordinal)
+        $svcPc = $svcBody.IndexOf("[r0, #24]",
+            [System.StringComparison]::Ordinal)
+        $svcPcFloorMatch = [regex]::Match($svcBody, 'cmp\s+r3,\s*#2')
+        $svcPcFloor = $svcPcFloorMatch.Index
+        $svcOpcode = $svcBody.IndexOf("#0xDF",
+            [System.StringComparison]::Ordinal)
+        if ((-not $svcIpsrMatch.Success) -or (-not $svcNumberMatch.Success) -or
+                (-not $svcPcFloorMatch.Success) -or
+                ($svcNumber -le $svcIpsr) -or
+                ($svcExcReturn -le $svcNumber) -or ($svcMsp -le $svcExcReturn) -or
+                ($svcXpsr -le $svcMsp) -or ($svcPc -le $svcXpsr) -or
+                ($svcPcFloor -le $svcPc) -or ($svcOpcode -le $svcPcFloor) -or
+                ($svcBody.IndexOf("stacked Thread state must be Thumb",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($svcBody.IndexOf("stacked IPSR must describe Thread mode",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                ($svcBody.IndexOf("cannot require padding",
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "SVC first-start preflight is weaker than the frozen handler contract: $path"
+        }
+
+        $pendsvIpsrMatch = [regex]::Match($pendsvBody,
+            'mrs\s+r[0-3],\s*ipsr')
+        $pendsvNumberMatch = [regex]::Match($pendsvBody,
+            'cmp\s+r[0-3],\s*#14')
+        $pendsvPspMatch = [regex]::Match($pendsvBody,
+            'mrs\s+r0,\s*psp')
+        $pendsvIpsr = $pendsvIpsrMatch.Index
+        $pendsvNumber = $pendsvNumberMatch.Index
+        $pendsvExcReturn = $pendsvBody.IndexOf("0xFFFFFFFD",
+            [System.StringComparison]::Ordinal)
+        $pendsvPsp = $pendsvPspMatch.Index
+        $pendsvAlignment = $pendsvBody.IndexOf("8-byte hardware-frame base",
+            [System.StringComparison]::Ordinal)
+        $pendsvValidator = $pendsvBody.IndexOf(
+            "bl    fiber_port_context_validate_save_current",
+            [System.StringComparison]::Ordinal)
+        $pendsvXpsr = $pendsvBody.IndexOf("[r0, %c[xpsr]]",
+            [System.StringComparison]::Ordinal)
+        $pendsvAlignPad = $pendsvBody.IndexOf("%c[alignpad]",
+            [System.StringComparison]::Ordinal)
+        if ((-not $pendsvIpsrMatch.Success) -or
+                (-not $pendsvNumberMatch.Success) -or
+                (-not $pendsvPspMatch.Success) -or
+                ($pendsvNumber -le $pendsvIpsr) -or
+                ($pendsvExcReturn -le $pendsvNumber) -or
+                ($pendsvPsp -le $pendsvExcReturn) -or
+                ($pendsvAlignment -le $pendsvPsp) -or
+                ($pendsvValidator -le $pendsvAlignment) -or
+                ($pendsvXpsr -le $pendsvValidator) -or
+                ($pendsvAlignPad -le $pendsvXpsr)) {
+            throw "PendSV exception provenance or STACKALIGN preflight regressed: $path"
+        }
     }
 }
 
@@ -2324,6 +2445,97 @@ typedef enum IRQn {
                 throw "Stale selected-port object cohort must fail on $missingSymbol ($mode / $($case.Name)).`n$($result.Output)"
             }
         }
+    }
+}
+
+function Test-BasepriContextCohortIdentity {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $probeRoot = Join-Path $BuildRoot "basepri-context-cohort"
+    New-Item -ItemType Directory -Path $probeRoot | Out-Null
+    $expectationSource = Join-Path $RepositoryRoot `
+        "fiber\port\fiber_port_context_cohort_expectation.c"
+    $variants = @(
+        [pscustomobject]@{ Name = "prio4-basepri16"; PriorityBits = 4; Basepri = 16; Token = "_g4_u00010000_" },
+        [pscustomobject]@{ Name = "prio4-basepri32"; PriorityBits = 4; Basepri = 32; Token = "_g4_u00100000_" },
+        [pscustomobject]@{ Name = "prio5-basepri16"; PriorityBits = 5; Basepri = 16; Token = "_g5_u00010000_" }
+    )
+    $symbols = @{}
+
+    foreach ($variant in $variants) {
+        $probeDir = Join-Path $probeRoot $variant.Name
+        New-Item -ItemType Directory -Path $probeDir | Out-Null
+        $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS $($variant.PriorityBits)U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SVCall_IRQn = -5,
+    DebugMonitor_IRQn = -4, PendSV_IRQn = -2,
+    SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm3.h"
+#endif
+"@
+        Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+            -Value $mainHeader -Encoding ASCII
+        $objectPath = Join-Path $probeDir "expectation.o"
+        $compileArgs = @(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-Wall",
+            "-Wextra",
+            "-Wundef",
+            "-Werror=undef",
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV7M=1",
+            "-DFIBER_SCHEDULER_BASEPRI=$($variant.Basepri)",
+            "-I$probeDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port\ARM_CM3')",
+            "-I$RepositoryRoot",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$CmsisPath",
+            "-c", $expectationSource,
+            "-o", $objectPath
+        )
+        & $Compiler @compileArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "BASEPRI context-cohort expectation failed compile: $($variant.Name)"
+        }
+
+        $undefined = @(& $Nm -u $objectPath)
+        $cohortSymbols = @($undefined | ForEach-Object {
+            if ($_ -match '\bU\s+(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if (($cohortSymbols.Count -ne 1) -or
+                ($cohortSymbols[0].IndexOf($variant.Token,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Exact cohort omitted NVIC/BASEPRI policy: $($variant.Name)"
+        }
+        $symbols[$variant.Name] = $cohortSymbols[0]
+    }
+
+    if ((@($symbols.Values | Sort-Object -Unique)).Count -ne $variants.Count) {
+        throw "Distinct NVIC/BASEPRI policies collapsed to one exact context cohort"
     }
 }
 
@@ -3764,6 +3976,7 @@ Test-ContextPortBoundary -RepositoryRoot $RepoRoot
 Test-SelectedPortPrivateDeclarations -RepositoryRoot $RepoRoot
 Test-SelectedPortIntegrityPreflight -RepositoryRoot $RepoRoot
 Test-SelectedPortExceptionFrameGeometry -RepositoryRoot $RepoRoot
+Test-SelectedPortHandlerHardening -RepositoryRoot $RepoRoot
 Test-PendSvSaveValidationOrdering -RepositoryRoot $RepoRoot
 Test-ScheduleValidationOwnership -RepositoryRoot $RepoRoot
 
@@ -3839,8 +4052,10 @@ $configs = @(
     [pscustomobject]@{ Name = "cortex-m0";          CpuArgs = @("-mcpu=cortex-m0");              Core = "core_cm0.h";     PriorityBits = 4; VtorPresent = 0; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m0plus";      CpuArgs = @("-mcpu=cortex-m0plus");          Core = "core_cm0plus.h"; PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m3";          CpuArgs = @("-mcpu=cortex-m3");              Core = "core_cm3.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
+    [pscustomobject]@{ Name = "cortex-m3-prio8";    CpuArgs = @("-mcpu=cortex-m3");              Core = "core_cm3.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m4";          CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m4f";         CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m4f-prio8";   CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
     [pscustomobject]@{ Name = "cortex-m7";          CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m7f";         CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
     [pscustomobject]@{ Name = "cortex-m7f-prio8";   CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
@@ -3856,8 +4071,10 @@ $portProfiles = @{
     "cortex-m0"         = "FIBER_PORT_PROFILE_ARMV6M"
     "cortex-m0plus"     = "FIBER_PORT_PROFILE_ARMV6M"
     "cortex-m3"         = "FIBER_PORT_PROFILE_ARMV7M"
+    "cortex-m3-prio8"   = "FIBER_PORT_PROFILE_ARMV7M"
     "cortex-m4"         = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m4f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m4f-prio8"  = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7"         = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7f"        = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7f-prio8"  = "FIBER_PORT_PROFILE_ARMV7EM"
@@ -4017,6 +4234,9 @@ try {
     Test-SelectedPortContextCohortMismatch -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Ar $ar -CmsisPath $cmsis `
         -BuildRoot $buildRoot
+    Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
+    Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM3_MPU construction/SVC/PendSV contract =="
     Test-ArmCm3MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `
@@ -4842,6 +5062,58 @@ void Error_Handler(void);
         if ($normalizedOutput -notmatch [regex]::Escape($normalizedDiagnostic)) {
             throw "Invalid setting failed for the wrong reason: $($case.Name)`n$($negativeResult.Output)"
         }
+    }
+
+    Write-Host "== cortex-m0 / settings-contract-reject-basepri =="
+    $cm0ProbeDir = Join-Path $buildRoot "cm0-settings-contract"
+    New-Item -ItemType Directory -Path $cm0ProbeDir | Out-Null
+    $cm0Header = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 0U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2,
+    SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm0.h"
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $cm0ProbeDir "main.h") `
+        -Value $cm0Header -Encoding ASCII
+    $cm0BasepriArgs = @(
+        "-mcpu=cortex-m0",
+        "-mthumb",
+        "-std=gnu11",
+        "-ffreestanding",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Wundef",
+        "-Werror=undef",
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV6M=1",
+        "-DFIBER_SCHEDULER_BASEPRI=16",
+        "-I$cm0ProbeDir",
+        "-I$(Join-Path $RepoRoot 'fiber\port\ARM_CM0')",
+        "-I$RepoRoot",
+        "-I$(Join-Path $RepoRoot 'fiber')",
+        "-I$cmsis",
+        "-c", (Join-Path $RepoRoot "fiber\port\ARM_CM0\fiber_port.c"),
+        "-o", (Join-Path $cm0ProbeDir "reject-basepri.o")
+    )
+    $cm0BasepriResult = Invoke-CompilerProbe -Compiler $gcc `
+        -Arguments $cm0BasepriArgs `
+        -LogPath (Join-Path $cm0ProbeDir "reject-basepri.log")
+    if (($cm0BasepriResult.ExitCode -eq 0) -or
+            (($cm0BasepriResult.Output -replace '\s+', ' ') -notmatch
+            [regex]::Escape("ARM_CM0 has no BASEPRI"))) {
+        throw "ARM_CM0 must reject a nonzero scheduler BASEPRI setting:`n$($cm0BasepriResult.Output)"
     }
 
     Write-Host ""

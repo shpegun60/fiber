@@ -1,5 +1,33 @@
 # Fiber Decision Log
 
+## 2026-07-17: Harden Privileged Cortex-M Port Parity
+
+The privileged `ARM_CM0`, `ARM_CM3`, and `ARM_CM4` handlers now use the same
+fail-closed exception provenance policy as the validated CM7 path. First-start
+SVC checks IPSR, exact incoming EXC_RETURN, MSP frame alignment, xPSR Thumb and
+Thread state, absence of unexpected alignment padding, stacked PC shape, SVC
+opcode, and immediate. PendSV checks IPSR, accepted EXC_RETURN, PSP origin and
+alignment, current context preflight, and complete save headroom before writing
+the software frame.
+
+PendSV save bounds now account for the optional xPSR `STACKALIGN` word on CM0,
+CM3, and CM4. All production restore validators reject stacked PC values below
+two even when switch-time address-map hooks are disabled. The staged CM3 MPU
+SVC-frame validator follows the same cheap PC floor rule.
+
+BASEPRI policy is now exact configuration identity. The context-cohort symbol
+encodes `__NVIC_PRIO_BITS` and every bit of the selected threshold. CM3, CM4,
+and CM3 MPU use threshold `2` for 8-bit NVIC implementations and reject bit 0;
+CM0 rejects any nonzero BASEPRI setting because the register does not exist.
+The compile matrix freezes handler ordering, `STACKALIGN` geometry, PC guards,
+8-bit defaults, CM0 rejection, and distinct NVIC/BASEPRI cohort symbols.
+
+The CM0, CM3, and CM4 parity ledgers are pinned to local FreeRTOS commit
+`a50edad08b29052631aa469d4df6e6ec7ff68878` and classify the reference macro,
+constant, function, tick, ISR, FPU, and MPU families. `transitional_v8m` remains
+a build-only deletion target and receives no behavioral hardening in this
+checkpoint.
+
 ## 2026-07-17: Activate Exact Build Selection For ARM_CM3_MPU
 
 `ARM_CM3_MPU` is now a build-selectable compile/link-covered profile. Exact

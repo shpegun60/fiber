@@ -76,7 +76,8 @@ void fiber_port_runtime_start_first(FiberContext *first)
 
 enum {
 	fiber_portOFF_STACK_BASE = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
-	fiber_portOFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top)
+	fiber_portOFF_STACK_TOP = offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top),
+	fiber_portOFFSET_STACKED_XPSR = 7u * 4u
 };
 
 FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE <= 124, "fiber_portOFF_STACK_BASE must fit Thumb-1 LDR word offset");
@@ -265,6 +266,14 @@ void SVC_Handler(void)
 	__ASM volatile(
 			".syntax unified                         \n"
 
+			"mrs   r2, ipsr                         \n"
+			"cmp   r2, #11                          \n"
+			"bne   93f                              \n" /* must execute as SVCall */
+			"movs  r2, #6                           \n"
+			"mvns  r2, r2                           \n" /* 0xFFFFFFF9: Thread/MSP/basic */
+			"mov   r3, lr                           \n"
+			"cmp   r3, r2                           \n"
+			"bne   93f                              \n"
 			"movs  r2, #4                           \n"
 			"mov   r3, lr                           \n"
 			"tst   r3, r2                           \n"
@@ -274,7 +283,21 @@ void SVC_Handler(void)
 			"mov   r3, r0                           \n"
 			"tst   r3, r2                           \n"
 			"bne   93f                              \n" /* first-start MSP frame must be 8-byte aligned */
+			"ldr   r2, [r0, #28]                    \n" /* stacked xPSR */
+			"mov   r1, r2                           \n"
+			"lsls  r1, r1, #7                       \n"
+			"bpl   93f                              \n" /* stacked Thread state must be Thumb */
+			"mov   r1, r2                           \n"
+			"lsls  r1, r1, #22                      \n"
+			"bmi   93f                              \n" /* validated pre-SVC MSP cannot require padding */
+			"lsls  r2, r2, #23                      \n"
+			"bne   93f                              \n" /* stacked IPSR must describe Thread mode */
 			"ldr   r3, [r0, #24]                    \n" /* stacked PC */
+			"cmp   r3, #2                           \n"
+			"blo   94f                              \n"
+			"movs  r2, #1                           \n"
+			"tst   r3, r2                           \n"
+			"bne   93f                              \n" /* Thumb state belongs in xPSR, not PC bit 0 */
 			"subs  r3, #2                           \n"
 			"ldrb  r2, [r3, #1]                     \n"
 			"cmp   r2, #0xDF                        \n"
@@ -350,10 +373,22 @@ void PendSV_Handler(void)
 	__ASM volatile(
 			".syntax unified                         \n"
 
+			"mrs   r2, ipsr                         \n"
+			"cmp   r2, #14                          \n"
+			"bne   91f                              \n" /* must execute as PendSV */
+			"movs  r2, #2                           \n"
+			"mvns  r2, r2                           \n" /* 0xFFFFFFFD: Thread/PSP/basic */
+			"mov   r3, lr                           \n"
+			"cmp   r3, r2                           \n"
+			"bne   91f                              \n" /* reject every other EXC_RETURN encoding */
+
 			/* ----------------------------------------------------------------------
 			 * Prologue: get PSP and sync pipeline.
 			 * ---------------------------------------------------------------------- */
 			"mrs   r0, psp                          \n" /* r0 = PSP */
+			"movs  r2, #7                           \n"
+			"tst   r0, r2                           \n"
+			"bne   92f                              \n" /* STKALIGN requires an 8-byte hardware-frame base */
 
 			"dsb                                    \n"
 			"isb                                    \n"
@@ -393,6 +428,14 @@ void PendSV_Handler(void)
 			"ldr   r2, [r1, %c[offtop]]             \n" /* r2 = current->boot.stack_top */
 			"subs  r2, #%c[hwbase]                  \n" /* complete HW frame must fit below stack_top */
 			"bcc   92f                              \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			"ldr   r3, [r0, %c[xpsr]]               \n"
+			"lsls  r3, r3, #22                      \n" /* xPSR.STACKALIGN -> N */
+			"bpl   83f                              \n"
+			"subs  r2, #%c[alignpad]                \n"
+			"bcc   92f                              \n"
+			"83:                                    \n"
 			"cmp   r0, r2                           \n"
 			"bhi   92f                              \n" /* HW frame crosses declared stack top */
 
@@ -469,6 +512,8 @@ void PendSV_Handler(void)
 			:
 			: [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+			  [alignpad] "I" (FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
+			  [xpsr] "I" (fiber_portOFFSET_STACKED_XPSR),
 			  [offsb] "I" (fiber_portOFF_STACK_BASE),
 			  [offtop] "I" (fiber_portOFF_STACK_TOP)
 			: "memory","cc"

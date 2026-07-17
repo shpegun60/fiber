@@ -404,6 +404,9 @@ runtime-ABI mismatch links are active. The exact selected-profile/context
 object-cohort anchor is also active: mandatory private objects retain one exact
 identity, and the build-owned expectation source rejects a complete archive
 from a different exact cohort when its dedicated section is kept by the linker.
+The identity encodes `__NVIC_PRIO_BITS` and the complete effective scheduler
+BASEPRI value bit-for-bit. Ports without BASEPRI encode a zero threshold and
+must reject any nonzero public BASEPRI setting rather than silently ignoring it.
 It is not a source-revision fingerprint. Refreshed hardware evidence remains
 separate. No global selected internal-type facade is part of the frozen design.
 

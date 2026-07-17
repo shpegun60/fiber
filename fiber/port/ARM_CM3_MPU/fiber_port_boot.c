@@ -549,6 +549,7 @@ void fiber_port_validate_hardware_frame(const FiberContext *ctx,
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_THUMB_BIT) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_STACK_ALIGN_BIT) == 0u, 'a');
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->unprivileged_code_start,
