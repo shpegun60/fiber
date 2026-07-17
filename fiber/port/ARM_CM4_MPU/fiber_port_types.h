@@ -3,7 +3,7 @@
  *
  * The layout follows the protected-context geometry of the pinned FreeRTOS
  * GCC ARM_CM4_MPU port. It is not runtime-selectable through implementation
- * slice 3. Application code may allocate a selected FiberContext but must not
+ * slice 4. Application code may allocate a selected FiberContext but must not
  * inspect, copy, or mutate it after initialization.
  */
 

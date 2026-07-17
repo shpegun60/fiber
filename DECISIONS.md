@@ -1,5 +1,36 @@
 # Fiber Decision Log
 
+## 2026-07-17: Add The ARM_CM4_MPU Protected PendSV Slice
+
+Implementation slice 4 completes the non-selectable profile's protected
+switch path without activating the global selector or the remaining forward
+runtime ABI. The strong `PendSV_Handler` validates exact Thread/PSP provenance,
+the current seal/cursor/frame, active MPU image, CPACR/FPCCR policy, masks, and
+CONTROL/FPCA before reading mutable context fields.
+
+The handler follows the pinned FreeRTOS 53-word geometry: basic switches copy
+CONTROL, `r4-r11`, EXC_RETURN, PSP, and the eight-word hardware frame into
+privileged storage; extended switches prepend `s16-s31` and the 17 raw
+`s0-s15/FPSCR` words copied from `PSP + 32`. Lazy FP preservation must complete
+and clear `FPCCR.LSPACT` before scheduler publication. Restore performs the
+inverse copy and never places a software frame below the unprivileged PSP.
+
+Scheduler policy executes in privileged PendSV under the selected BASEPRI
+threshold. The port snapshots masks, CONTROL, IPSR, PSP, VTOR, MPU state,
+CPACR, and FPCCR around the user hook, validates the selected protected image,
+then publishes it through the frozen reverse ABI. MPU replacement runs with
+PRIMASK closed, reenables the exact selected image, and reads back every
+per-context and global region before restore. Cortex-M7 BASEPRI writes retain
+the stronger PRIMASK-preserving errata sequence.
+
+Compile/link/ELF proofs cover M4F/M7F with 8 and 16 regions, eager and lazy FP
+policy builds, exact undefined dependencies, load-only current-slot assembly,
+six generated FP transfers, validator/save/scheduler/MPU/restore ordering,
+strong vector slots 11 and 14, duplicate-handler failure, privileged section
+placement, and continued selector isolation. Hardware behavior remains
+unvalidated; the next slice is the eight-function forward ABI and exact
+build-selection activation.
+
 ## 2026-07-17: Add The ARM_CM4_MPU Protected SVC Slice
 
 Implementation slice 3 adds the exact profile's protected first-start path

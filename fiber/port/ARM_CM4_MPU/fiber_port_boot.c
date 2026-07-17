@@ -267,8 +267,16 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_runtime_schedule);
 	const uintptr_t svc_handler = fiber_port_function_address(
 			(uintptr_t)&SVC_Handler);
+	const uintptr_t pendsv_handler = fiber_port_function_address(
+			(uintptr_t)&PendSV_Handler);
 	const uintptr_t svc_dispatch = fiber_port_function_address(
 			(uintptr_t)&fiber_port_svc_dispatch);
+	const uintptr_t pendsv_preflight = fiber_port_function_address(
+			(uintptr_t)&fiber_port_pendsv_validate_save_current);
+	const uintptr_t scheduler_next = fiber_port_function_address(
+			(uintptr_t)&fiber_port_scheduler_pick_next_from_pendsv);
+	const uintptr_t mpu_switch = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_switch_to_context);
 	const uintptr_t start_first = fiber_port_function_address(
 			(uintptr_t)&fiber_port_start_first_context);
 	const uintptr_t restore_first = fiber_port_function_address(
@@ -306,7 +314,19 @@ void fiber_port_mpu_linker_layout_check(
 			svc_handler), 'L');
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->privileged_code_start, layout->privileged_code_end,
+			pendsv_handler), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
 			svc_dispatch), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			pendsv_preflight), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			scheduler_next), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			mpu_switch), 'L');
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->privileged_code_start, layout->privileged_code_end,
 			start_first), 'L');
@@ -616,6 +636,68 @@ void fiber_port_context_validate_running_svc(const FiberContext *ctx,
 			ctx->boot.stack_top, 'P');
 
 	fiber_port_validate_hardware_frame(hardware_frame, &layout);
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_context_validate_save_current(const FiberContext *ctx,
+		const uint32_t *hardware_frame,
+		uint32_t exc_return)
+{
+	/* SVC and PendSV interrupt the same active Thread/PSP image. Keep one
+	 * authoritative frame/CONTROL/cursor contract for both handlers. */
+	fiber_port_context_validate_running_svc(ctx, hardware_frame,
+			exc_return);
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_context_validate_restore(FiberContext *ctx)
+{
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_context_seal_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+	FIBER_REQUIRE(ctx->runtime_flags == 0u, 'q');
+
+	const int is_basic = ctx->protected_context_cursor ==
+			&ctx->protected_context.basic.cursor_limit;
+	const int is_extended = ctx->protected_context_cursor ==
+			&ctx->protected_context.extended.cursor_limit;
+	FIBER_REQUIRE((is_basic != 0) || (is_extended != 0), 'P');
+	FIBER_REQUIRE(!((is_basic != 0) && (is_extended != 0)), 'P');
+
+	const FiberPortProtectedCoreContext *core;
+	const FiberPortProtectedHardwareFrame *hardware;
+	uintptr_t frame_bytes;
+	if (is_basic != 0) {
+		core = &ctx->protected_context.basic.core;
+		hardware = &ctx->protected_context.basic.hardware;
+		frame_bytes = (uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
+		FIBER_REQUIRE(core->control ==
+				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+		FIBER_REQUIRE(core->exc_return ==
+				fiber_portEXC_RETURN_THREAD_PSP_BASIC, 'l');
+		for (uint32_t index = 19u;
+				index < fiber_portPROTECTED_CONTEXT_WORDS; ++index) {
+			FIBER_REQUIRE(ctx->protected_context.words[index] == 0u,
+					'x');
+		}
+	} else {
+		core = &ctx->protected_context.extended.core;
+		hardware = &ctx->protected_context.extended.hardware;
+		frame_bytes = (uintptr_t)FIBER_PORT_EXC_PER_LEVEL_BYTES;
+		FIBER_REQUIRE(core->control ==
+				(fiber_portINITIAL_CONTROL_UNPRIVILEGED | 4u), 'l');
+		FIBER_REQUIRE(core->exc_return ==
+				fiber_portEXC_RETURN_THREAD_PSP_EXTENDED, 'l');
+		FIBER_REQUIRE(ctx->protected_context.extended.cursor_limit == 0u,
+				'x');
+	}
+
+	const uintptr_t psp = (uintptr_t)hardware->psp;
+	FIBER_REQUIRE((psp & 7u) == 0u, 'A');
+	FIBER_REQUIRE(psp <= UINTPTR_MAX - frame_bytes, 'O');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((psp + frame_bytes) <= ctx->boot.stack_top, 'P');
+	fiber_port_validate_hardware_frame(&hardware->r0, &layout);
 }
 
 FIBER_CM4_MPU_PRIVILEGED

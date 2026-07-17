@@ -2,15 +2,17 @@
 
 ## Status
 
-Implementation slices 1-3 are complete for the exact `ARM_CM4_MPU` profile.
+Implementation slices 1-4 are complete for the exact `ARM_CM4_MPU` profile.
 They freeze the public type layout, MPU geometry, protected basic/FP context
 views, traits, and exact cohort identity, then add port-owned context
 construction, exact linker ranges, default MPU-image encoding, and immutable
 sealing. Slice 3 adds a strong SVC handler, protected first-context start,
 port-owned CPACR/FPCCR preparation, exact MPU activation/readback, and fixed
-unprivileged yield/return services. The profile deliberately contains no
-PendSV handler, complete forward ABI implementation, selector route, or
-hardware support claim.
+unprivileged yield/return services. Slice 4 adds strong protected PendSV,
+basic/extended FP save and restore, scheduler selection under BASEPRI, and
+per-context MPU replacement under PRIMASK. The profile deliberately contains
+no complete forward ABI implementation, selector route, or hardware support
+claim.
 
 The directory name follows the pinned FreeRTOS GCC port. That reference accepts
 both Cortex-M4F and Cortex-M7F. Fiber therefore freezes both manifests while
@@ -31,7 +33,7 @@ a50edad08b29052631aa469d4df6e6ec7ff68878
 | `portable/GCC/ARM_CM4_MPU/port.c` | 1738 | `cc9b731bc23e52a91d7d37b5dda16d7b501cfb4d3b3a3c8229c355c66662bf59` |
 | `portable/GCC/ARM_CM4_MPU/mpu_wrappers_v2_asm.c` | 2067 | `6b5110e0c14ba78c20d43c1edf17e5ac2311a6af0413d6aaab5df59edb2655c2` |
 
-## Exact Slice-3 Manifest
+## Exact Slice-4 Manifest
 
 ```text
 architecture        ARMv7E-M
@@ -40,7 +42,7 @@ compiler ABI        GCC-compatible Thumb with FP registers enabled
 MPU                 present; total regions explicitly 8 or 16
 VTOR                present
 FPU                 present and used
-selection           build-selected construction/SVC compile/link proof only
+selection           build-selected construction/runtime compile/link proof only
 runtime selectable  no
 ```
 
@@ -69,7 +71,7 @@ initial/basic view:
 ```
 
 The software frame is not placed on the unprivileged stack. Exception entry
-creates the hardware frame there; the future privileged handler copies it into
+creates the hardware frame there; privileged PendSV copies it into
 `FiberContext` before switching MPU regions, as the reference port does.
 
 Per-context MPU register storage follows the reference formula:
@@ -137,14 +139,19 @@ pairs. The protected register image, cursor, and runtime flags remain mutable.
 Four linker-derived global images cover the read-only current-context slot,
 unprivileged code, privileged code, and privileged data. Slice 2 constructs and
 validates these images. Slice 3 writes and reads back the complete selected
-image only during protected first start.
+image during protected first start. Slice 4 replaces the per-context portion
+during PendSV with PRIMASK closed, then reads back every per-context and global
+region before restore.
 
-Compile/link proofs cover M4F/M7F with both 8 and 16 regions. They verify exact
-cohort separation, privileged placement, the complete undefined linker-boundary
+Compile/link proofs cover M4F/M7F with both 8 and 16 regions and compile the
+runtime under both eager and lazy FP policy. They verify exact cohort
+separation, privileged placement, the complete undefined linker-boundary
 surface, successful synthetic placement, failure for every missing boundary,
-strong slot-11 SVC ownership, exact three-service generated code, privileged
-and unprivileged section placement, M7 PRIMASK-preserving BASEPRI clear, and
-continued absence of PendSV and global selector routing.
+strong slot-11 SVC and slot-14 PendSV ownership, exact three-service generated
+code, privileged and unprivileged section placement, six exact protected FP
+transfers, load-only current-slot access, exact reverse dependency surface,
+M7 PRIMASK-preserving BASEPRI writes, duplicate-handler failures, and continued
+absence of global selector routing.
 
 ## Protected SVC And First Start
 
@@ -171,13 +178,37 @@ readback before the transfer. Cortex-M7 uses a PRIMASK-preserving synchronized
 BASEPRI clear instead of FreeRTOS's unconditional IRQ re-enable workaround.
 
 The unprivileged schedule veneer contains only SVC 71 and return; the task
-return veneer contains only SVC 72 and a terminal loop. SVC 71 may pend PendSV,
-but this profile remains non-selectable until the protected FP-aware PendSV
-implementation exists.
+return veneer contains only SVC 72 and a terminal loop. SVC 71 pends the
+port-owned PendSV, but this profile remains non-selectable until the complete
+forward runtime ABI and build-selection slice exists.
+
+## Protected PendSV
+
+PendSV accepts only Thread/PSP basic or extended EXC_RETURN, an exact live PSP,
+zero incoming masks, matching CONTROL/FPCA state, an enabled and read-back MPU
+image, and the configured CPACR/FPCCR policy. The current context seal, cursor,
+stack extent, hardware frame, code address, and canary are validated before the
+handler reads mutable context fields.
+
+The save path starts at protected word zero. For an extended frame it first
+saves `s16-s31`, then copies the 17 raw `s0-s15/FPSCR` words from `PSP + 32`;
+it stores CONTROL, `r4-r11`, EXC_RETURN, PSP, and the copied basic hardware
+frame after them. A basic frame skips the FP transfers and ends at cursor word
+19; an extended frame ends at cursor word 52. `FPCCR.LSPACT` must be clear after
+the VFP copy, so an incomplete lazy save cannot be published to the scheduler.
+
+The scheduler bridge runs in privileged PendSV under the exact BASEPRI
+threshold and snapshots PRIMASK, BASEPRI, FAULTMASK, CONTROL, IPSR, PSP, VTOR,
+MPU state, CPACR, and FPCCR around the external hook. The returned context is
+fully validated before common publishes it. PendSV then closes PRIMASK,
+disables the MPU, replaces every per-context RBAR/RASR pair, reenables and
+reads back the complete MPU image, clears BASEPRI with the M7 errata-safe path,
+and restores the selected basic or extended image. No software frame is ever
+written below the user PSP.
 
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slice-3 mapping | Decision |
+| FreeRTOS family | Fiber slice-4 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs | public fiber API types | Kernel-specific typedefs excluded. |
 | `portUSING_MPU_WRAPPERS`, privilege bit | future optional MPU API | Deferred; no false wrapper support claim. |
@@ -192,7 +223,7 @@ implementation exists.
 | stack growth/alignment | port traits | Retained. |
 | SVC 100..103 | fixed fiber services 70/71/72 | Adapted: first start, yield, and task return are exact port-owned services; FreeRTOS privilege/syscall services remain excluded. |
 | yield/from-ISR macros | unprivileged SVC yield plus future ISR boundary | Thread-mode yield implemented; ISR-safe API remains deferred. |
-| critical-section macros | future selected-port scheduler envelope | Deferred to runtime slice. |
+| critical-section macros | selected-port scheduler envelope | BASEPRI handler envelope implemented; FreeRTOS public critical API excluded. |
 | optimized priority bitmap | C++ scheduler policy | Excluded from CPU port. |
 | interrupt-priority assertion | future ISR API validation | Deferred until an ISR-safe API exists. |
 | privilege query/reset/switch macros | future optional MPU ABI | Deferred. |
@@ -200,14 +231,14 @@ implementation exists.
 
 ## `port.c` Function Ledger
 
-| FreeRTOS path | Fiber owner | Slice-2 decision |
+| FreeRTOS path | Fiber owner | Slice-4 decision |
 | --- | --- | --- |
 | `pxPortInitialiseStack` | selected-port context constructor | Implemented for the unprivileged basic initial image; r9 is preserved and all unused protected words are zeroed. |
 | `prvRestoreContextOfFirstTask` | selected-port first-context restore | Implemented for the validated basic initial image, with second MSP rewind and exact MPU readback. |
 | `vPortSVCHandler`, `vSVCHandler_C` | strong selected-port SVC handler/dispatcher | Implemented with stricter origin, frame, opcode, immediate, continuation, context, and mask checks. |
-| `xPortPendSVHandler` | strong selected-port PendSV handler | Protected geometry frozen; code deferred. |
-| `vTaskSwitchContext` | common scheduler callback bridge | Replaced, as in existing ports. |
-| `prvSetupMPU` | selected-port global MPU startup | Exact global images, TYPE check, complete programming, MemManage enable, CTRL enable, and per-region readback implemented for first start. |
+| `xPortPendSVHandler` | strong selected-port PendSV handler | Implemented with protected basic/extended FP copy, exact cursor geometry, BASEPRI scheduler call, PRIMASK-closed MPU replacement, and restore. |
+| `vTaskSwitchContext` | common scheduler callback bridge | Replaced by the frozen reverse scheduler ABI with CPU-state preservation and restore-before-publication validation. |
+| `prvSetupMPU` | selected-port global MPU startup | Exact global images, TYPE check, complete first programming, MemManage enable, CTRL enable, switch-time per-context replacement, and per-region readback implemented. |
 | `prvGetMPURegionSizeSetting` | selected-port MPU encoder | Replaced by stricter exact encoder that rejects rounding, overflow, bad alignment, region number, and access policy. |
 | `vPortStoreTaskMPUSettings` | base constructor plus optional MPU API | Safe default implemented: configurable regions disabled and exact stack enabled; user configuration/access metadata remains optional. |
 | `xIsPrivileged`, `vResetPrivilege`, `vPortSwitchToUserMode`, `xPortIsTaskPrivileged` | optional MPU API and validated SVC paths | Deferred; no public stubs. |
@@ -237,8 +268,8 @@ that wrapper-v2 services exist.
    sealing, and the initial basic protected image.
 2. Completed: strong SVC first-start, MPU/FPU preparation and readback, and
    controlled unprivileged yield/return services.
-3. Strong PendSV protected save/copy/scheduler/MPU/restore path, including the
-   dynamic extended FP image.
+3. Completed: strong PendSV protected save/copy/scheduler/MPU/restore path,
+   including the dynamic extended FP image.
 4. Frozen eight-function runtime ABI integration, archive/cohort/ELF proofs,
    and exact build selection.
 5. M4F and M7F hardware validation for 8-region devices; 16-region hardware

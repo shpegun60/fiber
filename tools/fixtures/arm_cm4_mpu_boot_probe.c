@@ -6,6 +6,19 @@ static FiberContext fiber_arm_cm4_mpu_probe_context;
 __attribute__((section(".bss.fiber_runtime_current_context_slot")))
 FiberContext *volatile fiber_internal_runtime_current_context_slot;
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_select_scheduler_candidate(
+		FiberContext *current)
+{
+	return current;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_publish_current_context(FiberContext *next)
+{
+	fiber_internal_runtime_current_context_slot = next;
+}
+
 __attribute__((section(".fiber_test_unprivileged_ram"), aligned(2048)))
 static unsigned char fiber_arm_cm4_mpu_probe_stack[2048];
 
@@ -37,16 +50,6 @@ void fiber_panic(char code)
 		__asm volatile("nop");
 	}
 }
-
-fiber_portPRIVILEGED_FUNCTION
-void Default_Handler(void)
-{
-	for (;;) {
-		__asm volatile("nop");
-	}
-}
-
-void PendSV_Handler(void) __attribute__((weak, alias("Default_Handler")));
 
 __attribute__((used, section(".isr_vector")))
 const uintptr_t fiber_arm_cm4_mpu_probe_vectors[16] = {

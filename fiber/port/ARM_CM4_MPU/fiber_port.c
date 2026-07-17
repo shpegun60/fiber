@@ -1,4 +1,4 @@
-/* ARM_CM4_MPU protected SVC first-start and unprivileged service veneers. */
+/* ARM_CM4_MPU protected SVC/PendSV runtime and unprivileged service veneers. */
 
 #include "fiber_port_private.h"
 
@@ -79,11 +79,18 @@ void fiber_port_validate_svc_vector(void)
 			initial_msp), 'P');
 	const uintptr_t svc = fiber_port_code_address(
 			(uintptr_t)vectors[11]);
+	const uintptr_t pendsv = fiber_port_code_address(
+			(uintptr_t)vectors[14]);
 	FIBER_REQUIRE(svc <= UINTPTR_MAX - 2u, 'O');
+	FIBER_REQUIRE(pendsv <= UINTPTR_MAX - 2u, 'O');
 	FIBER_REQUIRE(svc == fiber_port_code_address(
 			(uintptr_t)&SVC_Handler), 'y');
+	FIBER_REQUIRE(pendsv == fiber_port_code_address(
+			(uintptr_t)&PendSV_Handler), 'Y');
 	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_code_start,
 			layout.privileged_code_end, svc, svc + 2u), 'y');
+	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_code_start,
+			layout.privileged_code_end, pendsv, pendsv + 2u), 'Y');
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
@@ -251,6 +258,173 @@ void fiber_port_mpu_activate_first_context(FiberContext *first)
 	fiber_port_mpu_validate_active_context(first);
 }
 
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_pendsv_validate_save_current(FiberContext *current,
+		uint32_t *hardware_frame,
+		uint32_t exc_return)
+{
+	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
+	FIBER_REQUIRE((exc_return == fiber_portEXC_RETURN_THREAD_PSP_BASIC) ||
+			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED), 'l');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)__get_PSP(), 'P');
+
+	const uint32_t control = __get_CONTROL();
+	FIBER_REQUIRE((control & 3u) ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
+		FIBER_REQUIRE((control & 4u) != 0u, 'l');
+	} else {
+		FIBER_REQUIRE((control & 4u) == 0u, 'l');
+	}
+
+	FIBER_REQUIRE((fiber_portSCB_CPACR_REG &
+			fiber_portCPACR_CP10_CP11_FULL) ==
+			fiber_portCPACR_CP10_CP11_FULL, 'e');
+	const uint32_t fpccr = fiber_portFPU_FPCCR_REG;
+	FIBER_REQUIRE((fpccr & fiber_portFPCCR_ASPEN_BIT) != 0u, 'E');
+#if FIBER_FPU_LAZY
+	FIBER_REQUIRE((fpccr & fiber_portFPCCR_LSPEN_BIT) != 0u, 'E');
+#else
+	FIBER_REQUIRE((fpccr & fiber_portFPCCR_LSPEN_BIT) == 0u, 'E');
+	FIBER_REQUIRE((fpccr & fiber_portFPCCR_LSPACT_BIT) == 0u, 'E');
+#endif
+	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_BASIC) {
+		FIBER_REQUIRE((fpccr & fiber_portFPCCR_LSPACT_BIT) == 0u, 'E');
+	}
+
+	fiber_port_context_validate_save_current(current, hardware_frame,
+			exc_return);
+	fiber_port_mpu_validate_active_context(current);
+}
+
+typedef struct FiberPortMpuSchedulerCpuState {
+	uint32_t primask;
+	uint32_t basepri;
+	uint32_t faultmask;
+	uint32_t control;
+	uint32_t ipsr;
+	uint32_t psp;
+	uint32_t vtor;
+	uint32_t mpu_ctrl;
+	uint32_t mpu_rnr;
+	uint32_t memfault_enabled;
+	uint32_t cpacr;
+	uint32_t fpccr;
+} FiberPortMpuSchedulerCpuState;
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_capture_scheduler_cpu_state(
+		FiberPortMpuSchedulerCpuState *state)
+{
+	FIBER_REQUIRE(state != NULL, 'C');
+	__COMPILER_BARRIER();
+	state->primask = __get_PRIMASK();
+	state->basepri = fiber_port_basepri_read();
+	state->faultmask = __get_FAULTMASK();
+	state->control = __get_CONTROL();
+	state->ipsr = __get_IPSR();
+	state->psp = __get_PSP();
+	state->vtor = fiber_portSCB_VTOR_REG;
+	state->mpu_ctrl = fiber_portMPU_CTRL_REG;
+	state->mpu_rnr = fiber_portMPU_RNR_REG;
+	state->memfault_enabled =
+			fiber_portSCB_SHCSR_REG & fiber_portSCB_MEMFAULTENA_BIT;
+	state->cpacr = fiber_portSCB_CPACR_REG;
+	state->fpccr = fiber_portFPU_FPCCR_REG;
+	__COMPILER_BARRIER();
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_validate_scheduler_cpu_state(
+		const FiberPortMpuSchedulerCpuState *before)
+{
+	FIBER_REQUIRE(before != NULL, 'C');
+	__COMPILER_BARRIER();
+	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
+	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	FIBER_REQUIRE(__get_IPSR() == before->ipsr, 'i');
+	FIBER_REQUIRE(__get_PSP() == before->psp, 'P');
+	FIBER_REQUIRE(fiber_portSCB_VTOR_REG == before->vtor, 'V');
+	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == before->mpu_ctrl, 'M');
+	FIBER_REQUIRE(fiber_portMPU_RNR_REG == before->mpu_rnr, 'M');
+	FIBER_REQUIRE((fiber_portSCB_SHCSR_REG &
+			fiber_portSCB_MEMFAULTENA_BIT) ==
+			before->memfault_enabled, 'M');
+	FIBER_REQUIRE(fiber_portSCB_CPACR_REG == before->cpacr, 'e');
+	FIBER_REQUIRE(fiber_portFPU_FPCCR_REG == before->fpccr, 'E');
+	__COMPILER_BARRIER();
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
+		FiberContext *current)
+{
+	FIBER_REQUIRE(current != NULL, 'C');
+	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_basepri_read() ==
+			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_LSPACT_BIT) == 0u, 'E');
+
+	FiberPortMpuSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const next =
+			fiber_internal_runtime_select_scheduler_candidate(current);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_restore(next);
+	fiber_internal_runtime_publish_current_context(next);
+	return next;
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_mpu_switch_to_context(FiberContext *next)
+{
+	FIBER_REQUIRE(next != NULL, 'N');
+	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
+	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_basepri_read() ==
+			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
+			'M');
+	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED,
+			'M');
+
+	/* FreeRTOS disables the MPU while replacing per-task regions. Fiber also
+	 * closes PRIMASK so no high-priority ISR can observe a partial image. */
+	fiber_portDATA_MEMORY_BARRIER();
+	fiber_portMPU_CTRL_REG = 0u;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	FIBER_REQUIRE((fiber_portMPU_CTRL_REG & fiber_portMPU_CTRL_ENABLE) ==
+			0u, 'M');
+
+	for (uint32_t index = 0u;
+			index < fiber_portMPU_CONTEXT_REGION_COUNT; ++index) {
+		fiber_port_mpu_write_region(&next->mpu_regions[index]);
+	}
+
+	fiber_portMPU_CTRL_REG = fiber_portMPU_CTRL_REQUIRED;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED,
+			'M');
+	FIBER_REQUIRE((fiber_portSCB_SHCSR_REG &
+			fiber_portSCB_MEMFAULTENA_BIT) != 0u, 'M');
+	fiber_port_mpu_validate_active_context(next);
+}
+
 static FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_validate_start_svc_frame(const uint32_t *hardware_frame,
 		const FiberPortMpuMemoryLayout *layout)
@@ -333,7 +507,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 	}
 }
 
-/* This exact unprivileged veneer is the only slice-3 route to PENDSVSET. */
+/* This exact unprivileged veneer is the only Thread-mode route to PENDSVSET. */
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FIBER_ATTR_NAKED_ASM fiber_portUNPRIVILEGED_FUNCTION
 void fiber_port_runtime_schedule(void)
@@ -490,6 +664,117 @@ void SVC_Handler(void)
 			".ltorg                                               \n"
 			:
 			:
+			: "memory", "cc");
+}
+
+/*
+ * Protected ARMv7E-M MPU context switch.
+ *
+ * No software frame is written to the unprivileged stack. The handler copies
+ * the complete basic hardware frame, and when EXC_RETURN selects it the low
+ * and high FP state, into the fixed 53-word privileged context image.
+ */
+FIBER_ATTR_NAKED_ASM fiber_portPRIVILEGED_FUNCTION
+void PendSV_Handler(void)
+{
+	__ASM volatile(
+			".syntax unified                         \n"
+			"mrs   r0, psp                          \n" /* basic HW frame */
+			"isb                                    \n"
+			"ldr   r1, =fiber_internal_runtime_current_context_slot \n"
+			"ldr   r1, [r1]                         \n" /* current */
+			"cmp   r1, #0                           \n"
+			"beq   90f                              \n"
+
+			/* Validate provenance, seal, cursor, MPU image, CONTROL, FP
+			 * policy, live PSP, and the complete hardware-frame extent before
+			 * reading a field through the current pointer. */
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r2, lr                           \n"
+			"mov   r3, r0                           \n"
+			"mov   r0, r1                           \n"
+			"mov   r1, r3                           \n"
+			"bl    fiber_port_pendsv_validate_save_current \n"
+			"pop   {r0, r1, r2, lr}                 \n"
+
+			/* Save into the maximum protected image. Extended frames first
+			 * save s16-s31, then copy s0-s15/FPSCR from PSP+32 as 17 raw
+			 * words, exactly matching the pinned FreeRTOS port. */
+			"mov   r2, r1                           \n" /* retain current */
+			"ldr   r1, [r2, #0]                    \n" /* cursor -> word 0 */
+			"mrs   r3, control                      \n"
+			"add   r0, r0, #32                     \n" /* low FP frame */
+			"tst   lr, #16                          \n"
+			"ittt  eq                               \n"
+			"vstmiaeq r1!, {s16-s31}               \n"
+			"vldmiaeq r0, {s0-s16}                 \n"
+			"vstmiaeq r1!, {s0-s16}                \n"
+			"sub   r0, r0, #32                     \n" /* basic frame */
+			"stmia r1!, {r3-r11, lr}               \n"
+			"ldmia r0, {r4-r11}                    \n"
+			"stmia r1!, {r0, r4-r11}               \n"
+			"str   r1, [r2, #0]                    \n" /* exact basic/FP limit */
+
+			/* Any pending lazy low-FP save must have completed when the VFP
+			 * copy executed. Continuing with LSPACT would publish an incomplete
+			 * protected image. */
+			"ldr   r3, =0xE000EF34                 \n"
+			"ldr   r3, [r3]                         \n"
+			"tst   r3, #1                           \n"
+			"bne   91f                              \n"
+
+			/* Run scheduler policy in privileged PendSV under BASEPRI. The
+			 * M7 expansion preserves the exact incoming PRIMASK around errata
+			 * 837070-sensitive BASEPRI writes. */
+			"movs  r0, #%c[sched_basepri]           \n"
+			fiber_portASM_WRITE_BASEPRI_R0_SYNC
+			"mov   r0, r2                           \n"
+			"bl    fiber_port_scheduler_pick_next_from_pendsv \n"
+
+			/* Replace the per-context MPU image with all configurable IRQs
+			 * masked. BASEPRI remains raised until the new image is active and
+			 * read back. */
+			"cpsid i                                \n"
+			"dsb                                    \n"
+			"isb                                    \n"
+			"push  {r0, lr}                         \n"
+			"bl    fiber_port_mpu_switch_to_context \n"
+			"pop   {r2, lr}                         \n" /* selected context */
+			"movs  r0, #0                           \n"
+			fiber_portASM_WRITE_BASEPRI_R0_SYNC
+
+			/* Restore basic state first. For an extended image, r0 now points
+			 * immediately after the copied basic frame; copy the 17 low-FP
+			 * words there and restore s16-s31 from privileged storage. */
+			"ldr   r1, [r2, #0]                    \n"
+			"ldmdb r1!, {r0, r4-r11}               \n"
+			"msr   psp, r0                          \n"
+			"stmia r0!, {r4-r11}                   \n"
+			"ldmdb r1!, {r3-r11, lr}               \n"
+			"msr   control, r3                      \n"
+			"isb                                    \n"
+			"tst   lr, #16                          \n"
+			"ittt  eq                               \n"
+			"vldmdbeq r1!, {s0-s16}                \n"
+			"vstmiaeq r0!, {s0-s16}                \n"
+			"vldmdbeq r1!, {s16-s31}               \n"
+			"str   r1, [r2, #0]                    \n" /* cursor -> word 0 */
+			"cpsie i                                \n"
+			"dsb                                    \n"
+			"isb                                    \n"
+			"bx    lr                               \n"
+
+			"90:                                    \n"
+			"movs  r0, #106                         \n" /* 'j' */
+			"bl    fiber_panic                      \n"
+			"b     90b                              \n"
+			"91:                                    \n"
+			"movs  r0, #69                          \n" /* 'E' */
+			"bl    fiber_panic                      \n"
+			"b     91b                              \n"
+			".ltorg                                 \n"
+			:
+			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI)
 			: "memory", "cc");
 }
 

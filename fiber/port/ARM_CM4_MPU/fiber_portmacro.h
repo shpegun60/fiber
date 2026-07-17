@@ -1,7 +1,7 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM4_MPU dictionary through implementation slice 3. The directory owns
+ * ARM_CM4_MPU dictionary through implementation slice 4. The directory owns
  * context construction, exact MPU/linker geometry, strong SVC first-start,
  * and controlled unprivileged yield/return services. PendSV save/restore and
  * global selection remain deliberately absent. Both Cortex-M4F and Cortex-M7F
@@ -491,7 +491,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM4_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM4_MPU slice 3 must remain non-selectable");
+		"[fiber]: ARM_CM4_MPU slice 4 must remain non-selectable");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
 		"[fiber]: ARM_CM4_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
