@@ -551,6 +551,32 @@ source:
 
 This matches the FreeRTOS rule that `GCC_ARM_CM7` routes to the r0p1-safe port.
 
+For the compile/link-covered Cortex-M3 MPU profile, the exact build-selected
+manifest is:
+
+```text
+defines:
+  FIBER_PORT_BUILD_SELECTED=1
+  FIBER_PORT_ARMV7M=1
+
+include path:
+  fiber/port/ARM_CM3_MPU
+
+sources:
+  fiber/port/ARM_CM3_MPU/fiber_port.c
+  fiber/port/ARM_CM3_MPU/fiber_port_boot.c
+
+required integration:
+  exact privileged/unprivileged linker boundaries
+  exact 32-byte current-context aperture
+  separately compiled context-cohort expectation plus linker KEEP
+```
+
+`FIBER_PORT_ARMV7M` does not identify privileged versus MPU execution. The
+include path, source group, immutable cohort, and linker manifest provide that
+identity. Auto/profile/force selection remains on privileged `ARM_CM3`; it
+must never infer an unprivileged policy from `__MPU_PRESENT`.
+
 ## Core Profiles
 
 The port split is based on architectural behavior:

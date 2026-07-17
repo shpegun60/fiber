@@ -3,13 +3,15 @@
 ## Status
 
 This is the frozen reference audit and staged implementation record for the
-future exact `ARM_CM3_MPU` selected profile. The directory is not selectable
+exact `ARM_CM3_MPU` profile. Slice 7 makes the complete source group selectable
+through an exact build-selected manifest. It remains compile/link-covered only
 and creates no runtime or STM32 hardware support claim.
 
-Implementation slices 1 through 4 and slice 6 are compile/link-covered. Slice
-5 remains intentionally absent because the current safe uniform policy needs
-no heterogeneous pre-start MPU configuration API. The directory owns the
-public type-only context, port-owned boot type, private `fiber_portmacro.h`
+Implementation slices 1 through 4, slice 6, and the slice-7 exact selection
+contract are compile/link-covered. Slice 5 remains intentionally absent because
+the current safe uniform policy needs no heterogeneous pre-start MPU
+configuration API. The directory owns the public type-only context, port-owned
+boot type, private `fiber_portmacro.h`
 dictionary, exact trait values, context-cohort identity, exhaustive 32-bit
 layout assertions, validated MPU encoding, the exact linker memory contract,
 safe default region construction, initial protected context construction, and
@@ -17,9 +19,10 @@ immutable sealing. It now also owns the exact three-service SVC namespace,
 strong SVC dispatcher, first-context MPU activation and restore, unprivileged
 yield veneer, unprivileged task-return veneer, strong protected PendSV
 save/switch/restore engine, and all eight frozen forward runtime operations.
-`fiber_port_select.h`,
-`fiber_port_selected.h`, and all active runtime source maps deliberately remain
-unchanged.
+`fiber_port_select.h` and its architecture-class profiles deliberately remain
+unchanged. Exact selection comes from the build-owned include path and source
+group, while `fiber_port_selected.h` resolves `fiber_port_types.h` through that
+path.
 
 The audit is intentionally completed before copying or adapting implementation
 logic. Every reference file, public macro family, port function, saved-context
@@ -39,7 +42,7 @@ VTOR                        __VTOR_PRESENT == 1
 FPU                         absent and unused
 NVIC priority bits          4 in the frozen compile manifest
 selection                   FIBER_PORT_BUILD_SELECTED == 1
-runtime-selectable          no
+runtime-selectable          no at the slice-1 checkpoint
 ```
 
 The public type-only header remains CMSIS-free and compiles as C and C++. The
@@ -330,6 +333,44 @@ they neither execute the MPU nor establish concrete-board MSP headroom.
 Global selection remains deliberately disabled. Slice 7 is the only step that
 may expose this source group as compile-covered, and slice 8 still requires the
 complete hardware suite before any runtime or STM32 support claim.
+
+## Slice 7 Exact Build Selection Contract
+
+Slice 7 exposes the already complete source group only through the exact
+FreeRTOS-style build manifest:
+
+```text
+defines:
+  FIBER_PORT_BUILD_SELECTED=1
+  FIBER_PORT_ARMV7M=1
+
+include path before fiber/port:
+  fiber/port/ARM_CM3_MPU
+
+selected sources:
+  fiber/port/ARM_CM3_MPU/fiber_port.c
+  fiber/port/ARM_CM3_MPU/fiber_port_boot.c
+
+build-owned cohort expectation:
+  fiber/port/fiber_port_context_cohort_expectation.c
+```
+
+The integration must also provide every exact linker boundary and retain the
+cohort expectation section described below. `FIBER_PORT_ARMV7M` is only an
+architecture compatibility gate. No `FIBER_PORT_ID_*` or MPU auto-detection
+route is introduced: auto, explicit architecture-profile, and force modes
+continue to select privileged `ARM_CM3`, even when CMSIS reports an MPU.
+
+The matrix now compiles the public `fiber_core.h` facade through the exact MPU
+include path and proves its 200-byte, 8-byte-aligned protected context and
+exact `ARM_CM3_MPU` diagnostic name. It separately proves that ARMv7-M auto
+selection with `__MPU_PRESENT == 1` still exposes privileged `ARM_CM3`, and
+that directly compiling the MPU dictionary without build-selected mode fails.
+The existing normal/LTO archive, exact-map ELF, vector, section, cohort, and
+duplicate-handler proofs remain mandatory.
+
+This changes selection eligibility, not runtime validation status. Slice 8 is
+still required before claiming a working Cortex-M3 MPU target or STM32 family.
 
 ## Frozen Reference
 
@@ -1023,12 +1064,13 @@ The implementation proceeds in independently reviewable checkpoints:
    and generated-code/link/vector proofs without enabling runtime selection.
 4. **Complete:** add PendSV protected-frame copy, MPU region switch, CONTROL
    restore, user scheduler bridge, and generated-assembly offset/order proofs.
-5. Add optional pre-start `fiber_port_mpu_abi` configuration and the versioned
-   common context-configuration lifecycle guard only if heterogeneous policy is
-   implemented in this profile.
+5. **Conditionally omitted:** add optional pre-start `fiber_port_mpu_abi`
+   configuration and the versioned common context-configuration lifecycle
+   guard only if heterogeneous policy is implemented in this profile.
 6. **Complete:** add full compile/link/archive/cohort/LTO/MPU-linker proof
    cohorts and all eight forward runtime adapters without enabling selection.
-7. Enable build selection as compile-covered only.
+7. **Complete:** enable exact build selection as compile/link-covered only,
+   without adding an architecture auto-selection route or hardware claim.
 8. Promote to runtime support only after the complete hardware suite.
 
 Common runtime choreography and the five/eight-function ABI are frozen during

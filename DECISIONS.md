@@ -1,5 +1,34 @@
 # Fiber Decision Log
 
+## 2026-07-17: Activate Exact Build Selection For ARM_CM3_MPU
+
+`ARM_CM3_MPU` is now a build-selectable compile/link-covered profile. Exact
+selection follows the FreeRTOS model and requires the complete manifest:
+
+```text
+defines       FIBER_PORT_BUILD_SELECTED=1, FIBER_PORT_ARMV7M=1
+include path  fiber/port/ARM_CM3_MPU
+sources       ARM_CM3_MPU/fiber_port.c, ARM_CM3_MPU/fiber_port_boot.c
+CPU ABI       -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
+hardware      __CORTEX_M=3, MPU and VTOR present, no FPU
+linker        exact privileged/unprivileged ranges and 32-byte current slot
+expectation   build-owned fiber_port_context_cohort_expectation.c plus KEEP
+```
+
+No exact generic port-ID macro is added. `FIBER_PORT_ARMV7M` remains only the
+architecture compatibility gate; the selected include path, source group,
+context cohort, and linker contract provide exact identity. Auto,
+`FIBER_PORT_PROFILE_ARMV7M`, and force modes deliberately continue selecting
+privileged `ARM_CM3`, even when `__MPU_PRESENT == 1`, because hardware
+capability cannot infer application privilege policy.
+
+The matrix proves the exact public facade, diagnostic name, protected context
+layout, rejection without build-selected mode, and non-inference by auto mode,
+in addition to the existing normal/LTO archive and exact MPU-linker proofs.
+This activation is not a hardware claim. Cortex-M3 MPU execution, isolation,
+MemManage faults, SVC/PendSV behavior, and board-specific MSP headroom remain
+unvalidated until slice 8 runs on matching hardware.
+
 ## 2026-07-17: Complete The Non-Selectable ARM_CM3_MPU Software Integration
 
 The exact `ARM_CM3_MPU` source group now implements all eight frozen

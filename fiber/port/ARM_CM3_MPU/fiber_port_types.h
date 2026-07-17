@@ -1,10 +1,10 @@
 /*
  * fiber_port_types.h
  *
- * Type-only public storage layout for the future ARM_CM3_MPU profile.
+ * Type-only public storage layout for the selected ARM_CM3_MPU profile.
  * Application code may allocate this type but must not inspect, copy, or
- * mutate an initialized context. MPU placement will enforce that contract for
- * unprivileged fibers when the runtime implementation is enabled.
+ * mutate an initialized context. The exact integration linker manifest places
+ * it in privileged storage before unprivileged execution is allowed.
  */
 
 #ifndef FIBER_PORT_ARM_CM3_MPU_FIBER_PORT_TYPES_H_
@@ -14,6 +14,14 @@
 
 #include "../../fiber_api_types.h"
 #include "fiber_port_boot_types.h"
+
+/* fiber_port_select.h can name only the ARMv7-M architecture class. The exact
+ * build-selected type header refines that diagnostic to the selected MPU
+ * profile without introducing a second generic port-ID selector. */
+#ifdef FIBER_PORT_NAME
+# undef FIBER_PORT_NAME
+#endif
+#define FIBER_PORT_NAME "ARM_CM3_MPU"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM3_MPU profile dictionary through implementation slice 6.
- * The profile remains non-selectable until the dedicated selector slice, but
- * its exact runtime, MPU, archive, linker, SVC, and PendSV contracts are
- * compile covered.
+ * ARM_CM3_MPU profile dictionary through implementation slice 7.
+ * The profile is selectable only through an exact build-selected manifest.
+ * Auto/profile architecture selection deliberately remains on privileged
+ * ARM_CM3 because MPU presence cannot determine the privilege policy.
  */
 
 #ifndef FIBER_PORT_ARM_CM3_MPU_FIBER_PORTMACRO_H_
@@ -73,7 +73,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM3_MPU runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Exact Cortex-M3 MPU profile facts. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -328,8 +328,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM3_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM3_MPU requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM3_MPU must remain non-selectable before selector activation");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM3_MPU build-selected activation changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_START >= 0 &&
 		fiber_portSVC_START <= 255,
 		"[fiber]: ARM_CM3_MPU start SVC must fit imm8");

@@ -1,4 +1,4 @@
-/* ARM_CM3_MPU slice 6: complete protected runtime ABI engine. */
+/* ARM_CM3_MPU slice 7: build-selected protected runtime ABI engine. */
 
 #include "fiber_port_private.h"
 #include "../../fiber_panic.h"

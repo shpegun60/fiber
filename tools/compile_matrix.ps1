@@ -2353,7 +2353,7 @@ function Test-ArmCm3MpuLayoutContract {
             "fiber_port_private.h",
             "fiber_port.c")) {
         if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
-            throw "ARM_CM3_MPU slice 6 is missing required source: $requiredFile"
+            throw "ARM_CM3_MPU slice 7 is missing required source: $requiredFile"
         }
     }
 
@@ -2385,7 +2385,7 @@ function Test-ArmCm3MpuLayoutContract {
             "void fiber_port_restore_first_context_from_svc(")) {
         if ($portSourceText.IndexOf($requiredText,
                 [System.StringComparison]::Ordinal) -lt 0) {
-            throw "ARM_CM3_MPU slice 6 lost required runtime source: $requiredText"
+            throw "ARM_CM3_MPU slice 7 lost required runtime source: $requiredText"
         }
     }
     foreach ($requiredDispatchText in @(
@@ -2484,7 +2484,7 @@ function Test-ArmCm3MpuLayoutContract {
         $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
         if ($selectorSource.IndexOf("ARM_CM3_MPU",
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM3_MPU slice 6 must not be reachable from global selection: $selectorPath"
+            throw "ARM_CM3_MPU exact identity must remain build-selected instead of entering architecture auto/profile selection: $selectorPath"
         }
     }
 
@@ -2529,6 +2529,97 @@ function Test-ArmCm3MpuLayoutContract {
         "-Werror=implicit-function-declaration",
         "-Werror=return-type"
     )
+
+    $selectedFacadeSource = Join-Path $probeDir "selected-facade.c"
+    $selectedFacadeObject = Join-Path $probeDir "selected-facade.o"
+    $selectedFacadeText = @"
+#include <stddef.h>
+#include "fiber/fiber_core.h"
+
+_Static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: build-selected facade did not expose ARM_CM3_MPU context");
+_Static_assert(offsetof(FiberContext, mpu_regions) == 4u,
+    "[fiber]: build-selected facade lost ARM_CM3_MPU MPU image");
+_Static_assert(sizeof(FiberContext) == 200u,
+    "[fiber]: build-selected facade exposed the wrong context size");
+_Static_assert(_Alignof(FiberContext) == 8u,
+    "[fiber]: build-selected facade exposed the wrong context alignment");
+_Static_assert(sizeof(FIBER_PORT_NAME) == sizeof("ARM_CM3_MPU"),
+    "[fiber]: build-selected facade exposed the wrong diagnostic identity");
+
+int fiber_arm_cm3_mpu_selected_facade_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $selectedFacadeSource -Value $selectedFacadeText `
+        -Encoding ASCII
+    $selectedFacadeBaseArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $manifestDefines + $includeArgs
+    $selectedFacadeArgs = $selectedFacadeBaseArgs + @(
+        "-c", $selectedFacadeSource,
+        "-o", $selectedFacadeObject
+    )
+    & $Compiler @selectedFacadeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU build-selected public facade failed compile"
+    }
+    $selectedFacadeMacros = (& $Compiler @($selectedFacadeBaseArgs + @(
+        "-dM", "-E", $selectedFacadeSource))) -join "`n"
+    if (($LASTEXITCODE -ne 0) -or
+            ($selectedFacadeMacros -notmatch
+            '(?m)^#define FIBER_PORT_NAME "ARM_CM3_MPU"$')) {
+        throw "ARM_CM3_MPU build-selected facade lost its exact diagnostic name"
+    }
+
+    $autoFacadeSource = Join-Path $probeDir "auto-facade.c"
+    $autoFacadeObject = Join-Path $probeDir "auto-facade.o"
+    $autoFacadeText = @"
+#include <stddef.h>
+#include "fiber/fiber_core.h"
+
+_Static_assert(offsetof(FiberContext, sp) == 0u,
+    "[fiber]: ARMv7-M auto selection inferred MPU privilege policy");
+_Static_assert(sizeof(FiberContext) != 200u,
+    "[fiber]: ARMv7-M auto selection silently selected ARM_CM3_MPU");
+
+int fiber_arm_cm3_auto_facade_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $autoFacadeSource -Value $autoFacadeText `
+        -Encoding ASCII
+    $autoFacadeBaseArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + @(
+        "-D__MPU_PRESENT=1",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot"
+    )
+    $autoFacadeArgs = $autoFacadeBaseArgs + @(
+        "-c", $autoFacadeSource,
+        "-o", $autoFacadeObject
+    )
+    & $Compiler @autoFacadeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARMv7-M auto selection must remain on privileged ARM_CM3 even when an MPU exists"
+    }
+    $autoFacadeMacros = (& $Compiler @($autoFacadeBaseArgs + @(
+        "-dM", "-E", $autoFacadeSource))) -join "`n"
+    if (($LASTEXITCODE -ne 0) -or
+            ($autoFacadeMacros -notmatch
+            '(?m)^#define FIBER_PORT_NAME "ARM_CM3"$')) {
+        throw "ARMv7-M auto selection changed its privileged ARM_CM3 identity"
+    }
 
     $typeSource = Join-Path $probeDir "type-only.c"
     $typeObject = Join-Path $probeDir "type-only.o"
@@ -3199,6 +3290,15 @@ int fiber_arm_cm3_mpu_type_only_cpp_probe()
     }
 
     $negativeCases = @(
+        [pscustomobject]@{
+            Name = "not-build-selected"
+            Cpu = "-mcpu=cortex-m3"
+            Defines = @($manifestDefines | Where-Object {
+                ($_ -ne "-DFIBER_PORT_BUILD_SELECTED=1") -and
+                ($_ -ne "-DFIBER_PORT_ARMV7M=1")
+            })
+            Diagnostic = "ARM_CM3_MPU is build-selected only"
+        },
         [pscustomobject]@{
             Name = "wrong-cpu"
             Cpu = "-mcpu=cortex-m4"

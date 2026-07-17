@@ -2,8 +2,8 @@
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
 
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: layout probe must not activate ARM_CM3_MPU runtime selection");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: layout probe requires active ARM_CM3_MPU build selection");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C04u,
 		"[fiber]: ARM_CM3_MPU feature identity changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_REGION_READ_WRITE == 0x03000000u,

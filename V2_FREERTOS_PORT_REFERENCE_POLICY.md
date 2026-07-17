@@ -517,10 +517,10 @@ The first missing-profile audit is frozen in
 kernel veneer as an explicit exclusion. The record requires protected saved
 context storage, per-switch MPU region programming, CONTROL restoration,
 unprivileged yield/return SVC services, exact linker isolation, and a safe
-default policy before this profile can become selectable.
+default policy as mandatory prerequisites to exact build selection.
 
-Its first four implementation slices and its sixth integration slice freeze a
-CMSIS-free public context type,
+Its first four implementation slices, sixth integration slice, and seventh
+selection slice freeze a CMSIS-free public context type,
 the exact `CM3M` port/layout/feature identity, four RBAR/RASR pairs, the
 20-word protected register image, MPU-specific boot metadata, every 32-bit
 field offset, exact MPU region encoding, ten mandatory linker boundaries,
@@ -530,10 +530,11 @@ three-service SVC namespace, strong fail-closed SVC dispatch, first-context MPU
 activation/restore, unprivileged yield/return veneers, and protected PendSV
 save/switch/MPU-replace/restore, all eight forward runtime operations, and a
 portable-application static-archive integration. The compile matrix treats this
-as a non-selectable complete-software cohort, requires normal/LTO,
-section-GC, exact-memory, current-slot, stack, cohort, vector, and strong-handler
-proofs, and rejects wrong-core, no-MPU, missing-boundary, or competing-handler
-manifests. No selector route or runtime support follows from these proofs.
+as an exact build-selectable, compile/link-covered cohort, requires normal/LTO,
+section-GC, exact-memory, current-slot, stack, cohort, vector, strong-handler,
+selected-facade, and build-selected-only proofs, and rejects wrong-core,
+no-MPU, missing-boundary, competing-handler, and architecture-auto-inference
+manifests. Selection eligibility is not a runtime or STM32 hardware claim.
 
 The same three role manifests apply to the ARM_CM35P, ARM_CM52, and ARM_CM85
 `non_secure` engines even though those rows are reference-portability targets

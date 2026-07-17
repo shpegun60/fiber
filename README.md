@@ -80,6 +80,8 @@ Cortex-M0/M0+: fiber/port/ARM_CM0/fiber_port.c
 Cortex-M3:     fiber/port/ARM_CM3/fiber_port.c
                fiber/port/ARM_CM3/fiber_port_boot.c
                fiber/port/ARM_CM3/fiber_port_exception.c
+Cortex-M3 MPU: fiber/port/ARM_CM3_MPU/fiber_port.c
+               fiber/port/ARM_CM3_MPU/fiber_port_boot.c
 Cortex-M4/F:   fiber/port/ARM_CM4/fiber_port.c
                fiber/port/ARM_CM4/fiber_port_boot.c
                fiber/port/ARM_CM4/fiber_port_exception.c
@@ -211,6 +213,17 @@ For automatic ARMv7E-M public type selection, include the device CMSIS header
 `__CORTEX_M` so the facade can distinguish the concrete M4 and M7 source
 groups. A build-selected integration supplies its selected type header through
 the build include path instead.
+
+The compile/link-covered `ARM_CM3_MPU` profile is build-selected only. Its
+exact manifest defines `FIBER_PORT_BUILD_SELECTED=1` and
+`FIBER_PORT_ARMV7M=1`, places `fiber/port/ARM_CM3_MPU` before `fiber/port` on
+the include path, and compiles only the two MPU source files listed above.
+It also requires the privileged/unprivileged linker ranges, exact 32-byte
+current-context aperture, and cohort expectation `KEEP` contract documented in
+`fiber/port/ARM_CM3_MPU/FREERTOS_PARITY.md`. Auto/profile selection never
+infers MPU or unprivileged policy from `__MPU_PRESENT`. This profile has no
+hardware support claim until its board isolation suite passes.
+
 The v2 target is FreeRTOS-style ownership: each concrete selected port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
 exception setup, FPU traits, and architecture-specific critical-section policy.
