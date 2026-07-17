@@ -698,7 +698,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	ctx->protected_context.r6 = 0u;
 	ctx->protected_context.r7 = 0u;
 	ctx->protected_context.r8 = 0u;
-	ctx->protected_context.r9 = 0u;
+	ctx->protected_context.r9 = fiber_port_read_r9();
 	ctx->protected_context.r10 = 0u;
 	ctx->protected_context.r11 = 0u;
 	ctx->protected_context.exc_return = fiber_portINITIAL_EXC_RETURN;

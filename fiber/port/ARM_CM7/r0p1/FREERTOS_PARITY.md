@@ -57,6 +57,11 @@ No FreeRTOS source text is copied into these files. If future work copies
 substantial FreeRTOS source, the MIT license notice must travel with that
 copied source.
 
+The compile matrix covers core-only M7 plus hard-float/eager and
+softfp/lazy M7F configurations. This is compiler/configuration evidence, not a
+replacement for the existing H7 hardware run or the still-required affected
+r0p0/r0p1 errata-board validation.
+
 ## Build Selection
 
 FreeRTOS production selection:

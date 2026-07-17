@@ -145,11 +145,16 @@ alignment. `FiberContext` storage must be wholly inside privileged data, the
 raw stack wholly inside unprivileged RAM, and the entry/return veneer wholly
 inside unprivileged executable code but outside privileged code.
 
-The initial protected image follows the audited FreeRTOS 20-word geometry:
-CONTROL, r4-r11, EXC_RETURN, PSP, and the copied basic hardware frame are stored
-in privileged context memory. The PSP reserves one complete basic hardware
-frame on the unprivileged stack. The stacked PC is Thumb-normalized, xPSR.T is
-set, and LR targets the slice-3 port-owned unprivileged return veneer.
+The initial protected image follows the audited FreeRTOS 20-word storage
+geometry: 19 active words hold CONTROL, r4-r11, EXC_RETURN, PSP, and the copied
+basic hardware frame; the final word is the explicit spare/one-past cursor
+target. The PSP reserves one complete basic hardware frame on the
+unprivileged stack. The stacked PC is Thumb-normalized, xPSR.T is set, LR
+targets the slice-3 port-owned unprivileged return veneer, and r9 is seeded
+from the live platform value so a process-wide static-base ABI is preserved
+when the integration toolchain reserves r9 for that role. Under the ordinary
+AAPCS configuration r9 remains a general callee-saved register and its initial
+value has no platform-static-base meaning.
 
 The boot hash seals all immutable boot/ABI fields, initial CONTROL policy, the
 four-region count, and all four RBAR/RASR pairs. It intentionally excludes the
@@ -273,6 +278,12 @@ word 19 address         one-past restore cursor target
 No software frame is placed on the unprivileged stack. The basic hardware frame
 already created by exception entry is copied into privileged context storage,
 and the live cursor advances from `control` to `cursor_limit`.
+
+The matrix separately freezes the initial live-r9 seed, compiles and inspects a
+`-ffixed-r9` generated-code probe for the reserved static-base ABI, and freezes
+the exact exception priority contract used by this profile: PendSV is
+written/read back at the lowest implemented priority and SVCall at priority
+zero.
 
 The scheduler bridge executes in privileged PendSV under the exact selected
 `BASEPRI`. In addition to the common candidate lifecycle, this port snapshots

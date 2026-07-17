@@ -1,5 +1,37 @@
 # Fiber Decision Log
 
+## 2026-07-17: Close Third-Round Portability Proof Gaps
+
+The third independent line-by-line comparison against the pinned local
+FreeRTOS ports found no new save/restore, SVC, PendSV, BASEPRI, FPU-frame, or
+MPU-region ordering defect in the production CM0, CM3, CM4, CM7, and
+build-selected CM3_MPU source groups.
+
+One initial-context portability gap was corrected in `ARM_CM3_MPU`: its
+protected synthetic frame now seeds callee-saved `r9` from the live platform
+value, matching the policy already used by the privileged ports. This retains
+a process-wide static base for toolchain or platform ABIs that reserve `r9`,
+instead of assuming that zero is always a valid initial value. The protected
+20-word storage remains the audited FreeRTOS geometry: 19 active saved words
+plus the explicit spare/one-past cursor word.
+
+Because ordinary AAPCS permits GCC to use `r9` as a general callee-saved
+register, the corresponding generated-code proof uses `-ffixed-r9`. It checks
+the configuration in which `r9` actually has platform static-base semantics;
+the ordinary ABI remains covered separately and does not assign that meaning
+to the initial register value.
+
+The compile matrix now also exercises M4F and M7F with the softfp calling
+convention and lazy FP stacking enabled. This proves that FPU discovery,
+extended-frame compilation, and the no-FP scheduler ABI do not accidentally
+depend on hard-float-only predefined macros. The CM3_MPU source proof now
+freezes both the live-r9 seed and its exact exception priority policy:
+PendSV lowest, SVCall highest, with exact readback predicates.
+
+`transitional_v8m` remains intentionally unchanged. These are software-side
+proofs; CM0/CM3/CM4/CM3_MPU hardware claims and a refreshed CM7 run remain
+separate.
+
 ## 2026-07-17: Close Second-Round Cortex-M Port Guards
 
 The privileged CM0, CM3, CM4, and CM7 schedule-request paths now require exact

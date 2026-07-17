@@ -195,6 +195,16 @@
 #define fiber_portPRIVILEGED_DATA \
 	__attribute__((section(".fiber_port_privileged_data")))
 
+/* Preserve the platform/static-base register in the synthetic first context.
+ * GCC normally treats r9 as a general callee-saved register, but PIC or
+ * platform ABIs may reserve it as a process-wide static base. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
+
 fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;

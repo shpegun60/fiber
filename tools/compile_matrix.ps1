@@ -2595,7 +2595,17 @@ function Test-ArmCm3MpuLayoutContract {
 
     $bootSourcePath = Join-Path $profileDir "fiber_port_boot.c"
     $portSourcePath = Join-Path $profileDir "fiber_port.c"
+    $macroSourcePath = Join-Path $profileDir "fiber_portmacro.h"
+    $bootSourceText = Get-Content -LiteralPath $bootSourcePath -Raw
     $portSourceText = Get-Content -LiteralPath $portSourcePath -Raw
+    $macroSourceText = Get-Content -LiteralPath $macroSourcePath -Raw
+    if (($macroSourceText.IndexOf("uint32_t fiber_port_read_r9(void)",
+                [System.StringComparison]::Ordinal) -lt 0) -or
+            ($bootSourceText.IndexOf(
+                "ctx->protected_context.r9 = fiber_port_read_r9();",
+                [System.StringComparison]::Ordinal) -lt 0)) {
+        throw "ARM_CM3_MPU initial context must preserve the live r9 platform/static base"
+    }
     foreach ($requiredText in @(
             "void SVC_Handler(void)",
             "void PendSV_Handler(void)",
@@ -2684,6 +2694,18 @@ function Test-ArmCm3MpuLayoutContract {
     if (($mpuPrimaskCheck -lt 0) -or ($mpuNextFieldRead -lt 0) -or
             ($mpuPrimaskCheck -ge $mpuNextFieldRead)) {
         throw "ARM_CM3_MPU must close PRIMASK before consuming the next MPU image"
+    }
+    $prioritySetupBody = Get-CFunctionBody -Source $portSourceText `
+        -Signature "void fiber_port_configure_exception_priorities(void)" `
+        -Path $portSourcePath
+    foreach ($requiredPriorityProof in @(
+            "lowest << fiber_portNVIC_PENDSV_PRIORITY_SHIFT",
+            "FIBER_REQUIRE(pendsv_priority == lowest, 'P');",
+            "FIBER_REQUIRE(svc_priority == 0u, 'w');")) {
+        if ($prioritySetupBody.IndexOf($requiredPriorityProof,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM3_MPU exact SVC/PendSV priority policy changed: $requiredPriorityProof"
+        }
     }
     $firstSelectionBody = Get-CFunctionBody -Source $portSourceText `
         -Signature "FiberContext *fiber_port_runtime_select_first(void)" `
@@ -2952,6 +2974,39 @@ int fiber_arm_cm3_mpu_type_only_probe(void)
     ))
     if ($LASTEXITCODE -ne 0) {
         throw "ARM_CM3_MPU context construction source failed compile"
+    }
+
+    $r9ProbeSource = Join-Path $probeDir "r9-static-base.c"
+    $r9ProbeObject = Join-Path $probeDir "r9-static-base.o"
+    $r9ProbeText = @"
+#include "fiber_portmacro.h"
+
+uint32_t fiber_arm_cm3_mpu_read_static_base_probe(void)
+{
+    return fiber_port_read_r9();
+}
+"@
+    Set-Content -LiteralPath $r9ProbeSource -Value $r9ProbeText `
+        -Encoding ASCII
+    & $Compiler @($sliceCompileArgs + @(
+        "-ffixed-r9",
+        "-c", $r9ProbeSource,
+        "-o", $r9ProbeObject
+    ))
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU reserved-r9 static-base probe failed compile"
+    }
+    $r9ProbeDisassembly = (& $Objdump -dr $r9ProbeObject) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for ARM_CM3_MPU reserved-r9 probe"
+    }
+    $r9ProbeBody = Get-DisassemblyFunctionBody `
+        -Disassembly $r9ProbeDisassembly `
+        -Symbol "fiber_arm_cm3_mpu_read_static_base_probe" `
+        -Path $r9ProbeObject
+    if (($r9ProbeBody -notmatch '\bmov\s+r0,\s*r9\b') -or
+            ($r9ProbeBody -notmatch '\bbx\s+lr\b')) {
+        throw "ARM_CM3_MPU reserved-r9 helper no longer reads the live static base"
     }
 
     & $Compiler @($sliceCompileArgs + @(
@@ -4075,9 +4130,11 @@ $configs = @(
     [pscustomobject]@{ Name = "cortex-m3-prio8";    CpuArgs = @("-mcpu=cortex-m3");              Core = "core_cm3.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m4";          CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m4f";         CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m4f-softfp-lazy"; CpuArgs = @("-mcpu=cortex-m4");          Core = "core_cm4.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=softfp", "-DFIBER_FPU_LAZY=1") },
     [pscustomobject]@{ Name = "cortex-m4f-prio8";   CpuArgs = @("-mcpu=cortex-m4");              Core = "core_cm4.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv4-sp-d16", "-mfloat-abi=hard") },
     [pscustomobject]@{ Name = "cortex-m7";          CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m7f";         CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m7f-softfp-lazy"; CpuArgs = @("-mcpu=cortex-m7");          Core = "core_cm7.h";     PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=softfp", "-DFIBER_FPU_LAZY=1") },
     [pscustomobject]@{ Name = "cortex-m7f-prio8";   CpuArgs = @("-mcpu=cortex-m7");              Core = "core_cm7.h";     PriorityBits = 8; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
     [pscustomobject]@{ Name = "cortex-m23";         CpuArgs = @("-mcpu=cortex-m23");             Core = "core_cm23.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m33";         CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
@@ -4094,9 +4151,11 @@ $portProfiles = @{
     "cortex-m3-prio8"   = "FIBER_PORT_PROFILE_ARMV7M"
     "cortex-m4"         = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m4f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m4f-softfp-lazy" = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m4f-prio8"  = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7"         = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7f"        = "FIBER_PORT_PROFILE_ARMV7EM"
+    "cortex-m7f-softfp-lazy" = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m7f-prio8"  = "FIBER_PORT_PROFILE_ARMV7EM"
     "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
     "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
@@ -4139,12 +4198,14 @@ $buildSelectedPortSourcesByProfile = @{
 $buildSelectedPortIncludeDirsByConfig = @{
     "cortex-m7"  = "fiber\port\ARM_CM7\r0p1"
     "cortex-m7f" = "fiber\port\ARM_CM7\r0p1"
+    "cortex-m7f-softfp-lazy" = "fiber\port\ARM_CM7\r0p1"
     "cortex-m7f-prio8" = "fiber\port\ARM_CM7\r0p1"
 }
 
 $buildSelectedPortSourcesByConfig = @{
     "cortex-m7"  = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m7f-softfp-lazy" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
 }
 

@@ -25,9 +25,9 @@ fiber/port/ARM_CM4/fiber_port.c
 fiber/port/ARM_CM4/fiber_port_exception.c
 ```
 
-The same source supports core-only M4 and hard-float M4F builds from compiler,
-CMSIS, and silicon facts. Both are compile/link-covered and await hardware
-validation on matching STM32 targets.
+The same source supports core-only M4 and M4F builds from compiler, CMSIS, and
+silicon facts. Hard-float/eager and softfp/lazy FPU configurations are
+compile/link-covered and await hardware validation on matching STM32 targets.
 
 ## `portmacro.h` Ledger
 
