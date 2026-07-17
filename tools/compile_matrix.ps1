@@ -428,7 +428,10 @@ function Test-ContextPortBoundary {
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
-    $expectedSlotOwners = @($portSources | ForEach-Object {
+    $slotOwnerSources = @($portSources) + @(
+        "fiber\port\ARM_CM3_MPU\fiber_port.c"
+    )
+    $expectedSlotOwners = @($slotOwnerSources | ForEach-Object {
         (Join-Path $RepositoryRoot $_).ToLowerInvariant()
     } | Sort-Object)
     $actualSlotOwners = @(
@@ -1044,6 +1047,7 @@ function Test-CommonRuntimeWithoutCmsis {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
+        [string]$Objdump,
         [string]$BuildRoot
     )
 
@@ -1084,6 +1088,16 @@ function Test-CommonRuntimeWithoutCmsis {
         if ($LASTEXITCODE -ne 0) {
             throw "Common runtime unexpectedly requires CMSIS or selected-port headers: $source"
         }
+    }
+
+    $runtimeStateObject = Join-Path $probeDir "fiber_runtime_state.c.o"
+    $runtimeStateSections = (& $Objdump -h $runtimeStateObject) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for common runtime current-slot storage proof"
+    }
+    if ($runtimeStateSections -notmatch
+            '\.bss\.fiber_runtime_current_context_slot\s+00000004\s+') {
+        throw "Common current slot must remain one 32-bit object in its isolated .bss subsection"
     }
 }
 
@@ -2308,6 +2322,856 @@ typedef enum IRQn {
     }
 }
 
+function Test-ArmCm3MpuLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$Objdump,
+        [string]$Objcopy,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileRelative = "fiber\port\ARM_CM3_MPU"
+    $profileDir = Join-Path $RepositoryRoot $profileRelative
+    $probeSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm3_mpu_layout_probe.c"
+    $probeDir = Join-Path $BuildRoot "arm-cm3-mpu-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value "#ifndef MAIN_H_`n#define MAIN_H_`n#endif`n" -Encoding ASCII
+
+    foreach ($requiredFile in @(
+            "fiber_port_boot.h",
+            "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_port.c")) {
+        if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
+            throw "ARM_CM3_MPU slice 4 is missing required source: $requiredFile"
+        }
+    }
+
+    foreach ($runtimeFile in @("fiber_port_exception.c")) {
+        if (Test-Path (Join-Path $profileDir $runtimeFile)) {
+            throw "ARM_CM3_MPU keeps SVC and PendSV in fiber_port.c; unexpected source: $runtimeFile"
+        }
+    }
+
+    $bootSourcePath = Join-Path $profileDir "fiber_port_boot.c"
+    $portSourcePath = Join-Path $profileDir "fiber_port.c"
+    $portSourceText = Get-Content -LiteralPath $portSourcePath -Raw
+    foreach ($requiredText in @(
+            "void SVC_Handler(void)",
+            "void PendSV_Handler(void)",
+            "void fiber_port_svc_dispatch(",
+            "void fiber_port_pendsv_validate_save_current(",
+            "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(",
+            "void fiber_port_mpu_switch_to_context(",
+            "void fiber_port_runtime_schedule(void)",
+            "void fiber_port_unprivileged_task_return(void)",
+            "void fiber_port_start_first_context(void)",
+            "void fiber_port_restore_first_context_from_svc(")) {
+        if ($portSourceText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM3_MPU slice 4 lost required runtime source: $requiredText"
+        }
+    }
+    foreach ($requiredDispatchText in @(
+            "case fiber_portSVC_START:",
+            "case fiber_portSVC_YIELD:",
+            "case fiber_portSVC_RETURN:",
+            "default:",
+            "fiber_panic('u');")) {
+        if ($portSourceText.IndexOf($requiredDispatchText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM3_MPU SVC dispatch is not fail-closed: $requiredDispatchText"
+        }
+    }
+    $dispatchStart = $portSourceText.IndexOf(
+        "void fiber_port_svc_dispatch(",
+        [System.StringComparison]::Ordinal)
+    $dispatchSource = $portSourceText.Substring($dispatchStart)
+    $excReturnCheck = $dispatchSource.IndexOf(
+        "FIBER_REQUIRE((exc_return == fiber_portEXC_RETURN_THREAD_MSP)",
+        [System.StringComparison]::Ordinal)
+    $frameShapeCheck = $dispatchSource.IndexOf(
+        "fiber_port_validate_svc_frame_shape(hardware_frame);",
+        [System.StringComparison]::Ordinal)
+    if (($excReturnCheck -lt 0) -or ($frameShapeCheck -lt 0) -or
+            ($excReturnCheck -ge $frameShapeCheck)) {
+        throw "ARM_CM3_MPU SVC dispatch must reject foreign EXC_RETURN before reading its selected frame"
+    }
+    $pendsvPreflightStart = $portSourceText.IndexOf(
+        "void fiber_port_pendsv_validate_save_current(",
+        [System.StringComparison]::Ordinal)
+    $pendsvPreflightSource = $portSourceText.Substring($pendsvPreflightStart)
+    $pendsvExcReturnCheck = $pendsvPreflightSource.IndexOf(
+        "FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN, 'l');",
+        [System.StringComparison]::Ordinal)
+    $pendsvContextCheck = $pendsvPreflightSource.IndexOf(
+        "fiber_port_context_validate_save_current(current, hardware_frame);",
+        [System.StringComparison]::Ordinal)
+    if (($pendsvExcReturnCheck -lt 0) -or ($pendsvContextCheck -lt 0) -or
+            ($pendsvExcReturnCheck -ge $pendsvContextCheck)) {
+        throw "ARM_CM3_MPU PendSV must reject foreign EXC_RETURN before frame/context validation"
+    }
+    $schedulerBridgeStart = $portSourceText.IndexOf(
+        "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(",
+        [System.StringComparison]::Ordinal)
+    $schedulerBridgeSource = $portSourceText.Substring($schedulerBridgeStart)
+    $nextRestoreCheck = $schedulerBridgeSource.IndexOf(
+        "fiber_port_context_validate_restore(next);",
+        [System.StringComparison]::Ordinal)
+    $nextPublication = $schedulerBridgeSource.IndexOf(
+        "fiber_internal_runtime_publish_current_context(next);",
+        [System.StringComparison]::Ordinal)
+    if (($nextRestoreCheck -lt 0) -or ($nextPublication -lt 0) -or
+            ($nextRestoreCheck -ge $nextPublication)) {
+        throw "ARM_CM3_MPU scheduler bridge must validate next before publication"
+    }
+    $mpuSwitchStart = $portSourceText.IndexOf(
+        "void fiber_port_mpu_switch_to_context(",
+        [System.StringComparison]::Ordinal)
+    $mpuSwitchSource = $portSourceText.Substring($mpuSwitchStart)
+    $mpuPrimaskCheck = $mpuSwitchSource.IndexOf(
+        "FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');",
+        [System.StringComparison]::Ordinal)
+    $mpuNextFieldRead = $mpuSwitchSource.IndexOf(
+        "next->mpu_regions[index]",
+        [System.StringComparison]::Ordinal)
+    if (($mpuPrimaskCheck -lt 0) -or ($mpuNextFieldRead -lt 0) -or
+            ($mpuPrimaskCheck -ge $mpuNextFieldRead)) {
+        throw "ARM_CM3_MPU must close PRIMASK before consuming the next MPU image"
+    }
+
+    foreach ($selectorPath in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
+        if ($selectorSource.IndexOf("ARM_CM3_MPU",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM3_MPU slice 4 must not be reachable from global selection: $selectorPath"
+        }
+    }
+
+    foreach ($typeHeaderName in @(
+            "fiber_port_types.h",
+            "fiber_port_boot_types.h")) {
+        $typeHeaderPath = Join-Path $profileDir $typeHeaderName
+        $typeHeaderSource = Get-Content -LiteralPath $typeHeaderPath -Raw
+        if ([regex]::IsMatch($typeHeaderSource,
+                '\b(mcu_core|fiber_compiler|fiber_portmacro|SCB|NVIC|__ASM)\b')) {
+            throw "ARM_CM3_MPU public type header acquired a CPU/runtime dependency: $typeHeaderPath"
+        }
+    }
+
+    $includeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $typeIncludeArgs = @("-I$profileDir")
+    $manifestDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV7M=1",
+        "-D__CORTEX_M=3",
+        "-D__MPU_PRESENT=1",
+        "-D__VTOR_PRESENT=1",
+        "-D__FPU_PRESENT=0",
+        "-D__FPU_USED=0",
+        "-D__NVIC_PRIO_BITS=4"
+    )
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+
+    $typeSource = Join-Path $probeDir "type-only.c"
+    $typeObject = Join-Path $probeDir "type-only.o"
+    $typeText = @"
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: ARM_CM3_MPU cursor offset changed");
+_Static_assert(offsetof(FiberContext, mpu_regions) == 4u,
+    "[fiber]: ARM_CM3_MPU MPU image offset changed");
+_Static_assert(offsetof(FiberContext, protected_context) == 36u,
+    "[fiber]: ARM_CM3_MPU protected context offset changed");
+_Static_assert(offsetof(FiberContext, boot) == 116u,
+    "[fiber]: ARM_CM3_MPU boot offset changed");
+_Static_assert(sizeof(FiberContext) == 200u,
+    "[fiber]: ARM_CM3_MPU context size changed");
+_Static_assert(_Alignof(FiberContext) == 8u,
+    "[fiber]: ARM_CM3_MPU context alignment changed");
+
+int fiber_arm_cm3_mpu_type_only_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $typeSource -Value $typeText -Encoding ASCII
+
+    $typeArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $typeIncludeArgs + @(
+        "-c", $typeSource,
+        "-o", $typeObject
+    )
+    & $Compiler @typeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU type-only header failed without CMSIS"
+    }
+
+    $layoutObject = Join-Path $probeDir "layout.o"
+    $layoutArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $manifestDefines + $includeArgs + @(
+        "-c", $probeSource,
+        "-o", $layoutObject
+    )
+    & $Compiler @layoutArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU exact layout manifest failed compile"
+    }
+
+    $nmOutput = & $Nm --defined-only $layoutObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM3_MPU layout probe"
+    }
+    $cohortSymbols = @()
+    foreach ($line in $nmOutput) {
+        if ($line -match '\b(?<symbol>fiber_port_context_cohort_\S+)\s*$') {
+            $cohortSymbols += $Matches['symbol']
+        }
+    }
+    if ($cohortSymbols.Count -ne 1) {
+        throw "ARM_CM3_MPU layout probe must define exactly one cohort symbol"
+    }
+    $expectedIdentity = "fiber_port_context_cohort_armv7m_p0x434D334Du_l0x00010001u_"
+    if (-not $cohortSymbols[0].StartsWith($expectedIdentity,
+            [System.StringComparison]::Ordinal)) {
+        throw "ARM_CM3_MPU cohort identity mismatch: $($cohortSymbols[0])"
+    }
+    if ($cohortSymbols[0].IndexOf("p0x434D3033u",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM3_MPU cohort reused privileged ARM_CM3 identity"
+    }
+
+    $bootProbeSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm3_mpu_boot_probe.c"
+    $bootObject = Join-Path $probeDir "boot.o"
+    $portObject = Join-Path $probeDir "runtime-port.o"
+    $bootProbeObject = Join-Path $probeDir "boot-probe.o"
+    $sliceCompileArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11",
+        "-O2",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fno-unwind-tables",
+        "-fno-asynchronous-unwind-tables"
+    ) + $warningArgs + $manifestDefines + $includeArgs
+
+    & $Compiler @($sliceCompileArgs + @(
+        "-c", $bootSourcePath,
+        "-o", $bootObject
+    ))
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU context construction source failed compile"
+    }
+
+    & $Compiler @($sliceCompileArgs + @(
+        "-c", $portSourcePath,
+        "-o", $portObject
+    ))
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU SVC slice source failed compile"
+    }
+
+    & $Compiler @($sliceCompileArgs + @(
+        "-c", $bootProbeSource,
+        "-o", $bootProbeObject
+    ))
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU context construction probe failed compile"
+    }
+
+    $bootUndefined = & $Nm --undefined-only $bootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM3_MPU construction object"
+    }
+    $allowedUndefined = @(
+        "__fiber_mpu_unprivileged_code_start__",
+        "__fiber_mpu_unprivileged_code_end__",
+        "__fiber_mpu_privileged_code_start__",
+        "__fiber_mpu_privileged_code_end__",
+        "__fiber_mpu_privileged_data_start__",
+        "__fiber_mpu_privileged_data_end__",
+        "__fiber_mpu_current_context_slot_start__",
+        "__fiber_mpu_current_context_slot_end__",
+        "__fiber_mpu_unprivileged_ram_start__",
+        "__fiber_mpu_unprivileged_ram_end__",
+        "SVC_Handler",
+        "PendSV_Handler",
+        "fiber_internal_task_return",
+        "fiber_panic",
+        "fiber_port_restore_first_context_from_svc",
+        "fiber_port_runtime_schedule",
+        "fiber_port_start_first_context",
+        "fiber_port_svc_dispatch",
+        "fiber_port_unprivileged_task_return"
+    )
+    foreach ($line in $bootUndefined) {
+        if ($line -notmatch '\bU\s+(?<symbol>\S+)\s*$') {
+            continue
+        }
+        $symbol = $Matches['symbol']
+        if (($allowedUndefined -notcontains $symbol) -and
+                (-not $symbol.StartsWith("fiber_port_context_cohort_",
+                    [System.StringComparison]::Ordinal))) {
+            throw "ARM_CM3_MPU construction acquired unexpected dependency: $symbol"
+        }
+    }
+    foreach ($requiredSymbol in $allowedUndefined) {
+        if (-not ($bootUndefined -match "\b$([regex]::Escape($requiredSymbol))\s*$")) {
+            throw "ARM_CM3_MPU construction lost required dependency: $requiredSymbol"
+        }
+    }
+
+    $portUndefined = @(& $Nm --undefined-only $portObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM3_MPU SVC/PendSV object"
+    }
+    $allowedPortUndefined = @(
+        "fiber_internal_runtime_current_context_slot",
+        "fiber_internal_runtime_publish_current_context",
+        "fiber_internal_runtime_select_scheduler_candidate",
+        "fiber_internal_task_return",
+        "fiber_panic",
+        "fiber_port_context_validate_restore",
+        "fiber_port_context_validate_running_svc",
+        "fiber_port_context_validate_save_current",
+        "fiber_port_mpu_build_global_regions",
+        "fiber_port_mpu_linker_layout_check",
+        "fiber_port_mpu_load_linker_layout"
+    )
+    $actualPortUndefined = @(Get-NmUndefinedSymbolNames `
+        -NmOutput $portUndefined -Path $portObject)
+    Assert-ExactSymbolSet -Actual $actualPortUndefined `
+        -Expected $allowedPortUndefined `
+        -Description "ARM_CM3_MPU SVC/PendSV undefined surface"
+
+    $bootSections = & $Objdump -h $bootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for ARM_CM3_MPU construction object"
+    }
+    if (-not ($bootSections -match '\.fiber_port_privileged_functions')) {
+        throw "ARM_CM3_MPU construction functions are not in privileged text"
+    }
+    $bootSymbolTable = & $Objdump -t $bootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump symbol-table read failed for ARM_CM3_MPU construction object"
+    }
+    $definedPortFunctions = 0
+    foreach ($line in $bootSymbolTable) {
+        if ($line -match '^\s*[0-9a-fA-F]+\s+\w+\s+F\s+(?<section>\S+)\s+[0-9a-fA-F]+\s+(?<symbol>fiber_port_\S+)\s*$') {
+            $definedPortFunctions++
+            if ($Matches['section'] -ne '.fiber_port_privileged_functions') {
+                throw "ARM_CM3_MPU function escaped privileged text: $($Matches['symbol']) -> $($Matches['section'])"
+            }
+        }
+    }
+    if ($definedPortFunctions -eq 0) {
+        throw "ARM_CM3_MPU privileged function section proof matched no functions"
+    }
+
+    $portSections = @(& $Objdump -h $portObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for ARM_CM3_MPU SVC/PendSV object"
+    }
+    foreach ($section in @(
+            ".fiber_port_privileged_functions",
+            ".fiber_port_unprivileged_functions")) {
+        if (-not ($portSections -match [regex]::Escape($section))) {
+            throw "ARM_CM3_MPU SVC/PendSV object lost section: $section"
+        }
+    }
+
+    $portSymbolTable = @(& $Objdump -t $portObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump symbol-table read failed for ARM_CM3_MPU SVC/PendSV object"
+    }
+    $unprivilegedFunctions = @(
+        "fiber_port_runtime_schedule",
+        "fiber_port_unprivileged_task_return"
+    )
+    $matchedSvcFunctions = 0
+    foreach ($line in $portSymbolTable) {
+        if ($line -notmatch '^\s*[0-9a-fA-F]+\s+\w+\s+F\s+(?<section>\S+)\s+[0-9a-fA-F]+\s+(?<symbol>(fiber_port_\S+|SVC_Handler|PendSV_Handler))\s*$') {
+            continue
+        }
+        $matchedSvcFunctions++
+        $expectedSection = ".fiber_port_privileged_functions"
+        if ($unprivilegedFunctions -contains $Matches['symbol']) {
+            $expectedSection = ".fiber_port_unprivileged_functions"
+        }
+        if ($Matches['section'] -ne $expectedSection) {
+            throw "ARM_CM3_MPU SVC function is in the wrong protection section: $($Matches['symbol']) -> $($Matches['section'])"
+        }
+    }
+    if ($matchedSvcFunctions -eq 0) {
+        throw "ARM_CM3_MPU SVC section proof matched no functions"
+    }
+    $continuationSections = @{
+        "fiber_port_svc_start_return_site" =
+            ".fiber_port_privileged_functions"
+        "fiber_port_svc_yield_return_site" =
+            ".fiber_port_unprivileged_functions"
+        "fiber_port_svc_return_return_site" =
+            ".fiber_port_unprivileged_functions"
+    }
+    foreach ($continuation in $continuationSections.Keys) {
+        $continuationLines = @($portSymbolTable | Where-Object {
+            $_ -match ("\s" + [regex]::Escape($continuation) + "\s*$")
+        })
+        if ($continuationLines.Count -ne 1) {
+            throw "ARM_CM3_MPU must emit exactly one SVC continuation symbol: $continuation"
+        }
+        $continuationFields = @($continuationLines[0].Trim() -split '\s+')
+        if (($continuationFields.Count -lt 3) -or
+                ($continuationFields[-3] -ne
+                    $continuationSections[$continuation])) {
+            throw "ARM_CM3_MPU SVC continuation is in the wrong protection section: $continuation"
+        }
+    }
+
+    $portDisassembly = (& $Objdump -dr $portObject) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump disassembly failed for ARM_CM3_MPU SVC/PendSV object"
+    }
+    $scheduleBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly -Symbol "fiber_port_runtime_schedule" `
+        -Path $portObject
+    $yieldSiteBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly `
+        -Symbol "fiber_port_svc_yield_return_site" -Path $portObject
+    $returnBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly `
+        -Symbol "fiber_port_unprivileged_task_return" -Path $portObject
+    $returnSiteBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly `
+        -Symbol "fiber_port_svc_return_return_site" -Path $portObject
+    if (($scheduleBody -notmatch '\bsvc\s+71\b') -or
+            ($yieldSiteBody -notmatch '\bbx\s+lr\b')) {
+        throw "ARM_CM3_MPU unprivileged schedule veneer changed generated shape"
+    }
+    if (($returnBody -notmatch '\bsvc\s+72\b') -or
+            ($returnSiteBody -notmatch '\bb(\.w|\.n)?\b')) {
+        throw "ARM_CM3_MPU unprivileged return veneer changed generated shape"
+    }
+    foreach ($veneer in @($scheduleBody, $yieldSiteBody,
+            $returnBody, $returnSiteBody)) {
+        if ($veneer -match '\b(mrs|msr|cpsid|cpsie|ldr|str|bl|blx)\b') {
+            throw "ARM_CM3_MPU unprivileged veneer acquired privileged/stateful instructions"
+        }
+    }
+    $startBody = Get-DisassemblyFunctionBody -Disassembly $portDisassembly `
+        -Symbol "fiber_port_start_first_context" -Path $portObject
+    if (($startBody -notmatch '\bsvc\s+70\b') -or
+            ($startBody -notmatch '\bmsr\s+MSP\b')) {
+        throw "ARM_CM3_MPU first-start SVC path changed generated shape"
+    }
+    $firstRestoreBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly `
+        -Symbol "fiber_port_restore_first_context_from_svc" `
+        -Path $portObject
+    $firstRestoreMsp = [regex]::Match($firstRestoreBody, '\bmsr\s+MSP\b')
+    $firstRestorePsp = [regex]::Match($firstRestoreBody, '\bmsr\s+PSP\b')
+    if ((-not $firstRestoreMsp.Success) -or
+            (-not $firstRestorePsp.Success) -or
+            ($firstRestoreMsp.Index -ge $firstRestorePsp.Index)) {
+        throw "ARM_CM3_MPU first restore must discard the SVC/C MSP frames before programming PSP"
+    }
+    $handlerBody = Get-DisassemblyFunctionBody -Disassembly $portDisassembly `
+        -Symbol "SVC_Handler" -Path $portObject
+    if (($handlerBody -notmatch
+            'R_ARM_ABS32\s+fiber_internal_runtime_current_context_slot') -or
+            ($handlerBody -notmatch
+            'R_ARM_THM_JUMP24\s+fiber_port_svc_dispatch')) {
+        throw "ARM_CM3_MPU strong SVC handler lost current-slot/dispatcher routing"
+    }
+    $pendsvBody = Get-DisassemblyFunctionBody `
+        -Disassembly $portDisassembly -Symbol "PendSV_Handler" `
+        -Path $portObject
+    foreach ($requiredPendSvPattern in @(
+            'R_ARM_ABS32\s+fiber_internal_runtime_current_context_slot',
+            'R_ARM_THM_CALL\s+fiber_port_pendsv_validate_save_current',
+            'R_ARM_THM_CALL\s+fiber_port_scheduler_pick_next_from_pendsv',
+            'R_ARM_THM_CALL\s+fiber_port_mpu_switch_to_context',
+            '\bstmia(\.w)?\s+r3!,\s*\{r2,\s*r4[^\r\n]*lr\}',
+            '\bldmia(\.w)?\s+r0,\s*\{r4[^\r\n]*fp\}',
+            '\bstmia(\.w)?\s+r3!,\s*\{r0,\s*r4[^\r\n]*fp\}',
+            '\bldmdb\s+r1!,\s*\{r0,\s*r4[^\r\n]*fp\}',
+            '\bmsr\s+PSP\b',
+            '\bstmia(\.w)?\s+r0,\s*\{r4[^\r\n]*fp\}',
+            '\bldmdb\s+r1!,\s*\{r3,\s*r4[^\r\n]*lr\}',
+            '\bmsr\s+CONTROL\b',
+            '\bcpsie\s+i\b',
+            '\bbx\s+lr\b')) {
+        if ($pendsvBody -notmatch $requiredPendSvPattern) {
+            throw "ARM_CM3_MPU PendSV lost generated operation: $requiredPendSvPattern"
+        }
+    }
+    $preflightCall = [regex]::Match($pendsvBody,
+        'R_ARM_THM_CALL\s+fiber_port_pendsv_validate_save_current')
+    $protectedCursorLoad = [regex]::Match($pendsvBody,
+        '\bldr\s+r3,\s*\[r1,\s*#0\]')
+    $schedulerCall = [regex]::Match($pendsvBody,
+        'R_ARM_THM_CALL\s+fiber_port_scheduler_pick_next_from_pendsv')
+    $mpuCall = [regex]::Match($pendsvBody,
+        'R_ARM_THM_CALL\s+fiber_port_mpu_switch_to_context')
+    $cpsid = [regex]::Match($pendsvBody, '\bcpsid\s+i\b')
+    $basepriWrites = [regex]::Matches($pendsvBody,
+        '\bmsr\s+BASEPRI\b')
+    $restorePsp = [regex]::Match($pendsvBody, '\bmsr\s+PSP\b')
+    $restoreControl = [regex]::Match($pendsvBody, '\bmsr\s+CONTROL\b')
+    $enableInterrupts = [regex]::Match($pendsvBody, '\bcpsie\s+i\b')
+    if ((-not $preflightCall.Success) -or
+            (-not $protectedCursorLoad.Success) -or
+            ($preflightCall.Index -ge $protectedCursorLoad.Index)) {
+        throw "ARM_CM3_MPU PendSV must validate current before reading protected context fields"
+    }
+    $beforeScheduler = $pendsvBody.Substring(0, $schedulerCall.Index)
+    if (($beforeScheduler -match
+            '\b(stmia|stmdb)(\.w)?\s+r0!?') -or
+            ($beforeScheduler -match '\bstr(\.w)?\s+[^\r\n]*\[r0')) {
+        throw "ARM_CM3_MPU PendSV must not write a software frame to the unprivileged PSP stack"
+    }
+    if ($pendsvBody -notmatch '\bmovs\s+r2,\s*#16\b') {
+        throw "ARM_CM3_MPU PendSV lost the exact four-priority-bit BASEPRI threshold"
+    }
+    if (($basepriWrites.Count -ne 2) -or
+            (-not $schedulerCall.Success) -or (-not $cpsid.Success) -or
+            (-not $mpuCall.Success) -or (-not $restorePsp.Success) -or
+            (-not $restoreControl.Success) -or
+            (-not $enableInterrupts.Success) -or
+            ($basepriWrites[0].Index -ge $schedulerCall.Index) -or
+            ($schedulerCall.Index -ge $cpsid.Index) -or
+            ($cpsid.Index -ge $mpuCall.Index) -or
+            ($mpuCall.Index -ge $basepriWrites[1].Index) -or
+            ($basepriWrites[1].Index -ge $restorePsp.Index) -or
+            ($restorePsp.Index -ge $restoreControl.Index) -or
+            ($restoreControl.Index -ge $enableInterrupts.Index)) {
+        throw "ARM_CM3_MPU PendSV scheduler/PRIMASK/MPU/BASEPRI ordering changed"
+    }
+    $svcInstructions = [regex]::Matches($portDisassembly,
+        '(?m)^[ ]*[0-9a-fA-F]+:[^\r\n]*\bsvc\s+(70|71|72)\b')
+    if ($svcInstructions.Count -ne 3) {
+        throw "ARM_CM3_MPU SVC namespace must generate exactly three service instructions"
+    }
+
+    $linkerScript = Join-Path $probeDir "arm-cm3-mpu.ld"
+    $linkerText = @"
+ENTRY(fiber_arm_cm3_mpu_boot_probe)
+SECTIONS
+{
+    .fiber_privileged_code 0x08000000 :
+    {
+        __fiber_mpu_privileged_code_start__ = .;
+        KEEP(*(.isr_vector))
+        KEEP(*(.fiber_port_privileged_functions))
+        *(.text*)
+        *(.rodata*)
+        . = __fiber_mpu_privileged_code_start__ + 0x00010000;
+        __fiber_mpu_privileged_code_end__ = .;
+    }
+    .fiber_unprivileged_code 0x08010000 :
+    {
+        __fiber_mpu_unprivileged_code_start__ = .;
+        KEEP(*(.fiber_port_unprivileged_functions))
+        KEEP(*(.fiber_test_unprivileged_code))
+        . = __fiber_mpu_unprivileged_code_start__ + 0x00010000;
+        __fiber_mpu_unprivileged_code_end__ = .;
+    }
+    .fiber_current_context_slot 0x20000000 (NOLOAD) :
+    {
+        __fiber_mpu_current_context_slot_start__ = .;
+        KEEP(*(.bss.fiber_runtime_current_context_slot))
+        . = __fiber_mpu_current_context_slot_start__ + 0x20;
+        __fiber_mpu_current_context_slot_end__ = .;
+    }
+    .fiber_privileged_data 0x20010000 (NOLOAD) :
+    {
+        __fiber_mpu_privileged_data_start__ = .;
+        KEEP(*(.fiber_port_privileged_data))
+        *(.data*)
+        *(.bss*)
+        . = __fiber_mpu_privileged_data_start__ + 0x00010000;
+        __fiber_mpu_privileged_data_end__ = .;
+    }
+    .fiber_unprivileged_ram 0x20020000 (NOLOAD) :
+    {
+        __fiber_mpu_unprivileged_ram_start__ = .;
+        KEEP(*(.fiber_test_unprivileged_ram))
+        . = __fiber_mpu_unprivileged_ram_start__ + 0x00010000;
+        __fiber_mpu_unprivileged_ram_end__ = .;
+    }
+    /DISCARD/ : { *(.comment*) *(.note*) }
+}
+"@
+    Set-Content -LiteralPath $linkerScript -Value $linkerText -Encoding ASCII
+
+    $bootElf = Join-Path $probeDir "arm-cm3-mpu.elf"
+    $linkArgs = @(
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-nostdlib",
+        "-Wl,--gc-sections",
+        "-Wl,-T,$linkerScript",
+        $bootObject,
+        $portObject,
+        $bootProbeObject,
+        "-o", $bootElf
+    )
+    & $Compiler @linkArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU synthetic linker contract failed"
+    }
+
+    $elfSymbols = & $Nm --defined-only $bootElf
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM3_MPU synthetic ELF"
+    }
+    foreach ($requiredSymbol in @(
+            "fiber_port_context_init",
+            "fiber_port_mpu_build_global_regions",
+            "fiber_port_context_compute_seal",
+            "fiber_port_context_seal_check",
+            "fiber_port_runtime_schedule",
+            "fiber_port_unprivileged_task_return",
+            "fiber_port_start_first_context",
+            "fiber_port_restore_first_context_from_svc",
+            "fiber_port_svc_dispatch",
+            "fiber_port_pendsv_validate_save_current",
+            "fiber_port_scheduler_pick_next_from_pendsv",
+            "fiber_port_mpu_switch_to_context",
+            "SVC_Handler",
+            "PendSV_Handler")) {
+        if (-not ($elfSymbols -match "\b$([regex]::Escape($requiredSymbol))\s*$")) {
+            throw "ARM_CM3_MPU synthetic ELF lost symbol: $requiredSymbol"
+        }
+    }
+    $runtimeStateSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_state.c") -Raw
+    if ($runtimeStateSource.IndexOf(
+            '.bss.fiber_runtime_current_context_slot',
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "Common current slot lost its MPU-isolatable .bss subsection"
+    }
+    $slotSectionOwners = @(Get-ChildItem -LiteralPath (Join-Path `
+        $RepositoryRoot "fiber") -Recurse -File -Filter "*.c" | Where-Object {
+        (Get-Content -LiteralPath $_.FullName -Raw).IndexOf(
+            '.bss.fiber_runtime_current_context_slot',
+            [System.StringComparison]::Ordinal) -ge 0
+    })
+    if (($slotSectionOwners.Count -ne 1) -or
+            ($slotSectionOwners[0].FullName -ne (Join-Path $RepositoryRoot `
+                "fiber\fiber_runtime_state.c"))) {
+        throw "Only common runtime may own the isolated current-slot input section"
+    }
+    $slotSymbolLines = @($elfSymbols | Where-Object {
+        $_ -match '\b[Bb]\s+fiber_internal_runtime_current_context_slot\s*$'
+    })
+    if ($slotSymbolLines.Count -ne 1) {
+        throw "ARM_CM3_MPU synthetic ELF must contain one isolated current slot"
+    }
+    if ($slotSymbolLines[0] -notmatch
+            '^\s*(?<address>[0-9a-fA-F]+)\s+[Bb]\s+') {
+        throw "ARM_CM3_MPU current-slot symbol address is unreadable"
+    }
+    if ([Convert]::ToUInt32($Matches['address'], 16) -ne 0x20000000) {
+        throw "ARM_CM3_MPU current slot escaped its exact MPU aperture"
+    }
+    $elfSections = (& $Objdump -h $bootElf) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump section read failed for ARM_CM3_MPU synthetic ELF"
+    }
+    if ($elfSections -notmatch
+            '\.fiber_current_context_slot\s+00000020\s+20000000\s+') {
+        throw "ARM_CM3_MPU current-slot aperture must be exactly 32 bytes"
+    }
+
+    $svcAddress = Get-StrongTextSymbolAddress -NmOutput $elfSymbols `
+        -Symbol "SVC_Handler" -Path $bootElf
+    $pendsvAddress = Get-StrongTextSymbolAddress -NmOutput $elfSymbols `
+        -Symbol "PendSV_Handler" -Path $bootElf
+    $privilegedBinary = Join-Path $probeDir "arm-cm3-mpu-privileged.bin"
+    & $Objcopy -O binary --only-section=.fiber_privileged_code `
+        $bootElf $privilegedBinary
+    if ($LASTEXITCODE -ne 0) {
+        throw "objcopy failed for ARM_CM3_MPU synthetic vector proof"
+    }
+    $privilegedBytes = [IO.File]::ReadAllBytes($privilegedBinary)
+    if ($privilegedBytes.Length -lt 64) {
+        throw "ARM_CM3_MPU synthetic vector table is incomplete"
+    }
+    $initialMsp = [BitConverter]::ToUInt32($privilegedBytes, 0)
+    $svcVector = [BitConverter]::ToUInt32($privilegedBytes, 11 * 4)
+    $pendsvVector = [BitConverter]::ToUInt32($privilegedBytes, 14 * 4)
+    if ($initialMsp -ne 0x20020000) {
+        throw "ARM_CM3_MPU synthetic vector initial MSP changed"
+    }
+    if ($svcVector -ne ($svcAddress -bor 1)) {
+        throw "ARM_CM3_MPU vector slot 11 does not resolve to strong SVC_Handler"
+    }
+    if ($pendsvVector -ne ($pendsvAddress -bor 1)) {
+        throw "ARM_CM3_MPU vector slot 14 does not resolve to strong PendSV_Handler"
+    }
+
+    $linkerBoundaries = @($allowedUndefined | Where-Object {
+        $_.StartsWith("__fiber_mpu_", [System.StringComparison]::Ordinal)
+    })
+    foreach ($boundary in $linkerBoundaries) {
+        $caseName = $boundary.Trim('_').Replace('__', '-').Replace('_', '-')
+        $negativeScript = Join-Path $probeDir ("missing-" + $caseName + ".ld")
+        $negativeText = $linkerText.Replace($boundary,
+            $boundary + "_for_negative_probe")
+        Set-Content -LiteralPath $negativeScript -Value $negativeText `
+            -Encoding ASCII
+        $negativeLog = Join-Path $probeDir ("missing-" + $caseName + ".log")
+        $negativeArgs = @(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-mfloat-abi=soft",
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-Wl,-T,$negativeScript",
+            $bootObject,
+            $portObject,
+            $bootProbeObject,
+            "-o", (Join-Path $probeDir ("missing-" + $caseName + ".elf"))
+        )
+        $negativeResult = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $negativeArgs -LogPath $negativeLog
+        if ($negativeResult.ExitCode -eq 0) {
+            throw "ARM_CM3_MPU missing linker boundary unexpectedly linked: $boundary"
+        }
+        if ($negativeResult.Output -notmatch [regex]::Escape($boundary)) {
+            throw "ARM_CM3_MPU missing-boundary link failed for the wrong reason: $boundary`n$($negativeResult.Output)"
+        }
+    }
+
+    $cppSource = Join-Path $probeDir "type-only.cpp"
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    $cppText = @"
+#include <cstddef>
+#include "fiber_port_types.h"
+
+static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: ARM_CM3_MPU C++ cursor offset changed");
+static_assert(offsetof(FiberContext, boot) == 116u,
+    "[fiber]: ARM_CM3_MPU C++ boot offset changed");
+static_assert(sizeof(FiberContext) == 200u,
+    "[fiber]: ARM_CM3_MPU C++ context size changed");
+static_assert(alignof(FiberContext) == 8u,
+    "[fiber]: ARM_CM3_MPU C++ context alignment changed");
+
+int fiber_arm_cm3_mpu_type_only_cpp_probe()
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $cppSource -Value $cppText -Encoding ASCII
+    $cppWarningArgs = @($warningArgs | Where-Object {
+        ($_ -ne "-Werror=implicit-function-declaration")
+    })
+    $cppArgs = @(
+        "-x", "c++",
+        "-mcpu=cortex-m3",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu++17",
+        "-fno-exceptions",
+        "-fno-rtti"
+    ) + $cppWarningArgs + $typeIncludeArgs + @(
+        "-c", $cppSource,
+        "-o", $cppObject
+    )
+    & $Compiler @cppArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM3_MPU type-only header failed C++ compile without CMSIS"
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "wrong-cpu"
+            Cpu = "-mcpu=cortex-m4"
+            Defines = $manifestDefines
+            Diagnostic = "build-selected FIBER_PORT_ARMV* conflicts with compiler"
+        },
+        [pscustomobject]@{
+            Name = "mpu-absent"
+            Cpu = "-mcpu=cortex-m3"
+            Defines = @($manifestDefines | Where-Object {
+                $_ -ne "-D__MPU_PRESENT=1"
+            }) + @("-D__MPU_PRESENT=0")
+            Diagnostic = "ARM_CM3_MPU manifest requires __MPU_PRESENT == 1"
+        },
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            Cpu = "-mcpu=cortex-m3"
+            Defines = @($manifestDefines | Where-Object {
+                $_ -ne "-D__CORTEX_M=3"
+            }) + @("-D__CORTEX_M=4")
+            Diagnostic = "ARM_CM3_MPU manifest requires CMSIS __CORTEX_M == 3"
+        }
+    )
+
+    foreach ($case in $negativeCases) {
+        $objectPath = Join-Path $probeDir ($case.Name + ".o")
+        $logPath = Join-Path $probeDir ($case.Name + ".log")
+        $args = @(
+            $case.Cpu,
+            "-mthumb",
+            "-mfloat-abi=soft",
+            "-std=gnu11"
+        ) + $warningArgs + $case.Defines + $includeArgs + @(
+            "-c", $probeSource,
+            "-o", $objectPath
+        )
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments $args `
+            -LogPath $logPath
+        if ($result.ExitCode -eq 0) {
+            throw "Invalid ARM_CM3_MPU layout manifest unexpectedly compiled: $($case.Name)"
+        }
+        $normalizedOutput = $result.Output -replace '\s+', ' '
+        if ($normalizedOutput -notmatch [regex]::Escape($case.Diagnostic)) {
+            throw "ARM_CM3_MPU negative probe failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 $gcc = Find-ArmGcc
 $cmsis = Find-CmsisCore
 $nm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-nm.exe"
@@ -2574,7 +3438,7 @@ try {
 
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
-        -BuildRoot $buildRoot
+        -Objdump $objdump -BuildRoot $buildRoot
     Write-Host "== reverse ABI current-slot C isolation =="
     Test-ReverseAbiSlotCIsolation -RepositoryRoot $RepoRoot -Compiler $gcc `
         -BuildRoot $buildRoot
@@ -2592,6 +3456,11 @@ try {
     Write-Host "== exact selected-port context-cohort contract =="
     Test-SelectedPortContextCohortMismatch -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM3_MPU construction/SVC/PendSV contract =="
+    Test-ArmCm3MpuLayoutContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `
+        -CmsisPath $cmsis `
         -BuildRoot $buildRoot
 
     if (-not $SettingsOnly) {

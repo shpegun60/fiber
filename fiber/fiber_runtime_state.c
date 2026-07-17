@@ -11,7 +11,12 @@
 const unsigned char fiber_internal_runtime_port_abi_v1_anchor =
 		(unsigned char)FIBER_RUNTIME_PORT_ABI_VERSION;
 
-FiberContext *volatile fiber_internal_runtime_current_context_slot = 0;
+/* Keep the slot in a standard .bss subsection. Ordinary linker scripts still
+ * collect and zero it through .bss*, while MPU profiles can isolate this one
+ * object in an exact unprivileged-read-only region. An MPU linker manifest
+ * must keep the complete aperture in its startup zero-initialization span. */
+FiberContext *volatile fiber_internal_runtime_current_context_slot
+		__attribute__((section(".bss.fiber_runtime_current_context_slot"))) = 0;
 
 static FiberSchedulerPickNextFn volatile
 fiber_internal_runtime_scheduler_pick_next = 0;

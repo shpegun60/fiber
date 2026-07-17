@@ -24,6 +24,11 @@ ownership:
   version anchor instead of including common-private scheduler state;
 - the current-context slot has its frozen assembly-only name, selected-port C
   has no lvalue declaration, and common runtime alone publishes it;
+- the slot's common-owned storage uses the standard
+  `.bss.fiber_runtime_current_context_slot` subsection. This does not change
+  reverse ABI v1; it permits MPU linker manifests to expose only current
+  identity as read-only while preserving normal `.bss*` collection and startup
+  zeroing for non-MPU builds;
 - every current mandatory port object retains a relocation to
   `fiber_internal_runtime_port_abi_v1_anchor`, while port panic calls are strong
   references to the canonical declaration and only the common fallback

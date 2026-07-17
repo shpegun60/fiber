@@ -711,6 +711,11 @@ not sufficient. Every production MPU port must also enforce these rules:
   request stub are executable from unprivileged code. They may read only state
   mapped as unprivileged-read-only and must not touch privileged-only data or
   registers before SVC;
+- the common current slot resides in
+  `.bss.fiber_runtime_current_context_slot`. An MPU profile may isolate that
+  object in an exact unprivileged-read-only aperture while keeping every other
+  runtime object privileged-only; the complete aperture must remain covered by
+  startup BSS zero-initialization;
 - an unprivileged `fiber_schedule()` reaches privileged code through a
   port-owned SVC and never writes SCB/NVIC state directly;
 - the selected SVC namespace gives distinct compile-time-checked numbers to

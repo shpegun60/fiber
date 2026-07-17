@@ -1,5 +1,77 @@
 # Fiber Decision Log
 
+## 2026-07-17: Add The Non-Selectable ARM_CM3_MPU PendSV Slice
+
+The staged exact `ARM_CM3_MPU` source group now implements slice 4 without
+changing common runtime ABI or activating global selection. Its strong
+`PendSV_Handler` follows the audited FreeRTOS 20-word protected-context
+geometry: CONTROL, r4-r11, EXC_RETURN, original PSP, and a copy of the basic
+hardware frame live in privileged `FiberContext` storage. No software frame is
+written to the unprivileged stack.
+
+Before the handler reads mutable context fields, privileged preflight validates
+exact PendSV/EXC_RETURN/CONTROL/mask provenance, current context placement and
+seal, live PSP bounds, hardware-frame structure and PC, the active eight-region
+MPU image, MPU_CTRL, and MemManage enable. The scheduler then runs under the
+selected BASEPRI threshold. The port snapshots and verifies PRIMASK, BASEPRI,
+FAULTMASK, CONTROL, IPSR, PSP, VTOR, MPU_CTRL, and MemManage-enable state across
+the user hook, validates the returned protected context, and publishes it
+through reverse ABI v1.
+
+Regions 0-3 are replaced for the selected context while BASEPRI remains raised
+and PRIMASK closes the short interval in which MPU_CTRL is disabled or the
+region image is partial. Regions 4-7 remain the sealed global policy. All eight
+regions, MPU_CTRL, and MemManage enable are read back before restore. BASEPRI is
+cleared while PRIMASK is still active, then the protected hardware frame is
+copied to the selected PSP and CONTROL/r4-r11/EXC_RETURN are restored. Only the
+live protected-context cursor is transitioned after restore.
+
+The compile matrix now proves preflight-before-field access, exact protected
+save/copy and restore instruction shapes, scheduler/BASEPRI/PRIMASK/MPU order,
+strong privileged `PendSV_Handler`, slot-14 Thumb vector resolution, exact
+undefined surfaces, and continued selector isolation. These are compile,
+generated-code, link, and synthetic ELF proofs only. The profile remains
+non-selectable and carries no hardware runtime claim.
+
+## 2026-07-16: Add The Non-Selectable ARM_CM3_MPU SVC Slice
+
+The staged `ARM_CM3_MPU` source group now implements its third mechanical
+slice without changing common runtime ABI or activating global selection. The
+port owns fixed SVC services 70/71/72 for first start, unprivileged yield, and
+unprivileged task return. Its strong `SVC_Handler` validates exact exception
+origin, frame shape, opcode, immediate, continuation provenance, current
+context, and zero interrupt-mask state; every unknown or mismatched service
+fails closed.
+
+The first-start service programs and reads back the exact eight-region
+Cortex-M3 MPU image, enables MemManage faults and `MPU_CTRL.ENABLE` with
+`PRIVDEFENA`, copies the protected hardware frame onto PSP, restores CONTROL,
+r4-r11 and EXC_RETURN, and enters unprivileged Thread/PSP by exception return.
+Immediately before programming PSP it rewinds MSP from the active vector table
+a second time. This deliberately discards the start-SVC hardware frame and the
+C dispatcher call frame, matching the essential FreeRTOS first-restore rule.
+The two unprivileged veneers contain only their SVC request and minimal return
+or terminal-loop instruction. Only privileged handler code can write
+`PENDSVSET` or reach the common task-return sink.
+
+Global region 4 is repurposed from the broad FreeRTOS peripheral mapping into
+an exact 32-byte privileged-RW/unprivileged-RO/XN aperture containing only the
+common current-context slot. The slot has a standard `.bss.*` subsection so
+ordinary non-MPU linker scripts remain compatible while an MPU linker manifest
+can isolate it. The complete aperture remains part of startup BSS zeroing.
+Region 7 remains privileged-only RW/XN. Therefore portable
+`fiber_current()` can read current identity without exposing other contexts,
+the scheduler hook, or runtime metadata to unprivileged Thread mode.
+
+The compile matrix proves exact undefined symbols, protection-section
+placement, generated veneer/start/handler instruction shape, assembly-only
+current-slot loading, the second MSP rewind before PSP programming, exactly
+three SVC instructions, strong slot-11 SVC vector ownership, and the deliberate
+absence of PendSV and selector routing. The
+profile remains non-selectable and has no runtime support claim. Slice 4 must
+add protected PendSV save/switch/restore and per-context MPU replacement before
+selection can be considered.
+
 ## 2026-07-15: Record The Corrected H7 Extended-FP Normal Run
 
 The STM32H7 board passed `FIBER_VAL_NORMAL_RUN` after source commit
@@ -1700,3 +1772,71 @@ Known limits:
   non-portable profile-policy customization. They do not contain mandatory
   safety mechanics, are not called by common runtime, and are not required by
   portable application code using only `fiber_core.h`.
+
+## 2026-07-16: Freeze the ARM_CM3_MPU reference audit
+
+- The exact pre-implementation parity ledger is
+  `fiber/port/ARM_CM3_MPU/FREERTOS_PARITY.md`, referenced to local FreeRTOS
+  commit `a50edad08b29052631aa469d4df6e6ec7ff68878` with hashes for
+  `portmacro.h`, `port.c`, and `mpu_wrappers_v2_asm.c`.
+- `ARM_CM3_MPU` is a separate selected profile and context cohort, not a
+  conditional extension of privileged `ARM_CM3`.
+- Mandatory profile state includes protected CONTROL/core/hardware-frame
+  storage, four per-context MPU region pairs, safe global MPU regions,
+  unprivileged yield SVC, return SVC, and privileged PendSV restore mechanics.
+- FreeRTOS kernel API veneers, generic privileged Thread-mode system calls,
+  SysTick, kernel-object ACLs, nested public critical sections, and FromISR APIs
+  are explicit exclusions rather than omitted inventory.
+- The safe default does not grant blanket peripheral access. Linker and MPU
+  proofs must keep writable stacks/application data outside writable privileged
+  context, scheduler, hook, and runtime state even after MPU size rounding.
+- Implementation proceeds in exact-profile slices and may not change common
+  runtime choreography or widen the frozen five/eight-function ABI.
+
+## 2026-07-16: Freeze the ARM_CM3_MPU type and layout cohort
+
+- Slice 1 adds only `fiber_port_types.h`, `fiber_port_boot_types.h`, and a
+  compile-only `fiber_portmacro.h` under `fiber/port/ARM_CM3_MPU`. There are no
+  runtime sources, selector route, handlers, or support claim.
+- `FiberContext` is an 8-byte-aligned 200-byte GCC Cortex-M3 type containing a
+  protected cursor, four contiguous RBAR/RASR pairs, a 20-word protected CPU
+  image, and an 80-byte immutable boot record.
+- Exact assertions freeze every saved-register, region, context, and boot-field
+  offset. The boot identity includes initial CONTROL and four-region policy;
+  the exact port/layout/feature tuple is `CM3M` / `0x00010001` / `0x00001C04`.
+- The build proof is Cortex-M3, Thumb, soft-float, MPU-present, VTOR-present,
+  and FPU-absent. Type-only C/C++ compilation requires no CMSIS; the private
+  trait/cohort probe consumes the established shared compiler contract.
+- Negative probes reject Cortex-M4, `__MPU_PRESENT == 0`, and a non-M3 CMSIS
+  identity. Source audits keep the new profile absent from global selection and
+  require that this slice contain no runtime source files.
+
+## 2026-07-16: Add the ARM_CM3_MPU construction slice
+
+- Slice 2 adds port-private MPU/linker helpers and the frozen
+  `fiber_port_context_init()` implementation, but no selector route, switch
+  engine, exception source, or handler symbol.
+- The linker owns ten exact code/data/RAM/current-slot boundaries with no weak fallback.
+  Programmed code/data ranges must be exact power-of-two aligned MPU regions;
+  code and RAM cannot overlap, privileged data is disjoint from unprivileged
+  RAM, and only a complete privileged-code overlay inside the unprivileged code
+  range is permitted.
+- Per-context regions 0-2 are disabled by default. Global region 4 is an exact
+  32-byte unprivileged-RO/XN current-slot aperture rather than a blanket
+  peripheral map. Regions 5-7 provide unprivileged RO code, privileged RO code,
+  and privileged-only RW/XN data. Region 3 maps only an exact
+  power-of-two/aligned raw stack as RW/XN.
+- The safe default rejects stack widening instead of accepting a rounded region
+  that could expose another stack or application object. Portable API calls do
+  not change; an MPU linker integration must provide the required placement.
+- Initial contexts are unprivileged (`CONTROL == 3`). Protected core and copied
+  hardware-frame state remains in privileged `FiberContext` storage; PSP
+  reserves the hardware frame in the unprivileged stack and LR targets the
+  future unprivileged return veneer.
+- The immutable hash covers boot/ABI fields, CONTROL policy, region count, and
+  all four MPU register pairs. Dynamic saved registers and the live cursor are
+  excluded. Full validation proves privileged context extent before the first
+  context-field read.
+- Matrix evidence includes an exact undefined-symbol allowlist, privileged-text
+  section proof, a positive synthetic linker manifest, a missing-boundary
+  negative link, selector isolation, and absence of SVC/PendSV symbols.

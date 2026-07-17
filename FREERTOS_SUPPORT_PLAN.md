@@ -143,6 +143,7 @@ Closed hardening items from the FreeRTOS comparison:
 | --- | --- | --- |
 | Cortex-M0/M0+ | Concrete `port/ARM_CM0` SVC/PendSV/frame code is compile/link-covered | Validate on hardware and document MSP rewind policy |
 | Cortex-M3 | Concrete `port/ARM_CM3` SVC/PendSV/frame code is compile/link-covered | Validate on hardware |
+| Cortex-M3 MPU | Exact reference audit plus slices 1-4 type/layout, MPU construction, linker isolation, protected context, strong SVC dispatch, first activation, unprivileged yield/return veneers, and protected PendSV save/switch/MPU-replace/restore are compile/generated-code/link/ELF-covered in `fiber/port/ARM_CM3_MPU`; no selector route or runtime claim exists yet | Complete archive/LTO/forward-ABI integration proofs, then enable build selection as compile-covered only |
 | Cortex-M4F | Concrete `port/ARM_CM4` source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
 | Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
 | Cortex-M23 | FreeRTOS reference-portability profile with compile-covered transitional SVC/PendSV/frame code; not a current STM32 MCU hardware claim, and PSPLIM/security policy is not FreeRTOS-level | Add PSPLIM slot/security policy, or keep excluded from runtime support |
