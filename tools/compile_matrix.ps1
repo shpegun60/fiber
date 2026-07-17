@@ -2557,6 +2557,314 @@ typedef enum IRQn {
     }
 }
 
+function Test-ArmCm4MpuSlice1Contract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot "fiber\port\ARM_CM4_MPU"
+    $probeSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm4_mpu_layout_probe.c"
+    $probeDir = Join-Path $BuildRoot "arm-cm4-mpu-slice1"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value "#ifndef MAIN_H_`n#define MAIN_H_`n#endif`n" -Encoding ASCII
+
+    foreach ($requiredFile in @(
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h",
+            "fiber_portmacro.h",
+            "FREERTOS_PARITY.md")) {
+        if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
+            throw "ARM_CM4_MPU slice 1 is missing required file: $requiredFile"
+        }
+    }
+    if (-not (Test-Path $probeSource)) {
+        throw "ARM_CM4_MPU slice 1 layout fixture is missing"
+    }
+
+    foreach ($forbiddenFile in @(
+            "fiber_port_boot.h",
+            "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_port.c",
+            "fiber_port_exception.c")) {
+        if (Test-Path (Join-Path $profileDir $forbiddenFile)) {
+            throw "ARM_CM4_MPU slice 1 must not provide runtime source: $forbiddenFile"
+        }
+    }
+
+    foreach ($selectorPath in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
+        if ($selectorSource.IndexOf("ARM_CM4_MPU",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM4_MPU slice 1 must have no global selector route: $selectorPath"
+        }
+    }
+
+    foreach ($typeHeaderName in @(
+            "fiber_port_types.h",
+            "fiber_port_boot_types.h")) {
+        $typeHeaderPath = Join-Path $profileDir $typeHeaderName
+        $typeHeaderSource = Get-Content -LiteralPath $typeHeaderPath -Raw
+        if ([regex]::IsMatch($typeHeaderSource,
+                '\b(mcu_core|fiber_compiler|fiber_portmacro|SCB|NVIC|__ASM)\b')) {
+            throw "ARM_CM4_MPU type header acquired a CMSIS/runtime dependency: $typeHeaderPath"
+        }
+    }
+
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $typeIncludeArgs = @("-I$profileDir")
+    $typeCSource = Join-Path $probeDir "type-only.c"
+    $typeCppSource = Join-Path $probeDir "type-only.cpp"
+    $typeText = @"
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(sizeof(FiberPortProtectedContext) == 212u,
+    "[fiber]: ARM_CM4_MPU protected context size changed");
+_Static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: ARM_CM4_MPU cursor offset changed");
+_Static_assert(offsetof(FiberContext, mpu_regions) == 4u,
+    "[fiber]: ARM_CM4_MPU MPU image offset changed");
+#if FIBER_PORT_CM4_MPU_TOTAL_REGIONS == 8
+_Static_assert(offsetof(FiberContext, protected_context) == 36u,
+    "[fiber]: ARM_CM4_MPU 8-region protected offset changed");
+_Static_assert(offsetof(FiberContext, runtime_flags) == 248u,
+    "[fiber]: ARM_CM4_MPU 8-region flags offset changed");
+_Static_assert(offsetof(FiberContext, boot) == 252u,
+    "[fiber]: ARM_CM4_MPU 8-region boot offset changed");
+_Static_assert(sizeof(FiberContext) == 344u,
+    "[fiber]: ARM_CM4_MPU 8-region context size changed");
+#else
+_Static_assert(offsetof(FiberContext, protected_context) == 100u,
+    "[fiber]: ARM_CM4_MPU 16-region protected offset changed");
+_Static_assert(offsetof(FiberContext, runtime_flags) == 312u,
+    "[fiber]: ARM_CM4_MPU 16-region flags offset changed");
+_Static_assert(offsetof(FiberContext, boot) == 316u,
+    "[fiber]: ARM_CM4_MPU 16-region boot offset changed");
+_Static_assert(sizeof(FiberContext) == 408u,
+    "[fiber]: ARM_CM4_MPU 16-region context size changed");
+#endif
+_Static_assert(_Alignof(FiberContext) == 8u,
+    "[fiber]: ARM_CM4_MPU context alignment changed");
+
+int fiber_arm_cm4_mpu_type_only_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $typeCSource -Value $typeText -Encoding ASCII
+
+    $typeCppText = @"
+#include <cstddef>
+#include "fiber_port_types.h"
+
+static_assert(sizeof(FiberPortProtectedContext) == 212u,
+    "[fiber]: ARM_CM4_MPU C++ protected context size changed");
+static_assert(offsetof(FiberContext, mpu_regions) == 4u,
+    "[fiber]: ARM_CM4_MPU C++ MPU image offset changed");
+#if FIBER_PORT_CM4_MPU_TOTAL_REGIONS == 8
+static_assert(offsetof(FiberContext, boot) == 252u,
+    "[fiber]: ARM_CM4_MPU C++ 8-region boot offset changed");
+static_assert(sizeof(FiberContext) == 344u,
+    "[fiber]: ARM_CM4_MPU C++ 8-region context size changed");
+#else
+static_assert(offsetof(FiberContext, boot) == 316u,
+    "[fiber]: ARM_CM4_MPU C++ 16-region boot offset changed");
+static_assert(sizeof(FiberContext) == 408u,
+    "[fiber]: ARM_CM4_MPU C++ 16-region context size changed");
+#endif
+static_assert(alignof(FiberContext) == 8u,
+    "[fiber]: ARM_CM4_MPU C++ context alignment changed");
+
+int fiber_arm_cm4_mpu_type_only_cpp_probe()
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $typeCppSource -Value $typeCppText -Encoding ASCII
+
+    foreach ($regionCount in @(8, 16)) {
+        $typeObject = Join-Path $probeDir "type-${regionCount}.o"
+        $typeArgs = @(
+            "-mcpu=cortex-m4",
+            "-mthumb",
+            "-std=gnu11"
+        ) + $warningArgs + @(
+            "-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=$regionCount"
+        ) + $typeIncludeArgs + @(
+            "-c", $typeCSource,
+            "-o", $typeObject
+        )
+        & $Compiler @typeArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU $regionCount-region type header failed C compile without CMSIS"
+        }
+
+        $cppWarningArgs = @($warningArgs | Where-Object {
+            ($_ -ne "-Werror=implicit-function-declaration")
+        })
+        $cppObject = Join-Path $probeDir "type-${regionCount}-cpp.o"
+        $cppArgs = @(
+            "-x", "c++",
+            "-mcpu=cortex-m4",
+            "-mthumb",
+            "-std=gnu++17",
+            "-fno-exceptions",
+            "-fno-rtti"
+        ) + $cppWarningArgs + @(
+            "-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=$regionCount"
+        ) + $typeIncludeArgs + @(
+            "-c", $typeCppSource,
+            "-o", $cppObject
+        )
+        & $Compiler @cppArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU $regionCount-region type header failed C++ compile without CMSIS"
+        }
+    }
+
+    $includeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $variants = @(
+        [pscustomobject]@{ Name = "m4-r8"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 8; PortId = "0x434D344Du"; Layout = "0x00010008u"; Errata = 0 },
+        [pscustomobject]@{ Name = "m4-r16"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 16; PortId = "0x434D344Du"; Layout = "0x00010010u"; Errata = 0 },
+        [pscustomobject]@{ Name = "m7-r8"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 8; PortId = "0x434D374Du"; Layout = "0x00010008u"; Errata = 1 },
+        [pscustomobject]@{ Name = "m7-r16"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 16; PortId = "0x434D374Du"; Layout = "0x00010010u"; Errata = 1 }
+    )
+    $cohortSymbols = @()
+    foreach ($variant in $variants) {
+        $objectPath = Join-Path $probeDir "$($variant.Name).o"
+        $defines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV7EM=1",
+            "-D__CORTEX_M=$($variant.Core)",
+            "-D__MPU_PRESENT=1",
+            "-D__VTOR_PRESENT=1",
+            "-D__FPU_PRESENT=1",
+            "-D__FPU_USED=1",
+            "-D__NVIC_PRIO_BITS=4",
+            "-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=$($variant.Regions)"
+        )
+        $compileArgs = @(
+            "-mcpu=$($variant.Cpu)",
+            "-mthumb",
+            "-mfpu=$($variant.Fpu)",
+            "-mfloat-abi=hard",
+            "-std=gnu11"
+        ) + $warningArgs + $defines + $includeArgs + @(
+            "-c", $probeSource,
+            "-o", $objectPath
+        )
+        & $Compiler @compileArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU slice-1 variant failed compile: $($variant.Name)"
+        }
+
+        $nmOutput = & $Nm --defined-only $objectPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM4_MPU slice-1 variant: $($variant.Name)"
+        }
+        $variantCohorts = @()
+        foreach ($line in $nmOutput) {
+            if ($line -match '\b(?<symbol>fiber_port_context_cohort_\S+)\s*$') {
+                $variantCohorts += $Matches['symbol']
+            }
+            if ($line -match '\b(SVC_Handler|PendSV_Handler|fiber_port_runtime_)\S*\s*$') {
+                throw "ARM_CM4_MPU slice 1 unexpectedly defines runtime symbol: $line"
+            }
+        }
+        if ($variantCohorts.Count -ne 1) {
+            throw "ARM_CM4_MPU $($variant.Name) must define exactly one cohort symbol"
+        }
+        $expectedPrefix = "fiber_port_context_cohort_armv7em_p$($variant.PortId)_l$($variant.Layout)_"
+        if (-not $variantCohorts[0].StartsWith($expectedPrefix,
+                [System.StringComparison]::Ordinal)) {
+            throw "ARM_CM4_MPU cohort identity mismatch for $($variant.Name): $($variantCohorts[0])"
+        }
+        if ($variantCohorts[0].IndexOf("_i$($variant.Errata)_",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM4_MPU M7 errata identity mismatch for $($variant.Name)"
+        }
+        $cohortSymbols += $variantCohorts[0]
+    }
+
+    if ((@($cohortSymbols | Sort-Object -Unique)).Count -ne $variants.Count) {
+        throw "ARM_CM4_MPU M4/M7 or 8/16-region variants collapsed to one cohort"
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{ Name = "missing-region-count"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Defines = @(); Diagnostic = "explicit 8- or 16-region MPU manifest" },
+        [pscustomobject]@{ Name = "invalid-region-count"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Defines = @("-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=12"); Diagnostic = "supports exactly 8 or 16 MPU regions" },
+        [pscustomobject]@{ Name = "mpu-absent"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Defines = @("-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=8", "-D__MPU_PRESENT=0"); Diagnostic = "requires __MPU_PRESENT == 1" },
+        [pscustomobject]@{ Name = "fpu-absent"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Defines = @("-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=8", "-D__FPU_PRESENT=0"); Diagnostic = "requires __FPU_PRESENT == 1" },
+        [pscustomobject]@{ Name = "fpu-unused"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Defines = @("-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=8", "-D__FPU_USED=0"); Diagnostic = "requires __FPU_USED == 1" },
+        [pscustomobject]@{ Name = "wrong-cmsis-core"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 3; Defines = @("-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=8"); Diagnostic = "requires CMSIS __CORTEX_M 4 or 7" }
+    )
+    foreach ($case in $negativeCases) {
+        $negativeObject = Join-Path $probeDir "$($case.Name).o"
+        $negativeLog = Join-Path $probeDir "$($case.Name).log"
+        $baseDefines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV7EM=1",
+            "-D__CORTEX_M=$($case.Core)",
+            "-D__VTOR_PRESENT=1",
+            "-D__NVIC_PRIO_BITS=4"
+        )
+        if (-not ($case.Defines -match '^-D__MPU_PRESENT=')) {
+            $baseDefines += "-D__MPU_PRESENT=1"
+        }
+        if (-not ($case.Defines -match '^-D__FPU_PRESENT=')) {
+            $baseDefines += "-D__FPU_PRESENT=1"
+        }
+        if (-not ($case.Defines -match '^-D__FPU_USED=')) {
+            $baseDefines += "-D__FPU_USED=1"
+        }
+        $negativeArgs = @(
+            "-mcpu=$($case.Cpu)",
+            "-mthumb",
+            "-mfpu=$($case.Fpu)",
+            "-mfloat-abi=hard",
+            "-std=gnu11"
+        ) + $warningArgs + $baseDefines + $case.Defines + $includeArgs + @(
+            "-c", $probeSource,
+            "-o", $negativeObject
+        )
+        $negativeResult = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $negativeArgs -LogPath $negativeLog
+        if ($negativeResult.ExitCode -eq 0) {
+            throw "ARM_CM4_MPU negative manifest unexpectedly compiled: $($case.Name)"
+        }
+        if ($negativeResult.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM4_MPU negative manifest failed for the wrong reason: $($case.Name)`n$($negativeResult.Output)"
+        }
+    }
+}
+
 function Test-ArmCm3MpuLayoutContract {
     param(
         [string]$RepositoryRoot,
@@ -4317,6 +4625,9 @@ try {
         -BuildRoot $buildRoot
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM4_MPU slice-1 layout/trait contract =="
+    Test-ArmCm4MpuSlice1Contract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM3_MPU construction/SVC/PendSV contract =="
     Test-ArmCm3MpuLayoutContract -RepositoryRoot $RepoRoot `

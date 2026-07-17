@@ -1,5 +1,35 @@
 # Fiber Decision Log
 
+## 2026-07-17: Stage ARM_CM4_MPU Protected Layout
+
+Implementation slice 1 adds a deliberately non-selectable `ARM_CM4_MPU`
+profile based on the pinned FreeRTOS GCC port. It freezes type-only protected
+context storage, MPU region formulas, exact M4F/M7F and 8/16-region cohort
+identities, and an exhaustive parity ledger. It adds no runtime source,
+handler, forward ABI implementation, or global selector route.
+
+The build must explicitly declare eight or sixteen MPU regions because that
+choice changes `FiberContext`. The protected image retains the reference
+53-word maximum: high FP, low FP/FPSCR, CONTROL/core registers, PSP/copied
+hardware frame, and a one-past cursor target. FreeRTOS wrapper-v2 syscall
+stacks, ACLs, and access metadata are classified as a future optional MPU ABI,
+not silently copied into the mandatory base context.
+
+## 2026-07-17: Freeze C++ Kernel Layer Direction
+
+The portable C core remains a scheduler-neutral CPU transfer engine. A future
+reference C++ kernel will provide compile-time cooperative round-robin and
+preemptive fixed-priority policies over the same scheduler callback and port.
+Synchronization and ISR-safe handoff belong to that layer; SysTick or another
+ISR requests PendSV but does not embed scheduler policy in port assembly.
+
+Source intended to move between both modes must synchronize shared mutable
+state and must not assume execution continues uninterrupted until explicit
+yield. lwIP integration remains an adapter above the kernel: raw/event-loop
+integration for `NO_SYS=1`, or C `sys_arch` wrappers over C++ primitives for
+`NO_SYS=0`. `CPP_KERNEL_ARCHITECTURE.md` is normative for this direction but
+does not create an implementation or runtime claim.
+
 ## 2026-07-17: Close Third-Round Portability Proof Gaps
 
 The third independent line-by-line comparison against the pinned local

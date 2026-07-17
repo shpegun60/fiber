@@ -51,6 +51,17 @@ profile-only service still depends on that service. Applications requiring the
 same operation across profiles keep it behind a separate application-level
 service interface; fiber feature ABIs are not general service APIs.
 
+`CPP_KERNEL_ARCHITECTURE.md` records the future layer above this runtime: a
+reference C++ scheduler with compile-time cooperative or preemptive policy,
+portable synchronization rules, an explicit ISR reschedule boundary, and lwIP
+adapters. That layer consumes the existing scheduler hook; queues, ticks, and
+network policy do not enter the CPU-port ABI.
+
+`ARM_CM4_MPU` currently exists only as a non-selectable implementation-slice-1
+layout and parity record. It freezes the pinned FreeRTOS 53-word protected FP
+context and explicit 8/16-region MPU identities for later M4F/M7F runtime work.
+It provides no runtime sources, handlers, selector route, or support claim.
+
 ## Project Setup
 
 Add the repository root to the include path, then include the public API:
