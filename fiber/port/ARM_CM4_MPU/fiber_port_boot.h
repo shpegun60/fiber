@@ -45,8 +45,8 @@ extern const unsigned char __fiber_mpu_current_context_slot_end__[];
 extern const unsigned char __fiber_mpu_unprivileged_ram_start__[];
 extern const unsigned char __fiber_mpu_unprivileged_ram_end__[];
 
-/* Slice 2 seeds this future port-owned return veneer into each initial frame.
- * Its definition arrives with the protected SVC runtime, never in common. */
+/* Context construction seeds this port-owned return veneer into each initial
+ * frame. Slice 3 defines it inside the protected SVC runtime, never in common. */
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portUNPRIVILEGED_FUNCTION
 void fiber_port_unprivileged_task_return(void);

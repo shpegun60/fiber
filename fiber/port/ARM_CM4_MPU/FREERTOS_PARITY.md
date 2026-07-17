@@ -2,12 +2,15 @@
 
 ## Status
 
-Implementation slices 1-2 are complete for the exact `ARM_CM4_MPU` profile.
+Implementation slices 1-3 are complete for the exact `ARM_CM4_MPU` profile.
 They freeze the public type layout, MPU geometry, protected basic/FP context
 views, traits, and exact cohort identity, then add port-owned context
 construction, exact linker ranges, default MPU-image encoding, and immutable
-sealing. The profile deliberately contains no SVC/PendSV handler, switch
-runtime, forward ABI implementation, selector route, or hardware support claim.
+sealing. Slice 3 adds a strong SVC handler, protected first-context start,
+port-owned CPACR/FPCCR preparation, exact MPU activation/readback, and fixed
+unprivileged yield/return services. The profile deliberately contains no
+PendSV handler, complete forward ABI implementation, selector route, or
+hardware support claim.
 
 The directory name follows the pinned FreeRTOS GCC port. That reference accepts
 both Cortex-M4F and Cortex-M7F. Fiber therefore freezes both manifests while
@@ -28,7 +31,7 @@ a50edad08b29052631aa469d4df6e6ec7ff68878
 | `portable/GCC/ARM_CM4_MPU/port.c` | 1738 | `cc9b731bc23e52a91d7d37b5dda16d7b501cfb4d3b3a3c8229c355c66662bf59` |
 | `portable/GCC/ARM_CM4_MPU/mpu_wrappers_v2_asm.c` | 2067 | `6b5110e0c14ba78c20d43c1edf17e5ac2311a6af0413d6aaab5df59edb2655c2` |
 
-## Exact Slice-2 Manifest
+## Exact Slice-3 Manifest
 
 ```text
 architecture        ARMv7E-M
@@ -37,7 +40,7 @@ compiler ABI        GCC-compatible Thumb with FP registers enabled
 MPU                 present; total regions explicitly 8 or 16
 VTOR                present
 FPU                 present and used
-selection           build-selected construction compile/link proof only
+selection           build-selected construction/SVC compile/link proof only
 runtime selectable  no
 ```
 
@@ -133,16 +136,48 @@ The boot seal covers every immutable ABI field plus all per-context RBAR/RASR
 pairs. The protected register image, cursor, and runtime flags remain mutable.
 Four linker-derived global images cover the read-only current-context slot,
 unprivileged code, privileged code, and privileged data. Slice 2 constructs and
-validates these images but does not write hardware MPU registers.
+validates these images. Slice 3 writes and reads back the complete selected
+image only during protected first start.
 
 Compile/link proofs cover M4F/M7F with both 8 and 16 regions. They verify exact
 cohort separation, privileged placement, the complete undefined linker-boundary
 surface, successful synthetic placement, failure for every missing boundary,
-and continued absence of SVC, PendSV, and mandatory runtime symbols.
+strong slot-11 SVC ownership, exact three-service generated code, privileged
+and unprivileged section placement, M7 PRIMASK-preserving BASEPRI clear, and
+continued absence of PendSV and global selector routing.
+
+## Protected SVC And First Start
+
+The port owns fixed services `70`, `71`, and `72` for first start,
+unprivileged yield, and unprivileged task return. They are fiber ABI values,
+not copies of FreeRTOS services `100..103`. `SVC_Handler` accepts only exact
+Thread/MSP first start or Thread/PSP basic/extended runtime provenance. The C
+dispatcher validates zero masks, exact frame shape, SVC opcode and immediate,
+continuation symbol, current context, linker ranges, and active MPU readback.
+Unknown services and cross-routed continuation sites fail closed.
+
+For an extended FP exception, PSP still points at the basic core frame; the
+low FP extension follows it at higher addresses. The handler therefore never
+adds 72 bytes before decoding stacked PC/xPSR. This is frozen by generated-code
+proof and matches the pinned FreeRTOS CM4 MPU save path, which adds `0x20` only
+when copying `s0-s16` after the basic frame.
+
+First start clears pre-start FPCA, rewinds MSP from the active vector table,
+clears stale PendSV, enters SVC, installs every per-context and global MPU
+region, enables MemManage and `MPU_CTRL.ENABLE|PRIVDEFENA`, and reads every
+region back. It then copies the protected basic hardware frame to PSP and
+restores CONTROL, r4-r11, and EXC_RETURN. CPACR and FPCCR are prepared with
+readback before the transfer. Cortex-M7 uses a PRIMASK-preserving synchronized
+BASEPRI clear instead of FreeRTOS's unconditional IRQ re-enable workaround.
+
+The unprivileged schedule veneer contains only SVC 71 and return; the task
+return veneer contains only SVC 72 and a terminal loop. SVC 71 may pend PendSV,
+but this profile remains non-selectable until the protected FP-aware PendSV
+implementation exists.
 
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slice-2 mapping | Decision |
+| FreeRTOS family | Fiber slice-3 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs | public fiber API types | Kernel-specific typedefs excluded. |
 | `portUSING_MPU_WRAPPERS`, privilege bit | future optional MPU API | Deferred; no false wrapper support claim. |
@@ -155,8 +190,8 @@ and continued absence of SVC, PendSV, and mandatory runtime symbols.
 | `MAX_CONTEXT_SIZE` | 53-word protected union | Retained exactly. |
 | task padding/privilege flags | `runtime_flags` bits | Retained as mutable port state. |
 | stack growth/alignment | port traits | Retained. |
-| SVC 100..103 | future port-owned SVC namespace | Deferred; numbers are not copied before dispatcher design. |
-| yield/from-ISR macros | C++ scheduler/ISR boundary | Deferred outside slice 2. |
+| SVC 100..103 | fixed fiber services 70/71/72 | Adapted: first start, yield, and task return are exact port-owned services; FreeRTOS privilege/syscall services remain excluded. |
+| yield/from-ISR macros | unprivileged SVC yield plus future ISR boundary | Thread-mode yield implemented; ISR-safe API remains deferred. |
 | critical-section macros | future selected-port scheduler envelope | Deferred to runtime slice. |
 | optimized priority bitmap | C++ scheduler policy | Excluded from CPU port. |
 | interrupt-priority assertion | future ISR API validation | Deferred until an ISR-safe API exists. |
@@ -168,16 +203,16 @@ and continued absence of SVC, PendSV, and mandatory runtime symbols.
 | FreeRTOS path | Fiber owner | Slice-2 decision |
 | --- | --- | --- |
 | `pxPortInitialiseStack` | selected-port context constructor | Implemented for the unprivileged basic initial image; r9 is preserved and all unused protected words are zeroed. |
-| `prvRestoreContextOfFirstTask` | selected-port first-context restore | Deferred. |
-| `vPortSVCHandler`, `vSVCHandler_C` | strong selected-port SVC handler/dispatcher | Deferred. |
+| `prvRestoreContextOfFirstTask` | selected-port first-context restore | Implemented for the validated basic initial image, with second MSP rewind and exact MPU readback. |
+| `vPortSVCHandler`, `vSVCHandler_C` | strong selected-port SVC handler/dispatcher | Implemented with stricter origin, frame, opcode, immediate, continuation, context, and mask checks. |
 | `xPortPendSVHandler` | strong selected-port PendSV handler | Protected geometry frozen; code deferred. |
 | `vTaskSwitchContext` | common scheduler callback bridge | Replaced, as in existing ports. |
-| `prvSetupMPU` | selected-port global MPU startup | Four exact global images and linker checks implemented; hardware programming/type/readback deferred. |
+| `prvSetupMPU` | selected-port global MPU startup | Exact global images, TYPE check, complete programming, MemManage enable, CTRL enable, and per-region readback implemented for first start. |
 | `prvGetMPURegionSizeSetting` | selected-port MPU encoder | Replaced by stricter exact encoder that rejects rounding, overflow, bad alignment, region number, and access policy. |
 | `vPortStoreTaskMPUSettings` | base constructor plus optional MPU API | Safe default implemented: configurable regions disabled and exact stack enabled; user configuration/access metadata remains optional. |
 | `xIsPrivileged`, `vResetPrivilege`, `vPortSwitchToUserMode`, `xPortIsTaskPrivileged` | optional MPU API and validated SVC paths | Deferred; no public stubs. |
-| VFP enable and FPCCR setup | selected-port startup | Deferred with mandatory readback. |
-| `xPortStartScheduler` | common start plus selected-port operations | Internal FreeRTOS scheduler/tick state excluded. |
+| VFP enable and FPCCR setup | selected-port startup | CPACR and ASPEN/LSPEN policy preparation with mandatory readback implemented. |
+| `xPortStartScheduler` | common start plus selected-port operations | SVC transfer, FPCA clear, MSP rewind, and stale-PendSV clear implemented; FreeRTOS scheduler/tick state excluded. |
 | `vPortEndScheduler` | none | Excluded for bare-metal one-shot start. |
 | `vPortEnterCritical`, `vPortExitCritical` | C++ kernel or selected-port envelope | FreeRTOS public kernel API excluded. |
 | `xPortSysTickHandler`, `vPortSetupTimerInterrupt` | C++ scheduler/platform | Excluded from CPU port. |
@@ -200,7 +235,8 @@ that wrapper-v2 services exist.
 
 1. Completed: port-owned boot construction, linker ranges, exact MPU encoding,
    sealing, and the initial basic protected image.
-2. Strong SVC first-start and controlled unprivileged yield/return services.
+2. Completed: strong SVC first-start, MPU/FPU preparation and readback, and
+   controlled unprivileged yield/return services.
 3. Strong PendSV protected save/copy/scheduler/MPU/restore path, including the
    dynamic extended FP image.
 4. Frozen eight-function runtime ABI integration, archive/cohort/ELF proofs,

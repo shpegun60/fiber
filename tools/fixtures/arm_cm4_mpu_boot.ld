@@ -13,6 +13,11 @@ __fiber_mpu_unprivileged_ram_end__ = 0x20030000;
 
 SECTIONS
 {
+	.isr_vector 0x08000000 :
+	{
+		KEEP(*(.isr_vector))
+	}
+
 	.fiber_unprivileged_code 0x08010000 :
 	{
 		KEEP(*(.fiber_port_unprivileged_functions))
@@ -20,7 +25,7 @@ SECTIONS
 	ASSERT(SIZEOF(.fiber_unprivileged_code) <= 0x10000,
 		"ARM_CM4_MPU unprivileged code exceeds its exact MPU region")
 
-	.fiber_privileged_code 0x08000000 :
+	.fiber_privileged_code 0x08000100 :
 	{
 		KEEP(*(.fiber_port_privileged_functions))
 		*(.text*)

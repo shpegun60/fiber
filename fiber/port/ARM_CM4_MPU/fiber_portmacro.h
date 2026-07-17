@@ -1,11 +1,12 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM4_MPU dictionary through implementation slice 2. The directory owns
- * context construction and exact MPU/linker geometry, but deliberately has no
- * switch runtime or handlers yet. Both Cortex-M4F and Cortex-M7F manifests are
- * accepted because the pinned FreeRTOS port owns both cases; their exact
- * cohort identities remain distinct.
+ * ARM_CM4_MPU dictionary through implementation slice 3. The directory owns
+ * context construction, exact MPU/linker geometry, strong SVC first-start,
+ * and controlled unprivileged yield/return services. PendSV save/restore and
+ * global selection remain deliberately absent. Both Cortex-M4F and Cortex-M7F
+ * manifests are accepted because the pinned FreeRTOS port owns both cases;
+ * their exact cohort identities remain distinct.
  */
 
 #ifndef FIBER_PORT_ARM_CM4_MPU_FIBER_PORTMACRO_H_
@@ -22,6 +23,7 @@
 #include "../fiber_port_select.h"
 #include "../fiber_settings.h"
 #include "../fiber_compiler.h"
+#include "../../fiber_panic.h"
 #include "fiber_port_types.h"
 
 #ifndef fiber_portFORCE_INLINE
@@ -32,6 +34,18 @@
 #ifndef fiber_portASM
 # define fiber_portASM __asm
 #endif
+
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_MEMORY_BARRIER() \
+	fiber_portASM volatile("dmb" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
+
+#define fiber_portSTRINGIFY_I(value) #value
+#define fiber_portSTRINGIFY(value) fiber_portSTRINGIFY_I(value)
 
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM4_MPU is build-selected only"
@@ -86,6 +100,60 @@
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFFDu
 #define fiber_portINITIAL_CONTROL_PRIVILEGED 0x00000002u
 #define fiber_portINITIAL_CONTROL_UNPRIVILEGED 0x00000003u
+
+/* Port-owned SVC namespace. The exact continuation sites are part of the
+ * privilege boundary and therefore cannot be application-overridden. */
+#ifdef FIBER_SVC_START_NUMBER
+# error "[fiber]: ARM_CM4_MPU owns its complete SVC namespace"
+#endif
+#define FIBER_SVC_START_NUMBER 70
+#define fiber_portSVC_START FIBER_SVC_START_NUMBER
+#define fiber_portSVC_YIELD 71
+#define fiber_portSVC_RETURN 72
+
+/* ARMv7E-M system-control, FPU, and MPU register dictionary. */
+#define fiber_portSCB_CPUID_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED00u))
+#define fiber_portNVIC_INT_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
+#define fiber_portNVIC_PENDSVCLR_BIT (1u << 27u)
+#define fiber_portSCB_VTOR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
+#define fiber_portSCB_SHCSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED24u))
+#define fiber_portSCB_MEMFAULTENA_BIT (1u << 16u)
+#define fiber_portMPU_TYPE_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED90u))
+#define fiber_portMPU_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED94u))
+#define fiber_portMPU_RNR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED98u))
+#define fiber_portMPU_RBAR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED9Cu))
+#define fiber_portMPU_RASR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000EDA0u))
+#define fiber_portSCB_CPACR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED88u))
+#define fiber_portFPU_FPCCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000EF34u))
+
+#define fiber_portMPU_EXPECTED_TYPE \
+	(fiber_portMPU_TOTAL_REGIONS << 8u)
+#define fiber_portMPU_CTRL_ENABLE 0x01u
+#define fiber_portMPU_CTRL_PRIVDEFENA 0x04u
+#define fiber_portMPU_CTRL_REQUIRED \
+	(fiber_portMPU_CTRL_ENABLE | fiber_portMPU_CTRL_PRIVDEFENA)
+
+#define fiber_portCPACR_CP10_CP11_FULL (0x0Fu << 20u)
+#define fiber_portFPCCR_LSPACT_BIT (1u << 0u)
+#define fiber_portFPCCR_LSPEN_BIT (1u << 30u)
+#define fiber_portFPCCR_ASPEN_BIT (1u << 31u)
+
+#define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
+#define fiber_portEXC_RETURN_THREAD_PSP_BASIC fiber_portINITIAL_EXC_RETURN
+#define fiber_portEXC_RETURN_THREAD_PSP_EXTENDED \
+	(fiber_portINITIAL_EXC_RETURN & ~(1u << 4u))
 
 #define fiber_portMPU_TOTAL_REGIONS FIBER_PORT_CM4_MPU_TOTAL_REGIONS
 #define fiber_portMPU_FIRST_CONFIGURABLE_REGION 0u
@@ -147,6 +215,93 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 	uint32_t value;
 	fiber_portASM volatile("mov %0, r9" : "=r"(value));
 	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, BASEPRI" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
+{
+#if __CORTEX_M == 7
+	uint32_t primask;
+
+	/* Cortex-M7 r0p0/r0p1 errata 837070: preserve the caller's exact IRQ
+	 * mask instead of FreeRTOS's unconditional cpsie i sequence. */
+	fiber_portASM volatile("mrs %0, primask" : "=r"(primask) :: "memory");
+	fiber_portASM volatile("cpsid i" ::: "memory");
+	fiber_portASM volatile("msr BASEPRI, %0" :: "r"(value) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	fiber_portASM volatile("msr primask, %0" :: "r"(primask) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+#else
+	fiber_portASM volatile("msr BASEPRI, %0" :: "r"(value) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+#endif
+}
+
+/* Naked restore paths use r12 only as an errata scratch register. Hardware
+ * restores the interrupted r12 from the copied exception frame. */
+#if __CORTEX_M == 7
+# define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
+	"mrs   r12, primask                  \n" \
+	"cpsid i                              \n" \
+	"msr   BASEPRI, r0                    \n" \
+	"dsb                                  \n" \
+	"isb                                  \n" \
+	"msr   primask, r12                  \n" \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#else
+# define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
+	"msr   BASEPRI, r0                    \n" \
+	"dsb                                  \n" \
+	"isb                                  \n"
+#endif
+
+fiber_portFORCE_INLINE void fiber_port_fpu_prepare(void)
+{
+	uint32_t cpacr = fiber_portSCB_CPACR_REG;
+	if ((cpacr & fiber_portCPACR_CP10_CP11_FULL) !=
+			fiber_portCPACR_CP10_CP11_FULL) {
+		cpacr = (cpacr & ~fiber_portCPACR_CP10_CP11_FULL) |
+				fiber_portCPACR_CP10_CP11_FULL;
+		fiber_portSCB_CPACR_REG = cpacr;
+		fiber_portDATA_SYNC_BARRIER();
+		fiber_portINST_SYNC_BARRIER();
+	}
+	FIBER_REQUIRE((fiber_portSCB_CPACR_REG &
+			fiber_portCPACR_CP10_CP11_FULL) ==
+			fiber_portCPACR_CP10_CP11_FULL, 'e');
+
+	uint32_t fpccr = fiber_portFPU_FPCCR_REG;
+	fpccr |= fiber_portFPCCR_ASPEN_BIT;
+#if FIBER_FPU_LAZY
+	fpccr |= fiber_portFPCCR_LSPEN_BIT;
+#else
+	fpccr &= ~fiber_portFPCCR_LSPEN_BIT;
+#endif
+	if (fpccr != fiber_portFPU_FPCCR_REG) {
+		fiber_portFPU_FPCCR_REG = fpccr;
+		fiber_portDATA_SYNC_BARRIER();
+		fiber_portINST_SYNC_BARRIER();
+	}
+
+#if FIBER_FPU_LAZY
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_LSPEN_BIT) != 0u, 'E');
+#else
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_LSPEN_BIT) == 0u, 'E');
+#endif
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_ASPEN_BIT) != 0u, 'E');
 }
 
 #define fiber_portPROTECTED_CONTEXT_WORDS 53u
@@ -336,7 +491,22 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM4_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM4_MPU slice 2 must remain non-selectable");
+		"[fiber]: ARM_CM4_MPU slice 3 must remain non-selectable");
+FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
+		"[fiber]: ARM_CM4_MPU first-start SVC changed");
+FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
+		"[fiber]: ARM_CM4_MPU yield SVC changed");
+FIBER_STATIC_ASSERT(fiber_portSVC_RETURN == 72u,
+		"[fiber]: ARM_CM4_MPU task-return SVC changed");
+FIBER_STATIC_ASSERT((fiber_portSVC_START != fiber_portSVC_YIELD) &&
+		(fiber_portSVC_START != fiber_portSVC_RETURN) &&
+		(fiber_portSVC_YIELD != fiber_portSVC_RETURN),
+		"[fiber]: ARM_CM4_MPU SVC namespace collided");
+FIBER_STATIC_ASSERT(fiber_portMPU_EXPECTED_TYPE ==
+		(fiber_portMPU_TOTAL_REGIONS << 8u),
+		"[fiber]: ARM_CM4_MPU expected MPU TYPE changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CTRL_REQUIRED == 0x00000005u,
+		"[fiber]: ARM_CM4_MPU MPU enable policy changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		FIBER_PORT_CM4_MPU_CONTEXT_REGION_COUNT,
 		"[fiber]: ARM_CM4_MPU per-context region count changed");

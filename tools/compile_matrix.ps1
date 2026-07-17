@@ -429,7 +429,8 @@ function Test-ContextPortBoundary {
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
     $slotOwnerSources = @($portSources) + @(
-        "fiber\port\ARM_CM3_MPU\fiber_port.c"
+        "fiber\port\ARM_CM3_MPU\fiber_port.c",
+        "fiber\port\ARM_CM4_MPU\fiber_port.c"
     )
     $expectedSlotOwners = @($slotOwnerSources | ForEach-Object {
         (Join-Path $RepositoryRoot $_).ToLowerInvariant()
@@ -1384,7 +1385,7 @@ function Test-GeneratedCurrentSlotLoadOnly {
     $assembly = Get-Content -LiteralPath $AssemblyPath -Raw
     $symbol = "fiber_internal_runtime_current_context_slot"
     $occurrences = [regex]::Matches($assembly, "\b$symbol\b")
-    $pairPattern = '(?im)^[ \t]*ldr[ \t]+(?<register>r[01]),[ \t]*=' +
+    $pairPattern = '(?im)^[ \t]*ldr[ \t]+(?<register>r(?:1[0-2]|[0-9])),[ \t]*=' +
         [regex]::Escape($symbol) +
         '[ \t]*(?:@.*)?\r?\n[ \t]*ldr[ \t]+\k<register>,[ \t]*\[\k<register>\][ \t]*(?:@.*)?\r?$'
     $loadPairs = [regex]::Matches($assembly, $pairPattern)
@@ -2557,12 +2558,13 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm4MpuSlice2Contract {
+function Test-ArmCm4MpuSlice3Contract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
         [string]$Nm,
         [string]$Objdump,
+        [string]$Objcopy,
         [string]$CmsisPath,
         [string]$BuildRoot
     )
@@ -2570,7 +2572,7 @@ function Test-ArmCm4MpuSlice2Contract {
     $profileDir = Join-Path $RepositoryRoot "fiber\port\ARM_CM4_MPU"
     $probeSource = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm4_mpu_layout_probe.c"
-    $probeDir = Join-Path $BuildRoot "arm-cm4-mpu-slice2"
+    $probeDir = Join-Path $BuildRoot "arm-cm4-mpu-slice3"
     New-Item -ItemType Directory -Path $probeDir | Out-Null
     Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
         -Value "#ifndef MAIN_H_`n#define MAIN_H_`n#endif`n" -Encoding ASCII
@@ -2581,21 +2583,20 @@ function Test-ArmCm4MpuSlice2Contract {
             "fiber_portmacro.h",
             "fiber_port_boot.h",
             "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_port.c",
             "FREERTOS_PARITY.md")) {
         if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
-            throw "ARM_CM4_MPU slice 2 is missing required file: $requiredFile"
+            throw "ARM_CM4_MPU slice 3 is missing required file: $requiredFile"
         }
     }
     if (-not (Test-Path $probeSource)) {
-        throw "ARM_CM4_MPU slice 2 layout fixture is missing"
+        throw "ARM_CM4_MPU slice 3 layout fixture is missing"
     }
 
-    foreach ($forbiddenFile in @(
-            "fiber_port_private.h",
-            "fiber_port.c",
-            "fiber_port_exception.c")) {
+    foreach ($forbiddenFile in @("fiber_port_exception.c")) {
         if (Test-Path (Join-Path $profileDir $forbiddenFile)) {
-            throw "ARM_CM4_MPU slice 2 must not provide switch runtime source: $forbiddenFile"
+            throw "ARM_CM4_MPU slice 3 must not provide exception runtime source: $forbiddenFile"
         }
     }
 
@@ -2605,7 +2606,7 @@ function Test-ArmCm4MpuSlice2Contract {
         $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
         if ($selectorSource.IndexOf("ARM_CM4_MPU",
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM4_MPU slice 2 must have no global selector route: $selectorPath"
+            throw "ARM_CM4_MPU slice 3 must have no global selector route: $selectorPath"
         }
     }
 
@@ -2782,12 +2783,12 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
         )
         & $Compiler @compileArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM4_MPU slice-2 layout variant failed compile: $($variant.Name)"
+            throw "ARM_CM4_MPU slice-3 layout variant failed compile: $($variant.Name)"
         }
 
         $nmOutput = & $Nm --defined-only $objectPath
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM4_MPU slice-2 layout variant: $($variant.Name)"
+            throw "nm failed for ARM_CM4_MPU slice-3 layout variant: $($variant.Name)"
         }
         $variantCohorts = @()
         foreach ($line in $nmOutput) {
@@ -2795,7 +2796,7 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
                 $variantCohorts += $Matches['symbol']
             }
             if ($line -match '\b(SVC_Handler|PendSV_Handler|fiber_port_runtime_)\S*\s*$') {
-                throw "ARM_CM4_MPU slice 2 unexpectedly defines runtime symbol: $line"
+                throw "ARM_CM4_MPU layout probe unexpectedly defines runtime symbol: $line"
             }
         }
         if ($variantCohorts.Count -ne 1) {
@@ -2867,14 +2868,17 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
 
     $bootSource = Join-Path $profileDir "fiber_port_boot.c"
     $bootHeader = Join-Path $profileDir "fiber_port_boot.h"
+    $portSource = Join-Path $profileDir "fiber_port.c"
+    $privateHeader = Join-Path $profileDir "fiber_port_private.h"
     $bootFixture = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm4_mpu_boot_probe.c"
     $bootLinker = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm4_mpu_boot.ld"
-    foreach ($requiredPath in @($bootSource, $bootHeader,
+    foreach ($requiredPath in @($bootSource, $bootHeader, $portSource,
+            $privateHeader,
             $bootFixture, $bootLinker)) {
         if (-not (Test-Path $requiredPath)) {
-            throw "ARM_CM4_MPU slice 2 construction proof is missing: $requiredPath"
+            throw "ARM_CM4_MPU slice 3 proof is missing: $requiredPath"
         }
     }
 
@@ -2886,6 +2890,9 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
             "fiber_port_mpu_build_global_regions",
             "fiber_port_context_compute_seal",
             "fiber_port_context_seal_check",
+            "fiber_port_context_validate_initial_restore",
+            "fiber_port_context_validate_running_svc",
+            "ARMv7E-M keeps the basic core frame at PSP",
             "fiber_port_context_init",
             "ctx->mpu_regions[fiber_portMPU_STACK_REGION] = stack_region;",
             "ctx->protected_context.basic.core.r9 = fiber_port_read_r9();",
@@ -2893,7 +2900,7 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
             "ctx->runtime_flags = 0u;")) {
         if ($bootText.IndexOf($requiredText,
                 [System.StringComparison]::Ordinal) -lt 0) {
-            throw "ARM_CM4_MPU slice 2 lost construction invariant: $requiredText"
+            throw "ARM_CM4_MPU slice 3 lost construction invariant: $requiredText"
         }
     }
     foreach ($forbiddenText in @(
@@ -2903,7 +2910,38 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
             "fiber_port_runtime_schedule(")) {
         if ($bootText.IndexOf($forbiddenText,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM4_MPU slice 2 activated runtime too early: $forbiddenText"
+            throw "ARM_CM4_MPU boot object acquired runtime ownership: $forbiddenText"
+        }
+    }
+
+    $portText = Get-Content -LiteralPath $portSource -Raw
+    foreach ($requiredText in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "void fiber_port_svc_dispatch(",
+            "void fiber_port_runtime_schedule(",
+            "void fiber_port_unprivileged_task_return(",
+            "void fiber_port_start_first_context(",
+            "void fiber_port_restore_first_context_from_svc(",
+            "void SVC_Handler(",
+            "fiber_port_mpu_activate_first_context",
+            "fiber_port_mpu_validate_active_context",
+            "fiber_port_fpu_prepare();",
+            "fiber_portSVC_START",
+            "fiber_portSVC_YIELD",
+            "fiber_portSVC_RETURN")) {
+        if ($portText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM4_MPU slice 3 lost SVC invariant: $requiredText"
+        }
+    }
+    foreach ($forbiddenText in @(
+            "void PendSV_Handler(",
+            "fiber_port_runtime_prepare_start(",
+            "fiber_port_runtime_select_first(",
+            "fiber_port_runtime_start_first(")) {
+        if ($portText.IndexOf($forbiddenText,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM4_MPU slice 3 activated later runtime too early: $forbiddenText"
         }
     }
 
@@ -2994,10 +3032,20 @@ typedef enum IRQn {
             throw "ARM_CM4_MPU construction source failed compile: $($variant.Name)"
         }
 
+        $portObject = Join-Path $variantDir "fiber_port.o"
+        $portAssembly = [IO.Path]::ChangeExtension($portObject, ".s")
+        & $Compiler @($constructionBase + @(
+            "-save-temps=obj",
+            "-c", $portSource, "-o", $portObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM4_MPU SVC source failed compile: $($variant.Name)"
+        }
+        Test-GeneratedCurrentSlotLoadOnly -AssemblyPath $portAssembly
+
         $bootDefined = @(& $Nm -g --defined-only $bootObject)
         foreach ($line in $bootDefined) {
             if ($line -match '\b(SVC_Handler|PendSV_Handler|fiber_port_runtime_)\S*\s*$') {
-                throw "ARM_CM4_MPU slice 2 unexpectedly defines runtime symbol: $line"
+                throw "ARM_CM4_MPU boot object unexpectedly defines runtime symbol: $line"
             }
         }
         $bootUndefined = @(& $Nm -u $bootObject)
@@ -3010,7 +3058,13 @@ typedef enum IRQn {
             }
         }
         foreach ($requiredUndefined in @(
-                "fiber_panic", "fiber_port_unprivileged_task_return")) {
+                "fiber_panic",
+                "fiber_port_unprivileged_task_return",
+                "fiber_port_runtime_schedule",
+                "fiber_port_svc_dispatch",
+                "fiber_port_start_first_context",
+                "fiber_port_restore_first_context_from_svc",
+                "SVC_Handler")) {
             if ($undefinedNames -notcontains $requiredUndefined) {
                 throw "ARM_CM4_MPU construction lost required dependency: $requiredUndefined / $($variant.Name)"
             }
@@ -3025,12 +3079,124 @@ typedef enum IRQn {
         $allowedUndefined = @($boundarySymbols + @(
             "fiber_panic",
             "fiber_port_unprivileged_task_return",
+            "fiber_port_runtime_schedule",
+            "fiber_port_svc_dispatch",
+            "fiber_port_start_first_context",
+            "fiber_port_restore_first_context_from_svc",
+            "SVC_Handler",
             $variantCohort[0]
         ))
         foreach ($symbol in $undefinedNames) {
             if ($allowedUndefined -notcontains $symbol) {
                 throw "ARM_CM4_MPU construction acquired unexpected dependency: $symbol / $($variant.Name)"
             }
+        }
+
+        $portDefined = @(& $Nm -g --defined-only $portObject)
+        foreach ($requiredSymbol in @(
+                "SVC_Handler",
+                "fiber_port_runtime_schedule",
+                "fiber_port_unprivileged_task_return",
+                "fiber_port_start_first_context",
+                "fiber_port_restore_first_context_from_svc",
+                "fiber_port_svc_dispatch")) {
+            if (-not ($portDefined -match
+                    "\b[TR] \s*$([regex]::Escape($requiredSymbol))$")) {
+                throw "ARM_CM4_MPU SVC object lost strong symbol: $requiredSymbol / $($variant.Name)"
+            }
+        }
+        if ($portDefined -match '\bPendSV_Handler$') {
+            throw "ARM_CM4_MPU slice 3 must not define PendSV_Handler: $($variant.Name)"
+        }
+
+        $portUndefined = @(& $Nm -u $portObject | ForEach-Object {
+            if ($_ -match '\bU\s+(\S+)$') { $Matches[1] }
+        })
+        foreach ($requiredUndefined in @(
+                "fiber_internal_runtime_current_context_slot",
+                "fiber_internal_task_return",
+                "fiber_panic",
+                "fiber_port_context_validate_initial_restore",
+                "fiber_port_context_validate_running_svc",
+                "fiber_port_mpu_build_global_regions",
+                "fiber_port_mpu_linker_layout_check",
+                "fiber_port_mpu_load_linker_layout")) {
+            if ($portUndefined -notcontains $requiredUndefined) {
+                throw "ARM_CM4_MPU SVC object lost dependency: $requiredUndefined / $($variant.Name)"
+            }
+        }
+        $portCohorts = @($portDefined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if ($portCohorts.Count -ne 1) {
+            throw "ARM_CM4_MPU SVC object must define one exact cohort: $($variant.Name)"
+        }
+
+        $portSymbolTable = @(& $Objdump -t $portObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM4_MPU SVC object: $($variant.Name)"
+        }
+        foreach ($symbol in @(
+                "SVC_Handler",
+                "fiber_port_start_first_context",
+                "fiber_port_restore_first_context_from_svc",
+                "fiber_port_svc_dispatch")) {
+            $match = @($portSymbolTable | Where-Object {
+                $_ -match "\bF\s+\.fiber_port_privileged_functions\s+[0-9a-fA-F]+\s+$([regex]::Escape($symbol))$"
+            })
+            if ($match.Count -ne 1) {
+                throw "ARM_CM4_MPU privileged SVC symbol escaped section: $symbol / $($variant.Name)"
+            }
+        }
+        foreach ($symbol in @(
+                "fiber_port_runtime_schedule",
+                "fiber_port_unprivileged_task_return")) {
+            $match = @($portSymbolTable | Where-Object {
+                $_ -match "\bF\s+\.fiber_port_unprivileged_functions\s+[0-9a-fA-F]+\s+$([regex]::Escape($symbol))$"
+            })
+            if ($match.Count -ne 1) {
+                throw "ARM_CM4_MPU unprivileged SVC veneer escaped section: $symbol / $($variant.Name)"
+            }
+        }
+
+        $portDisassembly = (& $Objdump -dr $portObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump disassembly failed for ARM_CM4_MPU SVC object: $($variant.Name)"
+        }
+        foreach ($shape in @(
+                'svc\s+71',
+                'svc\s+72',
+                'svc\s+70',
+                'ldmdb\s+r1!,\s*\{r0,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*r9,\s*sl,\s*fp\}',
+                'msr\s+PSP,\s*r0',
+                'stmia(?:\.w)?\s+r0,\s*\{r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*r9,\s*sl,\s*fp\}',
+                'msr\s+CONTROL,\s*r3',
+                'fiber_internal_runtime_current_context_slot')) {
+            if ($portDisassembly -notmatch $shape) {
+                throw "ARM_CM4_MPU generated SVC/restore shape changed: $shape / $($variant.Name)"
+            }
+        }
+        $svcInstructions = @([regex]::Matches($portDisassembly,
+                '(?m)^\s*[0-9a-f]+:\s+[0-9a-f ]+\s+svc\s+'))
+        if ($svcInstructions.Count -ne 3) {
+            throw "ARM_CM4_MPU slice 3 must emit exactly three SVC instructions: $($variant.Name)"
+        }
+        $svcHandler = [regex]::Match($portDisassembly,
+                '(?s)<SVC_Handler>:(?<body>.*?)(?=\r?\n[0-9a-fA-F]+\s+<)')
+        if (-not $svcHandler.Success) {
+            throw "ARM_CM4_MPU generated SVC handler was not found: $($variant.Name)"
+        }
+        if ($svcHandler.Groups['body'].Value -match
+                'add(?:\.w)?\s+r0,\s*r0,\s*#72') {
+            throw "ARM_CM4_MPU SVC must keep PSP on the basic core frame: $($variant.Name)"
+        }
+        if (($variant.Core -eq 7) -and
+                (($portDisassembly -notmatch 'mrs\s+ip,\s*PRIMASK') -or
+                 ($portDisassembly -notmatch 'msr\s+BASEPRI,\s*r0') -or
+                 ($portDisassembly -notmatch 'msr\s+PRIMASK,\s*ip'))) {
+            throw "ARM_CM4_MPU M7 restore lost PRIMASK-preserving errata sequence: $($variant.Name)"
         }
 
         $symbolTable = & $Objdump -t $bootObject
@@ -3067,6 +3233,7 @@ typedef enum IRQn {
             "-Wl,--gc-sections",
             "-T", $bootLinker,
             $fixtureObject,
+            $portObject,
             $bootObject,
             "-o", $elfPath
         )
@@ -3079,18 +3246,73 @@ typedef enum IRQn {
                 "fiber_port_context_init",
                 "fiber_port_context_compute_seal",
                 "fiber_port_context_seal_check",
+                "fiber_port_context_validate_initial_restore",
+                "fiber_port_context_validate_running_svc",
                 "fiber_port_mpu_try_encode_exact_region",
                 "fiber_port_mpu_build_global_regions",
-                "fiber_port_unprivileged_task_return")) {
+                "fiber_port_unprivileged_task_return",
+                "fiber_port_runtime_schedule",
+                "fiber_port_start_first_context",
+                "fiber_port_restore_first_context_from_svc",
+                "fiber_port_svc_dispatch",
+                "SVC_Handler")) {
             if (-not ($elfSymbols -match "\b$([regex]::Escape($requiredSymbol))$")) {
                 throw "ARM_CM4_MPU synthetic ELF lost symbol: $requiredSymbol / $($variant.Name)"
             }
         }
-        if ($elfSymbols -match '\b(SVC_Handler|PendSV_Handler)$') {
-            throw "ARM_CM4_MPU slice 2 synthetic ELF must not provide handlers: $($variant.Name)"
+        $svcAddress = Get-StrongTextSymbolAddress -NmOutput $elfSymbols `
+            -Symbol "SVC_Handler" -Path $elfPath
+        if ($elfSymbols -match '\bT\s+PendSV_Handler$') {
+            throw "ARM_CM4_MPU slice 3 must not provide strong PendSV: $($variant.Name)"
+        }
+
+        $vectorPath = Join-Path $variantDir "vectors.bin"
+        & $Objcopy -O binary --only-section=.isr_vector $elfPath $vectorPath
+        if (($LASTEXITCODE -ne 0) -or (-not (Test-Path $vectorPath))) {
+            throw "ARM_CM4_MPU vector extraction failed: $($variant.Name)"
+        }
+        $vectorBytes = [IO.File]::ReadAllBytes($vectorPath)
+        if ($vectorBytes.Length -lt (16 * 4)) {
+            throw "ARM_CM4_MPU synthetic vector table is truncated: $($variant.Name)"
+        }
+        $svcVector = [BitConverter]::ToUInt32($vectorBytes, 11 * 4)
+        if ((($svcVector -band 1) -eq 0) -or
+                (($svcVector -band [uint32]4294967294) -ne
+                ($svcAddress -band [uint32]4294967294))) {
+            throw "ARM_CM4_MPU vector slot 11 lost strong SVC: $($variant.Name)"
         }
 
         if ($variant.Name -eq "m4-r8") {
+            $competingSource = Join-Path $variantDir "competing-svc.c"
+            $competingObject = Join-Path $variantDir "competing-svc.o"
+            Set-Content -LiteralPath $competingSource -Encoding ASCII -Value `
+                "void SVC_Handler(void) { }`n"
+            & $Compiler @($constructionBase + @(
+                "-c", $competingSource, "-o", $competingObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM4_MPU competing SVC fixture failed compile"
+            }
+            $duplicateLog = Join-Path $variantDir "duplicate-svc.log"
+            $duplicateResult = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments @(
+                    "-mcpu=$($variant.Cpu)",
+                    "-mthumb",
+                    "-mfpu=$($variant.Fpu)",
+                    "-mfloat-abi=hard",
+                    "-nostdlib",
+                    "-Wl,--gc-sections",
+                    "-T", $bootLinker,
+                    $fixtureObject,
+                    $portObject,
+                    $bootObject,
+                    $competingObject,
+                    "-o", (Join-Path $variantDir "duplicate-svc.elf")
+                ) -LogPath $duplicateLog
+            if (($duplicateResult.ExitCode -eq 0) -or
+                    ($duplicateResult.Output -notmatch 'multiple definition')) {
+                throw "ARM_CM4_MPU competing strong SVC must fail link`n$($duplicateResult.Output)"
+            }
+
             foreach ($boundary in $boundarySymbols) {
                 $negativeLinker = Join-Path $variantDir `
                     "missing-$($boundary.Trim('_')).ld"
@@ -3110,6 +3332,7 @@ typedef enum IRQn {
                         "-Wl,--gc-sections",
                         "-T", $negativeLinker,
                         $fixtureObject,
+                        $portObject,
                         $bootObject,
                         "-o", (Join-Path $variantDir `
                             "missing-$($boundary.Trim('_')).elf")
@@ -4890,9 +5113,9 @@ try {
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM4_MPU slice-2 construction contract =="
-    Test-ArmCm4MpuSlice2Contract -RepositoryRoot $RepoRoot `
-        -Compiler $gcc -Nm $nm -Objdump $objdump `
+    Write-Host "== ARM_CM4_MPU slice-3 SVC contract =="
+    Test-ArmCm4MpuSlice3Contract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `
         -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM3_MPU construction/SVC/PendSV contract =="
     Test-ArmCm3MpuLayoutContract -RepositoryRoot $RepoRoot `

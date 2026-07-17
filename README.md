@@ -57,12 +57,13 @@ portable synchronization rules, an explicit ISR reschedule boundary, and lwIP
 adapters. That layer consumes the existing scheduler hook; queues, ticks, and
 network policy do not enter the CPU-port ABI.
 
-`ARM_CM4_MPU` remains non-selectable through implementation slice 2. It freezes
-the pinned FreeRTOS 53-word protected FP context and now constructs an exact
-per-fiber default MPU image from the stack range passed to `fiber_init()`, with
-linker-range isolation and immutable sealing for both 8- and 16-region M4F/M7F
-manifests. It still provides no SVC/PendSV handlers, switch runtime, selector
-route, or hardware support claim.
+`ARM_CM4_MPU` remains non-selectable through implementation slice 3. It freezes
+the pinned FreeRTOS 53-word protected FP context, constructs an exact per-fiber
+default MPU image, and now owns strong SVC first-start plus unprivileged
+yield/return services for both 8- and 16-region M4F/M7F manifests. First start
+programs and reads back the exact MPU image, prepares CPACR/FPCCR, and preserves
+the Cortex-M7 r0p0/r0p1 BASEPRI errata policy. Strong PendSV, full runtime ABI
+integration, selector routing, and hardware support claims remain absent.
 
 ## Project Setup
 

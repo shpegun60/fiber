@@ -1,5 +1,31 @@
 # Fiber Decision Log
 
+## 2026-07-17: Add The ARM_CM4_MPU Protected SVC Slice
+
+Implementation slice 3 adds the exact profile's protected first-start path
+without activating global selection or changing common runtime behavior. The
+port now owns fixed SVC services 70/71/72, a strong `SVC_Handler`, an
+unprivileged schedule veneer, and an unprivileged task-return veneer. Dispatch
+accepts only exact Thread/MSP first-start or Thread/PSP basic/extended origins
+and validates masks, frame shape, opcode, immediate, continuation provenance,
+current context, linker isolation, and active MPU state before acting.
+
+First start prepares and reads back CPACR/FPCCR, validates the concrete M4/M7
+CPUID, installs all 8- or 16-region MPU register pairs, enables MemManage and
+`MPU_CTRL.ENABLE|PRIVDEFENA`, then performs the FreeRTOS-style second MSP rewind
+and protected basic-context restore. Cortex-M7 BASEPRI clear uses the existing
+stronger PRIMASK-preserving errata sequence rather than unconditionally
+enabling IRQs around `msr BASEPRI`.
+
+The extended-FP SVC rule is explicit: PSP addresses the basic core frame and
+the low FP extension follows at higher addresses. The handler never offsets
+PSP before reading stacked PC/xPSR. Compile proofs cover M4F/M7F with 8 and 16
+regions, exact service count and generated restore shape, strong vector slot
+11, duplicate-handler failure, protection sections, linker boundaries, and
+the deliberate absence of `PendSV_Handler`. The profile remains
+non-selectable; the next slice owns protected FP-aware PendSV save, scheduler,
+MPU replacement, and restore.
+
 ## 2026-07-17: Add ARM_CM4_MPU Context Construction
 
 Implementation slice 2 adds the port-owned `fiber_port_boot.h/.c` construction

@@ -1,8 +1,6 @@
 /* ARM_CM4_MPU safe-default context and exact MPU-image construction. */
 
-#include "fiber_port_boot.h"
-#include "../fiber_port_context_cohort.h"
-#include "../../fiber_panic.h"
+#include "fiber_port_private.h"
 
 #define FIBER_CM4_MPU_PRIVILEGED \
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
@@ -265,6 +263,16 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_context_seal_check);
 	const uintptr_t return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_port_unprivileged_task_return);
+	const uintptr_t schedule_target = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_schedule);
+	const uintptr_t svc_handler = fiber_port_function_address(
+			(uintptr_t)&SVC_Handler);
+	const uintptr_t svc_dispatch = fiber_port_function_address(
+			(uintptr_t)&fiber_port_svc_dispatch);
+	const uintptr_t start_first = fiber_port_function_address(
+			(uintptr_t)&fiber_port_start_first_context);
+	const uintptr_t restore_first = fiber_port_function_address(
+			(uintptr_t)&fiber_port_restore_first_context_from_svc);
 
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->privileged_code_start, layout->privileged_code_end,
@@ -287,6 +295,24 @@ void fiber_port_mpu_linker_layout_check(
 	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
 			layout->privileged_code_start,
 			layout->privileged_code_end, return_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end, schedule_target), 'L');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end, schedule_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			svc_handler), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			svc_dispatch), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			start_first), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			restore_first), 'L');
 }
 
 FIBER_CM4_MPU_PRIVILEGED
@@ -473,6 +499,123 @@ void fiber_port_context_seal_check(const FiberContext *ctx)
 			expected_stack.rbar, 'M');
 	FIBER_REQUIRE(ctx->mpu_regions[fiber_portMPU_STACK_REGION].rasr ==
 			expected_stack.rasr, 'M');
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_validate_hardware_frame(const uint32_t *hardware_frame,
+		const FiberPortMpuMemoryLayout *layout)
+{
+	FIBER_REQUIRE(hardware_frame != NULL, 'P');
+	FIBER_REQUIRE(layout != NULL, 'L');
+
+	const uint32_t stacked_pc = hardware_frame[6];
+	const uint32_t stacked_xpsr = hardware_frame[7];
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_THUMB_BIT) != 0u, 'x');
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_STACK_ALIGN_BIT) == 0u,
+			'a');
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
+	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			(uintptr_t)stacked_pc), 'c');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end,
+			(uintptr_t)stacked_pc), 'c');
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_context_validate_initial_restore(FiberContext *ctx)
+{
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_context_seal_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+
+	FIBER_REQUIRE(ctx->protected_context_cursor ==
+			&ctx->protected_context.basic.cursor_limit, 'P');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.control ==
+			ctx->boot.abi_initial_control, 'q');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.exc_return ==
+			ctx->boot.abi_initial_exc_return, 'x');
+	FIBER_REQUIRE(ctx->runtime_flags == 0u, 'q');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r4 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r5 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r6 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r7 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r8 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r10 == 0u, 'x');
+	FIBER_REQUIRE(ctx->protected_context.basic.core.r11 == 0u, 'x');
+	for (uint32_t index = 20u;
+			index < fiber_portPROTECTED_CONTEXT_WORDS; ++index) {
+		FIBER_REQUIRE(ctx->protected_context.words[index] == 0u, 'x');
+	}
+
+	const uintptr_t psp =
+			(uintptr_t)ctx->protected_context.basic.hardware.psp;
+	FIBER_REQUIRE((psp & 7u) == 0u, 'A');
+	FIBER_REQUIRE(psp <= UINTPTR_MAX - FIBER_PORT_EXC_BASE_BYTES, 'O');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((psp + FIBER_PORT_EXC_BASE_BYTES) <=
+			ctx->boot.stack_top, 'P');
+
+	const uint32_t *const hardware_frame =
+			&ctx->protected_context.basic.hardware.r0;
+	fiber_port_validate_hardware_frame(hardware_frame, &layout);
+	FIBER_REQUIRE(hardware_frame[0] ==
+			(uint32_t)(uintptr_t)ctx->boot.arg, 'x');
+	FIBER_REQUIRE(hardware_frame[1] == 0u, 'x');
+	FIBER_REQUIRE(hardware_frame[2] == 0u, 'x');
+	FIBER_REQUIRE(hardware_frame[3] == 0u, 'x');
+	FIBER_REQUIRE(hardware_frame[4] == 0u, 'x');
+	FIBER_REQUIRE(hardware_frame[5] ==
+			(((uint32_t)(uintptr_t)&fiber_port_unprivileged_task_return) |
+			1u), 'x');
+	FIBER_REQUIRE(hardware_frame[6] == fiber_port_function_address(
+			(uintptr_t)ctx->boot.entry), 'x');
+	FIBER_REQUIRE(hardware_frame[7] == fiber_portINITIAL_XPSR, 'x');
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_context_validate_running_svc(const FiberContext *ctx,
+		const uint32_t *hardware_frame,
+		uint32_t exc_return)
+{
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_context_seal_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+
+	FIBER_REQUIRE(ctx->protected_context_cursor ==
+			&ctx->protected_context.words[0], 'P');
+	FIBER_REQUIRE((exc_return == fiber_portEXC_RETURN_THREAD_PSP_BASIC) ||
+			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED), 'l');
+	FIBER_REQUIRE(hardware_frame != NULL, 'P');
+
+	const uint32_t control = __get_CONTROL();
+	FIBER_REQUIRE((control & 3u) ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
+		FIBER_REQUIRE((control & 4u) != 0u, 'l');
+	} else {
+		FIBER_REQUIRE((control & 4u) == 0u, 'l');
+	}
+
+	/* ARMv7E-M keeps the basic core frame at PSP. For an extended exception
+	 * frame, s0-s15/FPSCR/reserved follow the core frame at higher addresses. */
+	const uintptr_t frame_start = (uintptr_t)hardware_frame;
+	const uintptr_t frame_bytes =
+			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) ?
+			(uintptr_t)FIBER_PORT_EXC_PER_LEVEL_BYTES :
+			(uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
+	FIBER_REQUIRE((frame_start & 7u) == 0u, 'A');
+	FIBER_REQUIRE(frame_start == (uintptr_t)__get_PSP(), 'P');
+	FIBER_REQUIRE(frame_start <= UINTPTR_MAX - frame_bytes, 'O');
+	FIBER_REQUIRE(frame_start >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((frame_start + frame_bytes) <=
+			ctx->boot.stack_top, 'P');
+
+	fiber_port_validate_hardware_frame(hardware_frame, &layout);
 }
 
 FIBER_CM4_MPU_PRIVILEGED
