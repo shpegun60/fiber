@@ -129,6 +129,20 @@
 		FIBER_API_NOCOVERAGE
 #endif
 
+/* CPU-neutral placement marker for the minimal common call chain that may run
+ * directly from Thread mode. Non-MPU linkers may collect it with ordinary
+ * text. MPU linkers map it to the application-executable code region. An
+ * explicit section attribute is required because -ffunction-sections names do
+ * not survive whole-program LTO reliably. */
+#ifndef FIBER_API_THREAD_FUNCTION
+# if defined(__GNUC__) || defined(__clang__)
+#  define FIBER_API_THREAD_FUNCTION \
+		__attribute__((section(".text.fiber_runtime_thread_functions")))
+# else
+#  define FIBER_API_THREAD_FUNCTION
+# endif
+#endif
+
 #ifndef FIBER_API_UNREACHABLE
 # if defined(__GNUC__) || defined(__clang__)
 #  define FIBER_API_UNREACHABLE() __builtin_unreachable()

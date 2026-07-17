@@ -23,7 +23,7 @@ void fiber_init(FiberContext* const ctx, void* const stack_begin, void* const st
 	fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);
 }
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 FiberContext* fiber_current(void)
 {
 	return fiber_internal_runtime_load_current_context();
@@ -58,7 +58,7 @@ void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *use
  * MPU/unprivileged ports can replace a direct PendSV request with yield SVC.
  * -------------------------------------------------------------------------- */
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 void fiber_schedule(void)
 {
 	fiber_port_runtime_schedule();

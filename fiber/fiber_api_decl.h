@@ -20,7 +20,7 @@ void fiber_init(FiberContext *ctx,
 		entry_t entry,
 		void *arg);
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 FiberContext *fiber_current(void);
 
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -29,7 +29,7 @@ void fiber_start(void);
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
 		void *user);
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 void fiber_schedule(void);
 
 #ifdef __cplusplus

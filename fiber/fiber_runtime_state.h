@@ -26,7 +26,7 @@ fiber_internal_runtime_current_context_slot;
 void fiber_internal_scheduler_store_pick_next(FiberSchedulerPickNextFn pick_next,
 		void *user);
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 FiberContext *fiber_internal_runtime_load_current_context(void);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY

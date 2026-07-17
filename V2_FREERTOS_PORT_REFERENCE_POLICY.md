@@ -519,7 +519,8 @@ context storage, per-switch MPU region programming, CONTROL restoration,
 unprivileged yield/return SVC services, exact linker isolation, and a safe
 default policy before this profile can become selectable.
 
-Its first three implementation slices freeze a CMSIS-free public context type,
+Its first four implementation slices and its sixth integration slice freeze a
+CMSIS-free public context type,
 the exact `CM3M` port/layout/feature identity, four RBAR/RASR pairs, the
 20-word protected register image, MPU-specific boot metadata, every 32-bit
 field offset, exact MPU region encoding, ten mandatory linker boundaries,
@@ -527,11 +528,12 @@ safe isolated current-slot aperture, disabled configurable regions, exact stack 
 unprivileged protected-context construction, an immutable boot/MPU seal, the
 three-service SVC namespace, strong fail-closed SVC dispatch, first-context MPU
 activation/restore, unprivileged yield/return veneers, and protected PendSV
-save/switch/MPU-replace/restore. The compile matrix treats this as a
-non-selectable partial-runtime cohort, requires generated-code and synthetic
-exact-memory/vector proofs for both strong handlers, and rejects wrong-core,
-no-MPU, or missing-boundary manifests. No selector route or runtime support
-follows from these proofs.
+save/switch/MPU-replace/restore, all eight forward runtime operations, and a
+portable-application static-archive integration. The compile matrix treats this
+as a non-selectable complete-software cohort, requires normal/LTO,
+section-GC, exact-memory, current-slot, stack, cohort, vector, and strong-handler
+proofs, and rejects wrong-core, no-MPU, missing-boundary, or competing-handler
+manifests. No selector route or runtime support follows from these proofs.
 
 The same three role manifests apply to the ARM_CM35P, ARM_CM52, and ARM_CM85
 `non_secure` engines even though those rows are reference-portability targets

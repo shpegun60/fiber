@@ -1,9 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM3_MPU profile dictionary through implementation slice 4.
- * The profile remains non-selectable until the later integration/proof slices,
- * but its exact context, MPU, SVC, and PendSV contracts are compile covered.
+ * ARM_CM3_MPU profile dictionary through implementation slice 6.
+ * The profile remains non-selectable until the dedicated selector slice, but
+ * its exact runtime, MPU, archive, linker, SVC, and PendSV contracts are
+ * compile covered.
  */
 
 #ifndef FIBER_PORT_ARM_CM3_MPU_FIBER_PORTMACRO_H_
@@ -100,11 +101,29 @@
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
 #define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
 #define fiber_portNVIC_PENDSVCLR_BIT (1u << 27u)
+#define fiber_portSCB_AIRCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED0Cu))
+#define fiber_portSCB_CCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED14u))
+#define fiber_portNVIC_SHPR2_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED1Cu))
+#define fiber_portNVIC_SHPR3_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED20u))
 #define fiber_portSCB_VTOR_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
 #define fiber_portSCB_SHCSR_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED24u))
 #define fiber_portSCB_MEMFAULTENA_BIT (1u << 16u)
+#define fiber_portSCB_BUSFAULTENA_BIT (1u << 17u)
+#define fiber_portSCB_USGFAULTENA_BIT (1u << 18u)
+#define fiber_portSCB_CFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED28u))
+#define fiber_portSCB_HFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED2Cu))
+#define fiber_portSCB_DFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED30u))
+#define fiber_portNVIC_FIRST_USER_PRIORITY_REG \
+	(*((volatile uint8_t *)(uintptr_t)0xE000E400u))
 #define fiber_portMPU_TYPE_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED90u))
 #define fiber_portMPU_CTRL_REG \
@@ -120,6 +139,18 @@
 #define fiber_portMPU_CTRL_PRIVDEFENA 0x04u
 #define fiber_portMPU_CTRL_REQUIRED \
 	(fiber_portMPU_CTRL_ENABLE | fiber_portMPU_CTRL_PRIVDEFENA)
+
+#define fiber_portSCB_CCR_UNALIGN_TRP_BIT (1u << 3u)
+#define fiber_portSCB_CCR_DIV_0_TRP_BIT (1u << 4u)
+#define fiber_portSCB_CCR_STKALIGN_BIT (1u << 9u)
+#define fiber_portSCB_AIRCR_PRIGROUP_MASK (7u << 8u)
+#define fiber_portNVIC_PRIORITY_BYTE_MASK 0xFFu
+#define fiber_portNVIC_PENDSV_PRIORITY_SHIFT 16u
+#define fiber_portNVIC_SVC_PRIORITY_SHIFT 24u
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+#define fiber_portVECTOR_REQUIRED_WORDS 16u
+#define fiber_portVECTOR_ALIGNMENT 128u
 
 #define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
 #define fiber_portXPSR_IPSR_MASK 0x000001FFu
@@ -298,7 +329,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM3_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM3_MPU must remain non-selectable before integration proof");
+		"[fiber]: ARM_CM3_MPU must remain non-selectable before selector activation");
 FIBER_STATIC_ASSERT(fiber_portSVC_START >= 0 &&
 		fiber_portSVC_START <= 255,
 		"[fiber]: ARM_CM3_MPU start SVC must fit imm8");

@@ -1,5 +1,39 @@
 # Fiber Decision Log
 
+## 2026-07-17: Complete The Non-Selectable ARM_CM3_MPU Software Integration
+
+The exact `ARM_CM3_MPU` source group now implements all eight frozen
+common-to-port runtime operations while remaining unreachable from the global
+selector. Startup is fail-closed over privileged Thread/MSP state, all masks,
+MPU type and disabled control, active VTOR and strong handlers, implemented
+priority bits, PRIGROUP, fault policy, SVC/PendSV priorities, and stale PendSV.
+The first scheduler callback runs inside the same selected BASEPRI policy as
+later handler-side selection and must preserve the captured CPU/MPU state.
+
+The minimal common Thread-callable chain uses the CPU-neutral
+`.text.fiber_runtime_thread_functions` marker. Its `.text.*` name remains
+compatible with existing non-MPU linker scripts, while an MPU linker extracts
+it together with the unprivileged SVC veneers before the privileged catch-all.
+This explicit marker is required because ordinary `-ffunction-sections` names
+are not stable across whole-program LTO.
+
+The compile matrix now links the unchanged portable five-function application
+against common runtime and the complete MPU port from a static archive under
+section GC, with and without library LTO. The synthetic exact-memory manifest
+proves one eight-function ABI, reverse ABI v1, exact cohort expectation,
+strong-handler extraction over weak startup aliases, slots 11/14, duplicate
+strong-handler failure, code/data protection placement, aligned 2 KiB stacks,
+the exact 32-byte current slot, and finite compiler stack-usage artifacts. The
+portable application translation unit stays outside LTO in this proof so its
+unprivileged entry section remains independently auditable; arbitrary
+application entry placement remains an integration responsibility.
+
+Conditional slice 5 remains omitted because the safe uniform policy does not
+yet need heterogeneous MPU configuration. The profile remains
+`FIBER_PORT_RUNTIME_SELECTABLE == 0`, has no hardware or STM32 support claim,
+and may be exposed only by the separate selector slice after these proofs stay
+green.
+
 ## 2026-07-17: Add The Non-Selectable ARM_CM3_MPU PendSV Slice
 
 The staged exact `ARM_CM3_MPU` source group now implements slice 4 without

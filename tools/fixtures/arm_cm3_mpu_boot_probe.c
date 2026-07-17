@@ -1,10 +1,11 @@
 #include "fiber_port_private.h"
 #include "../../fiber/fiber_panic.h"
 
-FIBER_PORT_CONTEXT_COHORT_DEFINE();
-
 fiber_portPRIVILEGED_DATA
 static FiberContext fiber_arm_cm3_mpu_probe_context;
+
+const unsigned char fiber_internal_runtime_port_abi_v1_anchor =
+		(unsigned char)FIBER_RUNTIME_PORT_ABI_VERSION;
 
 FiberContext *volatile fiber_internal_runtime_current_context_slot
 		__attribute__((section(".bss.fiber_runtime_current_context_slot"))) = 0;
@@ -22,6 +23,13 @@ fiber_portPRIVILEGED_FUNCTION
 void fiber_internal_runtime_publish_current_context(FiberContext *next)
 {
 	fiber_internal_runtime_current_context_slot = next;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_internal_runtime_require_current_context(void)
+{
+	FIBER_REQUIRE(fiber_internal_runtime_current_context_slot != NULL, 'G');
 }
 
 __attribute__((section(".fiber_test_unprivileged_ram"), aligned(2048)))

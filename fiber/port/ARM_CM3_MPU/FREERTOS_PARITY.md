@@ -6,15 +6,18 @@ This is the frozen reference audit and staged implementation record for the
 future exact `ARM_CM3_MPU` selected profile. The directory is not selectable
 and creates no runtime or STM32 hardware support claim.
 
-Implementation slices 1 through 4 are compile/link-covered. The directory owns the
+Implementation slices 1 through 4 and slice 6 are compile/link-covered. Slice
+5 remains intentionally absent because the current safe uniform policy needs
+no heterogeneous pre-start MPU configuration API. The directory owns the
 public type-only context, port-owned boot type, private `fiber_portmacro.h`
 dictionary, exact trait values, context-cohort identity, exhaustive 32-bit
 layout assertions, validated MPU encoding, the exact linker memory contract,
 safe default region construction, initial protected context construction, and
 immutable sealing. It now also owns the exact three-service SVC namespace,
 strong SVC dispatcher, first-context MPU activation and restore, unprivileged
-yield veneer, unprivileged task-return veneer, and strong protected PendSV
-save/switch/restore engine. `fiber_port_select.h`,
+yield veneer, unprivileged task-return veneer, strong protected PendSV
+save/switch/restore engine, and all eight frozen forward runtime operations.
+`fiber_port_select.h`,
 `fiber_port_selected.h`, and all active runtime source maps deliberately remain
 unchanged.
 
@@ -292,6 +295,41 @@ geometry, scheduler-before-MPU ordering, PRIMASK around MPU replacement,
 BASEPRI clear only after replacement, protected restore order, and slot 14
 Thumb-vector resolution in the synthetic exact-map ELF. These remain software
 proofs only.
+
+## Slice 6 Forward ABI And Integration Contract
+
+Slice 6 activates all eight mandatory common-to-port operations inside the
+still non-selectable profile. Startup now validates privileged Thread/MSP,
+zero interrupt masks, an exact disabled eight-region MPU, VTOR and strong
+handler ownership, implemented NVIC priority bits, PRIGROUP, fault policy,
+PendSV/SVC priority readback, and stale-PendSV clearing. The first scheduler
+selection runs inside the selected BASEPRI envelope, validates CPU-state
+preservation and the returned protected context, then restores BASEPRI before
+the first SVC transfer.
+
+The minimal common call chain that may execute from unprivileged Thread mode is
+explicitly marked with `.text.fiber_runtime_thread_functions`. The selected MPU
+linker extracts that section together with the port yield/return veneers into
+unprivileged RX before its privileged `.text*` catch-all. The `.text.*` prefix
+keeps ordinary non-MPU linker scripts compatible. Arbitrary unprivileged
+application entry placement remains an application linker/build responsibility;
+the synthetic LTO proof deliberately compiles the unchanged portable
+application fixture as a separate non-LTO translation unit so its per-function
+sections remain auditable.
+
+The matrix now links the unchanged five-function portable application against
+common runtime plus the complete MPU port from a static archive in normal and
+LTO modes with section GC. It proves exactly one eight-function ABI, reverse
+ABI v1 resolution, one exact cohort and external expectation relocation,
+strong SVC/PendSV extraction over startup weak aliases, vector slots 11/14,
+duplicate-strong failure, privileged/unprivileged code placement, privileged
+context storage, exact aligned unprivileged stacks, the 32-byte current slot,
+and finite compiler stack-usage artifacts. These are synthetic software proofs;
+they neither execute the MPU nor establish concrete-board MSP headroom.
+
+Global selection remains deliberately disabled. Slice 7 is the only step that
+may expose this source group as compile-covered, and slice 8 still requires the
+complete hardware suite before any runtime or STM32 support claim.
 
 ## Frozen Reference
 
@@ -988,7 +1026,8 @@ The implementation proceeds in independently reviewable checkpoints:
 5. Add optional pre-start `fiber_port_mpu_abi` configuration and the versioned
    common context-configuration lifecycle guard only if heterogeneous policy is
    implemented in this profile.
-6. Add full compile/link/archive/cohort/LTO/MPU-linker proof cohorts.
+6. **Complete:** add full compile/link/archive/cohort/LTO/MPU-linker proof
+   cohorts and all eight forward runtime adapters without enabling selection.
 7. Enable build selection as compile-covered only.
 8. Promote to runtime support only after the complete hardware suite.
 

@@ -86,7 +86,7 @@ void fiber_init(FiberContext *ctx,
                 entry_t entry,
                 void *arg);
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 FiberContext *fiber_current(void);
 
 void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
@@ -95,7 +95,7 @@ void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next,
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_start(void);
 
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
 void fiber_schedule(void);
 ```
 
@@ -239,6 +239,16 @@ stack-protector calls, implicit FP/MVE use, or LTO-generated helper calls.
 The public sensitive bundle includes `noipa`/no-clone/no-ICF protection, or the
 toolchain's verified equivalent, whenever available; `noinline` alone is not an
 LTO boundary.
+
+`FIBER_API_THREAD_FUNCTION` is a CPU-neutral placement marker for the minimal
+common call chain that a selected port may execute directly from Thread mode.
+GNU-compatible builds place it in `.text.fiber_runtime_thread_functions`.
+Ordinary `.text*` linker rules therefore remain compatible, while an MPU linker
+may extract the section before its privileged catch-all. The marker is required
+on `fiber_current()`, `fiber_schedule()`, and
+`fiber_internal_runtime_load_current_context()` so LTO cannot erase the
+privilege-boundary placement. It does not mark arbitrary application entry
+functions; their executable-domain placement remains an integration contract.
 
 Function attributes are necessary but are not sufficient for selected-port
 translation units that include CMSIS `always_inline` helpers. GCC may instrument
