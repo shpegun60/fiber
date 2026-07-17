@@ -14,8 +14,8 @@
 extern "C" {
 #endif
 
-/* Keep this transitional layout ABI-identical to the validated CM7 runtime.
- * Frame offsets and CPU save geometry remain private to the port source. */
+/* This selected port owns the complete context layout. Frame offsets and CPU
+ * save geometry remain private and are guarded by its exact cohort identity. */
 struct FiberContext {
 	uint32_t *sp;
 	FiberPortBoot boot;

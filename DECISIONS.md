@@ -1,5 +1,38 @@
 # Fiber Decision Log
 
+## 2026-07-17: Close Second-Round Cortex-M Port Guards
+
+The privileged CM0, CM3, CM4, and CM7 schedule-request paths now require exact
+privileged Thread/PSP state (`CONTROL[1:0] == 0b10`) after current-context
+ownership is established and before any mask read or direct `PENDSVSET` write.
+This catches accidental privilege loss or MSP selection with panic `'l'`
+instead of relying on a system-register or ICSR fault. FPCA remains dynamic and
+is deliberately excluded from this two-bit check.
+
+PendSV priority readback is now exact in all four production source groups.
+CM0, CM3, and CM4 no longer accept the weaker `(read & lowest) == lowest`
+predicate; setup and runtime validation both require the right-justified CMSIS
+value to equal the selected lowest priority. The compile matrix freezes both
+the CONTROL guard ordering and the two exact priority checks.
+
+The CM3 MPU synthetic ELF proof now verifies that the concrete scheduler hook
+is in privileged executable code and its application-owned `user` object is in
+privileged data, in addition to the existing context/runtime placement checks.
+This is a positive integration proof for the fixture, not a runtime validator
+for arbitrary indirect call graphs; real MPU integrations retain responsibility
+for equivalent linker placement of the hook, user state, and every callee.
+
+The local FreeRTOS MPU comparison also confirms that temporarily disabling the
+MPU while replacing task regions is reference behavior. Fiber keeps BASEPRI
+raised and additionally holds PRIMASK across that interval. NMI and HardFault
+remain architectural exceptions and their handlers are trusted integration
+code, as in the reference model. `transitional_v8m` remains build-only and its
+runtime behavior is unchanged.
+
+This checkpoint has source, compile, link, and H7 Debug/Release ELF evidence.
+Its new direct-schedule CONTROL trap still requires a future H7 hardware run;
+no previous board result is promoted across this behavior change.
+
 ## 2026-07-17: Harden Privileged Cortex-M Port Parity
 
 The privileged `ARM_CM0`, `ARM_CM3`, and `ARM_CM4` handlers now use the same

@@ -37,7 +37,7 @@ validation on matching STM32 targets.
 | Tick types, atomic tick traits, delay constants, `portTICK_PERIOD_MS` | User scheduler time policy | Excluded from CPU port. |
 | `portSTACK_GROWTH`, `portBYTE_ALIGNMENT` | Selected stack traits | Reimplemented. |
 | used/inline/compiler barrier attributes | `fiber_compiler.h` plus port-local macros | Adapted to the frozen compiler ABI. |
-| `portYIELD` and NVIC PendSV constants | `fiber_schedule()` and selected-port `PENDSVSET` | Adapted to cooperative scheduling. |
+| `portYIELD` and NVIC PendSV constants | `fiber_schedule()` and selected-port `PENDSVSET` | Adapted to cooperative scheduling. The direct request requires exact privileged Thread/PSP `CONTROL` state. |
 | ISR yield and ISR interrupt-mask macros | None public | Excluded until an ISR-safe scheduler API exists. |
 | BASEPRI disable/enable/raise/set helpers | Port-owned C and asm BASEPRI helpers | Reimplemented for the PendSV scheduler envelope. |
 | critical nesting API | None public | Excluded; only the handler-local scheduler envelope exists. |

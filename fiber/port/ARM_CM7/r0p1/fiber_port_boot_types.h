@@ -1,8 +1,8 @@
 /*
  * fiber_port_boot_types.h
  *
- * ARM_CM7/r0p1-owned immutable boot metadata. This remains ABI-identical to
- * the validated v2 layout while the port owns its future replacement.
+ * ARM_CM7/r0p1-owned immutable boot metadata. This type is part of the exact
+ * selected-port context cohort and is opaque to common runtime code.
  */
 
 #ifndef FIBER_PORT_ARM_CM7_R0P1_FIBER_PORT_BOOT_TYPES_H_

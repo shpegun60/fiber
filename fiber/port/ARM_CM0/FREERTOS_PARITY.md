@@ -41,7 +41,7 @@ until matching STM32 boards pass the runtime checklist.
 | `portARCH_NAME` | `FIBER_PORT_NAME` and exact build selection | Adapted. |
 | stack growth/alignment | selected ARMv6-M traits | Reimplemented. |
 | used/inline/compiler barrier attributes | `fiber_compiler.h` and local macros | Adapted. |
-| `portYIELD`, NVIC PendSV register/bit | `fiber_schedule()` and selected `PENDSVSET` | Adapted to cooperative scheduling. |
+| `portYIELD`, NVIC PendSV register/bit | `fiber_schedule()` and selected `PENDSVSET` | Adapted to cooperative scheduling. The direct request requires exact privileged Thread/PSP `CONTROL` state before touching ICSR. |
 | ISR yield macros | None | Excluded until an ISR-safe scheduler API exists. |
 | PRIMASK set/restore and interrupt enable/disable | selected-port C/asm helpers | Reimplemented. Nonzero `FIBER_SCHEDULER_BASEPRI` is a compile error because ARMv6-M has no BASEPRI. |
 | critical nesting API | None public | Excluded; PendSV uses a saved PRIMASK envelope only around the scheduler hook. |

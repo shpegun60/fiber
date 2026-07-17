@@ -8,8 +8,9 @@
  *
  * No RTOS coexistence. If you call this under an RTOS, you own the crash.
  *
- * Scope: Cortex-M7 r0p0/r0p1 only. This port owns the errata-aware BASEPRI
- * path and selected FPU policy; PSPLIM and TrustZone state are not applicable.
+ * Scope: all Cortex-M7 revisions. The r0p1-safe path is valid on later cores
+ * too, while affected r0p0/r0p1 parts require its errata-aware BASEPRI writes.
+ * PSPLIM and TrustZone state are not applicable.
  */
 
 #include "mcu_core.h"

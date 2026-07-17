@@ -37,7 +37,7 @@ matching STM32 Cortex-M3 board passes the runtime checklist.
 | `TickType_t`, `portMAX_DELAY`, `portTICK_TYPE_IS_ATOMIC`, `portTICK_PERIOD_MS` | User scheduler time policy | Excluded from the CPU port. |
 | `portSTACK_GROWTH`, `portBYTE_ALIGNMENT` | `fiber_portSTACK_GROWTH`, `fiber_portBYTE_ALIGNMENT`, `FIBER_PORT_STACK_ALIGNMENT` | Reimplemented. |
 | `portDONT_DISCARD`, `portINLINE`, `portFORCE_INLINE`, `portMEMORY_BARRIER` | `fiber_compiler.h` and port-local barrier macros | Adapted to the frozen compiler ABI. |
-| `portYIELD()` | `fiber_schedule()` -> `fiber_port_runtime_schedule()` | Adapted to cooperative scheduler selection and `PENDSVSET`. |
+| `portYIELD()` | `fiber_schedule()` -> `fiber_port_runtime_schedule()` | Adapted to cooperative scheduler selection and `PENDSVSET`; the direct request first requires exact privileged Thread/PSP `CONTROL` state. |
 | `portNVIC_INT_CTRL_REG`, `portNVIC_PENDSVSET_BIT` | Same CPU constants with `fiber_port` prefix | Reimplemented. |
 | `portEND_SWITCHING_ISR`, `portYIELD_FROM_ISR` | None | Excluded until an ISR-safe scheduler API exists. |
 | `portSET_INTERRUPT_MASK_FROM_ISR`, `portCLEAR_INTERRUPT_MASK_FROM_ISR` | Internal BASEPRI helpers only | Public ISR API excluded; CPU mechanism retained internally. |

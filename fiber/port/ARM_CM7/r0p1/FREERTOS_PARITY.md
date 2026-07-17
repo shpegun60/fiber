@@ -5,13 +5,10 @@ The goal is not to copy FreeRTOS source text. The goal is to audit every CPU
 port mechanism in the local FreeRTOS reference and either reimplement it,
 adapt it to the cooperative fiber model, or explicitly exclude it.
 
-This ledger describes the current transitional context-shape checkpoint. The
-complete CM7 type now lives in this selected port's type-only header, but its
-layout remains deliberately identical to the other current ports. The target in
-`../../../../V2_OPAQUE_CONTEXT_CONTRACT.md` moves construction, seal, and restore
-validation into this selected port without changing the validated save/restore
-behavior. The structural migration must update this file list and every affected
-mapping.
+The opaque-context migration is complete for this source group. Its type-only
+header, boot metadata, construction, seal, restore validation, SVC/PendSV code,
+and exact cohort identity are selected-port-owned. Common runtime code sees only
+opaque `FiberContext *` values and the frozen callable ABI.
 
 ## Reference
 
@@ -122,7 +119,7 @@ user/build option      -> FIBER_XXX
 | `portTICK_PERIOD_MS` | user scheduler tick policy | Excluded. |
 | `portBYTE_ALIGNMENT` | `fiber_portBYTE_ALIGNMENT` and `FIBER_PORT_STACK_ALIGNMENT` | Reimplemented. Alignment is a fixed selected-port trait, not a user setting. |
 | `portDONT_DISCARD` | shared `fiber_compiler.h` attribute helpers | Adapted. The selected port intentionally depends on the shared compiler ABI instead of duplicating toolchain attributes. |
-| `portYIELD()` | `fiber_schedule()` -> `fiber_port_runtime_schedule()` -> `fiber_arm_cm7_r0p1_yield_request()` | Adapted. The single selected-port operation rejects Handler mode, calls the common current-owner guard, then rejects PRIMASK/BASEPRI/FAULTMASK delayed switches before pending PendSV. Common `fiber_schedule()` owns no CPU register access, and the final ABI adds no intermediate hot-path call. |
+| `portYIELD()` | `fiber_schedule()` -> `fiber_port_runtime_schedule()` -> `fiber_arm_cm7_r0p1_yield_request()` | Adapted. The single selected-port operation rejects Handler mode, requires the published current context and exact privileged Thread/PSP `CONTROL` state, then rejects PRIMASK/BASEPRI/FAULTMASK delayed switches before pending PendSV. Common `fiber_schedule()` owns no CPU register access, and the final ABI adds no intermediate hot-path call. |
 | `portNVIC_INT_CTRL_REG` | `fiber_portNVIC_INT_CTRL_REG` | Reimplemented. |
 | `portNVIC_PENDSVSET_BIT` | `fiber_portNVIC_PENDSVSET_BIT` | Reimplemented. |
 | `portEND_SWITCHING_ISR()` | none | Excluded. Current fiber core has no ISR fiber API. Future ISR wake APIs must be scheduler-level and audited separately. |

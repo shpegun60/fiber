@@ -565,9 +565,13 @@ function Test-ContextPortBoundary {
             -Signature "void fiber_port_runtime_schedule(void)" -Path $path
         $scheduleSteps = @(
             "FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
-            "fiber_internal_runtime_require_current_context();",
-            "FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');"
+            "fiber_internal_runtime_require_current_context();"
         )
+        if ($relativePath -notmatch 'transitional_v8m') {
+            $scheduleSteps +=
+                "FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');"
+        }
+        $scheduleSteps += "FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');"
         $lastScheduleIndex = -1
         foreach ($step in $scheduleSteps) {
             $stepIndex = $scheduleBody.IndexOf($step,
@@ -600,6 +604,20 @@ function Test-ContextPortBoundary {
         if (($requestIndexes.Count -ne 1) -or
                 ($requestIndexes[0] -le $lastScheduleIndex)) {
             throw "Schedule adapter must issue exactly one request after all validation: $path"
+        }
+
+        if ($relativePath -notmatch 'transitional_v8m') {
+            $exceptionPath = Join-Path (Split-Path -Parent $path) `
+                "fiber_port_exception.c"
+            $exceptionSource = Get-Content -LiteralPath $exceptionPath -Raw
+            if ($exceptionSource -match '\(rd\s*&\s*lowest\)\s*==\s*lowest') {
+                throw "Selected port still accepts a masked-only PendSV priority readback: $exceptionPath"
+            }
+            $exactPriorityChecks = [regex]::Matches($exceptionSource,
+                "FIBER_REQUIRE\(rd == lowest, 'P'\);")
+            if ($exactPriorityChecks.Count -ne 2) {
+                throw "Selected port must verify exact PendSV priority during setup and runtime: $exceptionPath"
+            }
         }
     }
 }
@@ -3799,6 +3817,7 @@ function Test-ArmCm3MpuRuntimeIntegration {
                     "fiber_port_runtime_prepare_start",
                     "fiber_port_runtime_select_first",
                     "fiber_port_runtime_start_first",
+                    "portable_fixture_pick_next",
                     "SVC_Handler",
                     "PendSV_Handler"
                 )
@@ -3851,20 +3870,21 @@ function Test-ArmCm3MpuRuntimeIntegration {
                 throw "ARM_CM3_MPU portable stack escaped exact unprivileged RAM geometry ($mode): $stack"
             }
         }
-        foreach ($context in @("portable_fixture_context_1",
-                "portable_fixture_context_2")) {
-            $contextLines = @($defined | Where-Object {
+        foreach ($privilegedObject in @("portable_fixture_context_1",
+                "portable_fixture_context_2",
+                "portable_fixture_scheduler_user")) {
+            $objectLines = @($defined | Where-Object {
                 $_ -match ("^\s*(?<address>[0-9a-fA-F]+)\s+[Bb]\s+" +
-                    [regex]::Escape($context) + "$")
+                    [regex]::Escape($privilegedObject) + "$")
             })
-            if ($contextLines.Count -ne 1) {
-                throw "ARM_CM3_MPU privileged context symbol is missing ($mode): $context"
+            if ($objectLines.Count -ne 1) {
+                throw "ARM_CM3_MPU privileged application object is missing ($mode): $privilegedObject"
             }
-            $null = $contextLines[0] -match '^\s*(?<address>[0-9a-fA-F]+)'
-            $contextAddress = [Convert]::ToUInt32($Matches['address'], 16)
-            if (($contextAddress -lt 0x20010000) -or
-                    ($contextAddress -ge 0x20020000)) {
-                throw "ARM_CM3_MPU FiberContext escaped privileged data ($mode): $context"
+            $null = $objectLines[0] -match '^\s*(?<address>[0-9a-fA-F]+)'
+            $objectAddress = [Convert]::ToUInt32($Matches['address'], 16)
+            if (($objectAddress -lt 0x20010000) -or
+                    ($objectAddress -ge 0x20020000)) {
+                throw "ARM_CM3_MPU application-owned scheduler/context object escaped privileged data ($mode): $privilegedObject"
             }
         }
 

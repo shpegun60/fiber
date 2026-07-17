@@ -456,7 +456,8 @@ with MPU register writes appended:
    mode.
 6. The scheduler hook executes in privileged PendSV context. Its code, user
    state, current-context slot, and complete call graph are privileged runtime
-   assets.
+   assets. The synthetic ELF proof checks the concrete fixture hook and user
+   object; each real integration must provide the same linker placement proof.
 7. Writable stacks and application data cannot share an MPU region with
    writable context, scheduler, or port state. Region-size rounding must not
    widen a stack region over privileged metadata.

@@ -123,6 +123,7 @@ void fiber_port_runtime_schedule(void)
 {
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 	fiber_internal_runtime_require_current_context();
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
 	__DSB();

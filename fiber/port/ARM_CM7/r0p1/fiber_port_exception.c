@@ -236,7 +236,7 @@ void fiber_pendsv_init_lowest_priority(void)
     /* Paranoid: clear any spurious pending PendSV that might have been latched */
     fiber_pendsv_clear_pending();
 
-    /* Read-back verify. CMSIS returns right-justified priority; compare masked. */
+    /* Read back the exact right-justified CMSIS priority value. */
     {
         const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
         FIBER_REQUIRE(rd == lowest, 'P');  /* 'P' - PendSV priority not at lowest */

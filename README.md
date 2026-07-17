@@ -388,6 +388,11 @@ invalid EXC_RETURN, or insufficient software/hardware restore-frame headroom
 traps through `FIBER_REQUIRE`. Idle must be represented by a real initialized
 `FiberContext`, not by returning `NULL`.
 
+On privileged non-MPU ports, `fiber_schedule()` additionally requires exact
+privileged Thread/PSP state (`CONTROL[1:0] == 0b10`) before writing
+`PENDSVSET`; a violated privilege or stack-selection invariant traps with
+`'l'`. MPU/unprivileged ports use their selected SVC request path instead.
+
 Save preflight and restore-target validation are mandatory and have no
 performance-disable switch. PendSV validates the running context and live PSP
 before reading its metadata or saving it; every scheduler-selected target is
