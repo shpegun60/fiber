@@ -1,10 +1,11 @@
 /*
- * Type-only public storage for the staged ARM_CM4_MPU profile.
+ * Type-only public storage for the build-selected ARM_CM4_MPU profile.
  *
  * The layout follows the protected-context geometry of the pinned FreeRTOS
- * GCC ARM_CM4_MPU port. It is not runtime-selectable through implementation
- * slice 4. Application code may allocate a selected FiberContext but must not
- * inspect, copy, or mutate it after initialization.
+ * GCC ARM_CM4_MPU port. This header remains independent of CMSIS so public
+ * context storage can be consumed through the exact build-selected include
+ * path. Application code must not inspect, copy, or mutate it after
+ * initialization.
  */
 
 #ifndef FIBER_PORT_ARM_CM4_MPU_FIBER_PORT_TYPES_H_

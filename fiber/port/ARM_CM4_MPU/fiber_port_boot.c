@@ -261,6 +261,22 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_context_compute_seal);
 	const uintptr_t seal_check = fiber_port_function_address(
 			(uintptr_t)&fiber_port_context_seal_check);
+	const uintptr_t panic_target = fiber_port_function_address(
+			(uintptr_t)&fiber_panic);
+	const uintptr_t task_return_target = fiber_port_function_address(
+			(uintptr_t)&fiber_internal_task_return);
+	const uintptr_t memory_barrier = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_memory_barrier);
+	const uintptr_t panic_wait = fiber_port_function_address(
+			(uintptr_t)&fiber_port_panic_wait);
+	const uintptr_t scheduler_environment = fiber_port_function_address(
+			(uintptr_t)&fiber_port_require_scheduler_configuration_environment);
+	const uintptr_t prepare_start = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_prepare_start);
+	const uintptr_t select_first = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_select_first);
+	const uintptr_t runtime_start_first = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_start_first);
 	const uintptr_t return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_port_unprivileged_task_return);
 	const uintptr_t schedule_target = fiber_port_function_address(
@@ -297,6 +313,33 @@ void fiber_port_mpu_linker_layout_check(
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->privileged_code_start, layout->privileged_code_end,
 			seal_check), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			panic_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			task_return_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end, memory_barrier), 'L');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end, memory_barrier), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			panic_wait), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			scheduler_environment), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			prepare_start), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			select_first), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->privileged_code_start, layout->privileged_code_end,
+			runtime_start_first), 'L');
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->unprivileged_code_start,
 			layout->unprivileged_code_end, return_target), 'L');

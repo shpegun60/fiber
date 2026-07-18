@@ -57,15 +57,17 @@ portable synchronization rules, an explicit ISR reschedule boundary, and lwIP
 adapters. That layer consumes the existing scheduler hook; queues, ticks, and
 network policy do not enter the CPU-port ABI.
 
-`ARM_CM4_MPU` remains non-selectable through implementation slice 4. It freezes
-the pinned FreeRTOS 53-word protected FP context, constructs an exact per-fiber
-default MPU image, and owns strong SVC/PendSV handlers plus unprivileged
-yield/return services for both 8- and 16-region M4F/M7F manifests. PendSV copies
-basic and optional FP hardware state into privileged context storage, runs the
-external scheduler under BASEPRI, replaces and reads back the per-context MPU
-image under PRIMASK, then restores the selected context. Full eight-function
-runtime ABI integration, selector routing, and hardware support claims remain
-absent.
+`ARM_CM4_MPU` is a complete exact build-selected port after implementation
+slice 5. It freezes the pinned FreeRTOS 53-word protected FP context, constructs
+an exact per-fiber default MPU image, and owns all eight runtime operations,
+strong SVC/PendSV handlers, and unprivileged yield/return services for 8- and
+16-region M4F/M7F manifests. PendSV copies basic and optional FP hardware state
+into privileged context storage, runs the external scheduler under BASEPRI,
+replaces and reads back the per-context MPU image under PRIMASK, then restores
+the selected context. Portable-application archive links, exact MPU sections,
+cohort identity, vectors, section GC, and normal/LTO modes are compile/ELF
+covered. Global auto/profile selection remains deliberately absent, and M4F
+and M7F hardware support claims require separate board validation.
 
 ## Project Setup
 
@@ -98,6 +100,9 @@ Cortex-M3:     fiber/port/ARM_CM3/fiber_port.c
                fiber/port/ARM_CM3/fiber_port_exception.c
 Cortex-M3 MPU: fiber/port/ARM_CM3_MPU/fiber_port.c
                fiber/port/ARM_CM3_MPU/fiber_port_boot.c
+Cortex-M4F/M7F MPU:
+               fiber/port/ARM_CM4_MPU/fiber_port.c
+               fiber/port/ARM_CM4_MPU/fiber_port_boot.c
 Cortex-M4/F:   fiber/port/ARM_CM4/fiber_port.c
                fiber/port/ARM_CM4/fiber_port_boot.c
                fiber/port/ARM_CM4/fiber_port_exception.c
@@ -243,6 +248,18 @@ current-context aperture, and cohort expectation `KEEP` contract documented in
 `fiber/port/ARM_CM3_MPU/FREERTOS_PARITY.md`. Auto/profile selection never
 infers MPU or unprivileged policy from `__MPU_PRESENT`. This profile has no
 hardware support claim until its board isolation suite passes.
+
+The compile/link-covered `ARM_CM4_MPU` profile uses the same exact
+build-selected workflow. Its manifest defines `FIBER_PORT_BUILD_SELECTED=1`,
+`FIBER_PORT_ARMV7EM=1`, and
+`FIBER_PORT_CM4_MPU_TOTAL_REGIONS=8` or `16`; places
+`fiber/port/ARM_CM4_MPU` first on the include path; and compiles only its two
+port sources. Cortex-M4F and Cortex-M7F use distinct exact cohort identities,
+and the M7 form retains the conservative r0p1 BASEPRI workaround. The required
+MPU linker ranges and isolation contract are documented in
+`fiber/port/ARM_CM4_MPU/FREERTOS_PARITY.md`. Auto/profile selection does not
+infer this protected profile from MPU presence. Neither core has a hardware
+support claim until its own isolation and FP switch suite passes.
 
 The v2 target is FreeRTOS-style ownership: each concrete selected port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,

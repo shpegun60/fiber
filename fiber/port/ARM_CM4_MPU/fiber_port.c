@@ -1,12 +1,33 @@
-/* ARM_CM4_MPU protected SVC/PendSV runtime and unprivileged service veneers. */
+/* ARM_CM4_MPU build-selected protected runtime engine. */
 
 #include "fiber_port_private.h"
+#include "../../fiber_platform_policy.h"
 
 #define FIBER_CM4_MPU_PRIVILEGED \
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
 	fiber_portPRIVILEGED_FUNCTION
+#define FIBER_CM4_MPU_UNPRIVILEGED \
+	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
+	fiber_portUNPRIVILEGED_FUNCTION
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
+
+FIBER_CM4_MPU_UNPRIVILEGED
+void fiber_port_runtime_memory_barrier(void)
+{
+	fiber_portDATA_MEMORY_BARRIER();
+	fiber_portCOMPILER_BARRIER();
+}
+
+FIBER_API_NORETURN FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_panic_wait(void)
+{
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	for (;;) {
+		__WFE();
+	}
+}
 
 static FIBER_CM4_MPU_PRIVILEGED
 uintptr_t fiber_port_code_address(uintptr_t address)
@@ -24,6 +45,52 @@ int fiber_port_range_contains(uintptr_t outer_start,
 			(inner_end > inner_start) &&
 			(inner_start >= outer_start) &&
 			(inner_end <= outer_end);
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+uint32_t fiber_port_primask_save_disable(void)
+{
+	uint32_t primask;
+	fiber_portASM volatile(
+			"mrs %0, primask\n"
+			"cpsid i"
+			: "=r"(primask)
+			:
+			: "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	return primask;
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_primask_restore(uint32_t primask)
+{
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	fiber_portASM volatile("msr primask, %0" :: "r"(primask) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+uint32_t fiber_port_scheduler_critical_enter(void)
+{
+	const uint32_t previous = fiber_port_basepri_read();
+	FIBER_REQUIRE(previous == 0u, 'b');
+	fiber_port_basepri_write(FIBER_PORT_SCHEDULER_BASEPRI);
+	FIBER_REQUIRE(fiber_port_basepri_read() ==
+			FIBER_PORT_SCHEDULER_BASEPRI, 'B');
+	return previous;
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_scheduler_critical_exit(uint32_t previous)
+{
+	FIBER_REQUIRE(previous == 0u, 'b');
+	FIBER_REQUIRE(fiber_port_basepri_read() ==
+			FIBER_PORT_SCHEDULER_BASEPRI, 'B');
+	fiber_port_basepri_write(previous);
+	FIBER_REQUIRE(fiber_port_basepri_read() == previous, 'B');
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
@@ -54,6 +121,126 @@ void fiber_port_validate_core_identity(void)
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
+uint8_t fiber_port_lowest_priority_encoding(void)
+{
+	const uint32_t lowest = (1u << __NVIC_PRIO_BITS) - 1u;
+	return (uint8_t)(lowest << (8u - __NVIC_PRIO_BITS));
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_validate_priority_contract(void)
+{
+	const uint32_t primask = fiber_port_primask_save_disable();
+	const uint8_t original = fiber_portNVIC_FIRST_USER_PRIORITY_REG;
+	fiber_portNVIC_FIRST_USER_PRIORITY_REG = 0xFFu;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	fiber_portCOMPILER_BARRIER();
+	const uint8_t implemented = fiber_portNVIC_FIRST_USER_PRIORITY_REG;
+	fiber_portNVIC_FIRST_USER_PRIORITY_REG = original;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	fiber_portCOMPILER_BARRIER();
+	FIBER_REQUIRE(fiber_portNVIC_FIRST_USER_PRIORITY_REG == original, 'Q');
+	fiber_port_primask_restore(primask);
+
+	const uint8_t expected =
+			(uint8_t)(0xFFu << (8u - __NVIC_PRIO_BITS));
+	FIBER_REQUIRE(implemented != 0u, 'Q');
+	FIBER_REQUIRE(implemented == expected, 'Q');
+	FIBER_REQUIRE((FIBER_PORT_SCHEDULER_BASEPRI & implemented) != 0u, 'Q');
+	FIBER_REQUIRE((FIBER_PORT_SCHEDULER_BASEPRI &
+			(uint32_t)(uint8_t)~implemented) == 0u, 'q');
+
+	uint32_t implemented_bits = 0u;
+	uint8_t probe = implemented;
+	while ((probe & 0x80u) != 0u) {
+		++implemented_bits;
+		probe = (uint8_t)(probe << 1u);
+	}
+	FIBER_REQUIRE(implemented_bits == (uint32_t)__NVIC_PRIO_BITS, 'Q');
+
+	uint32_t max_prigroup = 0u;
+	if (implemented_bits < 8u) {
+		max_prigroup = 7u - implemented_bits;
+	} else {
+		FIBER_REQUIRE((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u, 'g');
+	}
+	max_prigroup = (max_prigroup << 8u) &
+			fiber_portSCB_AIRCR_PRIGROUP_MASK;
+	FIBER_REQUIRE((fiber_portSCB_AIRCR_REG &
+			fiber_portSCB_AIRCR_PRIGROUP_MASK) <= max_prigroup, 'g');
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_apply_fault_policy(void)
+{
+#if FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START
+	const uint32_t cfsr = fiber_portSCB_CFSR_REG;
+	const uint32_t hfsr = fiber_portSCB_HFSR_REG;
+	fiber_portSCB_CFSR_REG = cfsr;
+	fiber_portSCB_HFSR_REG = hfsr;
+	fiber_portSCB_DFSR_REG = 0x1Fu;
+#endif
+
+	uint32_t required_faults = fiber_portSCB_MEMFAULTENA_BIT;
+#if FIBER_ENABLE_CONFIGURABLE_FAULTS
+	required_faults |= fiber_portSCB_BUSFAULTENA_BIT |
+			fiber_portSCB_USGFAULTENA_BIT;
+#endif
+	fiber_portSCB_SHCSR_REG |= required_faults;
+
+	uint32_t required_ccr = fiber_portSCB_CCR_STKALIGN_BIT;
+#if FIBER_ENABLE_UNALIGNED_TRAP
+	required_ccr |= fiber_portSCB_CCR_UNALIGN_TRP_BIT;
+#endif
+#if FIBER_ENABLE_DIV0_TRAP
+	required_ccr |= fiber_portSCB_CCR_DIV_0_TRP_BIT;
+#endif
+	fiber_portSCB_CCR_REG |= required_ccr;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	FIBER_REQUIRE((fiber_portSCB_SHCSR_REG & required_faults) ==
+			required_faults, 'F');
+	FIBER_REQUIRE((fiber_portSCB_CCR_REG & required_ccr) == required_ccr,
+			'A');
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_configure_exception_priorities(void)
+{
+	const uint32_t primask = fiber_port_primask_save_disable();
+	const uint32_t lowest = (uint32_t)fiber_port_lowest_priority_encoding();
+	fiber_portNVIC_SHPR3_REG =
+			(fiber_portNVIC_SHPR3_REG &
+			~(fiber_portNVIC_PRIORITY_BYTE_MASK <<
+				fiber_portNVIC_PENDSV_PRIORITY_SHIFT)) |
+			(lowest << fiber_portNVIC_PENDSV_PRIORITY_SHIFT);
+	fiber_portNVIC_SHPR2_REG &=
+			~(fiber_portNVIC_PRIORITY_BYTE_MASK <<
+				fiber_portNVIC_SVC_PRIORITY_SHIFT);
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVCLR_BIT;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+
+	const uint32_t pendsv_priority =
+			(fiber_portNVIC_SHPR3_REG >>
+			fiber_portNVIC_PENDSV_PRIORITY_SHIFT) &
+			fiber_portNVIC_PRIORITY_BYTE_MASK;
+	const uint32_t svc_priority =
+			(fiber_portNVIC_SHPR2_REG >>
+			fiber_portNVIC_SVC_PRIORITY_SHIFT) &
+			fiber_portNVIC_PRIORITY_BYTE_MASK;
+	FIBER_REQUIRE(pendsv_priority == lowest, 'P');
+	FIBER_REQUIRE(svc_priority == 0u, 'w');
+	FIBER_REQUIRE((fiber_portNVIC_INT_CTRL_REG &
+			fiber_portNVIC_PENDSVSET_BIT) == 0u, 'J');
+	fiber_port_primask_restore(primask);
+}
+
+static FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_validate_svc_vector(void)
 {
 	FiberPortMpuMemoryLayout layout;
@@ -62,12 +249,14 @@ void fiber_port_validate_svc_vector(void)
 
 	const uintptr_t vector_base = (uintptr_t)fiber_portSCB_VTOR_REG;
 	FIBER_REQUIRE(vector_base != 0u, 'V');
-	FIBER_REQUIRE((vector_base & 0x7Fu) == 0u, 'V');
-	FIBER_REQUIRE(vector_base <= UINTPTR_MAX - (16u * sizeof(uint32_t)),
-			'O');
+	FIBER_REQUIRE((vector_base & (fiber_portVECTOR_ALIGNMENT - 1u)) == 0u,
+			'V');
+	FIBER_REQUIRE(vector_base <= UINTPTR_MAX -
+			(fiber_portVECTOR_REQUIRED_WORDS * sizeof(uint32_t)), 'O');
 	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_code_start,
 			layout.privileged_code_end, vector_base,
-			vector_base + (16u * sizeof(uint32_t))), 'V');
+			vector_base +
+				(fiber_portVECTOR_REQUIRED_WORDS * sizeof(uint32_t))), 'V');
 	const volatile uint32_t *const vectors =
 			(const volatile uint32_t *)vector_base;
 	const uintptr_t initial_msp = (uintptr_t)vectors[0];
@@ -77,10 +266,14 @@ void fiber_port_validate_svc_vector(void)
 			layout.privileged_data_end,
 			initial_msp - FIBER_PORT_EXC_BASE_BYTES,
 			initial_msp), 'P');
-	const uintptr_t svc = fiber_port_code_address(
-			(uintptr_t)vectors[11]);
-	const uintptr_t pendsv = fiber_port_code_address(
-			(uintptr_t)vectors[14]);
+	const uintptr_t actual_svc =
+			(uintptr_t)vectors[fiber_portVECTOR_INDEX_SVC];
+	const uintptr_t actual_pendsv =
+			(uintptr_t)vectors[fiber_portVECTOR_INDEX_PENDSV];
+	FIBER_REQUIRE((actual_svc & 1u) != 0u, 'y');
+	FIBER_REQUIRE((actual_pendsv & 1u) != 0u, 'Y');
+	const uintptr_t svc = fiber_port_code_address(actual_svc);
+	const uintptr_t pendsv = fiber_port_code_address(actual_pendsv);
 	FIBER_REQUIRE(svc <= UINTPTR_MAX - 2u, 'O');
 	FIBER_REQUIRE(pendsv <= UINTPTR_MAX - 2u, 'O');
 	FIBER_REQUIRE(svc == fiber_port_code_address(
@@ -105,6 +298,31 @@ void fiber_port_validate_first_start_environment(void)
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
 			'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_require_scheduler_configuration_environment(void)
+{
+	fiber_port_validate_first_start_environment();
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_runtime_prepare_start(void)
+{
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
+	FIBER_PORT_CONTEXT_COHORT_RETAIN();
+	fiber_port_validate_first_start_environment();
+
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
+	fiber_port_validate_svc_vector();
+	fiber_port_validate_priority_contract();
+	fiber_port_apply_fault_policy();
+	fiber_port_configure_exception_priorities();
+	fiber_port_fpu_prepare();
+	fiber_port_validate_svc_vector();
+	fiber_port_validate_first_start_environment();
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
@@ -358,6 +576,45 @@ void fiber_port_validate_scheduler_cpu_state(
 	FIBER_REQUIRE(fiber_portSCB_CPACR_REG == before->cpacr, 'e');
 	FIBER_REQUIRE(fiber_portFPU_FPCCR_REG == before->fpccr, 'E');
 	__COMPILER_BARRIER();
+}
+
+FIBER_CM4_MPU_PRIVILEGED
+FiberContext *fiber_port_runtime_select_first(void)
+{
+	fiber_port_validate_first_start_environment();
+	FIBER_REQUIRE((fiber_portSCB_CPACR_REG &
+			fiber_portCPACR_CP10_CP11_FULL) ==
+			fiber_portCPACR_CP10_CP11_FULL, 'e');
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_ASPEN_BIT) != 0u, 'E');
+#if FIBER_FPU_LAZY
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_LSPEN_BIT) != 0u, 'E');
+#else
+	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
+			fiber_portFPCCR_LSPEN_BIT) == 0u, 'E');
+#endif
+
+	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
+	FiberPortMpuSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const first =
+			fiber_internal_runtime_select_scheduler_candidate(NULL);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_restore(first);
+	fiber_port_scheduler_critical_exit(critical_state);
+	return first;
+}
+
+FIBER_API_NORETURN FIBER_CM4_MPU_PRIVILEGED
+void fiber_port_runtime_start_first(FiberContext *first)
+{
+	FIBER_REQUIRE(first != NULL, 'N');
+	fiber_internal_runtime_require_current_context();
+	fiber_port_validate_first_start_environment();
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_start_first_context();
+	FIBER_API_UNREACHABLE();
 }
 
 FIBER_CM4_MPU_PRIVILEGED

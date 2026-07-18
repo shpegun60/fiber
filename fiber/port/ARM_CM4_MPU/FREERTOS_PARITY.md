@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation slices 1-4 are complete for the exact `ARM_CM4_MPU` profile.
+Implementation slices 1-5 are complete for the exact `ARM_CM4_MPU` profile.
 They freeze the public type layout, MPU geometry, protected basic/FP context
 views, traits, and exact cohort identity, then add port-owned context
 construction, exact linker ranges, default MPU-image encoding, and immutable
@@ -10,9 +10,10 @@ sealing. Slice 3 adds a strong SVC handler, protected first-context start,
 port-owned CPACR/FPCCR preparation, exact MPU activation/readback, and fixed
 unprivileged yield/return services. Slice 4 adds strong protected PendSV,
 basic/extended FP save and restore, scheduler selection under BASEPRI, and
-per-context MPU replacement under PRIMASK. The profile deliberately contains
-no complete forward ABI implementation, selector route, or hardware support
-claim.
+per-context MPU replacement under PRIMASK. Slice 5 supplies all eight frozen
+forward runtime operations and activates an exact build-selected source group.
+The profile deliberately has no global auto/profile selector route and no
+hardware support claim.
 
 The directory name follows the pinned FreeRTOS GCC port. That reference accepts
 both Cortex-M4F and Cortex-M7F. Fiber therefore freezes both manifests while
@@ -33,7 +34,7 @@ a50edad08b29052631aa469d4df6e6ec7ff68878
 | `portable/GCC/ARM_CM4_MPU/port.c` | 1738 | `cc9b731bc23e52a91d7d37b5dda16d7b501cfb4d3b3a3c8229c355c66662bf59` |
 | `portable/GCC/ARM_CM4_MPU/mpu_wrappers_v2_asm.c` | 2067 | `6b5110e0c14ba78c20d43c1edf17e5ac2311a6af0413d6aaab5df59edb2655c2` |
 
-## Exact Slice-4 Manifest
+## Exact Build-Selected Manifest
 
 ```text
 architecture        ARMv7E-M
@@ -42,14 +43,52 @@ compiler ABI        GCC-compatible Thumb with FP registers enabled
 MPU                 present; total regions explicitly 8 or 16
 VTOR                present
 FPU                 present and used
-selection           build-selected construction/runtime compile/link proof only
-runtime selectable  no
+selection           exact build-selected include path and source group
+runtime selectable  yes, through the complete eight-function forward ABI
 ```
 
 `FIBER_PORT_CM4_MPU_TOTAL_REGIONS` is mandatory and must be exactly `8` or
 `16`. FreeRTOS defaults this setting to eight for backward compatibility;
 fiber fails closed because the value changes `FiberContext` storage and exact
 cohort identity.
+
+The build manifest is explicit:
+
+```text
+defines:
+  FIBER_PORT_BUILD_SELECTED=1
+  FIBER_PORT_ARMV7EM=1
+  FIBER_PORT_CM4_MPU_TOTAL_REGIONS=8 or 16
+
+first private include path:
+  fiber/port/ARM_CM4_MPU
+
+selected sources:
+  fiber/port/ARM_CM4_MPU/fiber_port.c
+  fiber/port/ARM_CM4_MPU/fiber_port_boot.c
+```
+
+The linker must provide these ten exact privileged/unprivileged code, data,
+stack, and current-slot boundaries:
+
+```text
+__fiber_mpu_unprivileged_code_start__
+__fiber_mpu_unprivileged_code_end__
+__fiber_mpu_privileged_code_start__
+__fiber_mpu_privileged_code_end__
+__fiber_mpu_privileged_data_start__
+__fiber_mpu_privileged_data_end__
+__fiber_mpu_current_context_slot_start__
+__fiber_mpu_current_context_slot_end__
+__fiber_mpu_unprivileged_ram_start__
+__fiber_mpu_unprivileged_ram_end__
+```
+
+The common build-owned cohort expectation source is compiled outside any
+prebuilt port archive and retained with
+`KEEP(*(.fiber_port_context_cohort_expectation))`. The architecture selector
+remains unchanged: it never infers MPU ownership or unprivileged policy from
+`__MPU_PRESENT`.
 
 ## Protected Context Layout
 
@@ -151,7 +190,13 @@ strong slot-11 SVC and slot-14 PendSV ownership, exact three-service generated
 code, privileged and unprivileged section placement, six exact protected FP
 transfers, load-only current-slot access, exact reverse dependency surface,
 M7 PRIMASK-preserving BASEPRI writes, duplicate-handler failures, and continued
-absence of global selector routing.
+absence of global selector routing. Slice 5 additionally links the unchanged
+portable application through the public five-function API against a static
+common/port archive for all four manifests, with and without LTO. The final ELF
+must expose exactly one definition of every forward operation, satisfy the
+external exact cohort relocation, preserve handlers under section GC, isolate
+the current slot, and place user code/stacks separately from privileged
+runtime/context data.
 
 ## Protected SVC And First Start
 
@@ -179,8 +224,8 @@ BASEPRI clear instead of FreeRTOS's unconditional IRQ re-enable workaround.
 
 The unprivileged schedule veneer contains only SVC 71 and return; the task
 return veneer contains only SVC 72 and a terminal loop. SVC 71 pends the
-port-owned PendSV, but this profile remains non-selectable until the complete
-forward runtime ABI and build-selection slice exists.
+port-owned PendSV. Slice 5 connects these veneers to the complete build-selected
+runtime while preserving the same generated SVC/PendSV bodies.
 
 ## Protected PendSV
 
@@ -208,7 +253,7 @@ written below the user PSP.
 
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slice-4 mapping | Decision |
+| FreeRTOS family | Fiber slice-5 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs | public fiber API types | Kernel-specific typedefs excluded. |
 | `portUSING_MPU_WRAPPERS`, privilege bit | future optional MPU API | Deferred; no false wrapper support claim. |
@@ -227,11 +272,11 @@ written below the user PSP.
 | optimized priority bitmap | C++ scheduler policy | Excluded from CPU port. |
 | interrupt-priority assertion | future ISR API validation | Deferred until an ISR-safe API exists. |
 | privilege query/reset/switch macros | future optional MPU ABI | Deferred. |
-| memory barrier | mandatory runtime ABI implementation | Deferred to runtime slice. |
+| memory barrier | mandatory runtime ABI implementation | Implemented as an unprivileged DMB plus compiler barrier. |
 
 ## `port.c` Function Ledger
 
-| FreeRTOS path | Fiber owner | Slice-4 decision |
+| FreeRTOS path | Fiber owner | Slice-5 decision |
 | --- | --- | --- |
 | `pxPortInitialiseStack` | selected-port context constructor | Implemented for the unprivileged basic initial image; r9 is preserved and all unused protected words are zeroed. |
 | `prvRestoreContextOfFirstTask` | selected-port first-context restore | Implemented for the validated basic initial image, with second MSP rewind and exact MPU readback. |
@@ -270,12 +315,13 @@ that wrapper-v2 services exist.
    controlled unprivileged yield/return services.
 3. Completed: strong PendSV protected save/copy/scheduler/MPU/restore path,
    including the dynamic extended FP image.
-4. Frozen eight-function runtime ABI integration, archive/cohort/ELF proofs,
-   and exact build selection.
+4. Completed: frozen eight-function runtime ABI integration,
+   archive/cohort/ELF proofs, and exact build selection.
 5. M4F and M7F hardware validation for 8-region devices; 16-region hardware
    remains a separate claim.
 6. Optional MPU configuration/syscall wrapper ABI only if required.
 
 No later slice may infer privilege policy merely from `__MPU_PRESENT`, reuse a
-privileged CM4/CM7 context, or activate selection before the complete runtime
-and link proof exists.
+privileged CM4/CM7 context, or add this profile to global architecture-class
+selection. Build selection remains explicit even though the complete runtime
+and link proof now exists.

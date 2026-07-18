@@ -1,5 +1,33 @@
 # Fiber Decision Log
 
+## 2026-07-18: Activate The ARM_CM4_MPU Build-Selected Runtime
+
+Implementation slice 5 completes the exact `ARM_CM4_MPU` source group without
+adding a global architecture selector route. A build selects the protected
+profile through the private include path plus
+`FIBER_PORT_BUILD_SELECTED=1`, `FIBER_PORT_ARMV7EM=1`, and an explicit
+`FIBER_PORT_CM4_MPU_TOTAL_REGIONS` value of 8 or 16. MPU presence alone never
+changes the privileged ARM_CM4 or ARM_CM7 profile selected by auto detection.
+
+The port now implements all eight frozen forward runtime operations. Startup
+validates privileged Thread/MSP state, exact linker and vector ownership,
+implemented NVIC priority bits, PRIGROUP, fault policy, SVC/PendSV priorities,
+stale PendSV state, CPACR/FPCCR, MPU-disabled preconditions, and the concrete
+M4/M7 identity before scheduler selection. The first scheduler call remains
+inside the port BASEPRI envelope; its CPU, MPU, vector, and FPU state is
+snapshotted and checked before the selected context is validated and returned
+to common for publication. First transfer then revalidates the published
+context and uses the existing protected SVC restore.
+
+The full integration proof links the unchanged portable application against a
+static archive containing common plus selected-port runtime for M4F and M7F,
+8 and 16 regions, with and without LTO. It requires all eight strong ABI
+symbols, an exact external cohort match, strong vector slots 11 and 14,
+privileged/unprivileged code and data placement, the isolated 32-byte current
+slot, exact 2 KiB user stacks, section-GC retention, no dynamic stack use, and
+duplicate-handler link failure. This activates a software build claim only;
+M4F and M7F hardware, FP, MPU-fault, and isolation validation remain separate.
+
 ## 2026-07-17: Add The ARM_CM4_MPU Protected PendSV Slice
 
 Implementation slice 4 completes the non-selectable profile's protected

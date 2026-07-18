@@ -1,12 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM4_MPU dictionary through implementation slice 4. The directory owns
- * context construction, exact MPU/linker geometry, strong SVC first-start,
- * and controlled unprivileged yield/return services. PendSV save/restore and
- * global selection remain deliberately absent. Both Cortex-M4F and Cortex-M7F
- * manifests are accepted because the pinned FreeRTOS port owns both cases;
- * their exact cohort identities remain distinct.
+ * ARM_CM4_MPU build-selected protected runtime dictionary. The directory owns
+ * context construction, exact MPU/linker geometry, SVC/PendSV, the frozen
+ * eight-function forward ABI, and controlled unprivileged service veneers.
+ * Both Cortex-M4F and Cortex-M7F manifests are accepted because the pinned
+ * FreeRTOS port owns both cases; their exact cohort identities remain distinct.
  */
 
 #ifndef FIBER_PORT_ARM_CM4_MPU_FIBER_PORTMACRO_H_
@@ -91,7 +90,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM4_MPU runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Reference context and MPU geometry. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -118,11 +117,29 @@
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
 #define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
 #define fiber_portNVIC_PENDSVCLR_BIT (1u << 27u)
+#define fiber_portSCB_AIRCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED0Cu))
+#define fiber_portSCB_CCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED14u))
+#define fiber_portNVIC_SHPR2_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED1Cu))
+#define fiber_portNVIC_SHPR3_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED20u))
 #define fiber_portSCB_VTOR_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
 #define fiber_portSCB_SHCSR_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED24u))
 #define fiber_portSCB_MEMFAULTENA_BIT (1u << 16u)
+#define fiber_portSCB_BUSFAULTENA_BIT (1u << 17u)
+#define fiber_portSCB_USGFAULTENA_BIT (1u << 18u)
+#define fiber_portSCB_CFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED28u))
+#define fiber_portSCB_HFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED2Cu))
+#define fiber_portSCB_DFSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED30u))
+#define fiber_portNVIC_FIRST_USER_PRIORITY_REG \
+	(*((volatile uint8_t *)(uintptr_t)0xE000E400u))
 #define fiber_portMPU_TYPE_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED90u))
 #define fiber_portMPU_CTRL_REG \
@@ -149,6 +166,18 @@
 #define fiber_portFPCCR_LSPACT_BIT (1u << 0u)
 #define fiber_portFPCCR_LSPEN_BIT (1u << 30u)
 #define fiber_portFPCCR_ASPEN_BIT (1u << 31u)
+
+#define fiber_portSCB_CCR_UNALIGN_TRP_BIT (1u << 3u)
+#define fiber_portSCB_CCR_DIV_0_TRP_BIT (1u << 4u)
+#define fiber_portSCB_CCR_STKALIGN_BIT (1u << 9u)
+#define fiber_portSCB_AIRCR_PRIGROUP_MASK (7u << 8u)
+#define fiber_portNVIC_PRIORITY_BYTE_MASK 0xFFu
+#define fiber_portNVIC_PENDSV_PRIORITY_SHIFT 16u
+#define fiber_portNVIC_SVC_PRIORITY_SHIFT 24u
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+#define fiber_portVECTOR_REQUIRED_WORDS 16u
+#define fiber_portVECTOR_ALIGNMENT 128u
 
 #define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
 #define fiber_portEXC_RETURN_THREAD_PSP_BASIC fiber_portINITIAL_EXC_RETURN
@@ -490,8 +519,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM4_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM4_MPU requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM4_MPU slice 4 must remain non-selectable");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM4_MPU build-selected activation changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
 		"[fiber]: ARM_CM4_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
