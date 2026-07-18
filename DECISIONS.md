@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-07-18: Stage The Exact ARM_CM23_NTZ Layout
+
+Implementation slice 1 adds a deliberately non-selectable
+`fiber/port/ARM_CM23_NTZ/non_secure` profile derived from the pinned FreeRTOS
+`GCC/ARM_CM23_NTZ/non_secure` source group. The exact manifest is ARMv8-M
+Baseline Cortex-M23, privileged non-MPU fiber execution in the Non-secure
+domain, no SecureContext companion, and no FPU/MVE/PAC/BTI.
+
+The saved software frame is frozen as ten words:
+
+```text
+[PSPLIM placeholder][EXC_RETURN][r4-r11]
+```
+
+The PSPLIM slot is mandatory even though Non-secure Cortex-M23 cannot access a
+Non-secure PSPLIM register. Therefore `FIBER_PORT_HAS_PSPLIM_SLOT == 1` and
+`FIBER_PORT_USES_PSPLIM_REGISTER == 0` are independent exact-cohort facts.
+Initial `EXC_RETURN` is `0xFFFFFFBC`, initial saved context is 72 bytes, and
+saved SP remains 8-byte aligned. This intentionally differs from the nine-word
+`transitional_v8m` baseline frame.
+
+The new directory exports only type/layout/trait artifacts and a reference
+parity ledger. It provides no runtime source, handler, archive, or hardware
+claim and remains absent from global auto/profile selection. Context
+construction, SVC, PendSV, startup, archive/ELF, and hardware evidence are
+separate behavior-changing slices.
+
 ## 2026-07-18: Activate The ARM_CM4_MPU Build-Selected Runtime
 
 Implementation slice 5 completes the exact `ARM_CM4_MPU` source group without

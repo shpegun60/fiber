@@ -2558,6 +2558,248 @@ typedef enum IRQn {
     }
 }
 
+function Test-ArmCm23NtzLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM23_NTZ\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm23_ntz_layout_probe.c"
+    foreach ($required in @(
+            (Join-Path $profileDir "fiber_port_types.h"),
+            (Join-Path $profileDir "fiber_port_boot_types.h"),
+            (Join-Path $profileDir "fiber_portmacro.h"),
+            (Join-Path $profileDir "FREERTOS_PARITY.md"),
+            $fixture)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "ARM_CM23_NTZ slice 1 is missing: $required"
+        }
+    }
+
+    foreach ($forbiddenRuntime in @(
+            "fiber_port.c",
+            "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_portasm.c")) {
+        if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
+            throw "ARM_CM23_NTZ slice 1 must not expose runtime artifact: $forbiddenRuntime"
+        }
+    }
+
+    $selectors = @(
+        (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+        (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h")
+    )
+    foreach ($selector in $selectors) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM23_NTZ", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Incomplete ARM_CM23_NTZ runtime entered global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM23_NTZ public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "23709D8EE3DE532A8394EAD05414FCF4FB4B37C94B5288ACF1FB1B829AA3F50E",
+            "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "E15BDECFD24AB85165B69E3496E6FA644E5FF9C36EFBB3FFE6975FD5D7C9806C",
+            "PSPLIM placeholder",
+            "mpu_wrappers_v2_asm.c")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM23_NTZ parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm23-ntz-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 0U
+#define __SAUREGION_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm23.h"
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+_Static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+_Static_assert(sizeof(FiberContext) == 76u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm23_ntz_type_only_object;
+'@
+    $typeObject = Join-Path $probeDir "type-only.o"
+    $typeArgs = @(
+        "-mcpu=cortex-m23", "-mthumb", "-std=c11",
+        "-ffreestanding", "-fno-builtin", "-Wall", "-Wextra", "-Werror",
+        "-I$profileDir", "-c", $typeProbe, "-o", $typeObject
+    )
+    & $Compiler @typeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ type-only C header failed without CMSIS"
+    }
+
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+static_assert(sizeof(FiberContext) == 76u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm23_ntz_cpp_type_only_object;
+'@
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    & $Compiler -x c++ -mcpu=cortex-m23 -mthumb -std=c++17 `
+        -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $cppProbe -o $cppObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ type-only C++ header failed without CMSIS"
+    }
+
+    $layoutObject = Join-Path $probeDir "layout.o"
+    $manifestArgs = @(
+        "-mcpu=cortex-m23", "-mthumb", "-std=c11",
+        "-ffreestanding", "-fno-builtin", "-fno-common",
+        "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV8M_BASELINE=1",
+        "-I$probeDir", "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot", "-I$CmsisPath"
+    )
+    & $Compiler @manifestArgs -c $fixture -o $layoutObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ exact layout manifest failed compile"
+    }
+
+    $defined = @(& $Nm -g --defined-only $layoutObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM23_NTZ layout probe"
+    }
+    $cohorts = @($defined | ForEach-Object {
+        if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+            $Matches[1]
+        }
+    })
+    if ($cohorts.Count -ne 1) {
+        throw "ARM_CM23_NTZ layout must define one exact cohort"
+    }
+    foreach ($token in @(
+            "armv8m_baseline",
+            "p0x4332334Eu",
+            "l0x00010001u",
+            "_o0xFFFFFFBCu_",
+            "_c0_s1_x0_",
+            "_t1_n1_k0_")) {
+        if ($cohorts[0].IndexOf($token,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM23_NTZ exact cohort lost token ${token}: $($cohorts[0])"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "selector-mode"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb")
+            Defines = @("-DFIBER_PORT_PROFILE=4")
+            Diagnostic = "ARM_CM23_NTZ is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb", "-mcmse")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_BASELINE=1")
+            Diagnostic = "does not accept a Secure CMSE build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "no-vtor"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_BASELINE=1")
+            Diagnostic = "requires __VTOR_PRESENT == 1"
+            Main = ($mainHeader -replace '__VTOR_PRESENT 1U', '__VTOR_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "wrong-core"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb")
+            Defines = @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV8M_BASELINE=1",
+                "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1")
+            Diagnostic = "requires an ARMv8-M Baseline compiler target"
+            Main = ($mainHeader -replace 'core_cm23.h', 'core_cm33.h')
+        },
+        [pscustomobject]@{
+            Name = "fpu-present"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_BASELINE=1")
+            Diagnostic = "Cortex-M23 has no FPU"
+            Main = (($mainHeader -replace '__FPU_PRESENT 0U', '__FPU_PRESENT 1U') `
+                -replace '__FPU_USED 0U', '__FPU_USED 1U')
+        }
+    )
+
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $log = Join-Path $caseDir "compile.log"
+        $arguments = @($case.CompilerArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin",
+            "-Wall", "-Wextra", "-I$caseDir", "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot", "-I$CmsisPath") +
+            $case.Defines + @(
+            "-c", $fixture, "-o", (Join-Path $caseDir "invalid.o")))
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $arguments -LogPath $log
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM23_NTZ manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 function Test-ArmCm4MpuSlice5Contract {
     param(
         [string]$RepositoryRoot,
@@ -5689,6 +5931,9 @@ try {
         -BuildRoot $buildRoot
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM23_NTZ slice-1 exact layout contract =="
+    Test-ArmCm23NtzLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `

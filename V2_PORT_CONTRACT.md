@@ -212,6 +212,13 @@ fiber/
       # Final FreeRTOS-parity non-MPU profile; same selected role-file pattern.
     ARM_CM4_MPU/
       # Exact M4/M7 MPU profile plus the selected MPU extension ABI/source.
+    ARM_CM23_NTZ/
+      non_secure/
+        # Slice 1 currently provides type/layout/trait files and parity ledger.
+        fiber_port_types.h
+        fiber_port_boot_types.h
+        fiber_portmacro.h
+        FREERTOS_PARITY.md
     ARM_CM7/
       r0p1/
         fiber_port_types.h
