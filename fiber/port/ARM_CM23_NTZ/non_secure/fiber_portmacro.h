@@ -1,9 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M23 NTZ Non-secure dictionary, implementation slice 1.
- * This slice freezes the privileged non-MPU context layout but deliberately
- * provides no runtime source or exception handlers yet.
+ * Exact Cortex-M23 NTZ Non-secure dictionary, implementation slices 1-2.
+ * These slices freeze the privileged non-MPU context layout and construct its
+ * initial frame, but deliberately provide no exception handlers or switching
+ * runtime yet.
  */
 #ifndef FIBER_PORT_ARM_CM23_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM23_NTZ_FIBER_PORTMACRO_H_
@@ -20,6 +21,25 @@
 #include "../../fiber_settings.h"
 #include "../../fiber_compiler.h"
 #include "fiber_port_types.h"
+
+#ifndef fiber_portFORCE_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+# else
+#  define fiber_portFORCE_INLINE static inline
+# endif
+#endif
+
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
+
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
 
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM23_NTZ is build-selected only"
@@ -140,6 +160,31 @@
 # error "[fiber]: ARM_CM23_NTZ has no BASEPRI; FIBER_SCHEDULER_BASEPRI must be zero"
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_initial_xpsr(void)
+{
+	return fiber_portINITIAL_XPSR;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
+{
+	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
+}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /* Frozen 32-bit GCC public storage layout. */
 #define FIBER_PORT_CM23_NTZ_CONTEXT_SP_OFFSET 0u
 #define FIBER_PORT_CM23_NTZ_CONTEXT_BOOT_OFFSET 4u
@@ -152,7 +197,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM23_NTZ requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM23_NTZ slice 1 must remain non-selectable");
+		"[fiber]: incomplete ARM_CM23_NTZ runtime must remain non-selectable");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM23_NTZ software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,
@@ -181,5 +226,7 @@ FIBER_STATIC_ASSERT(sizeof(FiberPortBoot) ==
 
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_context_cohort.h"
+#include "fiber_port_boot.h"
+#include "../../fiber_port_geometry.h"
 
 #endif /* FIBER_PORT_ARM_CM23_NTZ_FIBER_PORTMACRO_H_ */

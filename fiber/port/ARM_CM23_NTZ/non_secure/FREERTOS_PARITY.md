@@ -27,7 +27,7 @@ for below rather than copied implicitly.
 
 ## Exact Profile
 
-Implementation slice 1 freezes one exact build manifest:
+Implementation slices 1-2 freeze one exact build manifest:
 
 ```text
 CPU architecture:             ARMv8-M Baseline
@@ -38,7 +38,8 @@ MPU task isolation:           disabled
 FPU/MVE/PAC/BTI:              absent
 scheduler interrupt mask:     PRIMASK
 VTOR:                         required
-runtime source/handlers:      not implemented in this slice
+runtime source:               constructor only
+SVC/PendSV handlers:          not implemented in this slice
 hardware support claim:       none
 ```
 
@@ -55,12 +56,16 @@ context-init, SVC, PendSV, startup, archive, and ELF slices are complete.
 ## Saved Frame
 
 FreeRTOS reserves a PSPLIM word even though Non-secure Cortex-M23 has no
-Non-secure PSPLIM register. Fiber preserves that distinction exactly:
+Non-secure PSPLIM register. Its initial-stack constructor seeds the slot with
+`pxEndOfStack`; the Non-secure restore path consumes but ignores the value, and
+later PendSV saves write zero into the same slot. Fiber preserves this lifecycle
+exactly: the initial frame stores `FiberPortBoot.stack_base`, while the future
+NTZ PendSV slice must store zero and must never access PSPLIM.
 
 ```text
 low address / FiberContext.sp
 
-word  0  PSPLIM placeholder, always zero in this exact profile
+word  0  ignored PSPLIM slot, initially stack_base; zero after first save
 word  1  EXC_RETURN = 0xFFFFFFBC
 word  2  r4
 word  3  r5
@@ -123,7 +128,7 @@ belong to the CPU transfer ABI and are intentionally not exported.
 
 | FreeRTOS symbol/family | Fiber disposition |
 | --- | --- |
-| `pxPortInitialiseStack` | Future `fiber_port_context_init`; slice 1 freezes its exact frame output. |
+| `pxPortInitialiseStack` | `fiber_port_context_init` plus `fiber_port_init_context_frame`; initial slot is `stack_base`, all frame words are explicitly seeded, and the boot record is sealed and revalidated. |
 | `vRestoreContextOfFirstTask`, `vStartFirstTask` | Future SVC-only first-start slice. |
 | `SVC_Handler`, `vPortSVCHandler_C` | Future strong fail-closed selected-port handler; FreeRTOS scheduler/system-call dispatch is not copied. |
 | `PendSV_Handler` | Future scheduler-hook save/select/restore slice using the ten-word frame. |
@@ -158,7 +163,7 @@ outside this port dictionary:
 They are scheduler, kernel, MPU-profile, or companion-image responsibilities.
 Omission here does not permit a later capable profile to ignore them.
 
-## Slice 1 Proofs
+## Slices 1-2 Proofs
 
 The compile matrix must prove:
 
@@ -169,6 +174,14 @@ The compile matrix must prove:
   Extension, and Non-secure role;
 - software-frame size/index/modulo constants match the reference assembly;
 - Secure CMSE, wrong core/profile, VTOR-less, and FPU manifests fail;
+- the constructor source group emits exactly `fiber_port_context_init` from the
+  eight-function forward ABI and one matching exact cohort;
+- the initial constructor writes all 18 words in exact low-to-high order,
+  including `stack_base`, `EXC_RETURN`, `r4-r11`, and the hardware frame;
+- boot metadata is sealed, hashed, checked against exact context identity, and
+  address-map validated during context creation;
+- no SVC/PendSV symbol or other start/switch runtime operation exists yet;
 - global auto/profile selectors do not expose this incomplete runtime.
 
-No runtime, archive, ELF-vector, LTO, or hardware claim is made by this slice.
+No start/switch runtime, archive, ELF-vector, LTO, or hardware claim is made by
+these slices.

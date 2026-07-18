@@ -1,5 +1,27 @@
 # Fiber Decision Log
 
+## 2026-07-18: Construct The Exact ARM_CM23_NTZ Initial Context
+
+Implementation slice 2 adds a deliberately partial `fiber_port.c` and
+`fiber_port_boot.c` to the non-selectable `ARM_CM23_NTZ/non_secure` profile.
+The source group implements only `fiber_port_context_init` from the frozen
+eight-function forward ABI. It owns boot metadata construction, seal/hash and
+address-map checks, stack normalization, canary initialization, and the exact
+18-word initial frame. It defines no SVC/PendSV handler or scheduling/startup
+operation.
+
+The FreeRTOS constructor initializes its reserved PSPLIM slot with the lower
+stack bound even though the NTZ restore path does not write PSPLIM. Fiber does
+the same: initial word 0 is `FiberPortBoot.stack_base`. The future PendSV save
+path must follow the other reference branch and write zero into that slot.
+This distinction replaces the earlier imprecise description of the slot as
+always zero.
+
+The matrix requires all frame assignments in exact order, one matching cohort,
+only `fiber_port_context_init` from the forward ABI, the expected reverse and
+integration dependencies, and no handler symbols. The profile remains absent
+from global selection until all eight operations and handler/ELF proofs exist.
+
 ## 2026-07-18: Stage The Exact ARM_CM23_NTZ Layout
 
 Implementation slice 1 adds a deliberately non-selectable

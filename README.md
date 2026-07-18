@@ -69,11 +69,13 @@ cohort identity, vectors, section GC, and normal/LTO modes are compile/ELF
 covered. Global auto/profile selection remains deliberately absent, and M4F
 and M7F hardware support claims require separate board validation.
 
-`ARM_CM23_NTZ` implementation slice 1 freezes the exact privileged,
+`ARM_CM23_NTZ` implementation slices 1-2 freeze the exact privileged,
 non-MPU, Non-secure Cortex-M23 context contract from the pinned FreeRTOS NTZ
 port. It adds the otherwise missing PSPLIM placeholder word, giving a ten-word
-software frame with `EXC_RETURN` at index 1. The profile is deliberately not
-runtime-selectable yet and has no SVC/PendSV or hardware claim. See
+software frame with `EXC_RETURN` at index 1, and now builds the matching sealed
+initial context. The ignored initial PSPLIM slot contains `stack_base`; future
+NTZ saves will replace it with zero without accessing PSPLIM. The profile is
+deliberately not runtime-selectable yet and has no SVC/PendSV or hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
@@ -123,6 +125,8 @@ v8-M fixture:  fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
 M23 NTZ stage: fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM23_NTZ/non_secure/fiber_port.c
+               fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot.c
 ```
 
 Every build-selected target must also compile this source separately from any

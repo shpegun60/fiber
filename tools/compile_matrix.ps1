@@ -2558,7 +2558,7 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm23NtzLayoutContract {
+function Test-ArmCm23NtzConstructionContract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
@@ -2575,20 +2575,22 @@ function Test-ArmCm23NtzLayoutContract {
             (Join-Path $profileDir "fiber_port_types.h"),
             (Join-Path $profileDir "fiber_port_boot_types.h"),
             (Join-Path $profileDir "fiber_portmacro.h"),
+            (Join-Path $profileDir "fiber_port_boot.h"),
+            (Join-Path $profileDir "fiber_port_private.h"),
+            (Join-Path $profileDir "fiber_port.c"),
+            (Join-Path $profileDir "fiber_port_boot.c"),
             (Join-Path $profileDir "FREERTOS_PARITY.md"),
             $fixture)) {
         if (-not (Test-Path -LiteralPath $required)) {
-            throw "ARM_CM23_NTZ slice 1 is missing: $required"
+            throw "ARM_CM23_NTZ construction slice is missing: $required"
         }
     }
 
     foreach ($forbiddenRuntime in @(
-            "fiber_port.c",
-            "fiber_port_boot.c",
-            "fiber_port_private.h",
+            "fiber_port_exception.c",
             "fiber_portasm.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
-            throw "ARM_CM23_NTZ slice 1 must not expose runtime artifact: $forbiddenRuntime"
+            throw "ARM_CM23_NTZ construction slice must not expose switch artifact: $forbiddenRuntime"
         }
     }
 
@@ -2625,7 +2627,7 @@ function Test-ArmCm23NtzLayoutContract {
             "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
             "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
             "E15BDECFD24AB85165B69E3496E6FA644E5FF9C36EFBB3FFE6975FD5D7C9806C",
-            "PSPLIM placeholder",
+            "ignored PSPLIM slot, initially stack_base; zero after first save",
             "mpu_wrappers_v2_asm.c")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
@@ -2731,6 +2733,141 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
         if ($cohorts[0].IndexOf($token,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM23_NTZ exact cohort lost token ${token}: $($cohorts[0])"
+        }
+    }
+
+    $runtimePath = Join-Path $profileDir "fiber_port.c"
+    $bootPath = Join-Path $profileDir "fiber_port_boot.c"
+    $runtimeSource = Get-Content -LiteralPath $runtimePath -Raw
+    $bootSource = Get-Content -LiteralPath $bootPath -Raw
+    $frameBody = Get-CFunctionBody -Source $runtimeSource `
+        -Signature "void fiber_port_init_context_frame(FiberContext *const ctx)" `
+        -Path $runtimePath
+    $requiredAssignments = @(
+        "frame[fiber_portFRAME_PSPLIM] = (uint32_t)ctx->boot.stack_base;",
+        "frame[fiber_portFRAME_EXC_RETURN] = fiber_portINITIAL_EXC_RETURN;",
+        "frame[fiber_portFRAME_R4] = 0u;",
+        "frame[fiber_portFRAME_R5] = 0u;",
+        "frame[fiber_portFRAME_R6] = 0u;",
+        "frame[fiber_portFRAME_R7] = 0u;",
+        "frame[fiber_portFRAME_R8] = 0u;",
+        "frame[fiber_portFRAME_R9] = fiber_port_read_r9();",
+        "frame[fiber_portFRAME_R10] = 0u;",
+        "frame[fiber_portFRAME_R11] = 0u;",
+        "frame[fiber_portFRAME_R0] = (uint32_t)(uintptr_t)ctx->boot.arg;",
+        "frame[fiber_portFRAME_R1] = 0u;",
+        "frame[fiber_portFRAME_R2] = 0u;",
+        "frame[fiber_portFRAME_R3] = 0u;",
+        "frame[fiber_portFRAME_R12] = 0u;",
+        "frame[fiber_portFRAME_LR] =",
+        "frame[fiber_portFRAME_PC] =",
+        "frame[fiber_portFRAME_XPSR] = fiber_port_initial_xpsr();",
+        "ctx->sp = frame;"
+    )
+    $lastAssignment = -1
+    foreach ($assignment in $requiredAssignments) {
+        $assignmentIndex = $frameBody.IndexOf($assignment,
+            [System.StringComparison]::Ordinal)
+        if ($assignmentIndex -le $lastAssignment) {
+            throw "ARM_CM23_NTZ initial frame lost exact assignment order: $assignment"
+        }
+        $lastAssignment = $assignmentIndex
+    }
+    if (([regex]::Matches($frameBody, 'frame\[fiber_portFRAME_[A-Z0-9_]+\]\s*=')).Count -ne 18) {
+        throw "ARM_CM23_NTZ constructor must assign exactly eighteen frame words"
+    }
+    foreach ($requiredFrameContract in @(
+            "fiber_portFRAME_PSPLIM = 0",
+            "fiber_portFRAME_EXC_RETURN = 1",
+            "fiber_portFRAME_R0 = 10",
+            "fiber_portFRAME_XPSR = 17",
+            "fiber_portFRAME_WORD_COUNT = 18",
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();")) {
+        if ($runtimeSource.IndexOf($requiredFrameContract,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM23_NTZ runtime lost exact construction contract: $requiredFrameContract"
+        }
+    }
+    foreach ($requiredBootContract in @(
+            "void fiber_port_context_init(FiberContext *const ctx,",
+            "ctx->boot = fiber_port_boot_create(stack_begin, stack_end, entry, arg);",
+            "fiber_port_init_context_frame(ctx);",
+            "fiber_port_validate_initial_frame(ctx);",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();")) {
+        if ($bootSource.IndexOf($requiredBootContract,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM23_NTZ boot source lost constructor contract: $requiredBootContract"
+        }
+    }
+
+    $runtimeObject = Join-Path $probeDir "fiber-port.o"
+    $bootObject = Join-Path $probeDir "fiber-port-boot.o"
+    $groupObject = Join-Path $probeDir "constructor-group.o"
+    & $Compiler @manifestArgs -O2 -c $runtimePath -o $runtimeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ frame constructor failed compile"
+    }
+    & $Compiler @manifestArgs -O2 -c $bootPath -o $bootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ boot constructor failed compile"
+    }
+    & $Compiler -r $runtimeObject $bootObject -o $groupObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM23_NTZ constructor object group failed relocatable link"
+    }
+
+    $groupDefined = @(& $Nm -g --defined-only $groupObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM23_NTZ constructor group"
+    }
+    $definedForward = @($groupDefined | ForEach-Object {
+        if ($_ -match '\b(fiber_port_(?:context_init|runtime_memory_barrier|panic_wait|require_scheduler_configuration_environment|runtime_prepare_start|runtime_select_first|runtime_start_first|runtime_schedule))$') {
+            $Matches[1]
+        }
+    } | Sort-Object -Unique)
+    if (($definedForward.Count -ne 1) -or
+            ($definedForward[0] -ne "fiber_port_context_init")) {
+        throw "ARM_CM23_NTZ slice 2 must define only context_init from the forward ABI: $($definedForward -join ', ')"
+    }
+    foreach ($forbiddenSymbol in @("SVC_Handler", "PendSV_Handler")) {
+        if ($groupDefined -match "\b$forbiddenSymbol$") {
+            throw "ARM_CM23_NTZ constructor slice exposed premature handler: $forbiddenSymbol"
+        }
+    }
+    $groupCohorts = @($groupDefined | ForEach-Object {
+        if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+            $Matches[1]
+        }
+    })
+    if (($groupCohorts.Count -ne 1) -or ($groupCohorts[0] -ne $cohorts[0])) {
+        throw "ARM_CM23_NTZ constructor group disagrees with its frozen layout cohort"
+    }
+
+    $undefined = @(& $Nm -u $groupObject | ForEach-Object {
+        if ($_ -match '\bU\s+(\S+)$') {
+            $Matches[1]
+        }
+    } | Sort-Object -Unique)
+    $allowedUndefined = @(
+        "fiber_addr_plausible_code",
+        "fiber_addr_plausible_ram",
+        "fiber_internal_task_return",
+        "fiber_panic",
+        "memcpy",
+        "memset"
+    ) | Sort-Object
+    $unexpectedUndefined = @(Compare-Object -ReferenceObject $allowedUndefined `
+        -DifferenceObject $undefined | Where-Object SideIndicator -eq "=>")
+    if ($unexpectedUndefined.Count -ne 0) {
+        throw "ARM_CM23_NTZ constructor gained unexpected dependencies: $($undefined -join ', ')"
+    }
+    foreach ($requiredUndefined in @(
+            "fiber_addr_plausible_code",
+            "fiber_addr_plausible_ram",
+            "fiber_internal_task_return",
+            "fiber_panic")) {
+        if ($undefined -notcontains $requiredUndefined) {
+            throw "ARM_CM23_NTZ constructor lost required integration dependency: $requiredUndefined"
         }
     }
 
@@ -5932,8 +6069,8 @@ try {
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM23_NTZ slice-1 exact layout contract =="
-    Test-ArmCm23NtzLayoutContract -RepositoryRoot $RepoRoot `
+    Write-Host "== ARM_CM23_NTZ slices 1-2 layout/construction contract =="
+    Test-ArmCm23NtzConstructionContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `

@@ -214,10 +214,14 @@ fiber/
       # Exact M4/M7 MPU profile plus the selected MPU extension ABI/source.
     ARM_CM23_NTZ/
       non_secure/
-        # Slice 1 currently provides type/layout/trait files and parity ledger.
+        # Slices 1-2 provide exact types/traits and initial-context construction.
         fiber_port_types.h
         fiber_port_boot_types.h
         fiber_portmacro.h
+        fiber_port_boot.h
+        fiber_port_private.h
+        fiber_port.c
+        fiber_port_boot.c
         FREERTOS_PARITY.md
     ARM_CM7/
       r0p1/
