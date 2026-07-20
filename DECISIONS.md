@@ -1,5 +1,104 @@
 # Fiber Decision Log
 
+## 2026-07-20: Stage The Exact ARM_CM33_NTZ Layout
+
+Implementation slice 1 adds a deliberately non-selectable
+`fiber/port/ARM_CM33_NTZ/non_secure` profile derived from the pinned FreeRTOS
+`GCC/ARM_CM33_NTZ/non_secure` source group. The exact manifest is ARMv8-M
+Mainline Cortex-M33, single-core privileged non-MPU fiber execution in the
+Non-secure domain, no SecureContext companion, and no FPU/MVE/PAC/BTI context.
+
+The saved software frame is frozen as ten words:
+
+```text
+[PSPLIM][EXC_RETURN][r4-r11]
+```
+
+Unlike M23 NTZ, this profile has an accessible PSPLIM register. Therefore
+`FIBER_PORT_HAS_PSPLIM_SLOT == 1` and
+`FIBER_PORT_USES_PSPLIM_REGISTER == 1` are independent exact-cohort facts.
+Initial `EXC_RETURN` is `0xFFFFFFBC`, the scheduler mask is BASEPRI, the
+initial context is 72 bytes, and the maximum saved context is 76 bytes.
+
+The new directory exports only type/layout/trait artifacts and a reference
+parity ledger. It provides no runtime source, handler, archive, or hardware
+claim and remains absent from global auto/profile selection. Construction, SVC,
+PendSV, BASEPRI envelope, archive/ELF, and hardware evidence are separate
+behavior-changing slices. An MPU-capable CPU does not activate an MPU ABI; an
+FP-capable CPU must use a separate M33F context profile before it can compile
+with an FP register ABI.
+
+## 2026-07-20: Activate ARM_CM23_NTZ Build-Selected Runtime
+
+Implementation slice 5 promotes the concrete `ARM_CM23_NTZ/non_secure` source
+group to an exact build-selected runtime profile. Its manifest defines
+`FIBER_PORT_BUILD_SELECTED=1` and `FIBER_PORT_ARMV8M_BASELINE=1`, places the
+concrete private directory first on the include path, and compiles only
+`fiber_port.c` plus `fiber_port_boot.c` with the common runtime. This does not
+add an ARMv8-M auto/profile route: ordinary Cortex-M23 auto and explicit
+architecture selection remain on `transitional_v8m` until a separate policy
+decision promotes a concrete profile globally.
+
+The matrix now links that source group as a static archive against an unchanged
+portable application and an application-owned exact cohort expectation object.
+It proves all eight forward ABI symbols, one exact cohort identity, strong
+`SVC_Handler`/`PendSV_Handler`, vector slots 11 and 14, section-GC retention,
+normal and LTO archive extraction, and deliberate duplicate-handler failure.
+The cohort definition is explicitly link-visible under GCC LTO, so the external
+expectation cannot be silently optimized into an unverified whole-archive link.
+
+This is compile/link/ELF evidence only. The profile has no Cortex-M23 or STM32
+hardware claim, and Secure, MPU, SecureContext, and TF-M roles remain separate
+optional profile work.
+
+## 2026-07-20: Add ARM_CM23_NTZ PendSV Switching Source
+
+Implementation slice 4 completes the source-level non-MPU switching mechanics
+for the build-selected, still non-selectable `ARM_CM23_NTZ/non_secure` profile.
+The port now exposes all eight frozen forward-ABI operations and directly owns
+both strong exception handlers. `fiber_port_runtime_schedule()` accepts only
+privileged Thread/PSP execution with `PRIMASK == 0`, then requests PendSV.
+
+The PendSV handler follows the pinned FreeRTOS NTZ non-MPU ten-word frame:
+it validates exact PendSV/PSP `EXC_RETURN = 0xFFFFFFBC`, validates the running
+context before reading its metadata, proves source bounds and stack-alignment
+padding, saves `[0][EXC_RETURN][r4-r11]`, invokes the user scheduler under
+PRIMASK, validates/publishes the selected target, and restores through the
+reference `+24/-36` Thumb-1 geometry. Word 0 is the mandatory PSPLIM slot, but
+ordinary Non-secure M23 saves write zero and restore deliberately skips it;
+this profile emits no PSPLIM register access.
+
+The source is intentionally not yet runtime-selectable. Archive extraction,
+exact vector/ELF/LTO evidence, and Cortex-M23 Non-secure hardware validation
+remain promotion requirements. Matrix coverage must prove the exact eight
+forward operations, both strong handlers, scheduler/reverse dependencies,
+save-before-metadata validation ordering, ten-word save/restore shape, and
+absence of PSPLIM instructions. This is source/generated-code evidence only.
+
+## 2026-07-18: Add ARM_CM23_NTZ SVC-only First Start
+
+Implementation slice 3 adapts the pinned FreeRTOS Cortex-M23 NTZ first-task
+restore without exposing an incomplete switching runtime. The build-selected,
+non-selectable profile now defines seven frozen forward-ABI operations and one
+strong `SVC_Handler`; `fiber_port_runtime_schedule` and `PendSV_Handler` remain
+absent until the next slice.
+
+The handler accepts only the exact Non-secure Thread/MSP/basic SVC origin
+`0xFFFFFFB8`, validates the stacked MSP frame and start SVC instruction, invokes
+the first scheduler selection under saved PRIMASK, validates the selected
+context, sets and reads back `CONTROL = 2`, ignores the reserved PSPLIM word,
+restores `r4-r11`, and returns through the context's exact `0xFFFFFFBC`.
+SVCall priority and active VTOR slot 11 are written/read back before selection.
+They are revalidated under PRIMASK after the user scheduler hook, and that mask
+is retained into the naked start helper so no IRQ window exists before SVC.
+The ARMv8-M `CONTROL.SPSEL` seed follows the reference first restore; exact
+`EXC_RETURN` remains the authority for unstack and SVC provenance.
+
+Matrix coverage requires the exact seven-operation surface, one strong SVC and
+no PendSV, exact reverse dependencies, and generated Thumb-1 `+24/-36` restore
+geometry. This is compile/generated-code evidence, not a Cortex-M23 hardware or
+complete-runtime claim.
+
 ## 2026-07-18: Construct The Exact ARM_CM23_NTZ Initial Context
 
 Implementation slice 2 adds a deliberately partial `fiber_port.c` and

@@ -1,4 +1,4 @@
-/* ARM_CM23_NTZ boot seal and initial-context construction, slice 2. */
+/* ARM_CM23_NTZ boot, switch validation, and first-start state. */
 
 #include "fiber_port_private.h"
 
@@ -276,4 +276,262 @@ void fiber_port_context_init(FiberContext *const ctx,
 		fiber_portINST_SYNC_BARRIER();
 		fiber_portCOMPILER_BARRIER();
 	}
+}
+
+typedef struct FiberPortStartMspPlan {
+	uintptr_t top;
+	uint32_t prepared;
+} FiberPortStartMspPlan;
+
+static FiberPortStartMspPlan fiber_port_start_msp_plan;
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_context_pointer(const FiberContext *const ctx)
+{
+	FIBER_REQUIRE(ctx != NULL, 'N');
+	const uintptr_t begin = (uintptr_t)ctx;
+	FIBER_REQUIRE((begin & ((uintptr_t)_Alignof(FiberContext) - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE(begin <= (UINTPTR_MAX - sizeof(*ctx)), 'O');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FIBER_REQUIRE(fiber_addr_plausible_ram(begin,
+			begin + sizeof(*ctx)) != 0, 'C');
+#endif
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_stack_canary(const FiberContext *const ctx)
+{
+#if FIBER_STACK_CANARY
+	const uintptr_t begin = (uintptr_t)ctx->boot.begin;
+	const uintptr_t canary_cell = fiber_word_align_up(begin);
+	FIBER_REQUIRE(canary_cell >= begin, 'c');
+	FIBER_REQUIRE(canary_cell <= (UINTPTR_MAX - sizeof(uint32_t)), 'c');
+	FIBER_REQUIRE((canary_cell + sizeof(uint32_t)) <=
+			ctx->boot.stack_base, 'c');
+	FIBER_REQUIRE(*(const volatile uint32_t *)canary_cell ==
+			FIBER_INTERNAL_STACK_CANARY_VALUE, 'c');
+#else
+	(void)ctx;
+#endif
+}
+
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+typedef struct FiberPortValidationCpuState {
+	uint32_t primask;
+	uint32_t control;
+} FiberPortValidationCpuState;
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_capture_validation_cpu_state(
+		FiberPortValidationCpuState *const state)
+{
+	FIBER_REQUIRE(state != NULL, 'C');
+	fiber_portCOMPILER_BARRIER();
+	state->primask = __get_PRIMASK();
+	state->control = __get_CONTROL();
+	fiber_portCOMPILER_BARRIER();
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_validation_cpu_state(
+		const FiberPortValidationCpuState *const before)
+{
+	FIBER_REQUIRE(before != NULL, 'C');
+	fiber_portCOMPILER_BARRIER();
+	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	fiber_portCOMPILER_BARRIER();
+}
+#endif
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_prepare_start_msp_plan(void)
+{
+	FIBER_REQUIRE(fiber_port_start_msp_plan.prepared == 0u, 'M');
+	uintptr_t top;
+
+#if FIBER_REWIND_MSP
+	const uint32_t first = fiber_port_read_initial_msp();
+	fiber_portINST_SYNC_BARRIER();
+	const uint32_t second = fiber_port_read_initial_msp();
+	FIBER_REQUIRE(first != 0u, 'M');
+	FIBER_REQUIRE(first == second, 'V');
+	top = (uintptr_t)first;
+#else
+	top = (uintptr_t)__get_MSP();
+#endif
+
+	FIBER_REQUIRE(top != 0u, 'M');
+	FIBER_REQUIRE((top & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'M');
+	FIBER_REQUIRE(top >= sizeof(uint32_t), 'R');
+	FIBER_REQUIRE(fiber_addr_plausible_ram(top - sizeof(uint32_t), top) != 0,
+			'R');
+
+	fiber_port_start_msp_plan.top = top;
+	{
+		fiber_portDATA_SYNC_BARRIER();
+		fiber_portINST_SYNC_BARRIER();
+		fiber_portCOMPILER_BARRIER();
+	}
+	fiber_port_start_msp_plan.prepared = 1u;
+	{
+		fiber_portDATA_SYNC_BARRIER();
+		fiber_portINST_SYNC_BARRIER();
+		fiber_portCOMPILER_BARRIER();
+	}
+}
+
+static FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const boot)
+{
+	FIBER_REQUIRE(boot != NULL, 'n');
+	FIBER_REQUIRE(fiber_port_start_msp_plan.prepared == 1u, 'M');
+	const uintptr_t top = fiber_port_start_msp_plan.top;
+	FIBER_REQUIRE(top != 0u, 'M');
+	FIBER_REQUIRE((top & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'M');
+	FIBER_REQUIRE(!(top > boot->stack_base && top <= boot->stack_top), 'O');
+	const size_t gap = (top > boot->stack_top)
+			? (size_t)(top - boot->stack_top)
+			: (size_t)(boot->stack_base - top);
+	FIBER_REQUIRE(gap >= (size_t)FIBER_STACK_REDZONE_BYTES, 'G');
+
+#if FIBER_REWIND_MSP
+	const uint32_t first = fiber_port_read_initial_msp();
+	fiber_portINST_SYNC_BARRIER();
+	const uint32_t second = fiber_port_read_initial_msp();
+	FIBER_REQUIRE(first != 0u, 'M');
+	FIBER_REQUIRE(first == second, 'V');
+	FIBER_REQUIRE(top == (uintptr_t)first, 'W');
+#endif
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_context_validate_save_current(const FiberContext *const ctx)
+{
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
+#endif
+	/* This runs before PendSV assembly reads any current metadata. The saved
+	 * ctx->sp is stale while the fiber executes, so validate the live PSP. */
+	fiber_port_validate_context_pointer(ctx);
+#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+	fiber_port_boot_record_check(&ctx->boot);
+#else
+	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
+			ctx->boot.stack_top) != 0, 'P');
+#endif
+	fiber_port_validate_stack_canary(ctx);
+
+	const uintptr_t psp = (uintptr_t)__get_PSP();
+	FIBER_REQUIRE((psp & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
+	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_context_validate_restore(FiberContext *const ctx)
+{
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
+#endif
+	fiber_port_validate_context_pointer(ctx);
+#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+	fiber_port_boot_record_check(&ctx->boot);
+#else
+	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
+			ctx->boot.stack_top) != 0, 'P');
+#endif
+	fiber_port_validate_stack_canary(ctx);
+	FIBER_REQUIRE(ctx->sp != NULL, 'P');
+
+	const uintptr_t sp = (uintptr_t)ctx->sp;
+	FIBER_REQUIRE((sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
+	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
+	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
+	const uintptr_t available = ctx->boot.stack_top - sp;
+	FIBER_REQUIRE(available >= (uintptr_t)FIBER_PORT_INITIAL_CONTEXT_BYTES,
+			'X');
+
+	const uint32_t *const words = (const uint32_t *)sp;
+	FIBER_REQUIRE((words[0] == 0u) ||
+			(words[0] == (uint32_t)ctx->boot.stack_base), 'L');
+	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
+	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
+	const uint32_t stacked_pc =
+			words[FIBER_PORT_SOFTWARE_FRAME_WORDS + 6u];
+	const uint32_t stacked_xpsr =
+			words[FIBER_PORT_SOFTWARE_FRAME_WORDS + 7u];
+	FIBER_REQUIRE((stacked_xpsr & (1u << 24u)) != 0u, 'x');
+	FIBER_REQUIRE((stacked_xpsr & 0x1FFu) == 0u, 'x');
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
+	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FIBER_REQUIRE(fiber_addr_plausible_code((uintptr_t)stacked_pc) != 0, 'c');
+#endif
+	uintptr_t required = (uintptr_t)FIBER_PORT_INITIAL_CONTEXT_BYTES;
+	if ((stacked_xpsr & (1u << 9u)) != 0u) {
+		required += (uintptr_t)FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES;
+	}
+	FIBER_REQUIRE(available >= required, 'X');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)
+{
+	fiber_port_context_validate_restore(ctx);
+	FIBER_REQUIRE(ctx->sp[0] == (uint32_t)ctx->boot.stack_base, 'L');
+	fiber_port_validate_start_msp_for_boot(&ctx->boot);
+#if FIBER_REWIND_MSP
+	return fiber_port_start_msp_plan.top;
+#else
+	return 0u;
+#endif
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_require_start_environment(void)
+{
+	const uint32_t control = __get_CONTROL();
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'I');
+	FIBER_REQUIRE((control & 1u) == 0u, 'p');
+	FIBER_REQUIRE((control & 2u) == 0u, 's');
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_require_start_interrupt_state(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_prepare(void)
+{
+#ifdef SCB_CCR_STKALIGN_Msk
+	SCB->CCR |= SCB_CCR_STKALIGN_Msk;
+	{
+		fiber_portDATA_SYNC_BARRIER();
+		fiber_portINST_SYNC_BARRIER();
+	}
+	FIBER_REQUIRE((SCB->CCR & SCB_CCR_STKALIGN_Msk) != 0u, 'A');
+#endif
+	fiber_port_prepare_start_msp_plan();
 }

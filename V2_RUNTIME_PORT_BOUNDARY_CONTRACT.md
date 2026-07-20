@@ -107,6 +107,7 @@ scheduler hook owns selection from the first context onward.
 The complete generic callable ABI exported by one selected port is:
 
 ```c
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_init(
         FiberContext *ctx,
         void *stack_begin,
@@ -120,6 +121,7 @@ void fiber_port_runtime_memory_barrier(void);
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_require_scheduler_configuration_environment(void);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY

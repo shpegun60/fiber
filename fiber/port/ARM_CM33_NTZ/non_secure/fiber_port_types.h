@@ -1,11 +1,11 @@
 /*
- * Type-only public storage for the build-selected ARM_CM23_NTZ profile.
+ * Type-only public storage for the staged ARM_CM33_NTZ profile.
  *
  * Saved registers remain on the fiber stack. The exact ten-word software
  * frame is a private port contract and is frozen in fiber_portmacro.h.
  */
-#ifndef FIBER_PORT_ARM_CM23_NTZ_FIBER_PORT_TYPES_H_
-#define FIBER_PORT_ARM_CM23_NTZ_FIBER_PORT_TYPES_H_
+#ifndef FIBER_PORT_ARM_CM33_NTZ_FIBER_PORT_TYPES_H_
+#define FIBER_PORT_ARM_CM33_NTZ_FIBER_PORT_TYPES_H_
 
 #include "../../../fiber_api_types.h"
 #include "fiber_port_boot_types.h"
@@ -13,7 +13,7 @@
 #ifdef FIBER_PORT_NAME
 # undef FIBER_PORT_NAME
 #endif
-#define FIBER_PORT_NAME "ARM_CM23_NTZ"
+#define FIBER_PORT_NAME "ARM_CM33_NTZ"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,4 +28,4 @@ struct FiberContext {
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_ARM_CM23_NTZ_FIBER_PORT_TYPES_H_ */
+#endif /* FIBER_PORT_ARM_CM33_NTZ_FIBER_PORT_TYPES_H_ */

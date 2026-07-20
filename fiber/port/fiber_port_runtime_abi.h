@@ -18,6 +18,7 @@
 extern "C" {
 #endif
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_init(FiberContext *ctx,
 		void *stack_begin,
 		void *stack_end,
@@ -33,6 +34,7 @@ FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
 /* Frozen common-core-freeze-v1 runtime operations. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_require_scheduler_configuration_environment(void);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY

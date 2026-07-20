@@ -69,14 +69,26 @@ cohort identity, vectors, section GC, and normal/LTO modes are compile/ELF
 covered. Global auto/profile selection remains deliberately absent, and M4F
 and M7F hardware support claims require separate board validation.
 
-`ARM_CM23_NTZ` implementation slices 1-2 freeze the exact privileged,
+`ARM_CM23_NTZ` implementation slices 1-5 freeze the exact privileged,
 non-MPU, Non-secure Cortex-M23 context contract from the pinned FreeRTOS NTZ
 port. It adds the otherwise missing PSPLIM placeholder word, giving a ten-word
-software frame with `EXC_RETURN` at index 1, and now builds the matching sealed
-initial context. The ignored initial PSPLIM slot contains `stack_base`; future
-NTZ saves will replace it with zero without accessing PSPLIM. The profile is
-deliberately not runtime-selectable yet and has no SVC/PendSV or hardware claim. See
+software frame with `EXC_RETURN` at index 1, builds the matching sealed initial
+context, adds a strong fail-closed SVC first start, and implements the exact
+non-MPU PendSV save/select/restore path plus `runtime_schedule`. The ignored
+initial PSPLIM slot contains `stack_base`; every ordinary PendSV save replaces
+it with zero without accessing PSPLIM. An exact build-selected M23 manifest now
+has static-archive, cohort, vector, section-GC, and normal/LTO ELF coverage.
+Auto/profile selection deliberately remains on `transitional_v8m`, and this
+profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
+
+`ARM_CM33_NTZ/non_secure` slice 1 now freezes the corresponding Cortex-M33
+Mainline NTZ non-MPU/no-FPU layout: a live PSPLIM word followed by
+`EXC_RETURN = 0xFFFFFFBC` and `r4-r11`. It has BASEPRI and FAULTMASK traits,
+but intentionally has no construction, SVC, PendSV, archive, or hardware
+claim yet. This keeps M33F, MPU, SecureContext, and TF-M behavior separate
+instead of hiding it behind a permissive generic v8-M path. See
+`fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
 
@@ -122,11 +134,17 @@ v8-M fixture:  fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
                fiber/port/transitional_v8m/fiber_port_boot.c
                fiber/port/transitional_v8m/fiber_port_exception.c
 
-M23 NTZ stage: fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_types.h
+M23 NTZ runtime:
+               fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_portmacro.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot.c
+
+M33 NTZ layout staging:
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_portmacro.h
 ```
 
 Every build-selected target must also compile this source separately from any
@@ -275,6 +293,19 @@ MPU linker ranges and isolation contract are documented in
 `fiber/port/ARM_CM4_MPU/FREERTOS_PARITY.md`. Auto/profile selection does not
 infer this protected profile from MPU presence. Neither core has a hardware
 support claim until its own isolation and FP switch suite passes.
+
+The compile/ELF-covered `ARM_CM23_NTZ/non_secure` profile is also
+build-selected only. Its manifest defines `FIBER_PORT_BUILD_SELECTED=1` and
+`FIBER_PORT_ARMV8M_BASELINE=1`, places
+`fiber/port/ARM_CM23_NTZ/non_secure` before `fiber/port` on the include path,
+and compiles only `fiber_port.c` and `fiber_port_boot.c` with the common
+runtime. The application separately compiles
+`fiber_port_context_cohort_expectation.c` with the same private include path
+and retains its input section with `KEEP`. The matrix proves static-archive
+extraction, one exact cohort, strong handlers in vector slots 11/14,
+section-GC, normal/LTO modes, and duplicate-handler rejection. Auto/profile
+selection remains deliberately transitional, and no M23 hardware support claim
+is made.
 
 The v2 target is FreeRTOS-style ownership: each concrete selected port exports
 the complete CPU interface for frame setup, first start, PendSV/SVC handlers,
@@ -567,10 +598,12 @@ BASEPRI-less ports save `PRIMASK`, disable interrupts, call the hook, and
 restore `PRIMASK`. Returning with changed `PRIMASK`, `FAULTMASK`, `BASEPRI`, or
 `CONTROL` is a panic condition.
 
-The v8-M feature policy remains intentionally strict for future ports. After the
-direct trampoline removal, M23/M33/M55/MVE-FP profiles have compile-covered SVC
-first-start mechanics, but runtime use remains policy-gated until the extra
-context state their FreeRTOS ports require is implemented and validated:
+The v8-M feature policy remains intentionally strict for future ports. The
+transitional M23/M33/M55/MVE-FP profiles have compile-covered SVC first-start
+mechanics, but runtime use remains policy-gated until the extra context state
+their FreeRTOS ports require is implemented and validated. Exact staged
+profiles, including `ARM_CM33_NTZ`, make no handler or runtime claim until
+their own construction and switching slices exist:
 
 ```c
 #define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 1
@@ -636,9 +669,11 @@ an application override. The non-production v8-M fallback uses explicitly
 scoped `FIBER_TRANSITIONAL_V8M_*` bring-up inputs, which do not provide
 production TrustZone or Non-secure support.
 
-Cortex-M23, Cortex-M33, Cortex-M55, MVE, TrustZone/Non-secure, and PAC/BTI
-scenarios are unsupported until their FreeRTOS-style context layout is
-implemented and hardware-validated. `FIBER_PORT_USES_PSPLIM_REGISTER`
+Cortex-M23 has one exact build-selected Non-secure non-MPU profile with
+compile/ELF evidence but no hardware validation. Cortex-M33, Cortex-M55, MVE,
+TrustZone/Non-secure companion, and PAC/BTI scenarios remain unsupported until
+their FreeRTOS-style context layout is implemented and hardware-validated.
+`FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank
 PSPLIM register when those ports are implemented.

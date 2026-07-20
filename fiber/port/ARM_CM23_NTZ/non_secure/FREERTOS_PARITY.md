@@ -27,7 +27,7 @@ for below rather than copied implicitly.
 
 ## Exact Profile
 
-Implementation slices 1-2 freeze one exact build manifest:
+Implementation slices 1-5 freeze one exact build manifest:
 
 ```text
 CPU architecture:             ARMv8-M Baseline
@@ -38,8 +38,10 @@ MPU task isolation:           disabled
 FPU/MVE/PAC/BTI:              absent
 scheduler interrupt mask:     PRIMASK
 VTOR:                         required
-runtime source:               constructor only
-SVC/PendSV handlers:          not implemented in this slice
+runtime source:               constructor, SVC first start, PendSV switch
+SVC handler:                  strong, fail-closed, implemented
+PendSV handler:               strong, fail-closed, implemented
+forward ABI:                  all eight frozen operations
 hardware support claim:       none
 ```
 
@@ -49,9 +51,10 @@ This corresponds to the non-MPU, `configRUN_FREERTOS_SECURE_ONLY == 0`,
 is a distinct exact context cohort; it must not be enabled by changing a macro
 inside this layout.
 
-`ARM_CM23_NTZ` is build-selected only. Architecture auto-selection continues
-to route ARMv8-M Baseline builds through `transitional_v8m` until concrete
-context-init, SVC, PendSV, startup, archive, and ELF slices are complete.
+`ARM_CM23_NTZ` is build-selected only. Architecture auto-selection deliberately
+continues to route ARMv8-M Baseline builds through `transitional_v8m`; concrete
+M23 promotion is a separate selector-policy decision, not an implication of
+this profile's archive/ELF proof.
 
 ## Saved Frame
 
@@ -59,8 +62,8 @@ FreeRTOS reserves a PSPLIM word even though Non-secure Cortex-M23 has no
 Non-secure PSPLIM register. Its initial-stack constructor seeds the slot with
 `pxEndOfStack`; the Non-secure restore path consumes but ignores the value, and
 later PendSV saves write zero into the same slot. Fiber preserves this lifecycle
-exactly: the initial frame stores `FiberPortBoot.stack_base`, while the future
-NTZ PendSV slice must store zero and must never access PSPLIM.
+exactly: the initial frame stores `FiberPortBoot.stack_base`, while every
+ordinary NTZ PendSV save stores zero and never accesses PSPLIM.
 
 ```text
 low address / FiberContext.sp
@@ -101,6 +104,54 @@ saved SP modulo 8:            0
 The older transitional baseline frame has nine software words and is not
 ABI-compatible with this concrete profile.
 
+## First Start And PendSV
+
+Slice 3 implements SVC first start by adapting the pinned FreeRTOS
+`vStartFirstTask` and non-MPU `vRestoreContextOfFirstTask` paths. It is stricter
+than the reference dispatcher:
+
+- startup requires privileged Thread mode on MSP with `PRIMASK == 0`;
+- the active VTOR slot 11 must resolve directly to the selected strong
+  `SVC_Handler`, and SVCall priority is written and read back as zero; both are
+  revalidated under PRIMASK after first scheduler selection;
+- stale PendSV state is cleared before first SVC, and the selected strong
+  PendSV handler plus priority are validated along with SVC;
+- SVC provenance must be the exact Non-secure Thread/MSP/basic
+  `EXC_RETURN = 0xFFFFFFB8`;
+- the stacked MSP frame, xPSR, PC, SVC opcode, and immediate are validated
+  before the selected context is read;
+- scheduler selection runs under a saved-PRIMASK envelope and must preserve
+  `PRIMASK` and `CONTROL`;
+- the selected context is fully validated before restore;
+- `CONTROL` is set and read back as privileged Thread/PSP (`2`), matching the
+  ARMv8-M reference first restore; exact `EXC_RETURN` remains the authority for
+  the actual exception unstack and security/stack provenance;
+- restore consumes but never writes the ignored PSPLIM word, restores
+  `r4-r11`, programs PSP at word 10, and returns through exact
+  `EXC_RETURN = 0xFFFFFFBC`.
+
+Slice 4 adapts the non-MPU `PendSV_Handler` from `portasm.c`. Its ordinary save
+and restore geometry matches the reference exactly:
+
+- PendSV must arrive with exact Non-secure Thread/PSP/basic
+  `EXC_RETURN = 0xFFFFFFBC` and an 8-byte-aligned PSP;
+- Fiber validates the common-owned current context before any assembly metadata
+  load, then proves the software frame and basic hardware frame fit before
+  reading stacked xPSR; it subsequently proves the optional stacked-alignment
+  pad fits in the declared stack;
+- it stores ten words in reference order: zero for the inaccessible PSPLIM
+  slot, `EXC_RETURN`, `r4-r7`, and staged `r8-r11`;
+- the user scheduler hook replaces `vTaskSwitchContext()` under a PRIMASK
+  envelope and must preserve `PRIMASK` and `CONTROL`; Fiber validates and
+  publishes the selected restore target through the frozen reverse ABI;
+- restore adds 24 bytes from word 0 to staged `r8-r11`, programs PSP at
+  hardware-frame word 10, then subtracts 36 bytes to load word 1
+  (`EXC_RETURN`) together with `r4-r7`.
+
+No M23 NTZ path emits `mrs` or `msr psplim`. This is compile/generated-code
+evidence for one exact build-selected profile only; auto/profile selection does
+not select it, and it has no Cortex-M23 hardware claim.
+
 ## Trait Mapping
 
 | FreeRTOS fact | Fiber representation | Decision |
@@ -129,16 +180,16 @@ belong to the CPU transfer ABI and are intentionally not exported.
 | FreeRTOS symbol/family | Fiber disposition |
 | --- | --- |
 | `pxPortInitialiseStack` | `fiber_port_context_init` plus `fiber_port_init_context_frame`; initial slot is `stack_base`, all frame words are explicitly seeded, and the boot record is sealed and revalidated. |
-| `vRestoreContextOfFirstTask`, `vStartFirstTask` | Future SVC-only first-start slice. |
-| `SVC_Handler`, `vPortSVCHandler_C` | Future strong fail-closed selected-port handler; FreeRTOS scheduler/system-call dispatch is not copied. |
-| `PendSV_Handler` | Future scheduler-hook save/select/restore slice using the ten-word frame. |
-| `ulSetInterruptMask`, `vClearInterruptMask` | Future saved-PRIMASK helpers; unconditional IRQ unmask is not acceptable. |
+| `vRestoreContextOfFirstTask`, `vStartFirstTask` | Adapted as the SVC first start described above, with exact frame restore and stronger provenance/readback checks. |
+| `SVC_Handler`, `vPortSVCHandler_C` | Replaced by one strong fail-closed handler for the start service only; FreeRTOS scheduler/system-call dispatch is not copied. |
+| `PendSV_Handler` | One strong fail-closed selected-port handler. It saves the exact ten-word non-MPU NTZ frame, calls the scheduler bridge under PRIMASK, and restores the selected frame. |
+| `ulSetInterruptMask`, `vClearInterruptMask` | Adapted as private saved-PRIMASK helpers around startup setup and first scheduler selection; state is restored and read back. |
 | `xIsPrivileged`, `vRaisePrivilege`, `vResetPrivilege` | Not part of this privileged non-MPU profile's public API. |
-| `xPortStartScheduler` | Split across the frozen eight-function runtime ABI; no FreeRTOS scheduler is imported. |
+| `xPortStartScheduler` | Startup portion is split across the frozen eight-operation forward ABI. No FreeRTOS scheduler is imported. |
 | `vPortYield`, `SysTick_Handler`, timer/tickless functions | Scheduler policy excluded; this runtime exposes explicit scheduling only. |
 | `vPortEnterCritical`, `vPortExitCritical` | FreeRTOS kernel critical nesting excluded. |
 | `xPortIsInsideInterrupt`, interrupt-priority validation | Startup/handler invariants stay port-owned; no ISR-safe public scheduler API exists yet. |
-| `vPortConfigureInterruptPriorities` | Relevant SVC/PendSV/vector readbacks are required later; SysTick policy is excluded. |
+| `vPortConfigureInterruptPriorities` | PendSV is configured/read back as the lowest priority, SVCall as priority zero, and both direct vector slots are validated. SysTick policy is excluded. |
 | `prvSetupFPU`, PAC/BTI helpers | Compile-time rejected for Cortex-M23. |
 | `prvSetupMPU`, `vPortStoreTaskMPUSettings`, authorization/ACL functions | Deferred to a separate exact MPU profile and optional policy ABI. |
 | `vSystemCallEnter`, `vSystemCallExit`, MPU wrapper veneers | Deferred with the MPU profile; no decorative stubs. |
@@ -163,7 +214,7 @@ outside this port dictionary:
 They are scheduler, kernel, MPU-profile, or companion-image responsibilities.
 Omission here does not permit a later capable profile to ignore them.
 
-## Slices 1-2 Proofs
+## Slices 1-5 Proofs
 
 The compile matrix must prove:
 
@@ -174,14 +225,30 @@ The compile matrix must prove:
   Extension, and Non-secure role;
 - software-frame size/index/modulo constants match the reference assembly;
 - Secure CMSE, wrong core/profile, VTOR-less, and FPU manifests fail;
-- the constructor source group emits exactly `fiber_port_context_init` from the
-  eight-function forward ABI and one matching exact cohort;
+- the source group emits exactly eight forward-ABI operations;
 - the initial constructor writes all 18 words in exact low-to-high order,
   including `stack_base`, `EXC_RETURN`, `r4-r11`, and the hardware frame;
 - boot metadata is sealed, hashed, checked against exact context identity, and
   address-map validated during context creation;
-- no SVC/PendSV symbol or other start/switch runtime operation exists yet;
-- global auto/profile selectors do not expose this incomplete runtime.
+- one strong `SVC_Handler`, one strong `PendSV_Handler`, and exactly one start
+  SVC instruction are emitted;
+- generated code retains exact Non-secure SVC provenance construction,
+  `CONTROL = 2`, PSP programming, and the `+24/-36` Thumb-1 restore geometry;
+- generated PendSV code validates the current context before metadata access,
+  saves the exact ten-word frame, runs the scheduler under PRIMASK, restores
+  through the exact `+24/-36` geometry, and contains no PSPLIM instruction;
+- reverse-ABI anchor, scheduler selection, and assembly-only current-slot
+  dependencies are exact and no unexpected common helper is imported;
+- a static archive containing common plus the selected M23 source group links
+  with the unchanged portable application in normal and LTO modes;
+- an application-owned external expectation retains one exact cohort relocation,
+  and a mismatched cohort cannot link;
+- the final ELF retains one exact strong cohort identity, strong handlers in
+  vector slots 11 and 14, and the expectation section under `--gc-sections`;
+- a competing strong SVC/PendSV definition fails the link deliberately;
+- global auto/profile selectors deliberately continue to route ARMv8-M
+  Baseline through `transitional_v8m`.
 
-No start/switch runtime, archive, ELF-vector, LTO, or hardware claim is made by
-these slices.
+The archive/ELF/LTO proof activates this exact build-selected profile only. It
+does not make a Cortex-M23 hardware claim and does not promote Secure, MPU,
+SecureContext, or TF-M behavior into this non-MPU Non-secure ABI.

@@ -147,8 +147,8 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M4F | Concrete `port/ARM_CM4` source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
 | Cortex-M4F/M7F MPU | Exact build-selected `port/ARM_CM4_MPU` slices 1-5 implement the pinned FreeRTOS 53-word protected FP context, exact 8/16-region MPU construction, all eight forward ABI operations, strong fail-closed SVC/PendSV, unprivileged yield/return veneers, dynamic basic/extended FP save/restore, exact MPU replacement/readback, CPACR/FPCCR policy, scheduler BASEPRI envelope, and M7 errata-safe BASEPRI writes; portable application archive extraction, exact MPU linker placement, cohort, vectors, GC, and normal/LTO modes are compile/ELF-covered | Establish separate M4F and M7F hardware/isolation claims; keep the protected profile outside global auto/profile selection |
 | Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
-| Cortex-M23 | Exact build-selected `ARM_CM23_NTZ` slices 1-2 freeze the FreeRTOS ten-word non-MPU Non-secure frame and implement sealed context construction; the ignored PSPLIM slot starts with `stack_base`, register access stays disabled, and the old transitional runtime is ABI-incompatible | Add SVC, PendSV, remaining startup/runtime ABI operations, archive/ELF proofs, then hardware validation; keep Secure/MPU roles separate |
-| Cortex-M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level | Add FreeRTOS-style CONTROL/PSPLIM/security-domain context layout and validate |
+| Cortex-M23 | Exact build-selected `ARM_CM23_NTZ` slices 1-5 freeze the FreeRTOS ten-word non-MPU Non-secure frame, implement sealed context construction, strong fail-closed SVC first start, exact `0xFFFFFFB8` provenance, and PendSV save/select/restore with `+24/-36` Thumb-1 geometry; the ignored PSPLIM slot starts with `stack_base`, each ordinary save writes zero, and register access stays disabled. Static archive extraction, exact cohort, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. | Validate the concrete Non-secure profile on hardware; keep global selector routing and Secure/MPU roles separate |
+| Cortex-M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slice 1 freezes the pinned FreeRTOS Mainline NTZ non-MPU/no-FPU ten-word `[PSPLIM][EXC_RETURN][r4-r11]` layout, `0xFFFFFFBC` Non-secure return, BASEPRI/FAULTMASK/PSPLIM traits, and cohort identity. It intentionally has no runtime source, handler, archive, or hardware claim. | Add construction, SVC first start, PendSV PSPLIM save/restore, archive/ELF proof, then hardware validation; keep MPU, SecureContext, TF-M, and M33F as separate profiles. |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
 
 ## Priority Roadmap
@@ -446,18 +446,21 @@ Closed hardening items from the FreeRTOS comparison:
    - implement a v8-M Baseline path with a PSPLIM slot similar to FreeRTOS NTZ;
    - or mark M23 as not supported until hardware/toolchain validation exists.
 
-   Current policy: M23 has compile-covered transitional SVC first-start
-   mechanics, but it is not runtime-supported. Exact `ARM_CM23_NTZ` slices 1-2
-   now freeze the missing PSPLIM-slot and Non-secure context identity and build
-   the matching initial context without selecting that incomplete runtime.
+   Current policy: M23 has an exact build-selected concrete NTZ runtime, but it
+   is not hardware-supported. Exact `ARM_CM23_NTZ` slices 1-5 freeze the missing
+   PSPLIM-slot and Non-secure context identity, build the matching initial
+   context, and implement SVC first start plus PendSV switching. Static archive,
+   external cohort expectation, vector, section-GC, normal/LTO, and
+   duplicate-handler evidence is complete. Global auto/profile selection still
+   deliberately routes ARMv8-M Baseline through `transitional_v8m`.
    FreeRTOS has a PSPLIM slot in the CM23 NTZ context layout, but it also gates
    actual PSPLIM register access through target/security configuration because
    Non-secure Cortex-M23 does not have a Non-secure PSPLIM register. The
    transitional fiber baseline path still has no PSPLIM slot. The concrete NTZ
    profile has the slot, seeds its initial value from `stack_base`, keeps
    `FIBER_PORT_USES_PSPLIM_REGISTER == 0`, and is intentionally ABI-distinct
-   from that fixture. Its future PendSV save path must write zero into the
-   ignored slot, matching the reference NTZ branch.
+   from that fixture. Its PendSV save path writes zero into the ignored slot,
+   matching the reference NTZ branch.
 
    Future direction: copying the FreeRTOS-style M23 layout is useful if `fiber`
    wants to claim ARMv8-M Baseline/Mainline parity. That work should be done as

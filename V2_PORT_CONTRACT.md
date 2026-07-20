@@ -214,7 +214,7 @@ fiber/
       # Exact M4/M7 MPU profile plus the selected MPU extension ABI/source.
     ARM_CM23_NTZ/
       non_secure/
-        # Slices 1-2 provide exact types/traits and initial-context construction.
+        # Slices 1-4 provide exact types/traits, first start, and PendSV source.
         fiber_port_types.h
         fiber_port_boot_types.h
         fiber_portmacro.h
@@ -627,8 +627,8 @@ Backlog required before stronger parity claims:
 | Area | Current v2 status | Required future work |
 | --- | --- | --- |
 | Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics and always compile the errata workaround. Runtime startup validates the M7 CPUID and immutable port trait. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
-| ARMv8-M Baseline / M23 | Transitional SVC/PendSV/frame code exists and is compile-covered, but PSPLIM/security policy is not FreeRTOS-level. | Implement a PSPLIM slot/security policy, or keep M23 runtime excluded. Validate Secure/Non-secure ownership before claiming support. |
-| ARMv8-M Mainline / M33 | Transitional SVC/PendSV/frame code exists and is compile-covered, but CONTROL/PSPLIM/security policy is not FreeRTOS-level. | Split or explicitly implement Secure, Non-secure, NTZ, and TFM behavior. Validate EXC_RETURN, vector ownership, PSPLIM access, FP access, CONTROL state, and SVC/PendSV domain routing. |
+| ARMv8-M Baseline / M23 | Exact build-selected `ARM_CM23_NTZ/non_secure` slices 1-5 define the Non-secure PSPLIM-slot policy, sealed frame, strong SVC first start, and exact non-MPU PendSV save/select/restore plus `runtime_schedule`. Its static archive, external cohort expectation, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. Auto/profile selection remains deliberately transitional. | Validate the concrete Non-secure profile on hardware before any support claim. Secure, MPU, and companion roles remain separate profiles. |
+| ARMv8-M Mainline / M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slice 1 freezes the privileged non-MPU/no-FPU NTZ layout and traits: live PSPLIM slot, `0xFFFFFFBC`, BASEPRI, FAULTMASK, and one exact cohort. It deliberately provides no runtime source or handler. | Add construction, SVC/PendSV runtime, archive/ELF proof, and hardware validation. SecureContext, TF-M, MPU, and M33F remain distinct exact profiles. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
 | Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per runtime-image security/profile ABI and bind its identity-matched Secure artifact or TF-M component where required. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
@@ -1046,6 +1046,7 @@ frame sizes, offsets, CPU-state tokens, validators, and exception mechanics are
 port-private implementation facts:
 
 ```c
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_init(FiberContext *ctx,
                              void *stack_begin,
                              void *stack_end,
@@ -1058,6 +1059,7 @@ void fiber_port_runtime_memory_barrier(void);
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_require_scheduler_configuration_environment(void);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_prepare_start(void);
@@ -1278,8 +1280,11 @@ The current ARMv7E-M SVC path:
   the first context;
 - validates the published current `FiberContext` before PSP is restored;
 - clears BASEPRI in the SVC handler before the first context is restored;
-- sets PSP before exception return; Thread PSP selection comes from the
-  `EXC_RETURN` value, not from writing `CONTROL.SPSEL` in Handler mode;
+- sets PSP before exception return; the active `EXC_RETURN` selects and proves
+  the stack used for unstacking. A port must not infer the interrupted stack
+  from Handler-mode `CONTROL.SPSEL`. An ARMv8-M port may additionally seed
+  `CONTROL.SPSEL` for the post-return Thread state when its reference ABI
+  requires it; that write does not replace exact `EXC_RETURN` validation;
 - clears and verifies `CONTROL.FPCA` when the selected port has an FP context;
 - panics if the SVC instruction returns to the start helper.
 
@@ -1558,9 +1563,12 @@ P2: ARMv6-M / Cortex-M0/M0+
   Record MSP rewind and VTOR caveats per target.
 
 P3: ARMv8-M Baseline / Cortex-M23
-  PSPLIM register-access gate exists.
-  Define PSPLIM context slot policy.
-  Define Secure/Non-secure ownership before claiming FreeRTOS-level behavior.
+  Non-secure NTZ PSPLIM-slot, SVC first-start, and exact PendSV/runtime_schedule
+  source policy are implemented without enabling PSPLIM register access.
+  Exact archive/ELF/LTO activation evidence is complete for the build-selected
+  profile; keep auto/profile routing transitional until a separate promotion.
+  Validate the concrete Non-secure profile on hardware before a support claim.
+  Keep Secure/MPU ownership separate before any FreeRTOS-level claim.
 
 P4: ARMv8-M Mainline / Cortex-M33
   Runtime policy gates exist.

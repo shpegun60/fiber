@@ -429,6 +429,7 @@ function Test-ContextPortBoundary {
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
     $slotOwnerSources = @($portSources) + @(
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
         "fiber\port\ARM_CM3_MPU\fiber_port.c",
         "fiber\port\ARM_CM4_MPU\fiber_port.c"
     )
@@ -925,7 +926,8 @@ function Test-SelectedPortExceptionFrameGeometry {
         "fiber\port\ARM_CM0\fiber_port.c",
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
-        "fiber\port\ARM_CM7\r0p1\fiber_port.c"
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c"
     )
 
     foreach ($relativePath in $saveSources) {
@@ -953,6 +955,7 @@ function Test-SelectedPortExceptionFrameGeometry {
         "fiber\port\ARM_CM3\fiber_port_boot.c",
         "fiber\port\ARM_CM4\fiber_port_boot.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port_boot.c",
         "fiber\port\ARM_CM3_MPU\fiber_port_boot.c"
     )
     foreach ($relativePath in $restorePcSources) {
@@ -1067,6 +1070,7 @@ function Test-PendSvSaveValidationOrdering {
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
 
@@ -1144,6 +1148,7 @@ function Test-ScheduleValidationOwnership {
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
         "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
     )
 
@@ -1633,8 +1638,10 @@ function Test-SensitiveAttributeContract {
     $forwardPath = Join-Path $RepositoryRoot "fiber\port\fiber_port_runtime_abi.h"
     $forward = Get-Content -LiteralPath $forwardPath -Raw
     foreach ($symbol in @(
+            "fiber_port_context_init",
             "fiber_port_runtime_memory_barrier",
             "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
             "fiber_port_runtime_prepare_start",
             "fiber_port_runtime_select_first",
             "fiber_port_runtime_start_first",
@@ -2558,11 +2565,12 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm23NtzConstructionContract {
+function Test-ArmCm23NtzRuntimeContract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
         [string]$Nm,
+        [string]$Objdump,
         [string]$CmsisPath,
         [string]$BuildRoot
     )
@@ -2582,7 +2590,7 @@ function Test-ArmCm23NtzConstructionContract {
             (Join-Path $profileDir "FREERTOS_PARITY.md"),
             $fixture)) {
         if (-not (Test-Path -LiteralPath $required)) {
-            throw "ARM_CM23_NTZ construction slice is missing: $required"
+            throw "ARM_CM23_NTZ runtime slice is missing: $required"
         }
     }
 
@@ -2590,7 +2598,7 @@ function Test-ArmCm23NtzConstructionContract {
             "fiber_port_exception.c",
             "fiber_portasm.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
-            throw "ARM_CM23_NTZ construction slice must not expose switch artifact: $forbiddenRuntime"
+            throw "ARM_CM23_NTZ runtime slice must not expose an unowned runtime artifact: $forbiddenRuntime"
         }
     }
 
@@ -2601,7 +2609,7 @@ function Test-ArmCm23NtzConstructionContract {
     foreach ($selector in $selectors) {
         if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
                 "ARM_CM23_NTZ", [System.StringComparison]::Ordinal) -ge 0) {
-            throw "Incomplete ARM_CM23_NTZ runtime entered global selection: $selector"
+            throw "Build-selected ARM_CM23_NTZ profile entered global architecture selection: $selector"
         }
     }
 
@@ -2628,6 +2636,7 @@ function Test-ArmCm23NtzConstructionContract {
             "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
             "E15BDECFD24AB85165B69E3496E6FA644E5FF9C36EFBB3FFE6975FD5D7C9806C",
             "ignored PSPLIM slot, initially stack_base; zero after first save",
+            "ten-word non-MPU NTZ frame",
             "mpu_wrappers_v2_asm.c")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
@@ -2782,7 +2791,8 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
             "fiber_portFRAME_R0 = 10",
             "fiber_portFRAME_XPSR = 17",
             "fiber_portFRAME_WORD_COUNT = 18",
-            "FIBER_PORT_CONTEXT_COHORT_DEFINE();")) {
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();")) {
         if ($runtimeSource.IndexOf($requiredFrameContract,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM23_NTZ runtime lost exact construction contract: $requiredFrameContract"
@@ -2802,18 +2812,53 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
 
     $runtimeObject = Join-Path $probeDir "fiber-port.o"
     $bootObject = Join-Path $probeDir "fiber-port-boot.o"
-    $groupObject = Join-Path $probeDir "constructor-group.o"
+    $groupObject = Join-Path $probeDir "runtime-group.o"
     & $Compiler @manifestArgs -O2 -c $runtimePath -o $runtimeObject
     if ($LASTEXITCODE -ne 0) {
-        throw "ARM_CM23_NTZ frame constructor failed compile"
+        throw "ARM_CM23_NTZ runtime source failed compile"
     }
     & $Compiler @manifestArgs -O2 -c $bootPath -o $bootObject
     if ($LASTEXITCODE -ne 0) {
-        throw "ARM_CM23_NTZ boot constructor failed compile"
+        throw "ARM_CM23_NTZ boot runtime support failed compile"
     }
+
+    $configurationCohorts = @(
+        [pscustomobject]@{
+            Name = "paranoid"
+            Defines = @(
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1")
+        },
+        [pscustomobject]@{
+            Name = "minimal"
+            Defines = @(
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0",
+                "-DFIBER_STACK_CANARY=0",
+                "-DFIBER_REWIND_MSP=0")
+        }
+    )
+    foreach ($cohort in $configurationCohorts) {
+        $cohortArgs = $manifestArgs + @($cohort.Defines)
+        $cohortRuntime = Join-Path $probeDir `
+            ("fiber-port-{0}.o" -f $cohort.Name)
+        $cohortBoot = Join-Path $probeDir `
+            ("fiber-port-boot-{0}.o" -f $cohort.Name)
+        & $Compiler @cohortArgs -O2 -c `
+            $runtimePath -o $cohortRuntime
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ $($cohort.Name) runtime configuration failed compile"
+        }
+        & $Compiler @cohortArgs -O2 -c `
+            $bootPath -o $cohortBoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ $($cohort.Name) boot configuration failed compile"
+        }
+    }
+
     & $Compiler -r $runtimeObject $bootObject -o $groupObject
     if ($LASTEXITCODE -ne 0) {
-        throw "ARM_CM23_NTZ constructor object group failed relocatable link"
+        throw "ARM_CM23_NTZ runtime object group failed relocatable link"
     }
 
     $groupDefined = @(& $Nm -g --defined-only $groupObject)
@@ -2825,14 +2870,27 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
             $Matches[1]
         }
     } | Sort-Object -Unique)
-    if (($definedForward.Count -ne 1) -or
-            ($definedForward[0] -ne "fiber_port_context_init")) {
-        throw "ARM_CM23_NTZ slice 2 must define only context_init from the forward ABI: $($definedForward -join ', ')"
+    $expectedForward = @(
+        "fiber_port_context_init",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule"
+    ) | Sort-Object
+    if (@(Compare-Object -ReferenceObject $expectedForward `
+            -DifferenceObject $definedForward).Count -ne 0) {
+        throw "ARM_CM23_NTZ runtime forward ABI surface changed: $($definedForward -join ', ')"
     }
-    foreach ($forbiddenSymbol in @("SVC_Handler", "PendSV_Handler")) {
-        if ($groupDefined -match "\b$forbiddenSymbol$") {
-            throw "ARM_CM23_NTZ constructor slice exposed premature handler: $forbiddenSymbol"
-        }
+    $strongSvc = @($groupDefined | Where-Object { $_ -match '\bT\s+SVC_Handler$' })
+    if ($strongSvc.Count -ne 1) {
+        throw "ARM_CM23_NTZ runtime must define one strong SVC_Handler"
+    }
+    $strongPendSv = @($groupDefined | Where-Object { $_ -match '\bT\s+PendSV_Handler$' })
+    if ($strongPendSv.Count -ne 1) {
+        throw "ARM_CM23_NTZ runtime must define one strong PendSV_Handler"
     }
     $groupCohorts = @($groupDefined | ForEach-Object {
         if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
@@ -2840,7 +2898,7 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
         }
     })
     if (($groupCohorts.Count -ne 1) -or ($groupCohorts[0] -ne $cohorts[0])) {
-        throw "ARM_CM23_NTZ constructor group disagrees with its frozen layout cohort"
+        throw "ARM_CM23_NTZ runtime group disagrees with its frozen layout cohort"
     }
 
     $undefined = @(& $Nm -u $groupObject | ForEach-Object {
@@ -2851,6 +2909,11 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
     $allowedUndefined = @(
         "fiber_addr_plausible_code",
         "fiber_addr_plausible_ram",
+        "fiber_internal_runtime_current_context_slot",
+        "fiber_internal_runtime_port_abi_v1_anchor",
+        "fiber_internal_runtime_publish_current_context",
+        "fiber_internal_runtime_require_current_context",
+        "fiber_internal_runtime_select_scheduler_candidate",
         "fiber_internal_task_return",
         "fiber_panic",
         "memcpy",
@@ -2859,16 +2922,185 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
     $unexpectedUndefined = @(Compare-Object -ReferenceObject $allowedUndefined `
         -DifferenceObject $undefined | Where-Object SideIndicator -eq "=>")
     if ($unexpectedUndefined.Count -ne 0) {
-        throw "ARM_CM23_NTZ constructor gained unexpected dependencies: $($undefined -join ', ')"
+        throw "ARM_CM23_NTZ runtime gained unexpected dependencies: $($undefined -join ', ')"
     }
     foreach ($requiredUndefined in @(
             "fiber_addr_plausible_code",
             "fiber_addr_plausible_ram",
+            "fiber_internal_runtime_current_context_slot",
+            "fiber_internal_runtime_port_abi_v1_anchor",
+            "fiber_internal_runtime_publish_current_context",
+            "fiber_internal_runtime_require_current_context",
+            "fiber_internal_runtime_select_scheduler_candidate",
             "fiber_internal_task_return",
             "fiber_panic")) {
         if ($undefined -notcontains $requiredUndefined) {
-            throw "ARM_CM23_NTZ constructor lost required integration dependency: $requiredUndefined"
+            throw "ARM_CM23_NTZ runtime lost required integration dependency: $requiredUndefined"
         }
+    }
+
+    foreach ($requiredStartupContract in @(
+            "fiber_portSVC_ORIGIN_EXC_RETURN 0xFFFFFFB8u",
+            "void fiber_port_runtime_prepare_start(void)",
+            "FiberContext *fiber_port_runtime_select_first(void)",
+            "void fiber_port_runtime_start_first(FiberContext *const first)",
+            "void fiber_port_runtime_schedule(void)",
+            "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(",
+            "void fiber_port_validate_exception_start_configuration(void)",
+            "void SVC_Handler(void)",
+            "void PendSV_Handler(void)",
+            "fiber_internal_runtime_current_context_slot",
+            "adds  r0, #24",
+            "subs  r0, #36")) {
+        if ($runtimeSource.IndexOf($requiredStartupContract,
+                [System.StringComparison]::Ordinal) -lt 0 -and
+                (Get-Content -LiteralPath (Join-Path $profileDir "fiber_portmacro.h") -Raw).IndexOf(
+                    $requiredStartupContract, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM23_NTZ SVC startup contract lost: $requiredStartupContract"
+        }
+    }
+
+    $startFirstBody = Get-CFunctionBody -Source $runtimeSource `
+        -Signature "void fiber_port_runtime_start_first(FiberContext *const first)" `
+        -Path $runtimePath
+    $lastStartBoundary = -1
+    foreach ($startBoundaryStep in @(
+            "fiber_port_context_prepare_first_start(first)",
+            "fiber_port_require_start_interrupt_state()",
+            "fiber_port_primask_save_disable()",
+            "__get_PRIMASK() == 1u",
+            "fiber_port_validate_exception_start_configuration()",
+            "fiber_port_start_first_context(msp_top)")) {
+        $stepIndex = $startFirstBody.IndexOf($startBoundaryStep,
+            [System.StringComparison]::Ordinal)
+        if ($stepIndex -le $lastStartBoundary) {
+            throw "ARM_CM23_NTZ final masked start ordering changed: $startBoundaryStep"
+        }
+        $lastStartBoundary = $stepIndex
+    }
+
+    $runtimeDisassembly = (& $Objdump -d $runtimeObject | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for ARM_CM23_NTZ startup object"
+    }
+    $svcBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+        -Symbol "SVC_Handler" -Path $runtimeObject
+    $pendSvBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+        -Symbol "PendSV_Handler" -Path $runtimeObject
+    foreach ($requiredShape in @(
+            '\bmovs\s+r2,\s*#71\b',
+            '\bmvns\s+r2,\s*r2\b',
+            '\bmsr\s+CONTROL,\s*r0\b',
+            '\badds\s+r0,\s*#24\b',
+            '\bsubs\s+r0,\s*#36\b',
+            '\bmsr\s+PSP,\s*r0\b',
+            '\bbx\s+lr\b')) {
+        if ($svcBody -notmatch $requiredShape) {
+            throw "ARM_CM23_NTZ generated SVC restore shape changed: $requiredShape"
+        }
+    }
+    if ($svcBody -notmatch 'fiber_port_context_validate_restore') {
+        throw "ARM_CM23_NTZ SVC must validate the selected context before restore"
+    }
+    $orderedSvcRestore = @(
+        'fiber_port_context_validate_restore',
+        '\bldr\s+r0,\s*\[r2(?:,\s*#0)?\]',
+        '\badds\s+r0,\s*#24\b',
+        '\bmsr\s+PSP,\s*r0\b',
+        '\bsubs\s+r0,\s*#36\b',
+        '\bbx\s+lr\b'
+    )
+    $lastSvcRestore = -1
+    foreach ($pattern in $orderedSvcRestore) {
+        $match = [regex]::Match($svcBody, $pattern)
+        if ((-not $match.Success) -or ($match.Index -le $lastSvcRestore)) {
+            throw "ARM_CM23_NTZ generated SVC restore ordering changed: $pattern"
+        }
+        $lastSvcRestore = $match.Index
+    }
+    if (([regex]::Matches($runtimeDisassembly, '\bsvc\s+70\b')).Count -ne 1) {
+        throw "ARM_CM23_NTZ runtime slice must emit exactly one start SVC"
+    }
+
+    $scheduleBody = Get-CFunctionBody -Source $runtimeSource `
+        -Signature "void fiber_port_runtime_schedule(void)" -Path $runtimePath
+    $lastScheduleStep = -1
+    foreach ($scheduleStep in @(
+            "FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+            "fiber_internal_runtime_require_current_context();",
+            "FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');",
+            "FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');",
+            "fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;",
+            "fiber_portDATA_SYNC_BARRIER();",
+            "fiber_portINST_SYNC_BARRIER();")) {
+        $stepIndex = $scheduleBody.IndexOf($scheduleStep,
+            [System.StringComparison]::Ordinal)
+        if ($stepIndex -le $lastScheduleStep) {
+            throw "ARM_CM23_NTZ runtime_schedule ordering changed: $scheduleStep"
+        }
+        $lastScheduleStep = $stepIndex
+    }
+    if ($scheduleBody.IndexOf("fiber_port_context_validate_save_current(",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM23_NTZ Thread schedule path must not duplicate PendSV preflight"
+    }
+
+    $pendSvSource = Get-CFunctionBody -Source $runtimeSource `
+        -Signature "void PendSV_Handler(void)" -Path $runtimePath
+    $stackTopLoad = $pendSvSource.IndexOf("ldr   r2, [r1, %c[offtop]]",
+        [System.StringComparison]::Ordinal)
+    if ($stackTopLoad -lt 0) {
+        throw "ARM_CM23_NTZ PendSV lost the stack-top hardware-frame preflight"
+    }
+    $basicFrameCheck = $pendSvSource.IndexOf("cmp   r0, r2", $stackTopLoad,
+        [System.StringComparison]::Ordinal)
+    $stackedXpsrLoad = $pendSvSource.IndexOf("ldr   r3, [r0, %c[xpsr]]",
+        [System.StringComparison]::Ordinal)
+    if (($basicFrameCheck -le $stackTopLoad) -or
+            ($stackedXpsrLoad -le $basicFrameCheck)) {
+        throw "ARM_CM23_NTZ must prove the basic hardware frame before reading stacked xPSR"
+    }
+
+    foreach ($requiredShape in @(
+            '\bmovs\s+r2,\s*#67\b',
+            '\bmvns\s+r2,\s*r2\b',
+            '\bmrs\s+r0,\s*PSP\b',
+            'fiber_port_context_validate_save_current',
+            '\bsubs\s+r0,\s*#40\b',
+            '\bstmia\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7\}',
+            '\bcpsid\s+i\b',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bcpsie\s+i\b',
+            '\badds\s+r0,\s*#24\b',
+            '\bmsr\s+PSP,\s*r0\b',
+            '\bsubs\s+r0,\s*#36\b',
+            '\bbx\s+lr\b')) {
+        if ($pendSvBody -notmatch $requiredShape) {
+            throw "ARM_CM23_NTZ generated PendSV shape changed: $requiredShape"
+        }
+    }
+    if ($pendSvBody -match '(?i)\bpsplim\b') {
+        throw "ARM_CM23_NTZ Non-secure PendSV must not access PSPLIM"
+    }
+    $orderedPendSv = @(
+        'fiber_port_context_validate_save_current',
+        '\bldr\s+r2,\s*\[r1',
+        '\bsubs\s+r0,\s*#40\b',
+        '\bcpsid\s+i\b',
+        'fiber_port_scheduler_pick_next_from_pendsv',
+        '\bcpsie\s+i\b',
+        '\badds\s+r0,\s*#24\b',
+        '\bmsr\s+PSP,\s*r0\b',
+        '\bsubs\s+r0,\s*#36\b',
+        '\bbx\s+lr\b'
+    )
+    $lastPendSvStep = -1
+    foreach ($pattern in $orderedPendSv) {
+        $match = [regex]::Match($pendSvBody, $pattern)
+        if ((-not $match.Success) -or ($match.Index -le $lastPendSvStep)) {
+            throw "ARM_CM23_NTZ generated PendSV ordering changed: $pattern"
+        }
+        $lastPendSvStep = $match.Index
     }
 
     $negativeCases = @(
@@ -2910,6 +3142,16 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
             Diagnostic = "Cortex-M23 has no FPU"
             Main = (($mainHeader -replace '__FPU_PRESENT 0U', '__FPU_PRESENT 1U') `
                 -replace '__FPU_USED 0U', '__FPU_USED 1U')
+        },
+        [pscustomobject]@{
+            Name = "invalid-svc-number"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb")
+            Defines = @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV8M_BASELINE=1",
+                "-DFIBER_SVC_START_NUMBER=256")
+            Diagnostic = "FIBER_SVC_START_NUMBER"
+            Main = $mainHeader
         }
     )
 
@@ -2933,6 +3175,536 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
                 ($result.Output.IndexOf($case.Diagnostic,
                 [System.StringComparison]::Ordinal) -lt 0)) {
             throw "Invalid ARM_CM23_NTZ manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
+function Test-ArmCm23NtzRuntimeIntegration {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$Objcopy,
+        [string]$Ar,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM23_NTZ\non_secure"
+    $startupSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm23_ntz_runtime_startup.c"
+    $portableSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\portable_application.c"
+    $expectationSource = Join-Path $RepositoryRoot `
+        "fiber\port\fiber_port_context_cohort_expectation.c"
+    $linkerScript = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm23_ntz_runtime.ld"
+    foreach ($requiredPath in @($startupSource, $portableSource,
+            $expectationSource, $linkerScript)) {
+        if (-not (Test-Path -LiteralPath $requiredPath)) {
+            throw "ARM_CM23_NTZ runtime integration fixture is missing: $requiredPath"
+        }
+    }
+
+    $commonSources = @(
+        "fiber\fiber_core.c",
+        "fiber\fiber_runtime_state.c",
+        "fiber\fiber_panic.c"
+    )
+    $portSources = @(
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port_boot.c"
+    )
+    $forwardAbiSymbols = @(
+        "fiber_port_context_init",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule"
+    )
+    $manifestDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV8M_BASELINE=1"
+    )
+    $counterFlags = @(
+        "-fno-instrument-functions",
+        "-fno-stack-protector",
+        "-fno-profile-arcs",
+        "-fno-test-coverage",
+        "-fno-sanitize=all",
+        "-mgeneral-regs-only"
+    )
+
+    foreach ($useLto in @($false, $true)) {
+        $mode = if ($useLto) { "lto" } else { "normal" }
+        $probeDir = Join-Path $BuildRoot "arm-cm23-ntz-runtime-$mode"
+        New-Item -ItemType Directory -Path $probeDir | Out-Null
+
+        $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 0U
+#define __SAUREGION_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm23.h"
+#endif
+"@
+        Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+            -Value $mainHeader -Encoding ASCII
+
+        $ltoArgs = if ($useLto) { @("-flto") } else { @() }
+        $baseArgs = @(
+            "-mcpu=cortex-m23",
+            "-mthumb",
+            "-mfloat-abi=soft",
+            "-O2",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-fno-builtin",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wundef",
+            "-Werror=undef",
+            "-Werror=implicit-function-declaration",
+            "-Werror=return-type",
+            "-I$probeDir",
+            "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot",
+            "-I$CmsisPath"
+        ) + $manifestDefines + $ltoArgs
+
+        $archiveObjects = @()
+        foreach ($source in ($commonSources + $portSources)) {
+            $object = Join-Path $probeDir `
+                (($source -replace '[\\/]', '_') + ".o")
+            $sourcePath = Join-Path $RepositoryRoot $source
+            $extraFlags = if ($portSources -contains $source) {
+                $counterFlags
+            }
+            else {
+                @()
+            }
+            & $Compiler @($baseArgs + $extraFlags + @(
+                "-c", $sourcePath, "-o", $object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM23_NTZ runtime archive compile failed ($mode): $source"
+            }
+            $archiveObjects += $object
+        }
+
+        $startupObject = Join-Path $probeDir "startup.o"
+        $portableObject = Join-Path $probeDir "portable.o"
+        $expectationObject = Join-Path $probeDir "expectation.o"
+        foreach ($compile in @(
+                [pscustomobject]@{ Source = $startupSource; Object = $startupObject; Name = "startup" },
+                [pscustomobject]@{ Source = $portableSource; Object = $portableObject; Name = "portable application" },
+                [pscustomobject]@{ Source = $expectationSource; Object = $expectationObject; Name = "cohort expectation" })) {
+            $fixtureArgs = $baseArgs
+            if ($useLto -and ($compile.Name -eq "portable application")) {
+                $fixtureArgs = @($baseArgs | Where-Object { $_ -ne "-flto" })
+                $fixtureArgs += "-fno-lto"
+            }
+            & $Compiler @($fixtureArgs + $counterFlags + @(
+                "-c", $compile.Source, "-o", $compile.Object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM23_NTZ $($compile.Name) compile failed ($mode)"
+            }
+        }
+
+        $objectNm = if ($useLto) { $GccNm } else { $Nm }
+        $expectationUndefined = @(& $objectNm --undefined-only $expectationObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ expectation nm failed ($mode)"
+        }
+        $expectedCohorts = @($expectationUndefined | ForEach-Object {
+            if ($_ -match '\bU\s+(fiber_port_context_cohort_armv8m_baseline_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if ($expectedCohorts.Count -ne 1) {
+            throw "ARM_CM23_NTZ expectation must retain one exact cohort relocation ($mode)"
+        }
+
+        $archivePath = Join-Path $probeDir "libfiber-arm-cm23-ntz.a"
+        & $Ar rcs $archivePath @archiveObjects
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ runtime archive creation failed ($mode)"
+        }
+
+        $elfPath = Join-Path $probeDir "fiber-arm-cm23-ntz.elf"
+        $mapPath = Join-Path $probeDir "fiber-arm-cm23-ntz.map"
+        $linkArgs = @(
+            "-mcpu=cortex-m23",
+            "-mthumb",
+            "-mfloat-abi=soft"
+        ) + $ltoArgs + @(
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-Wl,-Map,$mapPath",
+            "-Wl,-T,$linkerScript",
+            $startupObject,
+            $portableObject,
+            $expectationObject,
+            $archivePath,
+            "-o", $elfPath
+        )
+        & $Compiler @linkArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ portable archive/link integration failed ($mode)"
+        }
+
+        $defined = @(& $Nm -a --defined-only $elfPath)
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ final ELF nm failed ($mode)"
+        }
+        foreach ($symbol in $forwardAbiSymbols) {
+            $definitions = @($defined | Where-Object {
+                $_ -match ("\b[TW]\s+" + [regex]::Escape($symbol) + "$")
+            })
+            if ($definitions.Count -ne 1) {
+                throw "ARM_CM23_NTZ final ELF must define one strong forward ABI symbol ($mode): $symbol"
+            }
+        }
+
+        $cohortDefinitions = @($defined | ForEach-Object {
+            if ($_ -match '\b[DRTdrt]\s+(fiber_port_context_cohort_armv8m_baseline_\S+)$') {
+                $Matches[1]
+            }
+        })
+        $cohortSymbols = @($defined | Where-Object {
+            $_ -match '\bfiber_port_context_cohort_armv8m_baseline_\S+$'
+        })
+        if (($cohortDefinitions.Count -ne 1) -or
+                ($cohortDefinitions[0] -ne $expectedCohorts[0])) {
+            throw "ARM_CM23_NTZ final ELF must satisfy its exact cohort expectation ($mode): expected $($expectedCohorts -join ', '), found $($cohortDefinitions -join ', '); raw symbols $($cohortSymbols -join '; ')"
+        }
+
+        $svcAddress = Get-StrongTextSymbolAddress -NmOutput $defined `
+            -Symbol "SVC_Handler" -Path $elfPath
+        $pendsvAddress = Get-StrongTextSymbolAddress -NmOutput $defined `
+            -Symbol "PendSV_Handler" -Path $elfPath
+
+        $sections = (& $Objdump -h $elfPath) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ final ELF section audit failed ($mode)"
+        }
+        if ($sections -notmatch
+                '\.fiber_port_context_cohort_expectation\s+00000004\s+[0-9a-fA-F]+\s+') {
+            throw "ARM_CM23_NTZ final ELF lost its retained four-byte cohort expectation ($mode)"
+        }
+        $vectorPath = Join-Path $probeDir "vectors.bin"
+        & $Objcopy -O binary --only-section=.isr_vector $elfPath $vectorPath
+        if (($LASTEXITCODE -ne 0) -or (-not (Test-Path $vectorPath))) {
+            throw "ARM_CM23_NTZ runtime vector extraction failed ($mode)"
+        }
+        $vectorBytes = [IO.File]::ReadAllBytes($vectorPath)
+        if ($vectorBytes.Length -ne 64) {
+            throw "ARM_CM23_NTZ runtime vector fixture changed size ($mode)"
+        }
+        $svcVector = [BitConverter]::ToUInt32($vectorBytes, 11 * 4)
+        $pendsvVector = [BitConverter]::ToUInt32($vectorBytes, 14 * 4)
+        if ($svcVector -ne ($svcAddress -bor 1)) {
+            throw "ARM_CM23_NTZ runtime vector slot 11 lost strong SVC handler ($mode)"
+        }
+        if ($pendsvVector -ne ($pendsvAddress -bor 1)) {
+            throw "ARM_CM23_NTZ runtime vector slot 14 lost strong PendSV handler ($mode)"
+        }
+
+        $competingSource = Join-Path $probeDir "competing.c"
+        $competingObject = Join-Path $probeDir "competing.o"
+        Set-Content -LiteralPath $competingSource -Encoding ASCII -Value `
+            "void SVC_Handler(void) { }`nvoid PendSV_Handler(void) { }`n"
+        & $Compiler @($baseArgs + @(
+            "-c", $competingSource, "-o", $competingObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM23_NTZ competing-handler fixture compile failed ($mode)"
+        }
+        $duplicateLog = Join-Path $probeDir "duplicate.log"
+        $duplicateArgs = @($linkArgs[0..($linkArgs.Count - 3)] + @(
+            $competingObject, "-o", (Join-Path $probeDir "duplicate.elf")))
+        $duplicate = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $duplicateArgs -LogPath $duplicateLog
+        if (($duplicate.ExitCode -eq 0) -or
+                ($duplicate.Output -notmatch 'multiple definition')) {
+            throw "ARM_CM23_NTZ competing strong handlers must fail link ($mode)`n$($duplicate.Output)"
+        }
+    }
+}
+
+function Test-ArmCm33NtzLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM33_NTZ\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_ntz_layout_probe.c"
+    foreach ($required in @(
+            (Join-Path $profileDir "fiber_port_types.h"),
+            (Join-Path $profileDir "fiber_port_boot_types.h"),
+            (Join-Path $profileDir "fiber_portmacro.h"),
+            (Join-Path $profileDir "FREERTOS_PARITY.md"),
+            $fixture)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "ARM_CM33_NTZ slice 1 is missing: $required"
+        }
+    }
+
+    foreach ($forbiddenRuntime in @(
+            "fiber_port.c",
+            "fiber_port_boot.c",
+            "fiber_port_boot.h",
+            "fiber_port_private.h",
+            "fiber_port_exception.c",
+            "fiber_portasm.c")) {
+        if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
+            throw "ARM_CM33_NTZ slice 1 must not expose runtime artifact: $forbiddenRuntime"
+        }
+    }
+
+    $selectors = @(
+        (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+        (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h")
+    )
+    foreach ($selector in $selectors) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM33_NTZ", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Staged ARM_CM33_NTZ profile entered global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM33_NTZ public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B",
+            "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
+            "DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5",
+            "live `PSPLIM` value",
+            "ten-word software frame",
+            "mpu_wrappers_v2_asm.c")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33_NTZ parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm33-ntz-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+#ifndef FIBER_TEST_FPU_USED
+#define FIBER_TEST_FPU_USED 0U
+#endif
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#if FIBER_TEST_FPU_USED != 0U
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+_Static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+_Static_assert(sizeof(FiberContext) == 76u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm33_ntz_type_only_object;
+'@
+    $typeObject = Join-Path $probeDir "type-only.o"
+    $typeArgs = @(
+        "-mcpu=cortex-m33", "-mthumb", "-std=c11",
+        "-ffreestanding", "-fno-builtin", "-Wall", "-Wextra", "-Werror",
+        "-I$profileDir", "-c", $typeProbe, "-o", $typeObject
+    )
+    & $Compiler @typeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ type-only C header failed without CMSIS"
+    }
+
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+static_assert(sizeof(FiberContext) == 76u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm33_ntz_cpp_type_only_object;
+'@
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    & $Compiler -x c++ -mcpu=cortex-m33 -mthumb -std=c++17 `
+        -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $cppProbe -o $cppObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ type-only C++ header failed without CMSIS"
+    }
+
+    $layoutObject = Join-Path $probeDir "layout.o"
+    $manifestArgs = @(
+        "-mcpu=cortex-m33", "-mthumb", "-std=c11",
+        "-ffreestanding", "-fno-builtin", "-fno-common",
+        "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV8M_MAINLINE=1",
+        "-I$probeDir", "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot", "-I$CmsisPath"
+    )
+    & $Compiler @manifestArgs -c $fixture -o $layoutObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ exact layout manifest failed compile"
+    }
+
+    $defined = @(& $Nm -g --defined-only $layoutObject)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM33_NTZ layout probe"
+    }
+    $cohorts = @($defined | ForEach-Object {
+        if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+            $Matches[1]
+        }
+    })
+    if ($cohorts.Count -ne 1) {
+        throw "ARM_CM33_NTZ layout must define one exact cohort"
+    }
+    foreach ($token in @(
+            "armv8m_mainline",
+            "p0x4333334Eu",
+            "l0x00010001u",
+            "_h1_j1_v1_d1_r1_",
+            "_z8u_y0_w2_g3_",
+            "_i0_o0xFFFFFFBCu_c0_s1_x0_m0_a0_b0_t1_n1_k0_q0")) {
+        if ($cohorts[0].IndexOf($token,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33_NTZ exact cohort lost token ${token}: $($cohorts[0])"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "selector-mode"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb")
+            Defines = @("-DFIBER_PORT_PROFILE=5")
+            Diagnostic = "ARM_CM33_NTZ is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mcmse")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+            Diagnostic = "does not accept a Secure CMSE build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "no-vtor"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+            Diagnostic = "requires __VTOR_PRESENT == 1"
+            Main = ($mainHeader -replace '__VTOR_PRESENT 1U', '__VTOR_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "wrong-core"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb")
+            Defines = @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV8M_MAINLINE=1",
+                "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1")
+            Diagnostic = "requires an ARMv8-M Mainline compiler target"
+            Main = ($mainHeader -replace 'core_cm33.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb")
+            Defines = @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV8M_MAINLINE=1",
+                "-DFIBER_TEST_FPU_USED=1")
+            Diagnostic = "requires __FPU_USED == 0"
+            Main = $mainHeader
+        }
+    )
+
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $log = Join-Path $caseDir "compile.log"
+        $arguments = @($case.CompilerArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin",
+            "-Wall", "-Wextra", "-I$caseDir", "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot", "-I$CmsisPath") +
+            $case.Defines + @(
+            "-c", $fixture, "-o", (Join-Path $caseDir "invalid.o")))
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $arguments -LogPath $log
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM33_NTZ manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
         }
     }
 }
@@ -5871,6 +6643,7 @@ $mandatoryPortRuntimeSources = @(
     "fiber\port\ARM_CM3\fiber_port.c",
     "fiber\port\ARM_CM4\fiber_port.c",
     "fiber\port\ARM_CM7\r0p1\fiber_port.c",
+    "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
     "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
 )
 
@@ -5951,6 +6724,7 @@ $buildSelectedPortIncludeDirsByConfig = @{
     "cortex-m7f" = "fiber\port\ARM_CM7\r0p1"
     "cortex-m7f-softfp-lazy" = "fiber\port\ARM_CM7\r0p1"
     "cortex-m7f-prio8" = "fiber\port\ARM_CM7\r0p1"
+    "cortex-m23" = "fiber\port\ARM_CM23_NTZ\non_secure"
 }
 
 $buildSelectedPortSourcesByConfig = @{
@@ -5958,6 +6732,7 @@ $buildSelectedPortSourcesByConfig = @{
     "cortex-m7f" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m7f-softfp-lazy" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
+    "cortex-m23" = @("fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port_boot.c")
 }
 
 $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ("fiber-compile-matrix-" + [Guid]::NewGuid().ToString("N"))
@@ -5992,6 +6767,20 @@ $requiredPortSymbols = @(
     "PendSV_Handler",
     "fiber_exception_runtime_check",
     "fiber_pendsv_init_lowest_priority"
+)
+
+# Concrete runtime ports may intentionally omit legacy private helper names.
+# Their build-selected proof instead requires the frozen common-to-port ABI;
+# their own source/ELF cohort proves the port-private SVC/PendSV mechanics.
+$requiredForwardPortSymbols = @(
+    "fiber_port_context_init",
+    "fiber_port_runtime_memory_barrier",
+    "fiber_port_panic_wait",
+    "fiber_port_require_scheduler_configuration_environment",
+    "fiber_port_runtime_prepare_start",
+    "fiber_port_runtime_select_first",
+    "fiber_port_runtime_start_first",
+    "fiber_port_runtime_schedule"
 )
 
 $requiredReverseSymbolTypes = @{
@@ -6069,8 +6858,17 @@ try {
     Write-Host "== BASEPRI/NVIC exact context-cohort identity =="
     Test-BasepriContextCohortIdentity -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM23_NTZ slices 1-2 layout/construction contract =="
-    Test-ArmCm23NtzConstructionContract -RepositoryRoot $RepoRoot `
+    Write-Host "== ARM_CM23_NTZ layout/startup/PendSV source contract =="
+    Test-ArmCm23NtzRuntimeContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM23_NTZ full runtime/archive/ELF contract =="
+    Test-ArmCm23NtzRuntimeIntegration -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33_NTZ slice-1 exact layout contract =="
+    Test-ArmCm33NtzLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `
@@ -6438,8 +7236,20 @@ void Error_Handler(void);
             if ($portCohortDefinitions.Count -ne 1) {
                 throw "Expected one exact selected-port context-cohort definition for $($cfg.Name) / $($mode.Name); found $($portCohortDefinitions.Count)"
             }
-            if ($portCohortReferences.Count -ne 2) {
-                throw "Expected boot and exception context-cohort relocations for $($cfg.Name) / $($mode.Name); found $($portCohortReferences.Count)"
+            # ARM_CM23_NTZ has two mandatory objects: runtime owns the cohort
+            # definition and boot retains it. The other active ports retain it
+            # from both boot and a separate exception object.
+            $expectedPortCohortReferenceCount = if (
+                    ($mode.Name -eq "build-selected") -and
+                    ($cfg.Name -eq "cortex-m23")) {
+                1
+            }
+            else {
+                2
+            }
+            if ($portCohortReferences.Count -ne
+                    $expectedPortCohortReferenceCount) {
+                throw "Expected $expectedPortCohortReferenceCount selected-port context-cohort relocation(s) for $($cfg.Name) / $($mode.Name); found $($portCohortReferences.Count)"
             }
             foreach ($reference in $portCohortReferences) {
                 if ($reference -ne $portCohortDefinitions[0]) {
@@ -6526,7 +7336,12 @@ void Error_Handler(void);
                 throw "Symbol scan failed for $($cfg.Name) / $($mode.Name)"
             }
 
-            foreach ($symbol in $requiredPortSymbols) {
+            $requiredSymbolsForMode = $requiredPortSymbols
+            if (($cfg.Name -eq "cortex-m23") -and
+                    ($mode.Name -eq "build-selected")) {
+                $requiredSymbolsForMode = $requiredForwardPortSymbols
+            }
+            foreach ($symbol in $requiredSymbolsForMode) {
                 $definitions = @($definedSymbols | Where-Object {
                     $_ -match "\s[TW]\s+$([regex]::Escape($symbol))$"
                 })

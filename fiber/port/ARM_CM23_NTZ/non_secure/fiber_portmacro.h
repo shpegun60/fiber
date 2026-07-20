@@ -1,10 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M23 NTZ Non-secure dictionary, implementation slices 1-2.
- * These slices freeze the privileged non-MPU context layout and construct its
- * initial frame, but deliberately provide no exception handlers or switching
- * runtime yet.
+ * Exact Cortex-M23 NTZ Non-secure dictionary, implementation slices 1-5.
+ * These slices freeze the privileged non-MPU context layout, construct its
+ * initial frame, provide SVC first start plus the exact PendSV switch
+ * mechanics, and prove static-archive/ELF activation. Hardware validation
+ * remains separate.
  */
 #ifndef FIBER_PORT_ARM_CM23_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM23_NTZ_FIBER_PORTMACRO_H_
@@ -85,7 +86,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM23_NTZ runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Pinned FreeRTOS ARM_CM23_NTZ non-MPU frame dictionary. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -93,6 +94,7 @@
 #define fiber_portINITIAL_XPSR 0x01000000u
 #define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFBCu
+#define fiber_portSVC_ORIGIN_EXC_RETURN 0xFFFFFFB8u
 #define fiber_portPSPLIM_SLOT_WORDS 1u
 #define fiber_portCORE_SOFTWARE_WORDS 9u
 #define fiber_portSOFTWARE_FRAME_WORDS \
@@ -153,6 +155,14 @@
 	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
 #define FIBER_PORT_SAVED_SP_MOD8 0u
 
+#define fiber_portNVIC_INT_CTRL_REG (*((volatile uint32_t *)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
+#define fiber_portNVIC_PENDSVCLEAR_BIT (1u << 27u)
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+#define fiber_portLOWEST_EXCEPTION_PRIORITY \
+	((1u << __NVIC_PRIO_BITS) - 1u)
+
 #ifndef FIBER_SCHEDULER_BASEPRI
 # define FIBER_SCHEDULER_BASEPRI 0u
 #endif
@@ -181,6 +191,25 @@ fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
 	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
 }
 
+fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+{
+	uintptr_t value = (uintptr_t)SCB->VTOR;
+#if defined(SCB_VTOR_TBLOFF_Msk)
+	value &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
+#endif
+	return value;
+}
+
+fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+{
+	return (const uint32_t *)fiber_port_vectors_base_addr();
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
+{
+	return fiber_port_vectors_base_ptr()[0];
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -196,8 +225,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM23_NTZ requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM23_NTZ requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: incomplete ARM_CM23_NTZ runtime must remain non-selectable");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM23_NTZ requires archive/ELF activation");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM23_NTZ software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,
@@ -223,6 +252,24 @@ FIBER_STATIC_ASSERT(alignof(FiberContext) ==
 FIBER_STATIC_ASSERT(sizeof(FiberPortBoot) ==
 		FIBER_PORT_CM23_NTZ_BOOT_SIZE,
 		"[fiber]: ARM_CM23_NTZ boot size changed");
+FIBER_STATIC_ASSERT(fiber_portSVC_ORIGIN_EXC_RETURN == 0xFFFFFFB8u,
+		"[fiber]: ARM_CM23_NTZ first-start SVC origin changed");
+FIBER_STATIC_ASSERT((fiber_portINITIAL_EXC_RETURN & ~4u) ==
+		fiber_portSVC_ORIGIN_EXC_RETURN,
+		"[fiber]: ARM_CM23_NTZ SVC/PSP EXC_RETURN relationship changed");
+
+#ifndef FIBER_SVC_START_NUMBER
+# define FIBER_SVC_START_NUMBER 70
+#endif
+
+#if defined(FIBER_PENDSV_VECTOR_DIRECT) || defined(FIBER_SVC_VECTOR_DIRECT) || \
+		defined(FIBER_PENDSV_WIRED) || defined(FIBER_SVC_WIRED)
+# error "[fiber]: vector routing macros were removed; the selected port owns strong handlers"
+#endif
+
+FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
+		(FIBER_SVC_START_NUMBER <= 255),
+		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
 
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_context_cohort.h"
