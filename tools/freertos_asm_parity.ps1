@@ -1,0 +1,797 @@
+param(
+    [string]$ArmGcc = $env:ARM_NONE_EABI_GCC,
+    [string]$CmsisCore = $env:CMSIS_CORE_INCLUDE,
+    [string]$FreeRtosKernel = $env:FREERTOS_KERNEL_REFERENCE,
+    [string]$BuildRoot,
+    [ValidateSet("-O2", "-Os")]
+    [string]$Optimization = "-O2",
+    [switch]$KeepBuild
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version 2.0
+
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$ExpectedFreeRtosCommit = "a50edad08b29052631aa469d4df6e6ec7ff68878"
+
+function Find-ArmGcc {
+    if (-not [string]::IsNullOrWhiteSpace($ArmGcc)) {
+        if (Test-Path -LiteralPath $ArmGcc) {
+            return (Resolve-Path -LiteralPath $ArmGcc).Path
+        }
+        throw "ARM_NONE_EABI_GCC points to a missing file: $ArmGcc"
+    }
+
+    $command = Get-Command arm-none-eabi-gcc.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    foreach ($root in @("C:\ST", "C:\Program Files", "C:\Program Files (x86)")) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+        $found = Get-ChildItem -LiteralPath $root -Recurse `
+            -Filter arm-none-eabi-gcc.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
+    }
+
+    throw "arm-none-eabi-gcc.exe not found"
+}
+
+function Test-CmsisPath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+    foreach ($header in @(
+            "cmsis_compiler.h", "core_cm0.h", "core_cm0plus.h", "core_cm23.h",
+            "core_cm3.h", "core_cm4.h", "core_cm7.h", "core_cm33.h")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Path $header))) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Find-CmsisCore {
+    if (Test-CmsisPath $CmsisCore) {
+        return (Resolve-Path -LiteralPath $CmsisCore).Path
+    }
+
+    $workspace = Join-Path $env:USERPROFILE "Documents\my_workspace"
+    foreach ($candidate in @(
+            (Join-Path $RepoRoot "..\..\..\Drivers\CMSIS\Include"),
+            (Join-Path $workspace "gnu\gnu-tools-for-stm32\linkdb\tests\tmp_external\STM32_Embedded_CPP\Targets\Nucleo_F446RE\Drivers\CMSIS\Include"),
+            (Join-Path $workspace "gnu\gnu-tools-for-stm32\linkdb\tests\tmp_external\STM32_FreeRTOS-Kernel\Drivers\CMSIS\Core\Include"))) {
+        if (Test-CmsisPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    throw "CMSIS core headers not found"
+}
+
+function Find-FreeRtosKernel {
+    if (-not [string]::IsNullOrWhiteSpace($FreeRtosKernel)) {
+        if (Test-Path -LiteralPath (Join-Path $FreeRtosKernel "portable\GCC")) {
+            return (Resolve-Path -LiteralPath $FreeRtosKernel).Path
+        }
+        throw "FREERTOS_KERNEL_REFERENCE is not a FreeRTOS Kernel checkout: $FreeRtosKernel"
+    }
+
+    foreach ($candidate in @(
+            (Join-Path $RepoRoot "..\..\..\..\_reference\FreeRTOS-Kernel"),
+            (Join-Path $RepoRoot "_reference\FreeRTOS-Kernel"))) {
+        if (Test-Path -LiteralPath (Join-Path $candidate "portable\GCC")) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    throw "Pinned local FreeRTOS Kernel checkout not found"
+}
+
+function Get-DisassemblyFunctionBody {
+    param(
+        [string]$Disassembly,
+        [string]$Symbol,
+        [string]$Path
+    )
+
+    $pattern = '(?ms)^[0-9a-fA-F]+\s+<' + [regex]::Escape($Symbol) +
+            '>:\r?\n(?<body>.*?)(?=^[0-9a-fA-F]+\s+<[^>]+>:\r?\n|\z)'
+    $match = [regex]::Match($Disassembly, $pattern)
+    if (-not $match.Success) {
+        throw "Assembly parity cannot find $Symbol in $Path"
+    }
+    return $match.Groups['body'].Value
+}
+
+function Assert-OrderedPatterns {
+    param(
+        [string]$Body,
+        [string[]]$Patterns,
+        [string]$Label
+    )
+
+    $cursor = 0
+    foreach ($pattern in $Patterns) {
+        $match = [regex]::Match($Body.Substring($cursor), $pattern,
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if (-not $match.Success) {
+            throw "$Label lost ordered generated instruction: $pattern`n$Body"
+        }
+        $cursor += $match.Index + $match.Length
+    }
+}
+
+function Assert-AbsentPatterns {
+    param(
+        [string]$Body,
+        [string[]]$Patterns,
+        [string]$Label
+    )
+
+    foreach ($pattern in $Patterns) {
+        if ([regex]::IsMatch($Body, $pattern,
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            throw "$Label contains forbidden generated instruction: $pattern`n$Body"
+        }
+    }
+}
+
+function Write-CmsisMainHeader {
+    param(
+        [string]$Directory,
+        [string]$CoreHeader,
+        [int]$VtorPresent,
+        [int]$MpuPresent,
+        [int]$FpuPresent,
+        [int]$FpuUsed,
+        [int]$DspPresent
+    )
+
+    $content = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT ${MpuPresent}U
+#define __VTOR_PRESENT ${VtorPresent}U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT ${FpuPresent}U
+#define __FPU_USED ${FpuUsed}U
+#define __DSP_PRESENT ${DspPresent}U
+#define __SAUREGION_PRESENT 0U
+#define __ICACHE_PRESENT 0U
+#define __DCACHE_PRESENT 0U
+#define __DTCM_PRESENT 0U
+#define __ITCM_PRESENT 0U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14,
+    HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12,
+    BusFault_IRQn = -11,
+    UsageFault_IRQn = -10,
+    SecureFault_IRQn = -9,
+    SVCall_IRQn = -5,
+    DebugMonitor_IRQn = -4,
+    PendSV_IRQn = -2,
+    SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "$CoreHeader"
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $Directory "main.h") `
+        -Value $content -Encoding ASCII
+}
+
+function Invoke-Compile {
+    param(
+        [string]$Compiler,
+        [string[]]$Arguments,
+        [string]$Label
+    )
+
+    & $Compiler @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Label compile failed"
+    }
+}
+
+function Get-ObjectDisassembly {
+    param(
+        [string]$Objdump,
+        [string]$ObjectPath
+    )
+
+    $result = (& $Objdump -dr $ObjectPath) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed: $ObjectPath"
+    }
+    return $result
+}
+
+function Assert-ReferenceIdentity {
+    param(
+        [string]$KernelRoot,
+        [hashtable]$ExpectedFiles
+    )
+
+    $commit = ((& git -C $KernelRoot rev-parse HEAD) -join "").Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot read pinned FreeRTOS commit"
+    }
+    if ($commit -ne $ExpectedFreeRtosCommit) {
+        throw "FreeRTOS reference drifted: expected $ExpectedFreeRtosCommit, got $commit"
+    }
+
+    foreach ($relativePath in $ExpectedFiles.Keys) {
+        $path = Join-Path $KernelRoot $relativePath
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Pinned FreeRTOS artifact is missing: $relativePath"
+        }
+        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        if ($actual -ne $ExpectedFiles[$relativePath]) {
+            throw "Pinned FreeRTOS artifact drifted: $relativePath`nExpected: $($ExpectedFiles[$relativePath])`nActual:   $actual"
+        }
+    }
+}
+
+function Assert-ProductionPortCoverage {
+    param(
+        [string]$RepositoryRoot,
+        [object[]]$PortDefinitions
+    )
+
+    $portRoot = Join-Path $RepositoryRoot "fiber\port"
+    $actualProfiles = @(Get-ChildItem -LiteralPath $portRoot -Recurse `
+            -Filter "fiber_port.c" -File |
+        ForEach-Object {
+            $_.DirectoryName.Substring($RepositoryRoot.Length + 1)
+        } |
+        Sort-Object -Unique)
+    $coveredProfiles = @($PortDefinitions |
+        ForEach-Object { $_.ProfileDir } |
+        Sort-Object -Unique)
+    $coverageDifference = @(Compare-Object -ReferenceObject $actualProfiles `
+        -DifferenceObject $coveredProfiles)
+    if ($coverageDifference.Count -ne 0) {
+        $details = ($coverageDifference | ForEach-Object {
+            "$($_.SideIndicator) $($_.InputObject)"
+        }) -join "`n"
+        throw "Generated assembly parity production-port inventory drifted:`n$details"
+    }
+
+    foreach ($profile in $actualProfiles) {
+        $record = Join-Path (Join-Path $RepositoryRoot $profile) `
+            "FREERTOS_PARITY.md"
+        if (-not (Test-Path -LiteralPath $record)) {
+            throw "Production port has no FreeRTOS parity record: $profile"
+        }
+    }
+}
+
+function Assert-MechanismParity {
+    param(
+        [string]$PortName,
+        [string]$Mechanism,
+        [string]$ReferenceDisassembly,
+        [string]$ReferenceSymbol,
+        [string[]]$ReferencePatterns,
+        [string]$ReferencePath,
+        [string]$FiberDisassembly,
+        [string]$FiberSymbol,
+        [string[]]$FiberPatterns,
+        [string]$FiberPath,
+        [string[]]$DifferenceIds,
+        [string]$Ledger
+    )
+
+    $referenceBody = Get-DisassemblyFunctionBody `
+        -Disassembly $ReferenceDisassembly -Symbol $ReferenceSymbol `
+        -Path $ReferencePath
+    $fiberBody = Get-DisassemblyFunctionBody `
+        -Disassembly $FiberDisassembly -Symbol $FiberSymbol -Path $FiberPath
+
+    Assert-OrderedPatterns -Body $referenceBody -Patterns $ReferencePatterns `
+        -Label "$PortName FreeRTOS $Mechanism"
+    Assert-OrderedPatterns -Body $fiberBody -Patterns $FiberPatterns `
+        -Label "$PortName Fiber $Mechanism"
+
+    if (($null -eq $DifferenceIds) -or ($DifferenceIds.Count -eq 0)) {
+        throw "$PortName $Mechanism has no explicit difference rationale"
+    }
+    foreach ($differenceId in $DifferenceIds) {
+        if ($Ledger.IndexOf($differenceId,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "$PortName $Mechanism references undocumented difference: $differenceId"
+        }
+    }
+
+    Write-Host ("PASS {0,-14} {1,-18} {2} -> {3}" -f `
+        $PortName, $Mechanism, $ReferenceSymbol, $FiberSymbol)
+}
+
+$expectedReferenceFiles = @{
+    "portable\GCC\ARM_CM0\port.c" = "44A9D18193BF606BB8B6CC2B3341C207981C473D666A0C7075038E4FC18E1DF9"
+    "portable\GCC\ARM_CM0\portasm.c" = "1696254D07EBE24CD635067B0449E8C156E948967D07CA2B0E09B0D577C55395"
+    "portable\GCC\ARM_CM0\portasm.h" = "403910894BD2A6F588AFA3998584AE27D3336F6A7AE0F32FCE20DD2D0FF9B5C9"
+    "portable\GCC\ARM_CM0\portmacro.h" = "80593EEB9E1A6F89A913E9AAE19427B820B4090D7BA8CE81A265B5E823986B42"
+    "portable\GCC\ARM_CM3\port.c" = "0580691C59032249C53D572CF25A207C50417F0EF2BA0FC3A1588C6CB050C645"
+    "portable\GCC\ARM_CM3\portmacro.h" = "7E736EACB99D77167528350526C178D85B2E6DB9775E906D80CC37005B9EB495"
+    "portable\GCC\ARM_CM4F\port.c" = "1D26914A131EC8AE2E15F67EEB5D349C1CF8CB90CB432FFE6473773F06B35054"
+    "portable\GCC\ARM_CM4F\portmacro.h" = "F2C7DAFBDC35335B74A5428C82E0585225B43227AC4E584332B36CAE0A2E3047"
+    "portable\GCC\ARM_CM7\r0p1\port.c" = "13C9DE33A6856EF44522AB7B785C1196FF5739579DAB0FD2144E231E7393A32C"
+    "portable\GCC\ARM_CM7\r0p1\portmacro.h" = "859485FB0ECCF94CB357C95E562427411F406CE2385078EDFFB8A9D3C70B8205"
+    "portable\GCC\ARM_CM23_NTZ\non_secure\port.c" = "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A"
+    "portable\GCC\ARM_CM23_NTZ\non_secure\portasm.c" = "E15BDECFD24AB85165B69E3496E6FA644E5FF9C36EFBB3FFE6975FD5D7C9806C"
+    "portable\GCC\ARM_CM23_NTZ\non_secure\portasm.h" = "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C"
+    "portable\GCC\ARM_CM23_NTZ\non_secure\portmacro.h" = "23709D8EE3DE532A8394EAD05414FCF4FB4B37C94B5288ACF1FB1B829AA3F50E"
+    "portable\GCC\ARM_CM23_NTZ\non_secure\portmacrocommon.h" = "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2"
+    "portable\GCC\ARM_CM33_NTZ\non_secure\port.c" = "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A"
+    "portable\GCC\ARM_CM33_NTZ\non_secure\portasm.c" = "DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5"
+    "portable\GCC\ARM_CM33_NTZ\non_secure\portasm.h" = "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C"
+    "portable\GCC\ARM_CM33_NTZ\non_secure\portmacro.h" = "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B"
+    "portable\GCC\ARM_CM33_NTZ\non_secure\portmacrocommon.h" = "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2"
+    "portable\GCC\ARM_CM3_MPU\port.c" = "B94311759D4B807017F56669BDE818215215076A20C301A10D3C9DAE3D736676"
+    "portable\GCC\ARM_CM3_MPU\portmacro.h" = "FF720AEDBE44344752224173B3BBA316D675AD47C44103BBC8CAB984B0A98A68"
+    "portable\GCC\ARM_CM4_MPU\port.c" = "CC9B731BC23E52A91D7D37B5DDA16D7B501CFB4D3B3A3C8229C355C66662BF59"
+    "portable\GCC\ARM_CM4_MPU\portmacro.h" = "FA624BD1CAFAD461C86D1858E5AA9328EDEFE71D0E19A328746F85A52E7C35AD"
+}
+
+$ports = @(
+    [pscustomobject]@{
+        Name = "ARM_CM0"; CpuArgs = @("-mcpu=cortex-m0")
+        CoreHeader = "core_cm0.h"; Vtor = 0; Mpu = 0; Fpu = 0; Dsp = 0
+        ProfileDir = "fiber\port\ARM_CM0"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV6M=1")
+        ReferenceDir = "portable\GCC\ARM_CM0"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM0PLUS"; CpuArgs = @("-mcpu=cortex-m0plus")
+        CoreHeader = "core_cm0plus.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 0
+        ProfileDir = "fiber\port\ARM_CM0"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV6M=1")
+        ReferenceDir = "portable\GCC\ARM_CM0"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM3"; CpuArgs = @("-mcpu=cortex-m3")
+        CoreHeader = "core_cm3.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 0
+        ProfileDir = "fiber\port\ARM_CM3"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7M=1")
+        ReferenceDir = "portable\GCC\ARM_CM3"; ReferenceSource = "port.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM4"; CpuArgs = @("-mcpu=cortex-m4", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard")
+        CoreHeader = "core_cm4.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM4"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7EM=1")
+        ReferenceDir = "portable\GCC\ARM_CM4F"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1")
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM7_R0P1"; CpuArgs = @("-mcpu=cortex-m7", "-mfpu=fpv5-d16", "-mfloat-abi=hard")
+        CoreHeader = "core_cm7.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM7\r0p1"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7EM=1")
+        ReferenceDir = "portable\GCC\ARM_CM7\r0p1"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1")
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM23_NTZ"; CpuArgs = @("-mcpu=cortex-m23")
+        CoreHeader = "core_cm23.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 0
+        ProfileDir = "fiber\port\ARM_CM23_NTZ\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_BASELINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM23_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_NTZ"; CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33_NTZ\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM3_MPU"; CpuArgs = @("-mcpu=cortex-m3")
+        CoreHeader = "core_cm3.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 0
+        ProfileDir = "fiber\port\ARM_CM3_MPU"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7M=1")
+        ReferenceDir = "portable\GCC\ARM_CM3_MPU"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM4_MPU"; CpuArgs = @("-mcpu=cortex-m4", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard")
+        CoreHeader = "core_cm4.h"; Vtor = 1; Mpu = 1; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM4_MPU"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7EM=1", "-DFIBER_PORT_CM4_MPU_TOTAL_REGIONS=8")
+        ReferenceDir = "portable\GCC\ARM_CM4_MPU"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
+    }
+)
+
+Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
+    -PortDefinitions $ports
+
+$compiler = Find-ArmGcc
+$toolDir = Split-Path -Parent $compiler
+$objdump = Join-Path $toolDir "arm-none-eabi-objdump.exe"
+if (-not (Test-Path -LiteralPath $objdump)) {
+    throw "arm-none-eabi-objdump.exe not found next to compiler"
+}
+$cmsis = Find-CmsisCore
+$kernel = Find-FreeRtosKernel
+$configDir = Join-Path $RepoRoot "tools\fixtures\freertos_asm_parity"
+$ledgerPath = Join-Path $RepoRoot "FREERTOS_ASM_PARITY.md"
+if (-not (Test-Path -LiteralPath $ledgerPath)) {
+    throw "Generated assembly parity ledger is missing: $ledgerPath"
+}
+$ledger = Get-Content -LiteralPath $ledgerPath -Raw
+
+$ownsBuildRoot = [string]::IsNullOrWhiteSpace($BuildRoot)
+if ($ownsBuildRoot) {
+    $BuildRoot = Join-Path ([IO.Path]::GetTempPath()) `
+        ("fiber-freertos-asm-parity-" + [Guid]::NewGuid().ToString("N"))
+}
+New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
+
+try {
+    Assert-ReferenceIdentity -KernelRoot $kernel `
+        -ExpectedFiles $expectedReferenceFiles
+
+    Write-Host "Parity optimization: $Optimization"
+
+    $compiled = @{}
+    foreach ($port in $ports) {
+        $portBuild = Join-Path $BuildRoot $port.Name
+        New-Item -ItemType Directory -Path $portBuild -Force | Out-Null
+        Write-CmsisMainHeader -Directory $portBuild `
+            -CoreHeader $port.CoreHeader -VtorPresent $port.Vtor `
+            -MpuPresent $port.Mpu `
+            -FpuPresent $port.Fpu -FpuUsed $port.Fpu `
+            -DspPresent $port.Dsp
+
+        $profileDir = Join-Path $RepoRoot $port.ProfileDir
+        $fiberPath = Join-Path $profileDir $port.FiberSource
+        $fiberObject = Join-Path $portBuild "fiber-port.o"
+        $fiberArgs = @($port.CpuArgs) + @(
+            "-mthumb", "-std=gnu11", $Optimization, "-g0",
+            "-ffreestanding", "-fno-builtin", "-fno-common",
+            "-ffunction-sections", "-fdata-sections",
+            "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+            "-Werror=implicit-function-declaration", "-Werror=return-type"
+        ) + @($port.FiberDefines) + @(
+            "-I$portBuild", "-I$profileDir",
+            "-I$(Join-Path $RepoRoot 'fiber\port')",
+            "-I$(Join-Path $RepoRoot 'fiber')", "-I$RepoRoot", "-I$cmsis",
+            "-c", $fiberPath, "-o", $fiberObject
+        )
+        Invoke-Compile -Compiler $compiler -Arguments $fiberArgs `
+            -Label "$($port.Name) Fiber"
+
+        $referenceDir = Join-Path $kernel $port.ReferenceDir
+        $referencePath = Join-Path $referenceDir $port.ReferenceSource
+        $referenceObject = Join-Path $portBuild "freertos-port.o"
+        $referenceArgs = @($port.CpuArgs) + @(
+            "-mthumb", "-std=gnu11", $Optimization, "-g0",
+            "-ffreestanding", "-fno-builtin", "-fno-common",
+            "-ffunction-sections", "-fdata-sections"
+        ) + @($port.ReferenceDefines) + @(
+            "-I$configDir", "-I$(Join-Path $kernel 'include')",
+            "-I$referenceDir", "-c", $referencePath,
+            "-o", $referenceObject
+        )
+        Invoke-Compile -Compiler $compiler -Arguments $referenceArgs `
+            -Label "$($port.Name) FreeRTOS"
+
+        $compiled[$port.Name] = [pscustomobject]@{
+            FiberPath = $fiberObject
+            Fiber = Get-ObjectDisassembly -Objdump $objdump `
+                -ObjectPath $fiberObject
+            ReferencePath = $referenceObject
+            Reference = Get-ObjectDisassembly -Objdump $objdump `
+                -ObjectPath $referenceObject
+        }
+    }
+
+    # ARMv6-M keeps the same staged high-register frame as the reference.
+    foreach ($armv6Port in @("ARM_CM0", "ARM_CM0PLUS")) {
+    $pair = $compiled[$armv6Port]
+    Assert-MechanismParity -PortName $armv6Port -Mechanism "first-start" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bcpsie\s+i\b', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i\b', '\bmsr\s+CONTROL\b', '\bmsr\s+MSP\b', '\bcpsie\s+i\b', '\bdsb\b', '\bisb\b', '\bsvc\s+70\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armv6Port -Mechanism "first-restore" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r2\}', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+r2\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('fiber_port_context_validate_restore', '\badds\s+r0,\s*#20', '\bldmia\s+r0!,\s*\{r4[^\r\n]*r7\}', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#36', '\bldmia\s+r0!,\s*\{r3[^\r\n]*r7\}', '\bbx\s+lr\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-CM0-STAGED-FRAME") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armv6Port -Mechanism "PendSV" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @('\bmrs\s+r0,\s*PSP', '\bsubs\s+r0,\s*#36', '\bstmia\s+r0!,\s*\{r3[^\r\n]*r7\}', '\bstmia\s+r0!,\s*\{r4[^\r\n]*r7\}', '\bcpsid\s+i', 'vTaskSwitchContext', '\bcpsie\s+i', '\badds\s+r0,\s*#20', '\bldmia\s+r0!', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#36', '\bldmia\s+r0!', '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current', '\bsubs\s+r0,\s*#36', '\bstmia\s+r0!,\s*\{r3[^\r\n]*r7\}', '\bstmia\s+r0!,\s*\{r4[^\r\n]*r7\}', '\bmrs\s+r3,\s*PRIMASK', '\bcpsid\s+i', 'fiber_port_scheduler_pick_next_from_pendsv', '\bmsr\s+PRIMASK,\s*r3', '\badds\s+r0,\s*#20', '\bldmia\s+r0!', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#36', '\bldmia\s+r0!', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE") `
+        -Ledger $ledger
+    }
+
+    # ARMv7-M uses BASEPRI in both implementations. Fiber additionally carries
+    # EXC_RETURN per context instead of manufacturing FD in the SVC handler.
+    $pair = $compiled["ARM_CM3"]
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-start" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "prvPortStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+0') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-restore" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vPortSVCHandler" `
+        -ReferencePatterns @('\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\borr(\.w)?\s+lr,\s*lr,\s*#13', '\bbx\s+lr') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-CM3-EXC-RETURN") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "PendSV" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "xPortPendSVHandler" `
+        -ReferencePatterns @('\bmrs\s+r0,\s*PSP', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'vTaskSwitchContext', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'fiber_port_scheduler_pick_next_from_pendsv', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-CM3-EXC-RETURN") `
+        -Ledger $ledger
+
+    foreach ($floatingPort in @(
+            [pscustomobject]@{ Name = "ARM_CM4"; Errata = $false },
+            [pscustomobject]@{ Name = "ARM_CM7_R0P1"; Errata = $true })) {
+        $pair = $compiled[$floatingPort.Name]
+        Assert-MechanismParity -PortName $floatingPort.Name `
+            -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "prvPortStartFirstTask" `
+            -ReferencePatterns @('\bmsr\s+MSP', '\bmsr\s+CONTROL', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+0') `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "fiber_port_start_first_context" `
+            -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+            -FiberPath $pair.FiberPath `
+            -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+            -Ledger $ledger
+        Assert-MechanismParity -PortName $floatingPort.Name `
+            -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "vPortSVCHandler" `
+            -ReferencePatterns @('\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\bbx\s+lr') `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "SVC_Handler" `
+            -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bbx\s+lr') `
+            -FiberPath $pair.FiberPath `
+            -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-FP-VALIDATION") `
+            -Ledger $ledger
+        $referencePendSvPatterns = @(
+            '\bmrs\s+r0,\s*PSP', '\btst(\.w)?\s+lr,\s*#16',
+            '\bvstmdb(eq)?\s+r0!,\s*\{s16-s31\}',
+            '\bstmdb\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bstr\s+r0')
+        if ($floatingPort.Errata) {
+            $referencePendSvPatterns += @('\bcpsid\s+i', '\bmsr\s+BASEPRI', '\bcpsie\s+i')
+        } else {
+            $referencePendSvPatterns += @('\bmsr\s+BASEPRI')
+        }
+        $referencePendSvPatterns += @(
+            'vTaskSwitchContext', '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}',
+            '\btst(\.w)?\s+lr,\s*#16',
+            '\bvldmia(eq)?\s+r0!,\s*\{s16-s31\}',
+            '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr')
+        $fiberPendSvPatterns = @(
+            '\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current',
+            '\btst(\.w)?\s+lr,\s*#16',
+            '\bvstmdb(eq)?\s+r0!,\s*\{s16-s31\}',
+            '\bstmdb\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bstr\s+r0')
+        if ($floatingPort.Errata) {
+            $fiberPendSvPatterns += @('\bmrs\s+(ip|r12),\s*PRIMASK', '\bcpsid\s+i', '\bmsr\s+BASEPRI', '\bmsr\s+PRIMASK,\s*(ip|r12)')
+        } else {
+            $fiberPendSvPatterns += @('\bmsr\s+BASEPRI')
+        }
+        $fiberPendSvPatterns += @(
+            'fiber_port_scheduler_pick_next_from_pendsv', '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}',
+            '\btst(\.w)?\s+lr,\s*#16',
+            '\bvldmia(eq)?\s+r0!,\s*\{s16-s31\}',
+            '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr')
+        $differences = @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-FP-VALIDATION")
+        if ($floatingPort.Errata) {
+            $differences += "FAP-CM7-ERRATA-PRIMASK"
+        }
+        Assert-MechanismParity -PortName $floatingPort.Name `
+            -Mechanism "PendSV-FP" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "xPortPendSVHandler" `
+            -ReferencePatterns $referencePendSvPatterns `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "PendSV_Handler" -FiberPatterns $fiberPendSvPatterns `
+            -FiberPath $pair.FiberPath -DifferenceIds $differences `
+            -Ledger $ledger
+    }
+
+    # ARMv8-M Baseline NTZ keeps a reserved PSPLIM word but never accesses the
+    # register. The generated save/restore geometry must remain ten words.
+    $pair = $compiled["ARM_CM23_NTZ"]
+    Assert-MechanismParity -PortName "ARM_CM23_NTZ" `
+        -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM23_NTZ" `
+        -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r1,\s*r2\}', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('fiber_port_context_validate_restore', '\badds\s+r0,\s*#24', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#36', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-M23-PSPLIM-PLACEHOLDER") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM23_NTZ" `
+        -Mechanism "PendSV" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @('\bmrs\s+r0,\s*PSP', '\bsubs\s+r0,\s*#40', '\bstmia\s+r0!,\s*\{r2[^\r\n]*r7\}', '\bstmia\s+r0!,\s*\{r4[^\r\n]*r7\}', '\bcpsid\s+i', 'vTaskSwitchContext', '\bcpsie\s+i', '\badds\s+r0,\s*#24', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#40', '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current', '\bsubs\s+r0,\s*#40', '\bstmia\s+r0!,\s*\{r2[^\r\n]*r7\}', '\bstmia\s+r0!,\s*\{r4[^\r\n]*r7\}', '\bcpsid\s+i', 'fiber_port_scheduler_pick_next_from_pendsv', '\bcpsie\s+i', '\badds\s+r0,\s*#24', '\bmsr\s+PSP', '\bsubs\s+r0,\s*#36', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-M23-PSPLIM-PLACEHOLDER") `
+        -Ledger $ledger
+    $cm23ReferencePendSv = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Reference -Symbol "PendSV_Handler" `
+        -Path $pair.ReferencePath
+    $cm23FiberPendSv = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Fiber -Symbol "PendSV_Handler" -Path $pair.FiberPath
+    Assert-AbsentPatterns -Body $cm23ReferencePendSv -Patterns @('\bPSPLIM\b') `
+        -Label "ARM_CM23_NTZ FreeRTOS PendSV"
+    Assert-AbsentPatterns -Body $cm23FiberPendSv -Patterns @('\bPSPLIM\b') `
+        -Label "ARM_CM23_NTZ Fiber PendSV"
+
+    # CM33 slice currently proves only construction and SVC first start. It
+    # must not acquire a premature PendSV claim.
+    $pair = $compiled["ARM_CM33_NTZ"]
+    Assert-MechanismParity -PortName "ARM_CM33_NTZ" `
+        -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33_NTZ" `
+        -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r1,\s*r2\}', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\bbx\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r2,\s*r3[^\r\n]*fp\}', '\bmsr\s+PSPLIM', '\bmrs\s+[^,]+,\s*PSPLIM', '\bmsr\s+CONTROL', '\bmsr\s+PSP', '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-FULL-FIRST-RESTORE") `
+        -Ledger $ledger
+    if ($pair.Fiber -match '(?m)^[0-9a-fA-F]+\s+<PendSV_Handler>:') {
+        throw "ARM_CM33_NTZ SVC-only slice unexpectedly emitted PendSV_Handler"
+    }
+
+    # MPU ports deliberately retain the FreeRTOS protected-context model:
+    # hardware frames are copied to privileged context storage and MPU state is
+    # replaced before returning to unprivileged Thread mode.
+    foreach ($mpuPort in @(
+            [pscustomobject]@{ Name = "ARM_CM3_MPU"; HasFp = $false },
+            [pscustomobject]@{ Name = "ARM_CM4_MPU"; HasFp = $true })) {
+        $pair = $compiled[$mpuPort.Name]
+        Assert-MechanismParity -PortName $mpuPort.Name `
+            -Mechanism "SVC-dispatch" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "vPortSVCHandler" `
+            -ReferencePatterns @('\btst(\.w)?\s+lr,\s*#4', '\bmrs(eq)?\s+r0,\s*MSP', '\bmrs(ne)?\s+r0,\s*PSP', '\bldr\s+r[12],\s*\[r0,\s*#24\]', '\bldrb(\.w)?\s+r[12]', 'vSVCHandler_C') `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "SVC_Handler" `
+            -FiberPatterns @('\btst(\.w)?\s+lr,\s*#4', '\bmrs(eq)?\s+r0,\s*MSP', '\bmrs(ne)?\s+r0,\s*PSP', 'fiber_port_svc_dispatch') `
+            -FiberPath $pair.FiberPath `
+            -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-MPU-SVC-NAMESPACE") `
+            -Ledger $ledger
+        Assert-MechanismParity -PortName $mpuPort.Name `
+            -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "prvRestoreContextOfFirstTask" `
+            -ReferencePatterns @('\bmsr\s+MSP', '\bdmb\b', '\bldmia(\.w)?\s+r2!', '\bstmia(\.w)?\s+r0', '\bdsb\b', '\bldmdb\s+r1!', '\bmsr\s+PSP', '\bstmia(\.w)?\s+r0', '\bldmdb\s+r1!', '\bmsr\s+CONTROL', '\bmsr\s+BASEPRI', '\bbx\s+lr') `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+            -FiberPatterns @('\bmsr\s+MSP', '\bldmdb\s+r1!', '\bmsr\s+PSP', '\bstmia(\.w)?\s+r0', '\bldmdb\s+r1!', '\bmsr\s+CONTROL', '\bmsr\s+BASEPRI', '\bbx\s+lr') `
+            -FiberPath $pair.FiberPath `
+            -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-FIRST-ACTIVATION-SPLIT") `
+            -Ledger $ledger
+
+        $fiberSvcDispatch = Get-DisassemblyFunctionBody `
+            -Disassembly $pair.Fiber -Symbol "fiber_port_svc_dispatch" `
+            -Path $pair.FiberPath
+        Assert-OrderedPatterns -Body $fiberSvcDispatch `
+            -Patterns @('fiber_port_mpu_activate_first_context',
+                'fiber_port_restore_first_context_from_svc') `
+            -Label "$($mpuPort.Name) Fiber first MPU activation split"
+
+        $referencePendSv = @(
+            '\bmrs\s+r3,\s*CONTROL', '\bmrs\s+r0,\s*PSP')
+        $fiberPendSv = @(
+            '\bmrs\s+r0,\s*PSP',
+            'fiber_port_pendsv_validate_save_current',
+            '\bmrs\s+r[23],\s*CONTROL')
+        if ($mpuPort.HasFp) {
+            $referencePendSv += @('\bvstmia(eq)?\s+r1!,\s*\{s16-s31\}', '\bvldmia(eq)?\s+r0,\s*\{s0-s16\}', '\bvstmia(eq)?\s+r1!,\s*\{s0-s16\}')
+            $fiberPendSv += @('\bvstmia(eq)?\s+r1!,\s*\{s16-s31\}', '\bvldmia(eq)?\s+r0,\s*\{s0-s16\}', '\bvstmia(eq)?\s+r1!,\s*\{s0-s16\}')
+        }
+        $referencePendSv += @(
+            '\bstmia(\.w)?\s+r1!,\s*\{r3[^\r\n]*lr\}',
+            '\bldmia(\.w)?\s+r0,\s*\{r4[^\r\n]*fp\}',
+            '\bstmia(\.w)?\s+r1!,\s*\{r0[^\r\n]*fp\}',
+            '\bmsr\s+BASEPRI', 'vTaskSwitchContext', '\bmsr\s+BASEPRI',
+            '\bdmb\b', '\bldmia(\.w)?\s+r2!', '\bstmia(\.w)?\s+r0',
+            '\bldmdb\s+r1!', '\bmsr\s+PSP', '\bstmia(\.w)?\s+r0',
+            '\bldmdb\s+r1!', '\bmsr\s+CONTROL')
+        $fiberPendSv += @(
+            '\bstmia(\.w)?\s+r[13]!,\s*\{r[23][^\r\n]*lr\}',
+            '\bldmia(\.w)?\s+r0,\s*\{r4[^\r\n]*fp\}',
+            '\bstmia(\.w)?\s+r[13]!,\s*\{r0[^\r\n]*fp\}',
+            '\bmsr\s+BASEPRI', 'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bcpsid\s+i', 'fiber_port_mpu_switch_to_context',
+            '\bmsr\s+BASEPRI', '\bldmdb\s+r1!', '\bmsr\s+PSP',
+            '\bstmia(\.w)?\s+r0', '\bldmdb\s+r1!', '\bmsr\s+CONTROL')
+        if ($mpuPort.HasFp) {
+            $referencePendSv += @('\bvldmdb(eq)?\s+r1!,\s*\{s0-s16\}', '\bvstmia(eq)?\s+r0!,\s*\{s0-s16\}', '\bvldmdb(eq)?\s+r1!,\s*\{s16-s31\}')
+            $fiberPendSv += @('\bvldmdb(eq)?\s+r1!,\s*\{s0-s16\}', '\bvstmia(eq)?\s+r0!,\s*\{s0-s16\}', '\bvldmdb(eq)?\s+r1!,\s*\{s16-s31\}')
+        }
+        $referencePendSv += '\bbx\s+lr'
+        $fiberPendSv += @('\bcpsie\s+i', '\bbx\s+lr')
+        Assert-MechanismParity -PortName $mpuPort.Name `
+            -Mechanism "PendSV-MPU" -ReferenceDisassembly $pair.Reference `
+            -ReferenceSymbol "xPortPendSVHandler" `
+            -ReferencePatterns $referencePendSv `
+            -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+            -FiberSymbol "PendSV_Handler" -FiberPatterns $fiberPendSv `
+            -FiberPath $pair.FiberPath `
+            -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
+            -Ledger $ledger
+    }
+
+    Write-Host "FREERTOS_ASM_PARITY_PASS ($Optimization)"
+    if ($KeepBuild -or (-not $ownsBuildRoot)) {
+        Write-Host "Parity build retained: $BuildRoot"
+    }
+}
+finally {
+    if ($ownsBuildRoot -and (-not $KeepBuild) -and
+            (Test-Path -LiteralPath $BuildRoot)) {
+        Remove-Item -LiteralPath $BuildRoot -Recurse -Force
+    }
+}

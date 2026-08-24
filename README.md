@@ -82,12 +82,13 @@ Auto/profile selection deliberately remains on `transitional_v8m`, and this
 profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM33_NTZ/non_secure` slices 1-2 freeze the corresponding Cortex-M33
-Mainline NTZ non-MPU/no-FPU layout and construct its sealed initial context: a
-live PSPLIM word followed by `EXC_RETURN = 0xFFFFFFBC` and `r4-r11`. It has
-BASEPRI and FAULTMASK traits, but intentionally has no SVC, PendSV, scheduler,
-archive, or hardware claim yet. This keeps M33F, MPU, SecureContext, and TF-M
-behavior separate instead of hiding it behind a permissive generic v8-M path. See
+`ARM_CM33_NTZ/non_secure` slices 1-3 freeze the corresponding Cortex-M33
+Mainline NTZ non-MPU/no-FPU layout, construct its sealed initial context, and
+compile-cover a paranoid FreeRTOS-derived SVC first start. PendSV,
+`fiber_port_runtime_schedule()`, global selection, and a hardware claim remain
+absent. This keeps M33F, MPU, SecureContext, and TF-M behavior separate instead
+of hiding it behind a permissive generic v8-M path. The exact
+source-to-generated-assembly mapping is recorded in
 `fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
@@ -697,11 +698,19 @@ This compiles and relocatable-links every selected profile and verifies exactly
 one definition of each port ABI symbol. It covers selector and build-selected
 modes, strong selected-port handler ownership, archive extraction, vector-slot
 resolution, section GC and LTO, v8-M bring-up scenarios, adversarial compiler
-flags, and negative settings contracts. Compile coverage does not replace
-hardware tests or promote a transitional profile to a runtime-supported port.
+flags, and negative settings contracts. Before those checks it also compiles
+the real pinned FreeRTOS portable objects and the matching Fiber objects with
+the same compiler/CPU/FPU flags, then compares their generated SVC, PendSV,
+masking, frame-transfer, FP, and MPU instruction order. The exact scope and all
+accepted differences are normative in `FREERTOS_ASM_PARITY.md`. Set
+`FREERTOS_KERNEL_REFERENCE` when the pinned checkout is not in the workspace
+default `_reference/FreeRTOS-Kernel` location. Compile/disassembly coverage does
+not replace hardware tests or promote a transitional profile to a
+runtime-supported port.
 
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and
 `FREERTOS_SUPPORT_PLAN.md` for the roadmap toward FreeRTOS-style Cortex-M
-CPU-port support.
+CPU-port support. See `FREERTOS_ASM_PARITY.md` for the paired generated-object
+proof and rationale IDs.

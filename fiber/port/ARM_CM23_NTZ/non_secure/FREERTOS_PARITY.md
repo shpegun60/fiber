@@ -1,5 +1,9 @@
 # ARM_CM23_NTZ FreeRTOS Parity Ledger
 
+Paired generated-object evidence for the ten-word NTZ save/restore path is
+mandatory under `../../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the
+port-specific source and placeholder-PSPLIM classification.
+
 ## Reference
 
 This directory is derived by line-by-line comparison with the pinned local

@@ -430,6 +430,7 @@ function Test-ContextPortBoundary {
     )
     $slotOwnerSources = @($portSources) + @(
         "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
+        "fiber\port\ARM_CM33_NTZ\non_secure\fiber_port.c",
         "fiber\port\ARM_CM3_MPU\fiber_port.c",
         "fiber\port\ARM_CM4_MPU\fiber_port.c"
     )
@@ -3455,11 +3456,14 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm33NtzConstructionContract {
+function Test-ArmCm33NtzSvcStartContract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
         [string]$Nm,
+        [string]$Objdump,
+        [string]$Ar,
+        [string]$Objcopy,
         [string]$CmsisPath,
         [string]$BuildRoot
     )
@@ -3479,7 +3483,7 @@ function Test-ArmCm33NtzConstructionContract {
             (Join-Path $profileDir "FREERTOS_PARITY.md"),
             $fixture)) {
         if (-not (Test-Path -LiteralPath $required)) {
-            throw "ARM_CM33_NTZ construction slice is missing: $required"
+            throw "ARM_CM33_NTZ SVC-start slice is missing: $required"
         }
     }
 
@@ -3489,7 +3493,7 @@ function Test-ArmCm33NtzConstructionContract {
             "fiber_port_mpu.c",
             "fiber_port_secure_context.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
-            throw "ARM_CM33_NTZ construction slice must not expose runtime artifact: $forbiddenRuntime"
+            throw "ARM_CM33_NTZ SVC-start slice must not expose deferred artifact: $forbiddenRuntime"
         }
     }
 
@@ -3532,6 +3536,14 @@ function Test-ArmCm33NtzConstructionContract {
             "sealed boot record",
             "fiber_port_context_init()",
             "fiber_port_init_context_frame()",
+            "First-Start Assembly Parity",
+            "0xFFFFFFB8",
+            "ldmia saved_sp!, {r2-r11}",
+            "msr PSPLIM, r2",
+            "mrs CONTROL; orr #2; msr CONTROL",
+            "movs #2; msr CONTROL",
+            "msr PSP, hardware_frame",
+            "Generated-disassembly proof is mandatory",
             "mpu_wrappers_v2_asm.c")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
@@ -3650,26 +3662,56 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
     $frameSourcePath = Join-Path $profileDir "fiber_port.c"
     $bootSourcePath = Join-Path $profileDir "fiber_port_boot.c"
     $privateHeaderPath = Join-Path $profileDir "fiber_port_private.h"
+    $macroHeaderPath = Join-Path $profileDir "fiber_portmacro.h"
     $frameSource = Get-Content -LiteralPath $frameSourcePath -Raw
     $bootSource = Get-Content -LiteralPath $bootSourcePath -Raw
     $privateHeader = Get-Content -LiteralPath $privateHeaderPath -Raw
+    $macroHeader = Get-Content -LiteralPath $macroHeaderPath -Raw
 
     foreach ($forbiddenRuntimeToken in @(
-            "SVC_Handler",
             "PendSV_Handler",
-            "fiber_port_runtime_prepare_start",
-            "fiber_port_runtime_select_first",
-            "fiber_port_runtime_start_first",
             "fiber_port_runtime_schedule",
-            "__set_PSPLIM",
-            "msr   psplim")) {
+            "fiber_port_context_validate_save_current",
+            "fiber_port_scheduler_pick_next_from_pendsv",
+            "fiber_portNVIC_PENDSVSET_BIT")) {
         if (($frameSource.IndexOf($forbiddenRuntimeToken,
                     [System.StringComparison]::Ordinal) -ge 0) -or
                 ($bootSource.IndexOf($forbiddenRuntimeToken,
                     [System.StringComparison]::Ordinal) -ge 0) -or
                 ($privateHeader.IndexOf($forbiddenRuntimeToken,
                     [System.StringComparison]::Ordinal) -ge 0)) {
-            throw "ARM_CM33_NTZ construction slice exposed runtime token: $forbiddenRuntimeToken"
+            throw "ARM_CM33_NTZ SVC-start slice exposed deferred PendSV token: $forbiddenRuntimeToken"
+        }
+    }
+
+    foreach ($requiredStartToken in @(
+            "void SVC_Handler(void)",
+            "fiber_portSVC_ORIGIN_EXC_RETURN",
+            "fiber_port_context_validate_restore",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_scheduler_pick_first_from_start",
+            "fiber_internal_runtime_select_scheduler_candidate(NULL)",
+            "fiber_port_scheduler_critical_enter()",
+            "FIBER_REQUIRE(fiber_port_basepri_read() ==",
+            "fiber_port_validate_svc_vector()",
+            "fiber_port_validate_basepri_priority_policy()",
+            "ldmia r0!, {r2-r11}",
+            "msr   psplim, r2",
+            "mrs   r1, psplim",
+            "msr   control, r1",
+            "msr   psp, r0",
+            "bx    r3")) {
+        if (($frameSource.IndexOf($requiredStartToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($bootSource.IndexOf($requiredStartToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($privateHeader.IndexOf($requiredStartToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($macroHeader.IndexOf($requiredStartToken,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM33_NTZ SVC-start source lost contract: $requiredStartToken"
         }
     }
 
@@ -3750,7 +3792,8 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
     $frameObject = Join-Path $probeDir "frame.o"
     $bootObject = Join-Path $probeDir "boot.o"
     $constructionArgs = @($manifestArgs + @(
-        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1", "-O2"))
+        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1", "-O2",
+        "-Werror", "-save-temps=obj"))
     & $Compiler @constructionArgs -c $frameSourcePath -o $frameObject
     if ($LASTEXITCODE -ne 0) {
         throw "ARM_CM33_NTZ frame construction source failed compile"
@@ -3768,11 +3811,23 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
     if ($LASTEXITCODE -ne 0) {
         throw "nm failed for ARM_CM33_NTZ construction object group"
     }
-    $contextInitDefinitions = @($constructionDefined | Where-Object {
-        $_ -match '\bT\s+fiber_port_context_init$'
-    })
-    if ($contextInitDefinitions.Count -ne 1) {
-        throw "ARM_CM33_NTZ construction group must define one fiber_port_context_init"
+    $expectedForwardDefinitions = @(
+        "fiber_port_context_init",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first"
+    )
+    foreach ($expectedForwardDefinition in $expectedForwardDefinitions) {
+        $definitions = @($constructionDefined | Where-Object {
+            $_ -match ("\bT\s+" +
+                [regex]::Escape($expectedForwardDefinition) + "$")
+        })
+        if ($definitions.Count -ne 1) {
+            throw "ARM_CM33_NTZ SVC-start group must define one $expectedForwardDefinition"
+        }
     }
     $constructionCohorts = @($constructionDefined | ForEach-Object {
         if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
@@ -3783,21 +3838,20 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
             ($constructionCohorts[0] -ne $cohorts[0])) {
         throw "ARM_CM33_NTZ construction group disagrees with frozen layout cohort"
     }
+    $svcDefinitions = @($constructionDefined | Where-Object {
+        $_ -match '\bT\s+SVC_Handler$'
+    })
+    if ($svcDefinitions.Count -ne 1) {
+        throw "ARM_CM33_NTZ SVC-start group must define one strong SVC_Handler"
+    }
     foreach ($forbiddenDefinition in @(
-            "SVC_Handler",
             "PendSV_Handler",
-            "fiber_port_runtime_memory_barrier",
-            "fiber_port_panic_wait",
-            "fiber_port_require_scheduler_configuration_environment",
-            "fiber_port_runtime_prepare_start",
-            "fiber_port_runtime_select_first",
-            "fiber_port_runtime_start_first",
             "fiber_port_runtime_schedule")) {
         if (@($constructionDefined | Where-Object {
                     $_ -match ("\b[TW]\s+" +
                         [regex]::Escape($forbiddenDefinition) + "$")
                 }).Count -ne 0) {
-            throw "ARM_CM33_NTZ construction group leaked runtime symbol: $forbiddenDefinition"
+            throw "ARM_CM33_NTZ SVC-start group leaked deferred symbol: $forbiddenDefinition"
         }
     }
     $constructionUndefined = @(& $Nm -u $constructionGroup | ForEach-Object {
@@ -3806,6 +3860,9 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
         }
     } | Sort-Object -Unique)
     $allowedConstructionUndefined = @(
+        "fiber_internal_runtime_current_context_slot",
+        "fiber_internal_runtime_port_abi_v1_anchor",
+        "fiber_internal_runtime_select_scheduler_candidate",
         "fiber_internal_task_return",
         "fiber_panic",
         "memcpy",
@@ -3818,6 +3875,336 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
         })
     if ($unexpectedConstructionUndefined.Count -ne 0) {
         throw "ARM_CM33_NTZ construction group gained unexpected dependency: $($constructionUndefined -join ', ')"
+    }
+
+    $sourceVariants = @(
+        [pscustomobject]@{
+            Name = "production"
+            Defines = @(
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0")
+        },
+        [pscustomobject]@{
+            Name = "address-map"
+            Defines = @(
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1")
+        },
+        [pscustomobject]@{
+            Name = "no-rewind"
+            Defines = @(
+                "-DFIBER_REWIND_MSP=0",
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0")
+        }
+    )
+    foreach ($variant in $sourceVariants) {
+        $variantRuntime = Join-Path $probeDir "$($variant.Name)-runtime.o"
+        $variantBoot = Join-Path $probeDir "$($variant.Name)-boot.o"
+        $variantGroup = Join-Path $probeDir "$($variant.Name)-group.o"
+        $variantArgs = @($manifestArgs + @(
+            "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+            "-O2", "-Werror") + $variant.Defines)
+        & $Compiler @variantArgs -c $frameSourcePath -o $variantRuntime
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_NTZ $($variant.Name) runtime variant failed compile"
+        }
+        & $Compiler @variantArgs -c $bootSourcePath -o $variantBoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_NTZ $($variant.Name) boot variant failed compile"
+        }
+        & $Compiler -r $variantRuntime $variantBoot -o $variantGroup
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_NTZ $($variant.Name) object group failed link"
+        }
+    }
+
+    $frameAssembly = [IO.Path]::ChangeExtension($frameObject, ".s")
+    Test-GeneratedCurrentSlotLoadOnly -AssemblyPath $frameAssembly
+    $runtimeDisassembly = (& $Objdump -dr $frameObject) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for ARM_CM33_NTZ SVC-start object"
+    }
+    $svcBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+        -Symbol "SVC_Handler" -Path $frameObject
+    $startBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+        -Symbol "fiber_port_start_first_context" -Path $frameObject
+
+    $svcInstructionOrder = @(
+        'mrs\s+r3,\s*IPSR',
+        'cmp\s+r3,\s*#11',
+        'mvn(?:\.w)?\s+r3,\s*#71',
+        'cmp\s+lr,\s*r3',
+        'mrs\s+r0,\s*MSP',
+        'ldr\s+r2,\s*\[r0,\s*#28\]',
+        'ldr\s+r3,\s*\[r0,\s*#24\]',
+        'ldrb\s+r2,\s*\[r3,\s*#1\]',
+        'cmp\s+r2,\s*#223',
+        'ldrb\s+r3,\s*\[r3(?:,\s*#0)?\]',
+        'cmp\s+r3,\s*#70',
+        'cpsid\s+i',
+        'msr\s+BASEPRI,\s*r0',
+        'mrs\s+r1,\s*BASEPRI',
+        'ldr(?:\.w)?\s+r0,\s*\[pc,',
+        'ldr\s+r0,\s*\[r0(?:,\s*#0)?\]',
+        'fiber_port_context_validate_restore',
+        'ldmia(?:\.w)?\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*(?:r9|sb),\s*sl,\s*fp\}',
+        'mvn(?:\.w)?\s+r1,\s*#67',
+        'cmp\s+r3,\s*r1',
+        'msr\s+PSPLIM,\s*r2',
+        'mrs\s+r1,\s*PSPLIM',
+        'msr\s+CONTROL,\s*r1',
+        'mrs\s+r1,\s*CONTROL',
+        'msr\s+PSP,\s*r0',
+        'mrs\s+r1,\s*PSP',
+        'mrs\s+r1,\s*FAULTMASK',
+        'cpsie\s+i',
+        'bx\s+r3'
+    )
+    $remainingSvcBody = $svcBody
+    foreach ($instructionPattern in $svcInstructionOrder) {
+        $instructionMatch = [regex]::Match($remainingSvcBody,
+            $instructionPattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if (-not $instructionMatch.Success) {
+            throw "ARM_CM33_NTZ generated SVC lost FreeRTOS-parity instruction order: $instructionPattern`n$svcBody"
+        }
+        $remainingSvcBody = $remainingSvcBody.Substring(
+            $instructionMatch.Index + $instructionMatch.Length)
+    }
+
+    $startInstructionOrder = @(
+        'cpsid\s+i',
+        'msr\s+CONTROL,\s*r3',
+        'msr\s+MSP,\s*r0',
+        'msr\s+BASEPRI,\s*r0',
+        'mrs\s+r3,\s*BASEPRI',
+        'mrs\s+r3,\s*FAULTMASK',
+        'cpsie\s+f',
+        'cpsie\s+i',
+        'svc\s+70'
+    )
+    $remainingStartBody = $startBody
+    foreach ($instructionPattern in $startInstructionOrder) {
+        $instructionMatch = [regex]::Match($remainingStartBody,
+            $instructionPattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if (-not $instructionMatch.Success) {
+            throw "ARM_CM33_NTZ generated first-start helper lost FreeRTOS-parity instruction order: $instructionPattern`n$startBody"
+        }
+        $remainingStartBody = $remainingStartBody.Substring(
+            $instructionMatch.Index + $instructionMatch.Length)
+    }
+
+    foreach ($forbiddenGeneratedSymbol in @(
+            "PendSV_Handler",
+            "fiber_port_runtime_schedule",
+            "__aeabi_",
+            "__gnu_")) {
+        if ($runtimeDisassembly.IndexOf($forbiddenGeneratedSymbol,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33_NTZ SVC-start generated code contains deferred/runtime helper: $forbiddenGeneratedSymbol"
+        }
+    }
+
+    $adversarialObject = Join-Path $probeDir "adversarial-runtime.o"
+    & $Compiler @($manifestArgs + @(
+        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+        "-O2", "-Werror", "-finstrument-functions",
+        "-fstack-protector-all", "-fprofile-arcs", "-ftest-coverage",
+        "-c", $frameSourcePath, "-o", $adversarialObject))
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ adversarial SVC-start source failed compile"
+    }
+    $adversarialDisassembly = (& $Objdump -dr $adversarialObject) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "objdump failed for adversarial ARM_CM33_NTZ SVC object"
+    }
+    Assert-SensitiveFunctionClean -Disassembly $adversarialDisassembly `
+        -Symbol "SVC_Handler" -Path $adversarialObject
+    Assert-SensitiveFunctionClean -Disassembly $adversarialDisassembly `
+        -Symbol "fiber_port_start_first_context" -Path $adversarialObject
+
+    $elfFixturePath = Join-Path $probeDir "svc-start-elf-fixture.c"
+    $elfFixtureObject = Join-Path $probeDir "svc-start-elf-fixture.o"
+    $competingPath = Join-Path $probeDir "competing-svc.c"
+    $competingObject = Join-Path $probeDir "competing-svc.o"
+    $linkerPath = Join-Path $probeDir "svc-start.ld"
+    $archiveRuntimeObject = Join-Path $probeDir "archive-runtime.o"
+    $archiveBootObject = Join-Path $probeDir "archive-boot.o"
+    $archivePath = Join-Path $probeDir "libfiber_cm33_ntz_svc.a"
+    $elfPath = Join-Path $probeDir "svc-start.elf"
+    $vectorBinary = Join-Path $probeDir "svc-start-vectors.bin"
+    Set-Content -LiteralPath $elfFixturePath -Encoding ASCII -Value @'
+#include <stddef.h>
+#include <stdint.h>
+
+#include "fiber_port_types.h"
+#include "fiber_runtime_port_abi.h"
+
+extern void fiber_port_runtime_prepare_start(void);
+extern void SVC_Handler(void);
+
+const unsigned char fiber_internal_runtime_port_abi_v1_anchor = 1u;
+FiberContext *volatile fiber_internal_runtime_current_context_slot;
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_select_scheduler_candidate(
+        FiberContext *current)
+{
+    return current;
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_task_return(void)
+{
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_panic(char code)
+{
+    (void)code;
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+void *memcpy(void *destination, const void *source, size_t size)
+{
+    unsigned char *out = (unsigned char *)destination;
+    const unsigned char *in = (const unsigned char *)source;
+    while (size-- != 0u) {
+        *out++ = *in++;
+    }
+    return destination;
+}
+
+void *memset(void *destination, int value, size_t size)
+{
+    unsigned char *out = (unsigned char *)destination;
+    while (size-- != 0u) {
+        *out++ = (unsigned char)value;
+    }
+    return destination;
+}
+
+void Reset_Handler(void)
+{
+    fiber_port_runtime_prepare_start();
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+typedef void (*FiberVector)(void);
+__attribute__((used, section(".isr_vector")))
+const FiberVector fiber_vectors[16] = {
+    [1] = Reset_Handler,
+    [11] = SVC_Handler
+};
+'@
+    Set-Content -LiteralPath $competingPath -Encoding ASCII -Value @'
+void SVC_Handler(void)
+{
+    for (;;) {
+    }
+}
+'@
+    Set-Content -LiteralPath $linkerPath -Encoding ASCII -Value @'
+ENTRY(Reset_Handler)
+MEMORY
+{
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 64K
+}
+SECTIONS
+{
+    .isr_vector : { KEEP(*(.isr_vector)) } > FLASH
+    .text : { *(.text*) *(.rodata*) } > FLASH
+    .data : { *(.data*) } > RAM AT> FLASH
+    .bss (NOLOAD) : { *(.bss*) *(COMMON) } > RAM
+}
+'@
+
+    $archiveArgs = @($manifestArgs + @(
+        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+        "-O2", "-Werror", "-ffunction-sections", "-fdata-sections"))
+    & $Compiler @archiveArgs -c $frameSourcePath -o $archiveRuntimeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ SVC archive runtime failed compile"
+    }
+    & $Compiler @archiveArgs -c $bootSourcePath -o $archiveBootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ SVC archive boot failed compile"
+    }
+    & $Ar rcs $archivePath $archiveRuntimeObject $archiveBootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ SVC archive creation failed"
+    }
+    & $Compiler @archiveArgs -c $elfFixturePath -o $elfFixtureObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ SVC ELF fixture failed compile"
+    }
+    & $Compiler @archiveArgs -c $competingPath -o $competingObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ competing SVC fixture failed compile"
+    }
+
+    $linkArgs = @(
+        "-mcpu=cortex-m33", "-mthumb", "-nostdlib",
+        "-Wl,--gc-sections", "-T", $linkerPath,
+        $elfFixtureObject, $archivePath, "-o", $elfPath
+    )
+    & $Compiler @linkArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ SVC archive/ELF proof failed link"
+    }
+    $elfDefined = @(& $Nm -g --defined-only $elfPath)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM33_NTZ SVC ELF"
+    }
+    $svcSymbols = @($elfDefined | Where-Object {
+        $_ -match '^([0-9a-fA-F]+)\s+T\s+SVC_Handler$'
+    })
+    if ($svcSymbols.Count -ne 1) {
+        throw "ARM_CM33_NTZ SVC ELF must contain one strong SVC_Handler"
+    }
+    if (@($elfDefined | Where-Object {
+                $_ -match '\b[TW]\s+PendSV_Handler$'
+            }).Count -ne 0) {
+        throw "ARM_CM33_NTZ SVC-only ELF must not contain PendSV_Handler"
+    }
+    [void]($svcSymbols[0] -match '^([0-9a-fA-F]+)')
+    $svcAddress = [Convert]::ToUInt32($Matches[1], 16)
+    & $Objcopy -O binary --only-section=.isr_vector $elfPath $vectorBinary
+    if ($LASTEXITCODE -ne 0) {
+        throw "objcopy failed for ARM_CM33_NTZ SVC vector proof"
+    }
+    $vectorBytes = [IO.File]::ReadAllBytes($vectorBinary)
+    if ($vectorBytes.Length -lt (16 * 4)) {
+        throw "ARM_CM33_NTZ synthetic vector table is truncated"
+    }
+    $svcVector = [BitConverter]::ToUInt32($vectorBytes, 11 * 4)
+    $pendSvVector = [BitConverter]::ToUInt32($vectorBytes, 14 * 4)
+    if ($svcVector -ne ($svcAddress -bor [uint32]1)) {
+        throw "ARM_CM33_NTZ vector slot 11 does not resolve to strong SVC_Handler"
+    }
+    if ($pendSvVector -ne 0) {
+        throw "ARM_CM33_NTZ SVC-only vector slot 14 must remain empty"
+    }
+
+    $duplicateLog = Join-Path $probeDir "duplicate-svc.log"
+    $duplicate = Invoke-CompilerProbe -Compiler $Compiler `
+        -Arguments @(
+            "-mcpu=cortex-m33", "-mthumb", "-nostdlib",
+            "-Wl,--gc-sections", "-T", $linkerPath,
+            $elfFixtureObject, $competingObject, $archivePath,
+            "-o", (Join-Path $probeDir "duplicate-svc.elf")) `
+        -LogPath $duplicateLog
+    if (($duplicate.ExitCode -eq 0) -or
+            ($duplicate.Output -notmatch 'multiple definition.*SVC_Handler')) {
+        throw "ARM_CM33_NTZ competing strong SVC_Handler must fail link`n$($duplicate.Output)"
     }
 
     $negativeCases = @(
@@ -7013,6 +7400,19 @@ try {
     Write-Host "CMSIS:    $cmsis"
     Write-Host "Build:    $buildRoot"
 
+    Write-Host "== pinned FreeRTOS generated-assembly parity =="
+    foreach ($parityOptimization in @("-O2", "-Os")) {
+        $parityBuildName = "freertos-asm-parity-" +
+            $parityOptimization.Substring(1).ToLowerInvariant()
+        & (Join-Path $RepoRoot "tools\freertos_asm_parity.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis `
+            -Optimization $parityOptimization `
+            -BuildRoot (Join-Path $buildRoot $parityBuildName)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pinned FreeRTOS generated-assembly parity failed for $parityOptimization"
+        }
+    }
+
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
         -Objdump $objdump -BuildRoot $buildRoot
@@ -7046,9 +7446,10 @@ try {
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
         -BuildRoot $buildRoot
-    Write-Host "== ARM_CM33_NTZ slice-2 construction contract =="
-    Test-ArmCm33NtzConstructionContract -RepositoryRoot $RepoRoot `
-        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33_NTZ slice-3 SVC first-start contract =="
+    Test-ArmCm33NtzSvcStartContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump -Ar $ar `
+        -Objcopy $objcopy -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `

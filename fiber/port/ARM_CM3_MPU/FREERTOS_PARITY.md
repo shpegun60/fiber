@@ -1,5 +1,9 @@
 # ARM_CM3_MPU FreeRTOS Parity Record
 
+Paired generated-object evidence for SVC dispatch, first MPU activation, and
+protected PendSV is mandatory under `../../../FREERTOS_ASM_PARITY.md`; this
+ledger supplies the exhaustive MPU policy classification.
+
 ## Status
 
 This is the frozen reference audit and staged implementation record for the

@@ -1,5 +1,9 @@
 # ARM_CM3 FreeRTOS Parity Record
 
+Paired generated-object evidence is mandatory under
+`../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the port-specific
+source classification and explains the exact per-context EXC_RETURN policy.
+
 This is the exhaustive mechanism ledger for the privileged Cortex-M3 selected
 port. Every relevant item in the pinned FreeRTOS files is classified as
 reimplemented, adapted, replaced, intentionally excluded, or deferred. No

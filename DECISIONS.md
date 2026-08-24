@@ -1,5 +1,51 @@
 # Fiber Decision Log
 
+## 2026-08-24: Make Generated FreeRTOS Assembly Parity Mandatory
+
+The compile matrix now invokes `tools/freertos_asm_parity.ps1` as a mandatory
+fail-closed cohort. The cohort verifies local FreeRTOS commit
+`a50edad08b29052631aa469d4df6e6ec7ff68878` and SHA-256 identities for every
+consumed portable artifact, then compiles the FreeRTOS and Fiber objects with
+the same GCC, CPU/FPU ABI, Thumb mode, and optimization level. The mandatory
+cohort runs every comparison at both `-O2` and `-Os`.
+The script derives the production inventory from `fiber_port.c` files and
+fails if a production directory lacks either a paired definition or its local
+`FREERTOS_PARITY.md` record.
+
+The paired `objdump` proof covers all mechanisms currently implemented by the
+production selected ports: separate M0/no-VTOR and M0+/VTOR builds, M3, M4F,
+M7 r0p1, M23 NTZ, the CM33 NTZ first-start slice, CM3 MPU, and CM4 MPU. It
+checks ordered SVC start, first restore, PendSV save/restore, scheduler mask,
+FP transfer, PSPLIM, CONTROL, MPU replacement, and exception return. CM33 does
+not gain a PendSV claim until it implements one; `transitional_v8m` remains
+outside production parity.
+
+Exact binary equality is not required because Fiber intentionally adds
+validation and substitutes its user scheduler bridge for
+`vTaskSwitchContext()`. Every accepted generated-code difference must instead
+name a normative `FAP-*` rationale in `FREERTOS_ASM_PARITY.md`. An unpinned
+reference, missing operation, reordered architecture transfer, undocumented
+difference, or accidental premature handler now prevents the matrix from
+passing.
+
+## 2026-08-24: Add ARM_CM33_NTZ SVC First Start As A Separate Slice
+
+The exact build-selected `ARM_CM33_NTZ/non_secure` profile now owns the
+FreeRTOS-derived first-context transfer without pretending to be a complete
+runtime port. The selected-port object implements startup preparation,
+BASEPRI-protected `pick_next(NULL, user)`, restore validation, a naked SVC
+entry, and one strong `SVC_Handler`. `FIBER_PORT_RUNTIME_SELECTABLE` remains
+zero, `fiber_port_runtime_schedule()` and `PendSV_Handler` remain absent, and
+the global selector is unchanged.
+
+Every added port mechanism must carry two independent parity artifacts: an
+explicit instruction/function mapping to the pinned local FreeRTOS port and a
+generated-disassembly check of the emitted Fiber code. Compile-only or
+source-token parity is not sufficient. For M33 first start, Fiber consumes the
+same `[PSPLIM][EXC_RETURN][r4-r11]` software frame as the FreeRTOS non-MPU
+PendSV restore, while adding exact SVC provenance, frame, vector, CPU-state,
+and special-register readback checks.
+
 ## 2026-07-20: Construct The Exact ARM_CM33_NTZ Initial Context
 
 Implementation slice 2 adds only the construction half of the exact

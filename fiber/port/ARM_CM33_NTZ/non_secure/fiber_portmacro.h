@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slices 1-2.
+ * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slices 1-3.
  * The selected profile freezes one privileged, non-MPU, no-FPU context layout
- * and constructs its sealed initial frame. SVC, PendSV, and runtime selection
- * remain deliberately absent.
+ * and constructs its sealed initial frame. It also owns a fail-closed SVC
+ * first-start path. PendSV and runtime selection remain deliberately absent.
  */
 #ifndef FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
@@ -103,6 +103,7 @@
 #define fiber_portINITIAL_XPSR 0x01000000u
 #define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFBCu
+#define fiber_portSVC_ORIGIN_EXC_RETURN 0xFFFFFFB8u
 #define fiber_portPSPLIM_SLOT_WORDS 1u
 #define fiber_portCORE_SOFTWARE_WORDS 9u
 #define fiber_portSOFTWARE_FRAME_WORDS \
@@ -196,6 +197,21 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
 #define FIBER_PORT_SAVED_SP_MOD8 0u
 
+#define fiber_portNVIC_INT_CTRL_REG (*((volatile uint32_t *)0xE000ED04u))
+#define fiber_portNVIC_PENDSVCLEAR_BIT (1u << 27u)
+#define fiber_portVECTOR_INDEX_SVC 11u
+
+#define fiber_portBASEPRI_SYM "BASEPRI"
+#define fiber_portASM_WRITE_BASEPRI_R0 \
+	"msr   " fiber_portBASEPRI_SYM ", r0           \n"
+
+/* ARMv8-M Mainline has no Cortex-M7 r0p1 BASEPRI erratum. Keep synchronized
+ * writes in the same selected-port vocabulary used by the M4/M7 ports. */
+#define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R0 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -217,6 +233,53 @@ fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
 	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
 }
 
+fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, " fiber_portBASEPRI_SYM
+			: "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
+{
+	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0"
+			:: "r"(value) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_scheduler_critical_enter(void)
+{
+	const uint32_t previous = fiber_port_basepri_read();
+	fiber_port_basepri_write((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI);
+	return previous;
+}
+
+fiber_portFORCE_INLINE void fiber_port_scheduler_critical_exit(uint32_t state)
+{
+	fiber_port_basepri_write(state);
+}
+
+fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+{
+	uintptr_t value = (uintptr_t)SCB->VTOR;
+#if defined(SCB_VTOR_TBLOFF_Msk)
+	value &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
+#endif
+	return value;
+}
+
+fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+{
+	return (const uint32_t *)fiber_port_vectors_base_addr();
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
+{
+	return fiber_port_vectors_base_ptr()[0];
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -233,7 +296,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33_NTZ requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: construction-only ARM_CM33_NTZ must remain non-selectable");
+		"[fiber]: SVC-only ARM_CM33_NTZ must remain non-selectable");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM33_NTZ software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,
@@ -259,6 +322,24 @@ FIBER_STATIC_ASSERT(alignof(FiberContext) ==
 FIBER_STATIC_ASSERT(sizeof(FiberPortBoot) ==
 		FIBER_PORT_CM33_NTZ_BOOT_SIZE,
 		"[fiber]: ARM_CM33_NTZ boot size changed");
+FIBER_STATIC_ASSERT(fiber_portSVC_ORIGIN_EXC_RETURN == 0xFFFFFFB8u,
+		"[fiber]: ARM_CM33_NTZ first-start SVC origin changed");
+FIBER_STATIC_ASSERT((fiber_portINITIAL_EXC_RETURN & ~4u) ==
+		fiber_portSVC_ORIGIN_EXC_RETURN,
+		"[fiber]: ARM_CM33_NTZ SVC/PSP EXC_RETURN relationship changed");
+
+#ifndef FIBER_SVC_START_NUMBER
+# define FIBER_SVC_START_NUMBER 70
+#endif
+
+#if defined(FIBER_PENDSV_VECTOR_DIRECT) || defined(FIBER_SVC_VECTOR_DIRECT) || \
+		defined(FIBER_PENDSV_WIRED) || defined(FIBER_SVC_WIRED)
+# error "[fiber]: vector routing macros were removed; the selected port owns strong handlers"
+#endif
+
+FIBER_STATIC_ASSERT((FIBER_SVC_START_NUMBER >= 0) &&
+		(FIBER_SVC_START_NUMBER <= 255),
+		"[fiber]: FIBER_SVC_START_NUMBER must fit in an 8-bit SVC immediate");
 
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_context_cohort.h"

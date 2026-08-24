@@ -95,6 +95,20 @@ Every selected port must keep a FreeRTOS parity record: each relevant FreeRTOS
 CPU-port macro, helper, function, assembly label, config gate, and errata policy
 must be adopted, adapted, replaced, excluded with a reason, or deferred with a
 tracked TODO. Nothing relevant may disappear silently during a port rewrite.
+Every implementation slice that adds or changes first-start, save, restore,
+masking, privilege, security, or exception-transfer instructions must also
+compare the emitted Fiber disassembly with the pinned local FreeRTOS assembly.
+The parity ledger records both matching instruction order and every intentional
+divergence; the compile matrix checks the generated code. Source similarity or
+a successful compile alone is not an acceptable parity proof.
+
+`FREERTOS_ASM_PARITY.md` is the normative cross-port generated-code ledger.
+`tools/freertos_asm_parity.ps1` compiles both the pinned FreeRTOS artifact and
+the selected Fiber artifact with the same compiler, CPU/FPU ABI, and
+optimization flags. Every pair is checked at both `-O2` and `-Os`. A
+difference is accepted only through a documented
+`FAP-*` rationale ID. `transitional_v8m` is excluded from production parity,
+and an incomplete profile is checked only for the mechanisms it actually owns.
 
 Selected ports are the source of CPU facts. Selected-port implementation and
 compile-time validators consume those traits; layout-free common runtime code
@@ -628,7 +642,7 @@ Backlog required before stronger parity claims:
 | --- | --- | --- |
 | Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics and always compile the errata workaround. Runtime startup validates the M7 CPUID and immutable port trait. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
 | ARMv8-M Baseline / M23 | Exact build-selected `ARM_CM23_NTZ/non_secure` slices 1-5 define the Non-secure PSPLIM-slot policy, sealed frame, strong SVC first start, and exact non-MPU PendSV save/select/restore plus `runtime_schedule`. Its static archive, external cohort expectation, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. Auto/profile selection remains deliberately transitional. | Validate the concrete Non-secure profile on hardware before any support claim. Secure, MPU, and companion roles remain separate profiles. |
-| ARMv8-M Mainline / M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-2 freeze the privileged non-MPU/no-FPU NTZ layout and traits: live PSPLIM slot, `0xFFFFFFBC`, BASEPRI, FAULTMASK, one exact cohort, sealed boot record, and validated initial context construction. It deliberately provides no SVC/PendSV/scheduler runtime or handler. | Add SVC/PendSV runtime, archive/ELF proof, and hardware validation. SecureContext, TF-M, MPU, and M33F remain distinct exact profiles. |
+| ARMv8-M Mainline / M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-3 freeze the privileged non-MPU/no-FPU NTZ layout and traits, construct the sealed context, and add a strong, fail-closed SVC first-start path with generated-assembly parity against pinned FreeRTOS. It deliberately provides no PendSV, schedule operation, global selection, complete runtime archive, or hardware claim. | Add PendSV live-PSPLIM save/restore and the eighth forward operation, then complete archive/ELF and hardware validation. SecureContext, TF-M, MPU, and M33F remain distinct exact profiles. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
 | Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per runtime-image security/profile ABI and bind its identity-matched Secure artifact or TF-M component where required. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |

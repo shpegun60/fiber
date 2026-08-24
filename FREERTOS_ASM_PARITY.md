@@ -1,0 +1,190 @@
+# Generated Assembly Parity With FreeRTOS
+
+This document defines the generated-code comparison required before a selected
+port mechanism is accepted. The executable proof is
+`tools/freertos_asm_parity.ps1` and is also invoked by the compile matrix.
+
+## Reference
+
+The only accepted reference checkout for this proof is the local FreeRTOS
+Kernel commit:
+
+```text
+a50edad08b29052631aa469d4df6e6ec7ff68878
+```
+
+The parity script additionally verifies SHA-256 identities for every consumed
+`port.c`, `portasm.c`, `portasm.h`, `portmacro.h`, and `portmacrocommon.h`.
+A matching commit name with changed portable files therefore fails closed.
+
+Both the FreeRTOS object and the Fiber object are compiled by the same
+`arm-none-eabi-gcc`, with the same CPU, Thumb, FPU ABI, and optimization level.
+The mandatory matrix repeats every pair at `-O2` and `-Os`, then reads both
+objects with the same `objdump`. This covers the normal optimized validation
+shape and the size-optimized Release shape; it is not a claim of byte identity.
+
+## Comparison Rule
+
+Binary equality is neither required nor useful. Fiber has different symbols,
+extra validation branches, a user scheduler callback, and no FreeRTOS tick
+kernel. Instead, each mechanism has two ordered instruction signatures:
+
+```text
+pinned FreeRTOS generated function
+    ordered architecture operations
+
+Fiber generated function
+    corresponding ordered architecture operations
+    plus explicitly justified hardening/adaptation operations
+```
+
+The signatures cover register save/restore geometry, EXC_RETURN handling,
+PSP/MSP/PSPLIM/CONTROL writes, BASEPRI or PRIMASK envelopes, FP transfer order,
+MPU replacement order, SVC entry, and exception return. A missing, reordered,
+or newly unsupported operation fails the test.
+
+Source similarity and compile success are not parity evidence. A source change
+is accepted only when the generated object still passes the paired proof.
+
+## Covered Ports
+
+| Fiber port | FreeRTOS reference | Generated mechanisms covered |
+| --- | --- | --- |
+| `ARM_CM0` (M0 and M0+) | `GCC/ARM_CM0` | separate M0/no-VTOR and M0+/VTOR builds; first SVC request, first restore, PendSV save/mask/restore |
+| `ARM_CM3` | `GCC/ARM_CM3` | first SVC request, first restore, PendSV save/BASEPRI/restore |
+| `ARM_CM4` | `GCC/ARM_CM4F` | first SVC request, first restore, conditional FP PendSV |
+| `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
+| `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
+| `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | implemented SVC first-start slice only |
+| `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
+| `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
+
+`ARM_CM33_NTZ` does not yet claim PendSV parity because that selected port does
+not yet implement `PendSV_Handler` or runtime scheduling. The proof explicitly
+fails if the SVC-only slice silently starts exporting PendSV.
+
+The script also derives the production-port inventory from every
+`fiber/port/**/fiber_port.c`. The inventory must exactly match the paired
+profiles above, and every directory must contain `FREERTOS_PARITY.md`. Adding a
+new production port without adding its generated-code pair therefore fails the
+matrix instead of silently reducing coverage.
+
+`transitional_v8m` is intentionally excluded. It remains compile scaffolding
+and is not a production FreeRTOS-parity port.
+
+## Intentional Differences
+
+Every difference ID referenced by the executable proof is normative. A new
+difference requires a new ID and rationale before the generated-code check may
+accept it.
+
+### FAP-COMMON-START
+
+FreeRTOS starts the task already stored in `pxCurrentTCB`. Fiber first obtains a
+context from the configured user scheduler, publishes it through common-owned
+runtime state, validates the CPU/start plan, clears stale PendSV, and enters a
+dedicated first-start SVC. MSP/CONTROL writes are read back where the selected
+architecture permits it. This changes setup code but not exception-return
+geometry.
+
+### FAP-COMMON-PROVENANCE
+
+Fiber validates IPSR, incoming EXC_RETURN, stack origin/alignment, frame bounds,
+stacked xPSR/PC, context seal, and selected-context state before relying on the
+frame. FreeRTOS can trust its private kernel scheduler and TCBs and therefore
+has shorter handlers. These extra branches must precede the corresponding
+save or restore operation; they may not replace it.
+
+### FAP-COMMON-SCHEDULER
+
+`vTaskSwitchContext()` is replaced by the frozen Fiber scheduler bridge. The
+bridge invokes the user callback, validates its result, and lets common runtime
+publish the selected current context. The architecture-specific interrupt-mask
+envelope must remain in the same position around that call.
+
+### FAP-COMMON-MASK-RESTORE
+
+Where FreeRTOS relies on a known scheduler mask state and clears or enables it,
+Fiber preserves and validates the prior PRIMASK/BASEPRI state. This prevents a
+port helper from accidentally opening an interrupt mask owned by its caller.
+
+### FAP-CM0-STAGED-FRAME
+
+ARMv6-M cannot directly transfer `r8-r11` with the Thumb-2 multiple-register
+forms. Both implementations stage high registers through `r4-r7`. Fiber also
+keeps EXC_RETURN in its explicit nine-word software frame and performs the
+inverse staged restore inside its hardened SVC/PendSV handlers.
+
+### FAP-CM3-EXC-RETURN
+
+The pinned FreeRTOS CM3 first restore reconstructs Thread/PSP return by OR-ing
+the handler LR. Fiber stores exact EXC_RETURN in every context and restores it
+with `r4-r11`. This permits exact encoding validation and avoids manufacturing
+return authority in the handler.
+
+### FAP-FP-VALIDATION
+
+CM4/CM7 Fiber retains the FreeRTOS EXC_RETURN-bit-4 conditional transfer of
+`s16-s31`. It adds FP frame-extent, FPCA, CPACR, FPCCR, alignment, and context
+validation. No extra FP register is treated as caller-saved scheduler state.
+
+### FAP-CM7-ERRATA-PRIMASK
+
+The pinned CM7 r0p1 FreeRTOS port uses `cpsid i`/`cpsie i` around BASEPRI writes
+for erratum 837070. Fiber instead snapshots PRIMASK, disables interrupts,
+writes and synchronizes BASEPRI, then restores the exact old PRIMASK. This is
+strictly stronger when the incoming state was already masked.
+
+### FAP-M23-PSPLIM-PLACEHOLDER
+
+The NTZ Cortex-M23 layout retains the FreeRTOS PSPLIM-compatible reserved word,
+although M23 cannot access PSPLIM. Initial construction seeds the placeholder;
+ordinary PendSV saves zero and neither generated handler may emit a PSPLIM
+instruction. The remaining EXC_RETURN and `r4-r11` geometry stays ten words.
+
+### FAP-M33-FULL-FIRST-RESTORE
+
+The current CM33 slice restores the full PendSV-shaped
+`[PSPLIM, EXC_RETURN, r4-r11]` frame during first SVC instead of using the
+shorter FreeRTOS first-task helper. It additionally reads back PSPLIM, CONTROL,
+PSP, BASEPRI, and FAULTMASK. This guarantees that the initial frame already has
+the exact shape a later PendSV implementation must consume.
+
+### FAP-MPU-SVC-NAMESPACE
+
+FreeRTOS MPU ports multiplex kernel wrapper and privilege services. Fiber owns
+only its compile-time-checked start, yield, and task-return SVC values. Unknown
+or incorrectly originated services panic instead of falling through to a
+generic kernel dispatcher.
+
+### FAP-MPU-PROTECTED-FRAME
+
+Like the pinned FreeRTOS MPU ports, Fiber copies the hardware frame from the
+unprivileged PSP stack into privileged context storage. CONTROL, core state,
+optional FP state, the hardware frame copy, and MPU descriptors are restored
+from the protected `FiberContext`; no software authority frame is left on the
+user stack.
+
+### FAP-MPU-FIRST-ACTIVATION-SPLIT
+
+FreeRTOS programs the first task's MPU image inside
+`prvRestoreContextOfFirstTask()`. Fiber's validated SVC dispatcher first calls
+the selected-port MPU activation helper and only then enters
+`fiber_port_restore_first_context_from_svc()`. The executable proof checks this
+cross-function order as well as the register restore performed by the helper;
+splitting the functions may not omit or postpone MPU activation.
+
+### FAP-MPU-ATOMIC-SWITCH
+
+Fiber performs scheduler selection under BASEPRI, then closes PRIMASK while it
+replaces the selected context's MPU image and restore authority. It validates
+the programmed MPU state before reopening PRIMASK. The pinned FreeRTOS path
+programs the same architectural MPU registers but relies on kernel-private TCB
+state and a shorter trust boundary.
+
+## Non-Claims
+
+Generated assembly parity proves compiler output shape for the tested flags. It
+does not prove board vector routing, silicon errata behavior, memory-map linker
+truth, interrupt priority readback, or long-run FP preservation. Those remain
+separate ELF and hardware validation requirements.

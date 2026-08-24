@@ -1,5 +1,9 @@
 # GCC ARM_CM7 r0p1 FreeRTOS Parity Record
 
+Paired generated-object evidence for SVC, conditional FP PendSV, and the r0p1
+BASEPRI workaround is mandatory under `../../../../FREERTOS_ASM_PARITY.md`;
+this ledger supplies the complete port-specific classification.
+
 This record tracks the first FreeRTOS-style selected source group in `fiber`.
 The goal is not to copy FreeRTOS source text. The goal is to audit every CPU
 port mechanism in the local FreeRTOS reference and either reimplement it,

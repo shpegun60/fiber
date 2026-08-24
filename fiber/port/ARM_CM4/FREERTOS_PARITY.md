@@ -1,5 +1,9 @@
 # ARM_CM4 FreeRTOS Parity Record
 
+Paired generated-object evidence for the conditional FP save/restore path is
+mandatory under `../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the
+port-specific source classification behind that executable proof.
+
 This is the exhaustive mechanism ledger for the Cortex-M4/M4F selected port.
 Every relevant item in the pinned reference is classified. No FreeRTOS source
 text is copied into the fiber implementation.

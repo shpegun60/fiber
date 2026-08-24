@@ -1,5 +1,9 @@
 # ARM_CM0 FreeRTOS Parity Record
 
+Paired generated-object evidence for both M0/no-VTOR and M0+/VTOR builds is
+mandatory under `../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the
+port-specific source classification behind those executable checks.
+
 This is the exhaustive mechanism ledger for the privileged Cortex-M0/M0+
 selected port. The pinned FreeRTOS directory contains both non-MPU and optional
 MPU/unprivileged branches. This profile deliberately implements only the

@@ -1,5 +1,10 @@
 # ARM_CM4_MPU FreeRTOS Parity Record
 
+Paired generated-object evidence for SVC dispatch, protected FP context copy,
+MPU replacement, and PendSV restore is mandatory under
+`../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the exhaustive policy
+classification.
+
 ## Status
 
 Implementation slices 1-5 are complete for the exact `ARM_CM4_MPU` profile.
