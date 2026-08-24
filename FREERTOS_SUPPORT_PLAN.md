@@ -76,7 +76,7 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 Closed hardening items from the FreeRTOS comparison:
 
 - the compile matrix now runs one paired generated-assembly cohort for M0,
-  M0+, M3, M4F, M7 r0p1, M23 NTZ, the implemented M33 NTZ SVC-start slice,
+  M0+, M3, M4F, M7 r0p1, M23 NTZ, M33 NTZ, M33F NTZ,
   CM3 MPU, and CM4 MPU. It verifies the pinned FreeRTOS commit plus every
   consumed portable-file hash, compiles both objects with identical CPU/FPU
   flags, and checks ordered first-start, save, mask, MPU/FP, restore, and
@@ -156,6 +156,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M7F | STM32H7 embedding build selects the concrete FreeRTOS-referenced `ARM_CM7/r0p1` source group; compile matrix requires one complete port ABI definition set | Re-run H7 normal and all trap modes after current hardening; validate r0p0/r0p1 on affected hardware |
 | Cortex-M23 | Exact build-selected `ARM_CM23_NTZ` slices 1-5 freeze the FreeRTOS ten-word non-MPU Non-secure frame, implement sealed context construction, strong fail-closed SVC first start, exact `0xFFFFFFB8` provenance, and PendSV save/select/restore with `+24/-36` Thumb-1 geometry; the ignored PSPLIM slot starts with `stack_base`, each ordinary save writes zero, and register access stays disabled. Static archive extraction, exact cohort, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. | Validate the concrete Non-secure profile on hardware; keep global selector routing and Secure/MPU roles separate |
 | Cortex-M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-4 freeze the pinned FreeRTOS Mainline NTZ non-MPU/no-FPU ten-word `[PSPLIM][EXC_RETURN][r4-r11]` layout and implement sealed construction, paranoid SVC first start, exact live-PSPLIM PendSV save/restore, the eighth forward operation, paired `-O2`/`-Os` assembly parity, and normal/LTO archive/vector/ELF proofs. Global auto-selection and hardware support remain unclaimed. | Validate the concrete NTZ runtime on Cortex-M33 hardware; keep MPU, SecureContext, TF-M, and M33F as separate profiles. |
+| Cortex-M33F | Exact build-selected `ARM_CM33F_NTZ/non_secure` slices 1-4 define the FPU cohort, sealed 72-byte basic initial frame, 212-byte maximum frame, CPACR/FPCCR setup/readback, strict SVC first start, and exact basic/extended FP PendSV save/select/restore with PSPLIM. Hard-float and softfp builds pass paired construction/SVC/PendSV generated-assembly checks; normal/LTO archive proof retains strong SVC/PendSV handlers in slots 11/14, all eight forward ABI operations, and rejects competing handler ownership. Global auto-selection and hardware support remain unclaimed. | Validate first start plus basic/extended FP switching, vectors, priority readback, and long-run FPU stress on real Cortex-M33F Non-secure hardware. |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
 
 ## Priority Roadmap

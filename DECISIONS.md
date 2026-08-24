@@ -1,5 +1,52 @@
 # Fiber Decision Log
 
+## 2026-08-24: Complete ARM_CM33F_NTZ FP-Aware Runtime
+
+Slice 4 completes the exact build-selected `ARM_CM33F_NTZ/non_secure` runtime
+without widening the no-FPU M33 profile or global selection. The strong
+`PendSV_Handler` retains the pinned FreeRTOS non-MPU CM33 FPU order:
+conditionally save `s16-s31`, save `[PSPLIM, EXC_RETURN, r4-r11]`, execute the
+scheduler under BASEPRI, then restore the same core/FP state and return through
+the selected EXC_RETURN. Basic and extended frames remain exactly 72 and up to
+212 bytes respectively.
+
+Fiber adds selected-context provenance, metadata/canary/frame bounds, live
+PSPLIM, CPACR/FPCCR, scheduler-state, and post-restore readback checks without
+changing the saved context words. `LSPACT` remains forbidden for the one-shot
+first SVC start but is allowed during PendSV, where the first VFP operation may
+complete legitimate lazy state preservation. The port now exposes all eight
+forward ABI functions with strong SVC/PendSV handlers when explicitly
+build-selected. Hard-float and softfp `-O2/-Os` generated assembly plus
+normal/LTO archive/vector proofs are required; no M33F hardware claim exists
+until a real Non-secure board passes basic and extended FP switching stress.
+
+## 2026-08-24: Stage ARM_CM33F_NTZ FPU And SVC Start Before PendSV
+
+Added build-selected `ARM_CM33F_NTZ/non_secure` slices 1-3 instead of widening
+the no-FPU `ARM_CM33_NTZ` profile. The pinned FreeRTOS
+`pxPortInitialiseStack()` path proves that `configENABLE_FPU=1` still starts on
+the same basic `[PSPLIM, EXC_RETURN, r4-r11]` plus hardware frame. Fiber freezes
+that 72-byte initial image and separately reserves the 212-byte dynamic maximum
+for `s16-s31`, the extended hardware frame, and alignment padding.
+
+The exact cohort uses port ID `C3FN`, layout v1, feature mask `0x83`, basic
+`EXC_RETURN=0xFFFFFFBC`, and extended `EXC_RETURN=0xFFFFFFAC`. Hard-float and
+softfp builds are accepted only when compiler, CMSIS, and silicon all report FP
+use; soft/no-FP, MPU, MVE, PAC, BTI, wrong core, and Secure CMSE combinations
+fail closed. Constructor code is `general-regs-only` and paired with the pinned
+FreeRTOS generated frame at `-O2` and `-Os`. Its private boot constructor fills
+the destination in place, so pre-FPU construction has no `memcpy` or `memset`
+dependency outside the attribute-controlled port call graph.
+
+The first behavior slice now owns CPACR/FPCCR setup with barriers/readback,
+uses `FIBER_FPU_LAZY` only for the LSPEN policy, rejects active lazy state, and
+starts the initial basic context through one strict strong `SVC_Handler`.
+Normal/LTO archive proofs retain that handler in vector slot 11, leave slot 14
+empty, and reject a competing strong SVC definition. This is still not a
+runtime promotion: `FIBER_PORT_RUNTIME_SELECTABLE` remains zero and the port
+defines neither `PendSV_Handler` nor `fiber_port_runtime_schedule`. FP-aware
+PendSV remains a separate behavior-changing slice.
+
 ## 2026-08-24: Complete ARM_CM33_NTZ Non-MPU Runtime
 
 Implementation slice 4 completes the exact build-selected

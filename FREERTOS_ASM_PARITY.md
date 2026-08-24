@@ -56,14 +56,16 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
+| `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
 
-The script also derives the production-port inventory from every
-`fiber/port/**/fiber_port.c`. The inventory must exactly match the paired
-profiles above, and every directory must contain `FREERTOS_PARITY.md`. Adding a
-new production port without adding its generated-code pair therefore fails the
-matrix instead of silently reducing coverage.
+The script derives the port inventory from every `fiber/port/**/fiber_port.c`.
+The inventory must exactly match the paired profiles above, and every directory
+must contain `FREERTOS_PARITY.md`. A staged partial-runtime profile is listed
+explicitly with only its implemented mechanisms; it does not inherit a complete
+runtime claim. Adding any port source without a generated-code pair therefore
+fails the matrix instead of silently reducing coverage.
 
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
@@ -153,6 +155,46 @@ the software frame. Fiber preserves the same ten-word geometry and additionally
 requires live PSPLIM to match the current stack base before save, reads PSPLIM
 back after restore, and validates PSP after its write. These checks add no
 context word and do not change the reference register-transfer order.
+
+### FAP-CM33F-CONSTRUCTION
+
+FreeRTOS uses the same basic `pxPortInitialiseStack()` image whether
+`configENABLE_FPU` is zero or one; high FP state exists only after an extended
+exception frame is active. Fiber preserves the same 72-byte initial geometry
+and six architecturally significant seed values, but additionally zeroes the
+unspecified synthetic registers, preserves r9, seals immutable metadata, and
+validates the completed frame. Neither generated constructor may touch FP
+registers before runtime FPU setup. SVC and PendSV parity are separate proofs
+under `FAP-CM33F-SVC-START` and `FAP-CM33F-FP-PENDSV`; neither is implied by
+this construction difference ID.
+
+### FAP-CM33F-SVC-START
+
+The pinned FreeRTOS M33 NTZ FPU configuration enables CP10/CP11 and FPCCR
+automatic/lazy preservation before restoring the first task through SVC. Fiber
+keeps the same basic first-task frame and SVC transfer, but makes the selected
+FPU policy explicit: CPACR/FPCCR writes have barriers and readback, LSPEN is
+selected by `FIBER_FPU_LAZY`, and a start is rejected while `LSPACT` is active.
+The Fiber SVC handler is intentionally narrower than FreeRTOS's generic
+dispatcher: it accepts only the configured first-start immediate and exact
+Non-secure Thread/MSP/basic provenance, validates the FPU policy again, clears
+FPCA before transfer, and restores only an initial basic frame. The later
+FP-aware PendSV proof is recorded separately.
+
+### FAP-CM33F-FP-PENDSV
+
+The pinned FreeRTOS non-MPU CM33 FPU path conditionally saves `s16-s31` before
+its ten-word `[PSPLIM, EXC_RETURN, r4-r11]` software frame, and conditionally
+restores those high FP registers after that core frame. Fiber retains that
+order and the exact basic/extended EXC_RETURN distinction. It additionally
+accepts only the selected Non-secure Thread/PSP provenance, validates current
+context metadata before any context-field load, proves the dynamic basic or
+extended hardware/software frame bounds, verifies live PSPLIM, calls the
+frozen scheduler bridge under BASEPRI, validates the selected restore frame,
+and reads PSPLIM/PSP back after restore. `LSPACT` is allowed in PendSV because
+the first VFP instruction may complete legitimate lazy preservation; it
+remains rejected during the one-shot first SVC start. These checks do not add
+or reorder any saved context slot.
 
 ### FAP-MPU-SVC-NAMESPACE
 

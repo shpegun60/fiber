@@ -93,6 +93,19 @@ behind a permissive generic v8-M path. The exact generated-assembly mapping is
 recorded in
 `fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
+implement port-owned FPU setup/readback, strict first-start SVC, and a complete
+FP-aware PendSV runtime. FreeRTOS keeps a new FPU task on the same 72-byte
+basic initial frame; the port reserves a 212-byte maximum for dynamic
+`s16-s31` plus extended hardware state. Hard-float and softfp construction,
+SVC, and basic/extended FP PendSV code are paired against the pinned FreeRTOS
+source at `-O2/-Os`. The profile is build-selected only and has
+`FIBER_PORT_RUNTIME_SELECTABLE == 1`: it exports strong `SVC_Handler` and
+`PendSV_Handler` plus all eight forward operations. It remains hardware
+unvalidated and intentionally excludes MPU, SecureContext, TF-M, MVE, PAC,
+and BTI APIs. See
+`fiber/port/ARM_CM33F_NTZ/non_secure/FREERTOS_PARITY.md`.
+
 ## Project Setup
 
 Add the repository root to the include path, then include the public API:
@@ -144,7 +157,7 @@ M23 NTZ runtime:
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot.c
 
-M33 NTZ construction-only staging (not a runtime source group):
+M33 NTZ full build-selected runtime source group:
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_portmacro.h
@@ -152,6 +165,15 @@ M33 NTZ construction-only staging (not a runtime source group):
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_private.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
+
+M33F NTZ full build-selected FPU runtime source group:
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port.c
+               fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot.c
 ```
 
 Every build-selected target must also compile this source separately from any
@@ -678,11 +700,12 @@ an application override. The non-production v8-M fallback uses explicitly
 scoped `FIBER_TRANSITIONAL_V8M_*` bring-up inputs, which do not provide
 production TrustZone or Non-secure support.
 
-Cortex-M23 and Cortex-M33 each have one exact build-selected Non-secure
-non-MPU profile with compile/generated-assembly/ELF evidence but no hardware
-validation. Cortex-M55, MVE, TrustZone/SecureContext companion, TF-M, M33F,
-and PAC/BTI scenarios remain unsupported until their distinct FreeRTOS-style
-context layouts are implemented and hardware-validated.
+Cortex-M23, no-FPU Cortex-M33, and FPU Cortex-M33F each have an exact
+build-selected Non-secure non-MPU runtime profile with
+compile/generated-assembly/ELF evidence but no hardware validation. Cortex-M55, MVE,
+TrustZone/SecureContext companion, TF-M, and PAC/BTI scenarios remain
+unsupported until their distinct FreeRTOS-style context mechanics are
+implemented and hardware-validated.
 `FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank

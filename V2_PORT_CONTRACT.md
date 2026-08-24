@@ -237,6 +237,28 @@ fiber/
         fiber_port.c
         fiber_port_boot.c
         FREERTOS_PARITY.md
+    ARM_CM33_NTZ/
+      non_secure/
+        # Exact no-FPU NTZ runtime.
+        fiber_port_types.h
+        fiber_port_boot_types.h
+        fiber_portmacro.h
+        fiber_port_boot.h
+        fiber_port_private.h
+        fiber_port.c
+        fiber_port_boot.c
+        FREERTOS_PARITY.md
+    ARM_CM33F_NTZ/
+      non_secure/
+        # Exact build-selected FPU runtime with SVC and FP-aware PendSV.
+        fiber_port_types.h
+        fiber_port_boot_types.h
+        fiber_portmacro.h
+        fiber_port_boot.h
+        fiber_port_private.h
+        fiber_port.c
+        fiber_port_boot.c
+        FREERTOS_PARITY.md
     ARM_CM7/
       r0p1/
         fiber_port_types.h
@@ -643,8 +665,9 @@ Backlog required before stronger parity claims:
 | Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics and always compile the errata workaround. Runtime startup validates the M7 CPUID and immutable port trait. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
 | ARMv8-M Baseline / M23 | Exact build-selected `ARM_CM23_NTZ/non_secure` slices 1-5 define the Non-secure PSPLIM-slot policy, sealed frame, strong SVC first start, and exact non-MPU PendSV save/select/restore plus `runtime_schedule`. Its static archive, external cohort expectation, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. Auto/profile selection remains deliberately transitional. | Validate the concrete Non-secure profile on hardware before any support claim. Secure, MPU, and companion roles remain separate profiles. |
 | ARMv8-M Mainline / M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-4 freeze the privileged non-MPU/no-FPU NTZ layout and traits and implement sealed construction, strong fail-closed SVC/PendSV handlers, exact live-PSPLIM save/restore, all eight forward operations, paired generated-assembly parity, and normal/LTO archive/vector/ELF proofs. It deliberately provides no global auto-selection or hardware claim. | Validate the concrete NTZ runtime on Cortex-M33 hardware. SecureContext, TF-M, MPU, and M33F remain distinct exact profiles. |
+| ARMv8-M Mainline / M33F | Exact build-selected `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the FPU cohort independently from `ARM_CM33_NTZ`: FPU/compiler/CMSIS agreement, exact basic/extended EXC_RETURN set, 72-byte initial frame, 212-byte maximum, distinct `C3FN` identity, sealed construction, CPACR/FPCCR prepare/readback, strict first-start SVC, and FreeRTOS-shaped FP PendSV (`s16-s31`, ten-word PSPLIM/core frame, scheduler BASEPRI bridge, restore). Paired hard-float/softfp construction/SVC/PendSV generated-code checks plus normal/LTO archive/vector proofs retain both strong handlers in slots 11/14, all eight forward operations, and reject competing handler ownership. `FIBER_PORT_RUNTIME_SELECTABLE` is one only when this exact profile is explicitly build-selected. | Validate FPU first-start, basic/extended FP switching, vector/priority readback, and long-run stress on concrete Non-secure hardware before support. |
 | ARMv8.1-M / M55 / MVE | Selection can detect MVE and route to the ARMv8.1-M profile; transitional SVC/PendSV/frame code is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level. | Implement MVE-only and PAC/BTI policy where applicable, stack-frame implications, and validation beyond scalar FP stress tests. |
-| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, and concrete CM7 have separate source groups; v8-M classes still share `transitional_v8m`. | Replace the transitional v8-M group with one concrete runtime source group per runtime-image security/profile ABI and bind its identity-matched Secure artifact or TF-M component where required. |
+| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, concrete CM7, M23 NTZ, M33 NTZ, and M33F NTZ have separate runtime source groups. Global v8-M auto/profile routing and unported M55/security roles still use `transitional_v8m`. | Replace remaining transitional v8-M roles with one concrete runtime source group per runtime-image security/profile ABI and bind its identity-matched Secure artifact or TF-M component where required. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
 Do not describe a profile as FreeRTOS-level only because it has selection logic.
@@ -1587,9 +1610,11 @@ P3: ARMv8-M Baseline / Cortex-M23
   Keep Secure/MPU ownership separate before any FreeRTOS-level claim.
 
 P4: ARMv8-M Mainline / Cortex-M33
-  Runtime policy gates exist.
-  Split or implement Secure, Non-secure, NTZ, and TFM behavior.
-  Validate EXC_RETURN, vector ownership, PSPLIM, CONTROL, and FP access policy.
+  The exact no-FPU NTZ runtime is software-covered but hardware-unvalidated.
+  The separate M33F NTZ profile now has exact construction, FPU setup, strict
+  SVC first start, dynamic basic/extended FP PendSV, and archive/ELF proof.
+  Validate both exact profiles on real hardware before promotion. Keep Secure,
+  SecureContext, MPU, and TF-M as distinct selected profiles.
 
 P5: ARMv8.1-M / Cortex-M55 / MVE
   Runtime policy gates exist.
