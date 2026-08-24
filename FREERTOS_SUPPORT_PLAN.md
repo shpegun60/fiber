@@ -29,8 +29,22 @@ TrustZone Secure companion gateways are versioned cross-image ABIs; TF-M
 profiles use the matching NTZ-style CPU port and TF-M integration instead of the
 fiber-owned SecureContext companion.
 
+The future user lifecycle for a fiber-owned SecureContext companion is frozen
+in `TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`. It intentionally uses a selected-port
+pre-start attachment rather than copying FreeRTOS's task-side allocation macro:
+fiber contexts are static and sealed before `fiber_start()`, while PendSV still
+owns all automatic Secure save/load work.
+
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
+
+`CONTEXT_FIBER_ARCHITECTURE.md` freezes the later module boundary around this
+work. FreeRTOS parity belongs to selected processor Context backends: initial
+frame construction, exception entry/return, register save/restore, masks,
+FPU/MPU/security state, and architecture errata. FreeRTOS scheduler lists,
+queues, task policy, and public APIs are not imported. The portable Fiber and
+C++ Kernel layers consume the Context dispatcher surface and remain independent
+of every concrete `portable/` implementation.
 
 The required common-core boundary before production ports are added in bulk is
 defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. `fiber_api_types.h` exposes only

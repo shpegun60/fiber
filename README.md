@@ -11,11 +11,12 @@ context through SVC and an exception return.
 
 ## Architecture Direction
 
-The five-function cooperative API is intended to remain stable while CPU
-context storage is selected-port-owned. `fiber_core.h` completes `FiberContext`
-through one selected public type-only port header, and `FiberEntryFn` is the
-named entry type with `entry_t` kept as a compatible alias. Each current port
-owns its `FiberPortBoot` record, hash implementation, stack geometry, restore
+The five-function cooperative API is the active v2 porting and validation
+baseline while CPU context storage is selected-port-owned. `fiber_core.h`
+completes `FiberContext` through one selected public type-only port header, and
+`FiberEntryFn` is the named entry type with `entry_t` kept as a compatible
+alias. Each current port owns its `FiberPortBoot` record, hash implementation,
+stack geometry, restore
 validation, and first-start preparation. The current physical layout remains
 `sp + FiberPortBoot` for compatibility, but `fiber_core.c` and the common
 scheduler bridge use only callable port ABI functions and do not dereference
@@ -36,6 +37,18 @@ outside the port source group, retain its read-only linker section, and pass the
 final-ELF cohort and vector audit. Refreshed H7 board evidence remains the
 outstanding validation requirement.
 
+`CONTEXT_FIBER_ARCHITECTURE.md` freezes the post-port-freeze separation of this
+runtime into a processor execution-context engine, a portable stackful Fiber
+lifecycle, and C++ Task/Kernel policy layers. The existing selected ports become
+Context backends; they are not rewritten into direct Boost.Context-style jumps.
+The document is a future migration contract only. Current v2 symbols, frame
+layouts, handlers, directional ABIs, and validation claims are unchanged.
+After that extraction, supporting another processor means adding one complete
+Context backend and its conformance evidence; Fiber and C++ kernel sources stay
+unchanged. Applications that use only the portable kernel and service APIs are
+source-portable across accepted backends; board, HAL, linker, and peripheral
+integration remains platform-specific.
+
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
 selected-port integration headers and sources. Those extensions are not
@@ -45,17 +58,23 @@ production profile must provide a safe default that runs the same feature-blind
 application source without any extension call; optional headers are for
 deliberate non-portable profile integration only.
 
+`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md` defines the future TrustZone
+SecureContext lifecycle: a selected TrustZone port attaches Secure state to a
+specific fiber before `fiber_start()`, then owns all Secure save/load work at
+switch time. It is a design contract only; no current port exports that API.
+
 This portability guarantee covers the fiber lifecycle and context-switch
 mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another
 profile-only service still depends on that service. Applications requiring the
 same operation across profiles keep it behind a separate application-level
 service interface; fiber feature ABIs are not general service APIs.
 
-`CPP_KERNEL_ARCHITECTURE.md` records the future layer above this runtime: a
-reference C++ scheduler with compile-time cooperative or preemptive policy,
-portable synchronization rules, an explicit ISR reschedule boundary, and lwIP
-adapters. That layer consumes the existing scheduler hook; queues, ticks, and
-network policy do not enter the CPU-port ABI.
+`CPP_KERNEL_ARCHITECTURE.md` records the future layers above the Context engine:
+a portable Fiber lifecycle and a reference C++ scheduler with compile-time
+cooperative or preemptive policy, portable synchronization rules, an explicit
+ISR reschedule boundary, and lwIP adapters. During v2 port completion that
+design continues to consume the existing scheduler hook. Queues, ticks, and
+network policy never enter the CPU-port ABI.
 
 `ARM_CM4_MPU` is a complete exact build-selected port after implementation
 slice 5. It freezes the pinned FreeRTOS 53-word protected FP context, constructs

@@ -1,5 +1,63 @@
 # Fiber Decision Log
 
+## 2026-08-24: Freeze Context, Fiber, And Kernel Layer Separation
+
+The current five-function v2 runtime remains the active porting and validation
+baseline. After the required Cortex-M ports and hardware checkpoints are
+frozen, its CPU mechanics will be extracted behind a standardized Context
+consumer surface. Existing selected ports become Context backends and retain
+their FreeRTOS-derived SVC/PendSV implementation, exact context cohorts,
+private feature state, and proof obligations.
+
+Context owns opaque CPU execution state, current publication, one registered
+dispatcher, first start, Thread-mode yield, the future ISR reschedule boundary,
+and all CPU-specific validation. Fiber consumes Context and owns stackful
+identity and execution lifetime. The C++ Task/Kernel layer owns ready, wait,
+sleep, time, synchronization, and scheduler policy. Scheduler policies operate
+on Tasks or Fibers and never inspect selected context fields.
+
+After extraction, adding a processor or execution profile means implementing
+one complete Context backend plus its build, ABI/cohort, generated-code, and
+hardware evidence. It must not require a processor branch or source change in
+Fiber, Task, SchedulerPolicy, synchronization, or service-adapter layers.
+
+No public `context_switch(from, to)`, direct resume target, or manual first
+target is permitted. First and later targets come only from the registered
+dispatcher inside the selected port's protected envelope. A future host backend
+may use Boost.Context for lifecycle and policy tests, but cannot claim Cortex-M
+ISR, MPU, TrustZone, vector, or hardware behavior.
+
+This is a documentation-only architectural decision. It changes no current
+symbol, ABI, frame, handler, or generated assembly. The normative ownership,
+execution flows, negative dependency rules, proofs, and mechanical migration
+slices are in `CONTEXT_FIBER_ARCHITECTURE.md`.
+
+## 2026-08-24: Freeze Future TrustZone SecureContext User Lifecycle
+
+No current selected Fiber port implements TrustZone SecureContext support.
+`ARM_CM23_NTZ`, `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` therefore
+export neither a SecureContext header nor a compatibility stub.
+
+A full TrustZone profile implemented on the active v2 baseline keeps the
+mandatory five-function public API and eight-function runtime ABI unchanged.
+Its selected Non-secure port exposes a separate, profile-specific pre-start
+attachment operation for a fiber that will use Secure services. The context is
+attached after `fiber_init()` and before the first `fiber_start()`, then sealed
+as selected-port metadata. PendSV, not application code, saves and restores
+that fiber's Secure state through one matching versioned Secure companion
+gateway. After the later Context/Fiber extraction, the same mechanics belong
+to the selected Context backend and the security outcome does not change.
+
+This intentionally differs from FreeRTOS's task-side
+`portALLOCATE_SECURE_CONTEXT()` call. Fiber has a static sealed-context
+lifecycle rather than a mutable TCB lifecycle, but preserves the relevant
+outcome: only an attached fiber receives a private Secure stack/state, and a
+fiber without an attachment cannot inherit it. TrustZone remains distinct from
+MPU task isolation. TF-M is an alternative Secure provider and is mutually
+exclusive with the fiber-owned SecureContext companion for one selected
+profile. The full artifact and proof contract is in
+`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.
+
 ## 2026-08-24: Complete ARM_CM33F_NTZ FP-Aware Runtime
 
 Slice 4 completes the exact build-selected `ARM_CM33F_NTZ/non_secure` runtime

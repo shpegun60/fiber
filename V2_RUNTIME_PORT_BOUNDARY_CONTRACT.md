@@ -75,6 +75,22 @@ The boundary is intentionally narrower than the current implementation. Common
 code must not transport or interpret MSP, PSP, PSPLIM, EXC_RETURN, CONTROL,
 BASEPRI, VTOR, vector slots, frame offsets, or selected context fields.
 
+## Post-Port-Freeze Context Extraction
+
+This document remains normative for the active v2 runtime and every current
+port proof. `CONTEXT_FIBER_ARCHITECTURE.md` defines a later versioned extraction
+in which the CPU-neutral runtime becomes a standalone Context engine, Fiber
+becomes its lifecycle consumer, and the C++ Kernel owns scheduling policy.
+
+That later separation does not authorize a direct `from`/`to` switch API and
+does not replace the current exception-driven selected ports with
+Boost.Context-style cooperative jumps. Existing ports, handlers, frames, and
+FreeRTOS parity ledgers migrate as Context backends. Any symbol or directional
+ABI rename requires new anchors, stale-cohort negative links, generated-code
+comparison, and target hardware evidence. Until that migration is activated,
+the five public and eight forward ABI functions below remain the exact current
+contract.
+
 ## Stable Portable Common API
 
 The portable common API exported by `fiber_core.h` remains exactly:
