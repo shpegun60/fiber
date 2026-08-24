@@ -3455,7 +3455,7 @@ typedef enum IRQn {
     }
 }
 
-function Test-ArmCm33NtzLayoutContract {
+function Test-ArmCm33NtzConstructionContract {
     param(
         [string]$RepositoryRoot,
         [string]$Compiler,
@@ -3472,22 +3472,24 @@ function Test-ArmCm33NtzLayoutContract {
             (Join-Path $profileDir "fiber_port_types.h"),
             (Join-Path $profileDir "fiber_port_boot_types.h"),
             (Join-Path $profileDir "fiber_portmacro.h"),
+            (Join-Path $profileDir "fiber_port_boot.h"),
+            (Join-Path $profileDir "fiber_port_private.h"),
+            (Join-Path $profileDir "fiber_port.c"),
+            (Join-Path $profileDir "fiber_port_boot.c"),
             (Join-Path $profileDir "FREERTOS_PARITY.md"),
             $fixture)) {
         if (-not (Test-Path -LiteralPath $required)) {
-            throw "ARM_CM33_NTZ slice 1 is missing: $required"
+            throw "ARM_CM33_NTZ construction slice is missing: $required"
         }
     }
 
     foreach ($forbiddenRuntime in @(
-            "fiber_port.c",
-            "fiber_port_boot.c",
-            "fiber_port_boot.h",
-            "fiber_port_private.h",
             "fiber_port_exception.c",
-            "fiber_portasm.c")) {
+            "fiber_portasm.c",
+            "fiber_port_mpu.c",
+            "fiber_port_secure_context.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenRuntime)) {
-            throw "ARM_CM33_NTZ slice 1 must not expose runtime artifact: $forbiddenRuntime"
+            throw "ARM_CM33_NTZ construction slice must not expose runtime artifact: $forbiddenRuntime"
         }
     }
 
@@ -3524,8 +3526,12 @@ function Test-ArmCm33NtzLayoutContract {
             "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B",
             "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
             "DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5",
+            "00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743CE1706F3E",
             "live `PSPLIM` value",
             "ten-word software frame",
+            "sealed boot record",
+            "fiber_port_context_init()",
+            "fiber_port_init_context_frame()",
             "mpu_wrappers_v2_asm.c")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
@@ -3639,6 +3645,179 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM33_NTZ exact cohort lost token ${token}: $($cohorts[0])"
         }
+    }
+
+    $frameSourcePath = Join-Path $profileDir "fiber_port.c"
+    $bootSourcePath = Join-Path $profileDir "fiber_port_boot.c"
+    $privateHeaderPath = Join-Path $profileDir "fiber_port_private.h"
+    $frameSource = Get-Content -LiteralPath $frameSourcePath -Raw
+    $bootSource = Get-Content -LiteralPath $bootSourcePath -Raw
+    $privateHeader = Get-Content -LiteralPath $privateHeaderPath -Raw
+
+    foreach ($forbiddenRuntimeToken in @(
+            "SVC_Handler",
+            "PendSV_Handler",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule",
+            "__set_PSPLIM",
+            "msr   psplim")) {
+        if (($frameSource.IndexOf($forbiddenRuntimeToken,
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($bootSource.IndexOf($forbiddenRuntimeToken,
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($privateHeader.IndexOf($forbiddenRuntimeToken,
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+            throw "ARM_CM33_NTZ construction slice exposed runtime token: $forbiddenRuntimeToken"
+        }
+    }
+
+    $frameBody = Get-CFunctionBody -Source $frameSource `
+        -Signature "void fiber_port_init_context_frame(FiberContext *const ctx)" `
+        -Path $frameSourcePath
+    foreach ($assignment in @(
+            "frame[fiber_portFRAME_PSPLIM] = (uint32_t)ctx->boot.stack_base;",
+            "frame[fiber_portFRAME_EXC_RETURN] = fiber_portINITIAL_EXC_RETURN;",
+            "frame[fiber_portFRAME_R4] = 0u;",
+            "frame[fiber_portFRAME_R5] = 0u;",
+            "frame[fiber_portFRAME_R6] = 0u;",
+            "frame[fiber_portFRAME_R7] = 0u;",
+            "frame[fiber_portFRAME_R8] = 0u;",
+            "frame[fiber_portFRAME_R9] = fiber_port_read_r9();",
+            "frame[fiber_portFRAME_R10] = 0u;",
+            "frame[fiber_portFRAME_R11] = 0u;",
+            "frame[fiber_portFRAME_R0] = (uint32_t)(uintptr_t)ctx->boot.arg;",
+            "frame[fiber_portFRAME_R1] = 0u;",
+            "frame[fiber_portFRAME_R2] = 0u;",
+            "frame[fiber_portFRAME_R3] = 0u;",
+            "frame[fiber_portFRAME_R12] = 0u;",
+            "frame[fiber_portFRAME_LR] =",
+            "frame[fiber_portFRAME_PC] =",
+            "frame[fiber_portFRAME_XPSR] = fiber_port_initial_xpsr();")) {
+        if ($frameBody.IndexOf($assignment,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33_NTZ initial frame lost required assignment: $assignment"
+        }
+    }
+    $lastAssignment = -1
+    foreach ($assignment in @(
+            "fiber_portFRAME_PSPLIM] =",
+            "fiber_portFRAME_EXC_RETURN] =",
+            "fiber_portFRAME_R4] =",
+            "fiber_portFRAME_R5] =",
+            "fiber_portFRAME_R6] =",
+            "fiber_portFRAME_R7] =",
+            "fiber_portFRAME_R8] =",
+            "fiber_portFRAME_R9] =",
+            "fiber_portFRAME_R10] =",
+            "fiber_portFRAME_R11] =",
+            "fiber_portFRAME_R0] =",
+            "fiber_portFRAME_R1] =",
+            "fiber_portFRAME_R2] =",
+            "fiber_portFRAME_R3] =",
+            "fiber_portFRAME_R12] =",
+            "fiber_portFRAME_LR] =",
+            "fiber_portFRAME_PC] =",
+            "fiber_portFRAME_XPSR] =")) {
+        $assignmentIndex = $frameBody.IndexOf($assignment,
+            [System.StringComparison]::Ordinal)
+        if ($assignmentIndex -le $lastAssignment) {
+            throw "ARM_CM33_NTZ initial frame lost exact assignment order: $assignment"
+        }
+        $lastAssignment = $assignmentIndex
+    }
+    if (([regex]::Matches($frameBody,
+            'frame\[fiber_portFRAME_[A-Z0-9_]+\]\s*=')).Count -ne 18) {
+        throw "ARM_CM33_NTZ constructor must assign exactly eighteen frame words"
+    }
+    foreach ($requiredConstructionToken in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "fiber_port_boot_record_check(&ctx->boot);",
+            "ctx->sp = frame;",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            "ctx->boot = fiber_port_boot_create(stack_begin, stack_end, entry, arg);",
+            "fiber_port_init_context_frame(ctx);",
+            "fiber_port_validate_initial_frame(ctx);")) {
+        if (($frameSource.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($bootSource.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM33_NTZ construction source lost contract: $requiredConstructionToken"
+        }
+    }
+
+    $frameObject = Join-Path $probeDir "frame.o"
+    $bootObject = Join-Path $probeDir "boot.o"
+    $constructionArgs = @($manifestArgs + @(
+        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1", "-O2"))
+    & $Compiler @constructionArgs -c $frameSourcePath -o $frameObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ frame construction source failed compile"
+    }
+    & $Compiler @constructionArgs -c $bootSourcePath -o $bootObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ boot construction source failed compile"
+    }
+    $constructionGroup = Join-Path $probeDir "construction-group.o"
+    & $Compiler -r $frameObject $bootObject -o $constructionGroup
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33_NTZ construction object group failed relocatable link"
+    }
+    $constructionDefined = @(& $Nm -g --defined-only $constructionGroup)
+    if ($LASTEXITCODE -ne 0) {
+        throw "nm failed for ARM_CM33_NTZ construction object group"
+    }
+    $contextInitDefinitions = @($constructionDefined | Where-Object {
+        $_ -match '\bT\s+fiber_port_context_init$'
+    })
+    if ($contextInitDefinitions.Count -ne 1) {
+        throw "ARM_CM33_NTZ construction group must define one fiber_port_context_init"
+    }
+    $constructionCohorts = @($constructionDefined | ForEach-Object {
+        if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+            $Matches[1]
+        }
+    })
+    if (($constructionCohorts.Count -ne 1) -or
+            ($constructionCohorts[0] -ne $cohorts[0])) {
+        throw "ARM_CM33_NTZ construction group disagrees with frozen layout cohort"
+    }
+    foreach ($forbiddenDefinition in @(
+            "SVC_Handler",
+            "PendSV_Handler",
+            "fiber_port_runtime_memory_barrier",
+            "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule")) {
+        if (@($constructionDefined | Where-Object {
+                    $_ -match ("\b[TW]\s+" +
+                        [regex]::Escape($forbiddenDefinition) + "$")
+                }).Count -ne 0) {
+            throw "ARM_CM33_NTZ construction group leaked runtime symbol: $forbiddenDefinition"
+        }
+    }
+    $constructionUndefined = @(& $Nm -u $constructionGroup | ForEach-Object {
+        if ($_ -match '^\s*U\s+(\S+)$') {
+            $Matches[1]
+        }
+    } | Sort-Object -Unique)
+    $allowedConstructionUndefined = @(
+        "fiber_internal_task_return",
+        "fiber_panic",
+        "memcpy",
+        "memset"
+    )
+    $unexpectedConstructionUndefined = @(Compare-Object `
+        -ReferenceObject $allowedConstructionUndefined `
+        -DifferenceObject $constructionUndefined | Where-Object {
+            $_.SideIndicator -eq "=>"
+        })
+    if ($unexpectedConstructionUndefined.Count -ne 0) {
+        throw "ARM_CM33_NTZ construction group gained unexpected dependency: $($constructionUndefined -join ', ')"
     }
 
     $negativeCases = @(
@@ -6867,8 +7046,8 @@ try {
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
         -BuildRoot $buildRoot
-    Write-Host "== ARM_CM33_NTZ slice-1 exact layout contract =="
-    Test-ArmCm33NtzLayoutContract -RepositoryRoot $RepoRoot `
+    Write-Host "== ARM_CM33_NTZ slice-2 construction contract =="
+    Test-ArmCm33NtzConstructionContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `

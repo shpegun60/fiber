@@ -82,12 +82,12 @@ Auto/profile selection deliberately remains on `transitional_v8m`, and this
 profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM33_NTZ/non_secure` slice 1 now freezes the corresponding Cortex-M33
-Mainline NTZ non-MPU/no-FPU layout: a live PSPLIM word followed by
-`EXC_RETURN = 0xFFFFFFBC` and `r4-r11`. It has BASEPRI and FAULTMASK traits,
-but intentionally has no construction, SVC, PendSV, archive, or hardware
-claim yet. This keeps M33F, MPU, SecureContext, and TF-M behavior separate
-instead of hiding it behind a permissive generic v8-M path. See
+`ARM_CM33_NTZ/non_secure` slices 1-2 freeze the corresponding Cortex-M33
+Mainline NTZ non-MPU/no-FPU layout and construct its sealed initial context: a
+live PSPLIM word followed by `EXC_RETURN = 0xFFFFFFBC` and `r4-r11`. It has
+BASEPRI and FAULTMASK traits, but intentionally has no SVC, PendSV, scheduler,
+archive, or hardware claim yet. This keeps M33F, MPU, SecureContext, and TF-M
+behavior separate instead of hiding it behind a permissive generic v8-M path. See
 `fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
@@ -141,10 +141,14 @@ M23 NTZ runtime:
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot.c
 
-M33 NTZ layout staging:
+M33 NTZ construction-only staging (not a runtime source group):
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
+               fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
 ```
 
 Every build-selected target must also compile this source separately from any

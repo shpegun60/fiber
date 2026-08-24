@@ -21,10 +21,12 @@ portasm.c:               DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A550969
 mpu_wrappers_v2_asm.c:   00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743CE1706F3E
 ```
 
-Slice 1 freezes only the public storage, exact trait dictionary, context
-cohort, and compile proof. It has no `fiber_port.c`, `fiber_port_boot.c`,
-private header, handler, archive, or hardware claim. The global selector
-continues to route ARMv8-M Mainline through `transitional_v8m`.
+Slices 1-2 freeze the public storage, exact trait dictionary, context cohort,
+sealed boot record, and initial-frame construction. The construction sources
+are intentionally not a runtime source group: no SVC handler, PendSV handler,
+runtime-selection implementation, archive activation, or hardware claim exists.
+The global selector continues to route ARMv8-M Mainline through
+`transitional_v8m`.
 
 The exact staged configuration is deliberately narrow:
 
@@ -78,8 +80,11 @@ word 17  xPSR
 high address
 ```
 
-The construction slice must seed word 0 from the lower stack boundary, matching
-FreeRTOS `pxEndOfStack`. Normal PendSV must subsequently save and restore the
+`fiber_port_context_init()` now seals the immutable boot record, initializes
+the optional low-stack canary, and calls `fiber_port_init_context_frame()`.
+That builder seeds word 0 from the lower stack boundary, matching FreeRTOS
+`pxEndOfStack`, and verifies every initialized hardware and software-frame
+word before returning. Normal PendSV must subsequently save and restore the
 live PSPLIM value. The geometry is fixed now so later source cannot silently
 turn an M33 frame into the M23 ignored-PSPLIM frame.
 
@@ -121,7 +126,7 @@ No fiber-owned SecureContext companion is present in this NTZ profile.
 
 | FreeRTOS symbol/family | Slice-1 disposition |
 | --- | --- |
-| `pxPortInitialiseStack` | Deferred to construction slice; frame order and all required slots are frozen above. |
+| `pxPortInitialiseStack` | Implemented by `fiber_port_context_init()` plus `fiber_port_init_context_frame()`. Fiber adds a sealed boot record, address-map checks, canary, exact frame validation, and cohort retention around the same frame order. |
 | `vRestoreContextOfFirstTask` / `vStartFirstTask` | Deferred to SVC first-start slice. |
 | non-MPU `PendSV_Handler` | Deferred to switching slice; it must save/restore live PSPLIM around the user scheduler bridge. |
 | `SVC_Handler` / `vPortSVCHandler_C` | Deferred; Fiber will own one strong fail-closed SVC handler, not FreeRTOS syscall dispatch. |
@@ -145,11 +150,17 @@ The compile matrix must prove:
   PSPLIM slot, Security Extension, and Non-secure role;
 - the ten-word frame, 72-byte initial geometry, and 76-byte maximum geometry
   remain fixed;
+- construction sources define exactly one `fiber_port_context_init()` and one
+  cohort definition, retain that cohort from the boot object, and do not define
+  a handler or any other forward runtime operation;
+- the frame builder assigns all 18 words in the FreeRTOS order, seeds PSPLIM
+  from `stack_base`, preserves `r9`, and validates the completed frame;
 - `FIBER_PORT_RUNTIME_SELECTABLE == 0` until a complete runtime source group
   is proven;
 - selector mode, Secure CMSE, VTOR-less, wrong-mainline-core, and FP ABI
   manifests fail;
-- no runtime source or private implementation artifact appears in this slice;
+- no SVC/PendSV/runtime-selection implementation or archive artifact appears
+  in this slice;
 - global auto/profile selection continues to route Mainline builds to
   `transitional_v8m`.
 

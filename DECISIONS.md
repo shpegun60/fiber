@@ -1,5 +1,30 @@
 # Fiber Decision Log
 
+## 2026-07-20: Construct The Exact ARM_CM33_NTZ Initial Context
+
+Implementation slice 2 adds only the construction half of the exact
+build-selected `ARM_CM33_NTZ/non_secure` profile. `fiber_port_boot.c` owns the
+sealed immutable boot record, address-map and overlap checks, optional canary,
+and exact initial-frame validation. `fiber_port.c` owns the one context-cohort
+definition and the eighteen-word synthetic frame:
+
+```text
+[PSPLIM][EXC_RETURN][r4-r11][r0-r3,r12,LR,PC,xPSR]
+```
+
+The PSPLIM word is seeded from `stack_base`, matching the pinned non-MPU
+FreeRTOS `pxPortInitialiseStack()` frame. Unlike M23, this value is a live
+Mainline register state; a later M33 PendSV slice must save and restore it.
+Fiber additionally preserves `r9`, seals and validates the boot metadata, and
+validates every synthetic frame word before returning from
+`fiber_port_context_init()`.
+
+This does not activate a runtime profile. `FIBER_PORT_RUNTIME_SELECTABLE`
+remains zero, global selection remains unchanged, and the profile defines no
+SVC handler, PendSV handler, scheduler bridge, runtime-start operation, archive
+activation, or hardware claim. The next behavior-changing slices are M33 SVC
+first start and then the PSPLIM-aware PendSV path.
+
 ## 2026-07-20: Stage The Exact ARM_CM33_NTZ Layout
 
 Implementation slice 1 adds a deliberately non-selectable

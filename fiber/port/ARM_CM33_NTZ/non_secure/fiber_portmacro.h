@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slice 1.
- * This slice freezes one privileged, non-MPU, no-FPU context layout. It
- * deliberately provides no construction, exception handler, or switching
- * runtime yet.
+ * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slices 1-2.
+ * The selected profile freezes one privileged, non-MPU, no-FPU context layout
+ * and constructs its sealed initial frame. SVC, PendSV, and runtime selection
+ * remain deliberately absent.
  */
 #ifndef FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
@@ -233,7 +233,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33_NTZ requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: staged ARM_CM33_NTZ runtime must remain non-selectable");
+		"[fiber]: construction-only ARM_CM33_NTZ must remain non-selectable");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM33_NTZ software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,
