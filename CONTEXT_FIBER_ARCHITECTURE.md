@@ -13,6 +13,10 @@ cohort guards remain unchanged while the remaining CPU ports and hardware
 evidence are completed. This document does not rename a symbol, move a source
 file, change a frame, or modify generated SVC/PendSV code.
 
+`STM32_PORT_FREEZE_INVENTORY.md` records the current profile inventory,
+remaining implementation families, effort range, and exact pre-extraction
+checkpoint gate consumed by this contract.
+
 The later extraction is a versioned architectural change. It must preserve the
 validated CPU mechanics first and may remove old mixed `fiber_*` compatibility
 names only in a separate, explicit bridge-burning change after the replacement

@@ -46,6 +46,11 @@ queues, task policy, and public APIs are not imported. The portable Fiber and
 C++ Kernel layers consume the Context dispatcher surface and remain independent
 of every concrete `portable/` implementation.
 
+`STM32_PORT_FREEZE_INVENTORY.md` is the current execution ledger for this plan.
+It records the nine concrete profiles already present, the remaining CM0 MPU,
+CM33 MPU/security, CM55/N6, and announced CM85/V8 work, planning ranges, and the
+exact gate before Context extraction.
+
 The required common-core boundary before production ports are added in bulk is
 defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. `fiber_api_types.h` exposes only
 the forward declaration and callbacks, while each selected port owns its
@@ -172,6 +177,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-4 freeze the pinned FreeRTOS Mainline NTZ non-MPU/no-FPU ten-word `[PSPLIM][EXC_RETURN][r4-r11]` layout and implement sealed construction, paranoid SVC first start, exact live-PSPLIM PendSV save/restore, the eighth forward operation, paired `-O2`/`-Os` assembly parity, and normal/LTO archive/vector/ELF proofs. Global auto-selection and hardware support remain unclaimed. | Validate the concrete NTZ runtime on Cortex-M33 hardware; keep MPU, SecureContext, TF-M, and M33F as separate profiles. |
 | Cortex-M33F | Exact build-selected `ARM_CM33F_NTZ/non_secure` slices 1-4 define the FPU cohort, sealed 72-byte basic initial frame, 212-byte maximum frame, CPACR/FPCCR setup/readback, strict SVC first start, and exact basic/extended FP PendSV save/select/restore with PSPLIM. Hard-float and softfp builds pass paired construction/SVC/PendSV generated-assembly checks; normal/LTO archive proof retains strong SVC/PendSV handlers in slots 11/14, all eight forward ABI operations, and rejects competing handler ownership. Global auto-selection and hardware support remain unclaimed. | Validate first start plus basic/extended FP switching, vectors, priority readback, and long-run FPU stress on real Cortex-M33F Non-secure hardware. |
 | Cortex-M55/MVE | Transitional SVC/PendSV/frame code exists and is compile-covered, but MVE/PAC/BTI policy is not FreeRTOS-level | Add MVE/PAC/BTI context policy and hardware validation |
+| Cortex-M85/MVE/PACBTI | No concrete selected port. The pinned FreeRTOS graph contains CM85 Non-secure, Secure companion, NTZ, MPU, and TF-M variants; ST now lists the preannounced STM32V8 Cortex-M85 series. | Include the exact STM32V8 profile before an all-announced-STM32 freeze, or record an explicit preannouncement deferral. |
 
 ## Priority Roadmap
 
@@ -436,9 +442,13 @@ Closed hardening items from the FreeRTOS comparison:
    - exact CM23 Secure-only, Non-secure with/without a SecureContext companion,
      and NTZ profiles, plus the corresponding CM33/CM55 roles and their TF-M
      profiles relevant to current STM32 targets;
-   - CM35P, CM52, and CM85 as reference-portability rows without an STM32
-     hardware claim, including the distinct CM52/CM85 TF-M build profiles in
-     the local FreeRTOS graph.
+   - CM35P and CM52 as reference-portability rows without an STM32 hardware
+     claim, including the distinct CM52 TF-M build profile in the local
+     FreeRTOS graph;
+   - CM85 as announced STM32V8 scope rather than a permanently non-STM32
+     reference row. Until the preannouncement is admitted into the freeze, the
+     exclusion must be explicit. If admitted, cover the local FreeRTOS
+     Non-secure, Secure companion, NTZ, MPU, PAC/BTI, MVE, and TF-M mechanics.
 
    Initial production compiler evidence is GNU Arm Embedded GCC only. Other
    compiler families need their own compiler-port matrix before inheriting a CPU
@@ -633,6 +643,8 @@ The library can claim FreeRTOS-style STM32 Cortex-M CPU-port support only when:
 - the STM32H7/M7 path remains hardware validated;
 - M23, M33 Non-secure, and M55/MVE are either implemented and validated or
   explicitly excluded;
+- announced M85/STM32V8 is either implemented with its exact profile evidence
+  or explicitly deferred as preannouncement scope;
 - docs and source comments use the same support claims;
 - context-switch safety checks reject delayed-switch cases caused by interrupt
   masks.

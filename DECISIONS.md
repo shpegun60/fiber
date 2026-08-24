@@ -1,5 +1,36 @@
 # Fiber Decision Log
 
+## 2026-08-24: Freeze The Remaining STM32 Port Inventory
+
+`STM32_PORT_FREEZE_INVENTORY.md` is the current planning ledger for the port
+freeze required before Context extraction. The matrix passed from clean commit
+`2743fc6401f551195f1d8896130715f05ecc4500`, including paired FreeRTOS
+generated-assembly checks at `-O2` and `-Os` plus the active ELF, vector,
+directional ABI, cohort, section-GC, LTO, and negative-link proofs.
+
+Nine concrete parity-ledger profiles are present: privileged CM0/M0+, CM3,
+CM4/F, CM7/r0p1, CM3 MPU, CM4/M7 MPU, CM23 NTZ, CM33 NTZ, and CM33F NTZ. This
+count is software evidence only; it does not create a hardware claim for a
+profile without a current board run.
+
+The remaining full STM32 freeze scope is CM0 MPU, M33 MPU/FP, M33 TrustZone
+Non-secure plus SecureContext, M33 TF-M integration, concrete M55/N6
+FPU/MVE/MPU/TrustZone/security profiles, removal of `transitional_v8m`, and the
+final available hardware checkpoints. ST now lists the preannounced STM32V8
+Cortex-M85 family, so M85 is no longer classified as permanently non-STM32:
+an all-announced-STM32 freeze must implement it, while a freeze that excludes
+preannounced products must record that deferral explicitly.
+
+The planning estimate is 10-16 remaining slices for basic privileged cores,
+24-36 for full current STM32 coverage through M55/N6, and 32-48 when announced
+M85/V8 is included. These are audit and implementation ranges, not support
+claims or calendar commitments. The recommended order is CM0 MPU, M33 MPU, M33
+TrustZone/SecureContext, M33 TF-M, M55/N6, optional M85/V8, transitional
+removal, then the final software and available-hardware freeze.
+
+This is documentation-only. It changes no current port, ABI, context cohort,
+handler, frame, or generated code.
+
 ## 2026-08-24: Freeze Context, Fiber, And Kernel Layer Separation
 
 The current five-function v2 runtime remains the active porting and validation

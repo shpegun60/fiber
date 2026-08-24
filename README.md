@@ -49,6 +49,11 @@ unchanged. Applications that use only the portable kernel and service APIs are
 source-portable across accepted backends; board, HAL, linker, and peripheral
 integration remains platform-specific.
 
+`STM32_PORT_FREEZE_INVENTORY.md` records the concrete profiles already present,
+the remaining STM32 port families and feature cohorts, the current planning
+estimate, and the no-known-software-gap gate that must pass before Context
+extraction starts.
+
 The five functions in `fiber_core.h` are the complete portable common API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
 selected-port integration headers and sources. Those extensions are not
@@ -721,10 +726,12 @@ production TrustZone or Non-secure support.
 
 Cortex-M23, no-FPU Cortex-M33, and FPU Cortex-M33F each have an exact
 build-selected Non-secure non-MPU runtime profile with
-compile/generated-assembly/ELF evidence but no hardware validation. Cortex-M55, MVE,
-TrustZone/SecureContext companion, TF-M, and PAC/BTI scenarios remain
-unsupported until their distinct FreeRTOS-style context mechanics are
-implemented and hardware-validated.
+compile/generated-assembly/ELF evidence but no hardware validation.
+Cortex-M55/STM32N6, MVE, TrustZone/SecureContext companion, TF-M, and PAC/BTI
+scenarios remain unsupported until their distinct FreeRTOS-style context
+mechanics are implemented and hardware-validated. Cortex-M85 is now announced
+STM32V8 scope rather than a permanently non-STM32 reference row; it remains
+unsupported and may be explicitly deferred while STM32V8 is preannouncement.
 `FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank
