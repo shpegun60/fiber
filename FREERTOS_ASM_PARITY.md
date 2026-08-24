@@ -55,13 +55,9 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM4` | `GCC/ARM_CM4F` | first SVC request, first restore, conditional FP PendSV |
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
-| `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | implemented SVC first-start slice only |
+| `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
-
-`ARM_CM33_NTZ` does not yet claim PendSV parity because that selected port does
-not yet implement `PendSV_Handler` or runtime scheduling. The proof explicitly
-fails if the SVC-only slice silently starts exporting PendSV.
 
 The script also derives the production-port inventory from every
 `fiber/port/**/fiber_port.c`. The inventory must exactly match the paired
@@ -144,11 +140,19 @@ instruction. The remaining EXC_RETURN and `r4-r11` geometry stays ten words.
 
 ### FAP-M33-FULL-FIRST-RESTORE
 
-The current CM33 slice restores the full PendSV-shaped
+The CM33 port restores the full PendSV-shaped
 `[PSPLIM, EXC_RETURN, r4-r11]` frame during first SVC instead of using the
 shorter FreeRTOS first-task helper. It additionally reads back PSPLIM, CONTROL,
 PSP, BASEPRI, and FAULTMASK. This guarantees that the initial frame already has
-the exact shape a later PendSV implementation must consume.
+the exact shape consumed by PendSV.
+
+### FAP-M33-PSPLIM-READBACK
+
+The pinned FreeRTOS CM33 PendSV saves and restores PSPLIM as the first word of
+the software frame. Fiber preserves the same ten-word geometry and additionally
+requires live PSPLIM to match the current stack base before save, reads PSPLIM
+back after restore, and validates PSP after its write. These checks add no
+context word and do not change the reference register-transfer order.
 
 ### FAP-MPU-SVC-NAMESPACE
 

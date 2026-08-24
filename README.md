@@ -82,13 +82,15 @@ Auto/profile selection deliberately remains on `transitional_v8m`, and this
 profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM33_NTZ/non_secure` slices 1-3 freeze the corresponding Cortex-M33
+`ARM_CM33_NTZ/non_secure` slices 1-4 freeze the corresponding Cortex-M33
 Mainline NTZ non-MPU/no-FPU layout, construct its sealed initial context, and
-compile-cover a paranoid FreeRTOS-derived SVC first start. PendSV,
-`fiber_port_runtime_schedule()`, global selection, and a hardware claim remain
-absent. This keeps M33F, MPU, SecureContext, and TF-M behavior separate instead
-of hiding it behind a permissive generic v8-M path. The exact
-source-to-generated-assembly mapping is recorded in
+implement a paranoid FreeRTOS-derived SVC first start plus the exact
+PSPLIM-aware PendSV save/select/restore path and `runtime_schedule`. The static
+archive, strong handlers, vector slots, section GC, and normal/LTO links are
+covered. Global auto-selection and a hardware claim remain absent. This keeps
+M33F, MPU, SecureContext, and TF-M behavior separate instead of hiding it
+behind a permissive generic v8-M path. The exact generated-assembly mapping is
+recorded in
 `fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
@@ -601,14 +603,16 @@ The handler-side scheduler bridge follows FreeRTOS-style critical-section
 discipline: BASEPRI-capable ports raise `BASEPRI` around the hook, while
 BASEPRI-less ports save `PRIMASK`, disable interrupts, call the hook, and
 restore `PRIMASK`. Returning with changed `PRIMASK`, `FAULTMASK`, `BASEPRI`, or
-`CONTROL` is a panic condition.
+`CONTROL` is a panic condition; PSPLIM-owning ports also preserve and validate
+`PSPLIM` across the callback.
 
 The v8-M feature policy remains intentionally strict for future ports. The
 transitional M23/M33/M55/MVE-FP profiles have compile-covered SVC first-start
 mechanics, but runtime use remains policy-gated until the extra context state
-their FreeRTOS ports require is implemented and validated. Exact staged
-profiles, including `ARM_CM33_NTZ`, make no handler or runtime claim until
-their own construction and switching slices exist:
+their FreeRTOS ports require is implemented and validated. The separate exact
+build-selected M23 and M33 NTZ ports do have complete strong SVC/PendSV runtime
+objects, but remain hardware-unvalidated and do not make the broader
+transitional profile safe:
 
 ```c
 #define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 1
@@ -674,10 +678,11 @@ an application override. The non-production v8-M fallback uses explicitly
 scoped `FIBER_TRANSITIONAL_V8M_*` bring-up inputs, which do not provide
 production TrustZone or Non-secure support.
 
-Cortex-M23 has one exact build-selected Non-secure non-MPU profile with
-compile/ELF evidence but no hardware validation. Cortex-M33, Cortex-M55, MVE,
-TrustZone/Non-secure companion, and PAC/BTI scenarios remain unsupported until
-their FreeRTOS-style context layout is implemented and hardware-validated.
+Cortex-M23 and Cortex-M33 each have one exact build-selected Non-secure
+non-MPU profile with compile/generated-assembly/ELF evidence but no hardware
+validation. Cortex-M55, MVE, TrustZone/SecureContext companion, TF-M, M33F,
+and PAC/BTI scenarios remain unsupported until their distinct FreeRTOS-style
+context layouts are implemented and hardware-validated.
 `FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank

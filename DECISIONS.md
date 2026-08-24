@@ -1,5 +1,23 @@
 # Fiber Decision Log
 
+## 2026-08-24: Complete ARM_CM33_NTZ Non-MPU Runtime
+
+Implementation slice 4 completes the exact build-selected
+`ARM_CM33_NTZ/non_secure` non-MPU/no-FPU runtime. `PendSV_Handler` preserves the
+pinned FreeRTOS ten-word `[PSPLIM][EXC_RETURN][r4-r11]` frame, replaces
+`vTaskSwitchContext()` with the frozen user scheduler bridge under BASEPRI,
+and adds exact exception provenance, frame bounds, scheduler CPU-state, PSPLIM,
+PSP, CONTROL, and mask checks. `fiber_port_runtime_schedule()` is now the
+eighth mandatory forward operation and `FIBER_PORT_RUNTIME_SELECTABLE` is one.
+
+The generated FreeRTOS/Fiber pairs pass the same ordered first-start,
+first-restore, and PendSV mechanism checks at `-O2` and `-Os`. The selected
+runtime archive must expose both strong handlers, resolve synthetic vector
+slots 11 and 14, survive section GC in normal and LTO links, and reject
+competing strong handlers. Global auto/profile routing remains on
+`transitional_v8m`; MPU, FPU, SecureContext, TF-M, and hardware support are
+separate future claims.
+
 ## 2026-08-24: Make Generated FreeRTOS Assembly Parity Mandatory
 
 The compile matrix now invokes `tools/freertos_asm_parity.ps1` as a mandatory
@@ -14,11 +32,10 @@ fails if a production directory lacks either a paired definition or its local
 
 The paired `objdump` proof covers all mechanisms currently implemented by the
 production selected ports: separate M0/no-VTOR and M0+/VTOR builds, M3, M4F,
-M7 r0p1, M23 NTZ, the CM33 NTZ first-start slice, CM3 MPU, and CM4 MPU. It
+M7 r0p1, M23 NTZ, the complete CM33 NTZ non-MPU runtime, CM3 MPU, and CM4 MPU. It
 checks ordered SVC start, first restore, PendSV save/restore, scheduler mask,
-FP transfer, PSPLIM, CONTROL, MPU replacement, and exception return. CM33 does
-not gain a PendSV claim until it implements one; `transitional_v8m` remains
-outside production parity.
+FP transfer, PSPLIM, CONTROL, MPU replacement, and exception return.
+`transitional_v8m` remains outside production parity.
 
 Exact binary equality is not required because Fiber intentionally adds
 validation and substitutes its user scheduler bridge for

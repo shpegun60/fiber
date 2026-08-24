@@ -1,4 +1,4 @@
-/* ARM_CM33_NTZ exact non-MPU initial context frame. */
+/* ARM_CM33_NTZ exact non-MPU context construction and runtime. */
 
 #include "fiber_port_private.h"
 
@@ -34,6 +34,23 @@ FIBER_STATIC_ASSERT(fiber_portFRAME_R0 == FIBER_PORT_SOFTWARE_FRAME_WORDS,
 FIBER_STATIC_ASSERT(fiber_portFRAME_WORD_COUNT * sizeof(uint32_t) ==
 		FIBER_PORT_INITIAL_CONTEXT_BYTES,
 		"[fiber]: ARM_CM33_NTZ initial frame size changed");
+
+enum {
+	fiber_portOFF_STACK_BASE =
+		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
+	fiber_portOFF_STACK_TOP =
+		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top),
+	fiber_portOFFSET_STACKED_XPSR = 7u * 4u
+};
+
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE < 4096u,
+		"[fiber]: ARM_CM33_NTZ stack-base offset must fit Thumb-2 LDR");
+FIBER_STATIC_ASSERT(fiber_portOFF_STACK_TOP < 4096u,
+		"[fiber]: ARM_CM33_NTZ stack-top offset must fit Thumb-2 LDR");
+FIBER_STATIC_ASSERT((fiber_portOFF_STACK_BASE & 3u) == 0u,
+		"[fiber]: ARM_CM33_NTZ stack-base offset must be word aligned");
+FIBER_STATIC_ASSERT((fiber_portOFF_STACK_TOP & 3u) == 0u,
+		"[fiber]: ARM_CM33_NTZ stack-top offset must be word aligned");
 
 void fiber_port_init_context_frame(FiberContext *const ctx)
 {
@@ -97,6 +114,20 @@ void fiber_port_require_scheduler_configuration_environment(void)
 	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
 }
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_schedule(void)
+{
+	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	fiber_internal_runtime_require_current_context();
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+}
+
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_primask_save_disable(void)
 {
@@ -132,6 +163,17 @@ void fiber_port_validate_svc_vector(void)
 	FIBER_REQUIRE((actual & 1u) != 0u, 'y');
 	FIBER_REQUIRE((actual & ~(uintptr_t)1u) ==
 			(expected & ~(uintptr_t)1u), 'y');
+}
+
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_validate_pendsv_vector(void)
+{
+	const uint32_t *const vectors = fiber_port_vectors_base_ptr();
+	const uintptr_t actual = (uintptr_t)vectors[fiber_portVECTOR_INDEX_PENDSV];
+	const uintptr_t expected = (uintptr_t)&PendSV_Handler;
+	FIBER_REQUIRE((actual & 1u) != 0u, 'Y');
+	FIBER_REQUIRE((actual & ~(uintptr_t)1u) ==
+			(expected & ~(uintptr_t)1u), 'Y');
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -197,7 +239,10 @@ void fiber_port_validate_basepri_priority_policy(void)
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_exception_start_configuration(void)
 {
+	FIBER_REQUIRE(NVIC_GetPriority(PendSV_IRQn) ==
+			fiber_portLOWEST_EXCEPTION_PRIORITY, 'P');
 	FIBER_REQUIRE(NVIC_GetPriority(SVCall_IRQn) == 0u, 'w');
+	fiber_port_validate_pendsv_vector();
 	fiber_port_validate_svc_vector();
 #ifdef SCB_CCR_STKALIGN_Msk
 	FIBER_REQUIRE((SCB->CCR & SCB_CCR_STKALIGN_Msk) != 0u, 'A');
@@ -213,6 +258,7 @@ void fiber_port_prepare_exception_start(void)
 	const uint32_t primask = fiber_port_primask_save_disable();
 	FIBER_REQUIRE(primask == 0u, 'p');
 
+	NVIC_SetPriority(PendSV_IRQn, fiber_portLOWEST_EXCEPTION_PRIORITY);
 	NVIC_SetPriority(SVCall_IRQn, 0u);
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVCLEAR_BIT;
 	fiber_portDATA_SYNC_BARRIER();
@@ -241,6 +287,7 @@ typedef struct FiberPortSchedulerCpuState {
 	uint32_t control;
 	uint32_t basepri;
 	uint32_t faultmask;
+	uint32_t psplim;
 } FiberPortSchedulerCpuState;
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -253,6 +300,7 @@ void fiber_port_capture_scheduler_cpu_state(
 	state->control = __get_CONTROL();
 	state->basepri = fiber_port_basepri_read();
 	state->faultmask = __get_FAULTMASK();
+	state->psplim = __get_PSPLIM();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -266,6 +314,7 @@ void fiber_port_validate_scheduler_cpu_state(
 	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -290,6 +339,31 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_runtime_select_first(void)
 {
 	return fiber_port_scheduler_pick_first_from_start();
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
+		FiberContext *const current)
+{
+	FIBER_REQUIRE(current != NULL, 'C');
+	FIBER_REQUIRE(__get_IPSR() == 14u, 'j');
+	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	FIBER_REQUIRE(fiber_port_basepri_read() ==
+			(uint32_t)FIBER_PORT_SCHEDULER_BASEPRI, 'b');
+	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)current->boot.stack_base, 'L');
+
+	FiberPortSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const next =
+			fiber_internal_runtime_select_scheduler_candidate(current);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	/* Current was validated before save. Validate only the selected restore
+	 * target; this also covers the scheduler returning current. */
+	fiber_port_context_validate_restore(next);
+	fiber_internal_runtime_publish_current_context(next);
+	return next;
 }
 
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -488,5 +562,157 @@ void SVC_Handler(void)
 			".ltorg                                 \n"
 			:
 			:
+			: "memory", "cc");
+}
+
+FIBER_ATTR_NAKED_ASM
+void PendSV_Handler(void)
+{
+	fiber_portASM volatile(
+			".syntax unified                         \n"
+
+			/* Require the exact Non-secure Thread/PSP exception provenance. */
+			"mrs   r3, ipsr                         \n"
+			"cmp   r3, #14                          \n"
+			"bne   91f                              \n"
+			"mvn   r3, #67                          \n" /* 0xFFFFFFBC */
+			"cmp   lr, r3                           \n"
+			"bne   91f                              \n"
+			"tst   lr, #4                           \n"
+			"beq   91f                              \n"
+
+			/* PSP addresses the complete hardware frame in Handler mode. */
+			"mrs   r0, psp                          \n"
+			"tst   r0, #7                           \n"
+			"bne   92f                              \n"
+			"dsb                                    \n"
+			"isb                                    \n"
+
+			/* Validate current before reading any context-owned metadata. */
+			"ldr   r1, =fiber_internal_runtime_current_context_slot \n"
+			"ldr   r1, [r1]                         \n"
+			"cmp   r1, #0                           \n"
+			"beq   90f                              \n"
+			"push  {r0, r1, r2, lr}                 \n"
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_context_validate_save_current \n"
+			"pop   {r0, r1, r2, lr}                 \n"
+
+			/* Prove the hardware frame and future software frame fit before
+			 * the first source-stack write. */
+			"ldr   r2, [r1, %c[offsb]]              \n"
+			"cmp   r0, r2                           \n"
+			"blo   92f                              \n"
+			"mov   r3, r0                           \n"
+			"subs  r3, #%c[swbytes]                 \n"
+			"bcc   92f                              \n"
+			"cmp   r3, r2                           \n"
+			"blo   92f                              \n"
+			"ldr   r2, [r1, %c[offtop]]             \n"
+			"subs  r2, #%c[hwbase]                  \n"
+			"bcc   92f                              \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			"ldr   r3, [r0, %c[xpsr]]               \n"
+			"tst   r3, #0x200                       \n"
+			"beq   83f                              \n"
+			"subs  r2, #%c[alignpad]                \n"
+			"bcc   92f                              \n"
+			"83:                                    \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+
+			/* FreeRTOS ARM_CM33_NTZ non-MPU frame, low to high:
+			 * PSPLIM, EXC_RETURN, r4-r11. */
+			"ldr   r2, [r1, %c[offsb]]              \n"
+			"mrs   r3, psplim                       \n"
+			"cmp   r3, r2                           \n"
+			"bne   93f                              \n"
+			"mov   r2, r3                           \n"
+			"mov   r3, lr                           \n"
+			"stmdb r0!, {r2-r11}                    \n"
+			"str   r0, [r1]                         \n"
+
+			fiber_portASM_ENTER_SCHEDULER_CRITICAL
+			"mov   r0, r1                           \n"
+			"bl    fiber_port_scheduler_pick_next_from_pendsv \n"
+			fiber_portASM_EXIT_SCHEDULER_CRITICAL
+			"mrs   r1, " fiber_portBASEPRI_SYM "    \n"
+			"cmp   r1, #0                           \n"
+			"bne   95f                              \n"
+
+			/* Restore exactly the selected ten-word software frame. */
+			"mov   r1, r0                           \n"
+			"ldr   r0, [r1]                         \n"
+			"ldmia r0!, {r2-r11}                    \n"
+			"mvn   r1, #67                          \n" /* 0xFFFFFFBC */
+			"cmp   r3, r1                           \n"
+			"bne   94f                              \n"
+			"msr   psplim, r2                       \n"
+			"dsb                                    \n"
+			"isb                                    \n"
+			"mrs   r1, psplim                       \n"
+			"cmp   r1, r2                           \n"
+			"bne   93f                              \n"
+			"msr   psp, r0                          \n"
+			"isb                                    \n"
+			"mrs   r1, psp                          \n"
+			"cmp   r1, r0                           \n"
+			"bne   92f                              \n"
+
+			/* The scheduler may not leak privileged CPU state. */
+			"mrs   r1, control                      \n"
+			"and   r1, r1, #3                       \n"
+			"cmp   r1, #2                           \n"
+			"bne   96f                              \n"
+			"mrs   r1, primask                      \n"
+			"cmp   r1, #0                           \n"
+			"bne   96f                              \n"
+			"mrs   r1, faultmask                    \n"
+			"cmp   r1, #0                           \n"
+			"bne   96f                              \n"
+
+			"dsb                                    \n"
+			"isb                                    \n"
+			"bx    r3                               \n"
+
+			"90:                                    \n"
+			"movs  r0, #67                          \n" /* 'C' */
+			"bl    fiber_panic                      \n"
+			"b     90b                              \n"
+			"91:                                    \n"
+			"movs  r0, #106                         \n" /* 'j' */
+			"bl    fiber_panic                      \n"
+			"b     91b                              \n"
+			"92:                                    \n"
+			"movs  r0, #100                         \n" /* 'd' */
+			"bl    fiber_panic                      \n"
+			"b     92b                              \n"
+			"93:                                    \n"
+			"movs  r0, #76                          \n" /* 'L' */
+			"bl    fiber_panic                      \n"
+			"b     93b                              \n"
+			"94:                                    \n"
+			"movs  r0, #120                         \n" /* 'x' */
+			"bl    fiber_panic                      \n"
+			"b     94b                              \n"
+			"95:                                    \n"
+			"movs  r0, #98                          \n" /* 'b' */
+			"bl    fiber_panic                      \n"
+			"b     95b                              \n"
+			"96:                                    \n"
+			"movs  r0, #108                         \n" /* 'l' */
+			"bl    fiber_panic                      \n"
+			"b     96b                              \n"
+			/* Every path returns or loops before this literal pool. */
+			".ltorg                                 \n"
+			:
+			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
+			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
+			  [alignpad] "I" (FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
+			  [xpsr] "I" (fiber_portOFFSET_STACKED_XPSR),
+			  [offsb] "I" (fiber_portOFF_STACK_BASE),
+			  [offtop] "I" (fiber_portOFF_STACK_TOP)
 			: "memory", "cc");
 }

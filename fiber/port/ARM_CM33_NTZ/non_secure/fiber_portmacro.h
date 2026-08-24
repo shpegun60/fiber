@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slices 1-3.
+ * Exact Cortex-M33 NTZ Non-secure dictionary, implementation slices 1-4.
  * The selected profile freezes one privileged, non-MPU, no-FPU context layout
  * and constructs its sealed initial frame. It also owns a fail-closed SVC
- * first-start path. PendSV and runtime selection remain deliberately absent.
+ * first-start path plus the exact non-MPU PendSV save/select/restore runtime.
  */
 #ifndef FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_NTZ_FIBER_PORTMACRO_H_
@@ -95,7 +95,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM33_NTZ runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Pinned FreeRTOS ARM_CM33_NTZ non-MPU, no-FPU frame dictionary. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -198,12 +198,22 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 #define FIBER_PORT_SAVED_SP_MOD8 0u
 
 #define fiber_portNVIC_INT_CTRL_REG (*((volatile uint32_t *)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
 #define fiber_portNVIC_PENDSVCLEAR_BIT (1u << 27u)
 #define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+#define fiber_portLOWEST_EXCEPTION_PRIORITY \
+	((1u << __NVIC_PRIO_BITS) - 1u)
 
 #define fiber_portBASEPRI_SYM "BASEPRI"
 #define fiber_portASM_WRITE_BASEPRI_R0 \
 	"msr   " fiber_portBASEPRI_SYM ", r0           \n"
+#define fiber_portASM_WRITE_BASEPRI_R2 \
+	"msr   " fiber_portBASEPRI_SYM ", r2           \n"
+#define fiber_portASM_WRITE_BASEPRI_R3 \
+	"msr   " fiber_portBASEPRI_SYM ", r3           \n"
+#define fiber_portASM_SNAP_BASEPRI_R3 \
+	"mrs   r3, " fiber_portBASEPRI_SYM "            \n"
 
 /* ARMv8-M Mainline has no Cortex-M7 r0p1 BASEPRI erratum. Keep synchronized
  * writes in the same selected-port vocabulary used by the M4/M7 ports. */
@@ -211,6 +221,26 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 	fiber_portASM_WRITE_BASEPRI_R0 \
 	"dsb                                  \n" \
 	"isb                                  \n"
+
+#define fiber_portASM_WRITE_BASEPRI_R2_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R2 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+
+#define fiber_portASM_WRITE_BASEPRI_R3_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R3 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+
+#define fiber_portASM_ENTER_SCHEDULER_CRITICAL \
+	fiber_portASM_SNAP_BASEPRI_R3 \
+	"movs  r2, %[sched_basepri]           \n" \
+	"stmdb sp!, {r2, r3}                  \n" \
+	fiber_portASM_WRITE_BASEPRI_R2_SYNC
+
+#define fiber_portASM_EXIT_SCHEDULER_CRITICAL \
+	"ldmia sp!, {r2, r3}                  \n" \
+	fiber_portASM_WRITE_BASEPRI_R3_SYNC
 
 #ifdef __cplusplus
 extern "C" {
@@ -295,8 +325,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM33_NTZ requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33_NTZ requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: SVC-only ARM_CM33_NTZ must remain non-selectable");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM33_NTZ full runtime must remain selectable");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM33_NTZ software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,

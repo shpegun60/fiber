@@ -678,8 +678,8 @@ try {
     Assert-AbsentPatterns -Body $cm23FiberPendSv -Patterns @('\bPSPLIM\b') `
         -Label "ARM_CM23_NTZ Fiber PendSV"
 
-    # CM33 slice currently proves only construction and SVC first start. It
-    # must not acquire a premature PendSV claim.
+    # CM33 retains the FreeRTOS ten-word Mainline frame and adds exact
+    # provenance, bounds, CPU-state, and PSPLIM readback validation.
     $pair = $compiled["ARM_CM33_NTZ"]
     Assert-MechanismParity -PortName "ARM_CM33_NTZ" `
         -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
@@ -701,9 +701,42 @@ try {
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-FULL-FIRST-RESTORE") `
         -Ledger $ledger
-    if ($pair.Fiber -match '(?m)^[0-9a-fA-F]+\s+<PendSV_Handler>:') {
-        throw "ARM_CM33_NTZ SVC-only slice unexpectedly emitted PendSV_Handler"
-    }
+    Assert-MechanismParity -PortName "ARM_CM33_NTZ" `
+        -Mechanism "PendSV" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            '\bmrs\s+r2,\s*PSPLIM',
+            '\bmov\s+r3,\s*lr',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'vTaskSwitchContext',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmsr\s+PSP,\s*r0',
+            '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            'fiber_port_context_validate_save_current',
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmrs\s+r1,\s*PSPLIM',
+            '\bmsr\s+PSP,\s*r0',
+            '\bmrs\s+r1,\s*PSP',
+            '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-PSPLIM-READBACK") `
+        -Ledger $ledger
 
     # MPU ports deliberately retain the FreeRTOS protected-context model:
     # hardware frames are copied to privileged context storage and MPU state is

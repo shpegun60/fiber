@@ -1,5 +1,5 @@
 /*
- * Type-only public storage for the staged ARM_CM33_NTZ profile.
+ * Type-only public storage for the exact ARM_CM33_NTZ runtime profile.
  *
  * Saved registers remain on the fiber stack. The exact ten-word software
  * frame is a private port contract and is frozen in fiber_portmacro.h.

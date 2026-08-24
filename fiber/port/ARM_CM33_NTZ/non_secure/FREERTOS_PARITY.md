@@ -1,8 +1,8 @@
 # ARM_CM33_NTZ Non-Secure Parity Ledger
 
 Paired generated-object evidence is mandatory under
-`../../../../FREERTOS_ASM_PARITY.md`. It currently covers only construction and
-SVC first start; this ledger must not imply PendSV/runtime parity prematurely.
+`../../../../FREERTOS_ASM_PARITY.md`. It covers construction, SVC first start,
+and the complete non-MPU/no-FPU PendSV runtime.
 
 ## Scope
 
@@ -26,12 +26,13 @@ mpu_wrappers_v2_asm.c:   00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743
 ```
 
 Slices 1-2 freeze the public storage, exact trait dictionary, context cohort,
-sealed boot record, and initial-frame construction. Slice 3 adds only the
-FreeRTOS-derived SVC first-start mechanism and the seven forward operations
-needed before scheduling can begin. It deliberately does not add PendSV,
-`fiber_port_runtime_schedule()`, archive activation, global selection, or a
-hardware claim. The global selector continues to route ARMv8-M Mainline through
-`transitional_v8m`.
+sealed boot record, and initial-frame construction. Slice 3 adds the
+FreeRTOS-derived SVC first-start mechanism. Slice 4 adds the eighth forward
+operation, exact PSPLIM-aware PendSV save/restore, the user scheduler bridge,
+and strong-handler archive/ELF proofs. It deliberately does not add MPU, FPU,
+SecureContext, TF-M, global auto-selection, or a hardware claim. The generic
+profile selector continues to route ARMv8-M Mainline through
+`transitional_v8m`; this concrete port is selected explicitly by the build.
 
 The exact staged configuration is deliberately narrow:
 
@@ -133,9 +134,9 @@ No fiber-owned SecureContext companion is present in this NTZ profile.
 | --- | --- |
 | `pxPortInitialiseStack` | Implemented by `fiber_port_context_init()` plus `fiber_port_init_context_frame()`. Fiber adds a sealed boot record, address-map checks, canary, exact frame validation, and cohort retention around the same frame order. |
 | `vRestoreContextOfFirstTask` / `vStartFirstTask` | Implemented by `fiber_port_start_first_context()` and the strong `SVC_Handler`. Fiber retains the same PSPLIM/EXC_RETURN/PSP/CONTROL transfer but validates the complete provenance and readbacks. |
-| non-MPU `PendSV_Handler` | Deferred to switching slice; it must save/restore live PSPLIM around the user scheduler bridge. |
+| non-MPU `PendSV_Handler` | Implemented with the same `[PSPLIM, EXC_RETURN, r4-r11]` save/restore geometry. `vTaskSwitchContext()` is replaced by the frozen user scheduler bridge under BASEPRI. |
 | `SVC_Handler` / `vPortSVCHandler_C` | Replaced by one strong fail-closed SVC handler dedicated to the configured first-start immediate. Generic syscall dispatch is not imported. |
-| `ulSetInterruptMask` / `vClearInterruptMask` | Re-expressed by port-owned BASEPRI enter/exit helpers around `pick_next(NULL, user)`. Fiber additionally verifies PRIMASK, CONTROL, BASEPRI, and FAULTMASK preservation. |
+| `ulSetInterruptMask` / `vClearInterruptMask` | Re-expressed by port-owned BASEPRI enter/exit helpers around first and subsequent scheduler selection. Fiber preserves the previous BASEPRI and verifies PRIMASK, CONTROL, BASEPRI, FAULTMASK, and PSPLIM. |
 | `xPortStartScheduler` | Split across the frozen forward ABI: prepare CPU state, select the first context through the user scheduler, publish it in common runtime, then enter SVC. No FreeRTOS scheduler is imported. |
 | `vPortYield`, SysTick, tickless idle | Excluded as scheduler policy. Fiber's core remains explicit/cooperative. |
 | FreeRTOS critical nesting, queues, ready lists, SMP locks | Excluded as FreeRTOS kernel policy. This profile is single-core. |
@@ -169,7 +170,7 @@ msr PSP, hardware_frame
 bx EXC_RETURN
 ```
 
-Fiber slice 3 deliberately uses the full PendSV-shaped restore on first start:
+Fiber deliberately uses the full PendSV-shaped restore on first start:
 
 ```text
 ldmia saved_sp!, {r2-r11}  ; r2=PSPLIM, r3=EXC_RETURN, r4-r11 restored
@@ -216,7 +217,44 @@ Source-token or compile-only parity is insufficient: the matrix must compare
 the emitted SVC/start instructions and their order with the pinned FreeRTOS
 sequence recorded above.
 
-## Required Slice-3 Proofs
+## PendSV Assembly Parity
+
+The pinned FreeRTOS non-MPU/no-FPU handler performs:
+
+```text
+mrs PSP
+mrs PSPLIM
+move EXC_RETURN
+stmdb {PSPLIM, EXC_RETURN, r4-r11}
+publish saved SP
+raise BASEPRI
+call vTaskSwitchContext()
+clear BASEPRI
+load selected saved SP
+ldmia {PSPLIM, EXC_RETURN, r4-r11}
+msr PSPLIM
+msr PSP
+bx EXC_RETURN
+```
+
+Fiber retains that register-transfer order and frame geometry. The intentional
+differences are:
+
+- exact PendSV IPSR and `0xFFFFFFBC` provenance checks;
+- save-side context, canary, PSP, PSPLIM, and complete-frame bounds checks
+  before the first stack write;
+- `vTaskSwitchContext()` replaced by
+  `fiber_port_scheduler_pick_next_from_pendsv()`;
+- previous BASEPRI preserved instead of assuming a fixed incoming value;
+- scheduler callback CPU-state preservation checks;
+- selected restore-frame validation before assembly consumes it;
+- PSPLIM and PSP write readbacks plus final mask/CONTROL validation.
+
+The paired proof compiles both objects with the same GCC CPU flags at `-O2`
+and `-Os`, then requires the same ordered architecture operations. Extra Fiber
+checks may surround those operations but may not replace or reorder them.
+
+## Required Runtime Proofs
 
 The compile matrix must prove:
 
@@ -227,24 +265,24 @@ The compile matrix must prove:
   PSPLIM slot, Security Extension, and Non-secure role;
 - the ten-word frame, 72-byte initial geometry, and 76-byte maximum geometry
   remain fixed;
-- the staged object group defines exactly one `fiber_port_context_init()`, one
-  strong `SVC_Handler`, seven pre-scheduling forward operations, and no
-  `PendSV_Handler` or `fiber_port_runtime_schedule()`;
+- the selected object group defines exactly the eight mandatory forward
+  operations plus one strong `SVC_Handler` and one strong `PendSV_Handler`;
 - the frame builder assigns all 18 words in the FreeRTOS order, seeds PSPLIM
   from `stack_base`, preserves `r9`, and validates the completed frame;
-- generated disassembly preserves the ordered SVC provenance checks, full
-  ten-word restore, PSPLIM/CONTROL/PSP/BASEPRI readbacks, and final `bx`;
-- a synthetic vector slot 11 resolves to the strong SVC handler, survives
-  archive extraction and `--gc-sections`, while a competing strong SVC handler
-  fails link;
-- `FIBER_PORT_RUNTIME_SELECTABLE == 0` until PendSV, the eighth forward
-  operation, a complete runtime archive, and ELF proof are present;
+- generated disassembly preserves the ordered SVC provenance checks and the
+  complete FreeRTOS PendSV save/BASEPRI/select/restore sequence;
+- synthetic vector slots 11 and 14 resolve to the strong handlers, survive
+  archive extraction and `--gc-sections`, while competing strong handlers fail
+  link;
+- `FIBER_PORT_RUNTIME_SELECTABLE == 1`, with a complete runtime archive and
+  exact reverse-ABI unresolved-symbol allowlist;
 - selector mode, Secure CMSE, VTOR-less, wrong-mainline-core, and FP ABI
   manifests fail;
-- no PendSV, schedule operation, switching archive, or global selection appears
-  in this slice;
+- no MPU/FPU/SecureContext/TF-M artifact or global auto-selection appears in
+  this exact profile;
 - global auto/profile selection continues to route Mainline builds to
   `transitional_v8m`.
 
-The SVC mechanism is compile/disassembly/ELF covered only. No complete runtime,
-PendSV, global-selection, or hardware claim is made by this slice.
+The complete runtime is compile, generated-disassembly, archive, and synthetic
+ELF covered. No STM32 hardware claim is made until a concrete Cortex-M33 board
+passes first-start, repeated PendSV, PSPLIM, vector, priority, and trap checks.

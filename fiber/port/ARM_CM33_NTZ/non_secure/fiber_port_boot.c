@@ -323,6 +323,7 @@ typedef struct FiberPortValidationCpuState {
 	uint32_t control;
 	uint32_t basepri;
 	uint32_t faultmask;
+	uint32_t psplim;
 } FiberPortValidationCpuState;
 
 static FIBER_GENERAL_REGS_ONLY
@@ -335,6 +336,7 @@ void fiber_port_capture_validation_cpu_state(
 	state->control = __get_CONTROL();
 	state->basepri = fiber_port_basepri_read();
 	state->faultmask = __get_FAULTMASK();
+	state->psplim = __get_PSPLIM();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -348,9 +350,42 @@ void fiber_port_validate_validation_cpu_state(
 	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
 	fiber_portCOMPILER_BARRIER();
 }
 #endif
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_context_validate_save_current(const FiberContext *const ctx)
+{
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FiberPortValidationCpuState cpu_state;
+	fiber_port_capture_validation_cpu_state(&cpu_state);
+#endif
+	/* ctx->sp is stale while the fiber executes. Validate the live PSP and
+	 * PSPLIM before PendSV reads any immutable boot field or writes the frame. */
+	fiber_port_validate_context_pointer(ctx);
+#if FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH
+	fiber_port_boot_record_check(&ctx->boot);
+#else
+	fiber_port_boot_record_fast_check(&ctx->boot);
+#endif
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
+			ctx->boot.stack_top) != 0, 'P');
+#endif
+	fiber_port_validate_stack_canary(ctx);
+
+	const uintptr_t psp = (uintptr_t)__get_PSP();
+	FIBER_REQUIRE((psp & ((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u,
+			'A');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
+	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
+	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)ctx->boot.stack_base, 'L');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+	fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
+}
 
 static FIBER_GENERAL_REGS_ONLY
 void fiber_port_prepare_start_msp_plan(void)
