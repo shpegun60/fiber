@@ -544,6 +544,48 @@ model.
 Host tests supplement but never replace selected-target assembly and hardware
 evidence.
 
+## Normative Port-Freeze And Extraction Order
+
+The following order is mandatory. Port completion and architectural extraction
+must not be combined into one behavior-changing step.
+
+1. Complete every architecturally distinct STM32 execution profile required
+   from the pinned local FreeRTOS reference. Do not duplicate GCC, IAR, or Arm
+   Compiler ports when they implement the same processor-state mechanics. A
+   compiler-specific implementation is separate only when its ABI or generated
+   context mechanics are materially different.
+2. For every selected profile, verify all applicable evidence:
+   - initial and saved frame layout plus save/restore register order;
+   - first-start SVC and PendSV dispatch;
+   - FPU, MPU, TrustZone, PSPLIM, MVE, PAC/BTI, and architecture errata;
+   - compile matrix at all required optimization levels and with LTO;
+   - generated assembly against the matching pinned FreeRTOS port;
+   - ELF, vector, directional ABI, exact-cohort, stale-object, and negative
+     link tests;
+   - hardware tests when a matching board is available.
+3. Record a profile without a matching board only as
+   `compile/assembly/ELF validated`. Never infer or publish a
+   `hardware validated` claim from compile, disassembly, emulator, host, or ELF
+   evidence.
+4. Create a stable pre-extraction checkpoint only after all applicable software
+   proofs pass and no known software gap remains in any required profile.
+5. Only after that checkpoint, mechanically separate the validated runtime:
+
+   ```text
+   CPU/Context backend
+       -> Fiber lifecycle
+       -> C++ Task/Kernel
+       -> scheduler policies
+   ```
+
+   This step moves ownership and names behind the Context interface. It must not
+   redesign frame layout, save/restore order, exception mechanics, feature
+   policy, or scheduler semantics at the same time.
+6. After extraction, repeat the same generated-assembly, ELF/vector,
+   ABI/cohort, negative-link, and available hardware tests against the
+   pre-extraction checkpoint. The extracted baseline is accepted only when the
+   evidence proves no unintended runtime behavior change.
+
 ## Mechanical Migration Sequence
 
 The separation must not be implemented as one behavior-changing rename.
@@ -556,9 +598,35 @@ The separation must not be implemented as one behavior-changing rename.
 
 ### Slice 1: Complete Existing Port Freeze
 
-- finish required Cortex-M Context ports under their current v2 names;
+- finish every architecturally distinct STM32 Cortex-M execution profile needed
+  from the pinned local FreeRTOS reference under its current v2 name;
+- do not duplicate GCC, IAR, or Arm Compiler directories when they implement the
+  same processor state contract; record and test a compiler-specific difference
+  when it changes generated context mechanics;
 - retain per-port FreeRTOS parity and compile/ELF proofs;
 - complete outstanding hardware validation where boards exist.
+
+#### Slice 1 Exit Gate
+
+Every selected profile must have a reviewed parity ledger covering:
+
+```text
+initial and saved frame layout
+save and restore register order
+first-start SVC and PendSV dispatch
+FPU, MPU, TrustZone, PSPLIM, MVE, PAC/BTI and errata when applicable
+compile matrix at the required optimization levels and with LTO
+generated assembly comparison against the pinned FreeRTOS reference
+ELF, vector, directional ABI and exact-cohort positive and negative proofs
+target hardware tests when a matching board is available
+```
+
+A profile without matching hardware may be recorded only as
+`compile/assembly/ELF validated`; it must not receive a hardware-validation
+claim. Slice 2 may begin only after all required profiles pass their applicable
+software proofs, every unavailable hardware proof is explicitly recorded, and
+the branch has a stable checkpoint with no known software gap in frame,
+save/restore, exception, feature-state, ABI/cohort, or generated-code behavior.
 
 ### Slice 2: Introduce Internal Context Facade
 

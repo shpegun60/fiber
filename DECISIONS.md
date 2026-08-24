@@ -9,6 +9,18 @@ consumer surface. Existing selected ports become Context backends and retain
 their FreeRTOS-derived SVC/PendSV implementation, exact context cohorts,
 private feature state, and proof obligations.
 
+The extraction gate is explicit: every architecturally distinct required STM32
+profile must pass its applicable frame, save/restore, exception, feature-state,
+compile/LTO, generated-assembly, ELF/vector, ABI/cohort, and negative proofs.
+Profiles without matching boards remain compile/assembly/ELF validated only.
+Context extraction cannot start while a known software gap remains in a
+required profile.
+
+After the mechanical extraction, the same generated-assembly, ELF/vector,
+directional ABI/cohort, negative-link, and available hardware evidence must be
+repeated against the stable pre-extraction checkpoint. The new baseline is not
+accepted when that comparison exposes an unintended runtime behavior change.
+
 Context owns opaque CPU execution state, current publication, one registered
 dispatcher, first start, Thread-mode yield, the future ISR reschedule boundary,
 and all CPU-specific validation. Fiber consumes Context and owns stackful
