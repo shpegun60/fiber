@@ -1,11 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM0_MPU dictionary through implementation slice 4. This exact Cortex-M0+
+ * ARM_CM0_MPU dictionary through implementation slice 5. This exact Cortex-M0+
  * MPU profile freezes its protected layout/traits, linker-isolation contract,
- * construction/global-image contract, and first-start SVC/MPU activation. It
- * deliberately provides no PendSV handler, selector route, or public MPU
- * extension ABI.
+ * construction/global-image contract, first-start SVC/MPU activation, and
+ * protected Thumb-1 PendSV switching. It deliberately provides no selector
+ * route, public forward runtime ABI, or public MPU extension ABI.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORTMACRO_H_
@@ -91,9 +91,8 @@
 
 /*
  * Port-owned SVC namespace. The values are part of the protected execution
- * ABI, therefore application code cannot override them. Slice 4 implements
- * start and task-return. Yield remains reserved until it is introduced
- * atomically with the protected PendSV owner.
+ * ABI, therefore application code cannot override them. The protected runtime
+ * owns start, yield, and task-return as one closed service family.
  */
 #ifdef FIBER_SVC_START_NUMBER
 # error "[fiber]: ARM_CM0_MPU owns its complete SVC namespace"
@@ -107,9 +106,12 @@
  * keep the selected port independent from a particular CMSIS device header. */
 #define fiber_portNVIC_INT_CTRL_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
 #define fiber_portNVIC_PENDSVCLR_BIT (1u << 27u)
 #define fiber_portNVIC_SHPR2_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED1Cu))
+#define fiber_portNVIC_SHPR3_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED20u))
 #define fiber_portSCB_VTOR_REG \
 	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
 #define fiber_portMPU_TYPE_REG \
@@ -124,8 +126,10 @@
 	(*((volatile uint32_t *)(uintptr_t)0xE000EDA0u))
 
 #define fiber_portNVIC_SVC_PRIORITY_SHIFT 24u
+#define fiber_portNVIC_PENDSV_PRIORITY_SHIFT 16u
 #define fiber_portNVIC_PRIORITY_BYTE_MASK 0xFFu
 #define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
 #define fiber_portVECTOR_ALIGNMENT 128u
 #define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
 #define fiber_portXPSR_IPSR_MASK 0x000001FFu
@@ -300,7 +304,7 @@
  * Generic traits describe the complete logical restore transfer, excluding
  * cursor_limit. That image is privileged storage, not a software frame on the
  * unprivileged stack. The generic fiber_port_geometry.h model is therefore not
- * applicable to this profile; slices 2-4 use the explicit physical-PSP geometry
+ * applicable to this profile; slices 2-5 use the explicit physical-PSP geometry
  * below for raw-stack admission.
  */
 #define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
@@ -449,8 +453,9 @@ FIBER_STATIC_ASSERT(fiber_portEXC_RETURN_THREAD_MSP == 0xFFFFFFF9u &&
 		fiber_portINITIAL_EXC_RETURN == 0xFFFFFFFDu,
 		"[fiber]: ARM_CM0_MPU exception-return encodings changed");
 FIBER_STATIC_ASSERT(fiber_portVECTOR_INDEX_SVC == 11u &&
+		fiber_portVECTOR_INDEX_PENDSV == 14u &&
 		fiber_portVECTOR_ALIGNMENT == 128u,
-		"[fiber]: ARM_CM0_MPU SVC vector facts changed");
+		"[fiber]: ARM_CM0_MPU exception-vector facts changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_PORT_ID != 0x434D3030u,
 		"[fiber]: ARM_CM0_MPU must not reuse privileged ARM_CM0 identity");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C04u,

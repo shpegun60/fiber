@@ -9,8 +9,8 @@
 
 /*
  * The protected register image, its live cursor, MPU register pairs, and
- * runtime flags are mutable PendSV state. The future port-owned seal covers
- * this immutable record together with the MPU image.
+ * runtime flags are mutable PendSV state. The port-owned seal covers this
+ * immutable record together with the MPU image.
  */
 typedef struct FiberPortBoot {
 	void *begin;

@@ -101,6 +101,55 @@ VTOR-present and VTOR-absent compilation, linker-section placement, exact
 undefined surfaces, and absence of `PendSV_Handler`. It is compile/assembly/
 ELF evidence only; it creates no Cortex-M0+ MPU hardware support claim.
 
+## 2026-08-25: Add ARM_CM0_MPU Protected PendSV And Private Yield
+
+`ARM_CM0_MPU` slice 5 completes the private ARMv6-M MPU execution mechanism
+without activating the eight-operation forward runtime ABI.
+`FIBER_PORT_RUNTIME_SELECTABLE` remains zero, the global selector still excludes
+the profile, and no public MPU configuration API is introduced.
+
+The selected port now owns strong direct `SVC_Handler` and `PendSV_Handler`
+symbols, slot-11/slot-14 vector validation, SVCall priority zero, PendSV lowest
+priority, stale-PendSV cleanup, and the closed `70` start / `71` private yield /
+`72` task-return SVC namespace. Yield is accepted only from its exact
+unprivileged continuation; it pends PendSV under PRIMASK and never performs
+context selection itself.
+
+PendSV keeps the pinned FreeRTOS ARM_CM0 MPU protected 20-word geometry:
+Thumb-1 saves r4-r11, copies the complete eight-word hardware frame into
+privileged context storage, saves PSP/CONTROL/EXC_RETURN, enters the
+PRIMASK-protected scheduler bridge, atomically replaces the per-context MPU
+image, and restores the selected frame. No ARMv7-M transfer form, BASEPRI, or
+user-stack software frame is introduced.
+
+Fiber hardens the reference sequence without changing its transfer geometry:
+
+- current provenance, live PSP frame, active MPU image, and context cursor are
+  checked before the first `current->protected_context_cursor` read;
+- the scheduler callback must preserve PRIMASK, CONTROL, IPSR, PSP, vector
+  source, SVC/PendSV priorities, pending-PendSV state, MPU control/selection,
+  and all eight effective RBAR addresses/RASR values;
+- returned context validation precedes common-owned publication;
+- MPU replacement runs with PRIMASK asserted, changes only mutable regions
+  0-3, preserves linker-derived global regions 4-7, and reads back the complete
+  selected image;
+- the exact eight-word protected hardware transfer rejects xPSR `STACKALIGN`
+  padding rather than silently copying an unmodelled word.
+
+The scheduler callback is a trusted privileged integration point. Before the
+forward ABI is activated, its code and user object must be assigned to
+privileged MPU domains by the concrete application linker policy. The port
+proves that its direct reverse-ABI selector and publication callees are in
+privileged code; it does not claim to infer or police an opaque user function
+pointer at this staged boundary.
+
+The compile matrix and generated-assembly parity proof cover `-O2`, `-Os`, and
+LTO, direct slots 11/14, VTOR-present/absent cohorts, exact unresolved
+surfaces, preflight-before-cursor ordering, Thumb-1 save/restore, PRIMASK
+envelope, MPU replacement, and negative linker assertions. This remains
+compile/assembly/ELF evidence only. Cortex-M0+ MPU hardware and isolation
+validation are still required.
+
 ## 2026-08-24: Freeze Context, Fiber, And Kernel Layer Separation
 
 The current five-function v2 runtime remains the active porting and validation

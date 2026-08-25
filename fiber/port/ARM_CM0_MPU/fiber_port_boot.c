@@ -2,8 +2,9 @@
  *
  * This source does not enter the forward runtime ABI. It validates linker-owned
  * placement, builds and seals the exact privileged image, and supplies the
- * first-image validation consumed by slice-4 SVC/MPU activation. A later
- * protected PendSV slice will own ordinary MPU replacement and switching.
+ * protected-frame validators used by SVC and PendSV. PendSV owns the mutable
+ * image; this file owns the exact bounds, cursor, and frame invariants that
+ * must hold before it reads or restores that image.
  */
 
 #include "fiber_port_private.h"
@@ -278,6 +279,12 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_context_seal_check);
 	const uintptr_t initial_restore_check = fiber_port_function_address(
 			(uintptr_t)&fiber_port_context_validate_initial_restore);
+	const uintptr_t running_svc_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_validate_running_svc);
+	const uintptr_t save_current_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_validate_save_current);
+	const uintptr_t restore_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_validate_restore);
 	const uintptr_t encoder = fiber_port_function_address(
 			(uintptr_t)&fiber_port_mpu_try_encode_exact_region);
 	const uintptr_t layout_load = fiber_port_function_address(
@@ -290,6 +297,10 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_panic);
 	const uintptr_t task_return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_internal_task_return);
+	const uintptr_t scheduler_candidate = fiber_port_function_address(
+			(uintptr_t)&fiber_internal_runtime_select_scheduler_candidate);
+	const uintptr_t publish_current = fiber_port_function_address(
+			(uintptr_t)&fiber_internal_runtime_publish_current_context);
 	const uintptr_t svc_handler = fiber_port_function_address(
 			(uintptr_t)&SVC_Handler);
 	const uintptr_t svc_dispatch = fiber_port_function_address(
@@ -300,12 +311,25 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_start_first_context);
 	const uintptr_t first_restore = fiber_port_function_address(
 			(uintptr_t)&fiber_port_restore_first_context_from_svc);
+	const uintptr_t pendsv_preflight = fiber_port_function_address(
+			(uintptr_t)&fiber_port_pendsv_validate_save_current);
+	const uintptr_t scheduler_pick = fiber_port_function_address(
+			(uintptr_t)&fiber_port_scheduler_pick_next_from_pendsv);
+	const uintptr_t mpu_switch = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_switch_to_context);
+	const uintptr_t pendsv_handler = fiber_port_function_address(
+			(uintptr_t)&PendSV_Handler);
 	const uintptr_t return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_port_unprivileged_task_return);
+	const uintptr_t yield_target = fiber_port_function_address(
+			(uintptr_t)&fiber_port_unprivileged_yield);
 	const uintptr_t privileged_targets[] = {
-		context_init, seal_compute, seal_check, initial_restore_check, encoder, layout_load,
+		context_init, seal_compute, seal_check, initial_restore_check,
+		running_svc_check, save_current_check, restore_check, encoder, layout_load,
 		layout_check, global_builder, panic_target, task_return_target,
-		svc_handler, svc_dispatch, first_prepare, first_start, first_restore
+		scheduler_candidate, publish_current,
+		svc_handler, svc_dispatch, first_prepare, first_start, first_restore,
+		pendsv_preflight, scheduler_pick, mpu_switch, pendsv_handler
 	};
 
 	for (uint32_t index = 0u;
@@ -321,6 +345,12 @@ void fiber_port_mpu_linker_layout_check(
 	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
 			layout->privileged_code_start,
 			layout->privileged_code_end, return_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end, yield_target), 'L');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end, yield_target), 'L');
 }
 
 FIBER_CM0_MPU_BOOT
@@ -525,9 +555,9 @@ void fiber_port_context_seal_check(const FiberContext *ctx)
 			expected_stack.rasr, 'M');
 }
 
-/* This check is constructor-only. The protected image becomes mutable once a
- * later PendSV implementation owns save/restore, so it must not become a
- * switch-time validator or part of the immutable seal. */
+/* This check is constructor-only. The protected image is mutable after the
+ * selected PendSV saves/restores it, so it must not become a switch-time
+ * validator or part of the immutable seal. */
 static FIBER_CM0_MPU_BOOT
 void fiber_port_context_initial_image_check(const FiberContext *ctx,
 		uintptr_t initial_psp,
@@ -600,6 +630,100 @@ void fiber_port_context_validate_initial_restore(const FiberContext *ctx)
 	FIBER_REQUIRE(image->cursor_limit == 0u, 'P');
 	FIBER_REQUIRE(ctx->protected_context_cursor == &image->cursor_limit, 'P');
 	FIBER_REQUIRE(ctx->runtime_flags == 0u, 'q');
+}
+
+static FIBER_CM0_MPU_BOOT
+void fiber_port_validate_hardware_frame(const FiberContext *ctx,
+		const uint32_t *hardware_frame,
+		const FiberPortMpuMemoryLayout *layout)
+{
+	FIBER_REQUIRE(ctx != NULL, 'N');
+	FIBER_REQUIRE(hardware_frame != NULL, 'P');
+	FIBER_REQUIRE(layout != NULL, 'L');
+
+	const uint32_t stacked_pc = hardware_frame[6];
+	const uint32_t stacked_xpsr = hardware_frame[7];
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_THUMB_BIT) != 0u, 'x');
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');
+	/* The protected transfer owns exactly eight copied frame words. Reject the
+	 * alignment-padding variant until it has its own explicit image contract. */
+	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_STACK_ALIGN_BIT) == 0u, 'a');
+	FIBER_REQUIRE(stacked_pc >= 2u, 'x');
+	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			(uintptr_t)stacked_pc), 'c');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end,
+			(uintptr_t)stacked_pc), 'c');
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_context_validate_restore(FiberContext *ctx)
+{
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_context_seal_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+
+	FIBER_REQUIRE(ctx->protected_context_cursor ==
+			&ctx->protected_context.cursor_limit, 'P');
+	FIBER_REQUIRE(ctx->protected_context.control ==
+			ctx->boot.abi_initial_control, 'q');
+	FIBER_REQUIRE(ctx->protected_context.exc_return ==
+			ctx->boot.abi_initial_exc_return, 'x');
+
+	const uintptr_t psp = (uintptr_t)ctx->protected_context.psp;
+	FIBER_REQUIRE((psp & 7u) == 0u, 'A');
+	FIBER_REQUIRE(psp <= UINTPTR_MAX - FIBER_PORT_EXC_BASE_BYTES, 'O');
+	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((psp + FIBER_PORT_EXC_BASE_BYTES) <=
+			ctx->boot.stack_top, 'P');
+
+	fiber_port_validate_hardware_frame(ctx,
+			&ctx->protected_context.r0, &layout);
+}
+
+static FIBER_CM0_MPU_BOOT
+void fiber_port_context_validate_running_frame(const FiberContext *ctx,
+		const uint32_t *hardware_frame)
+{
+	FiberPortMpuMemoryLayout layout;
+	fiber_port_context_seal_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+
+	/* After a restore the cursor is exactly the next save origin, r4. The
+	 * pre-save check must establish this before PendSV reads it as a pointer. */
+	FIBER_REQUIRE(ctx->protected_context_cursor ==
+			&ctx->protected_context.r4, 'P');
+	FIBER_REQUIRE(ctx->protected_context.control ==
+			ctx->boot.abi_initial_control, 'q');
+	FIBER_REQUIRE(ctx->protected_context.exc_return ==
+			ctx->boot.abi_initial_exc_return, 'x');
+	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)__get_PSP(), 'P');
+	const uintptr_t frame_start = (uintptr_t)hardware_frame;
+	FIBER_REQUIRE((frame_start & 7u) == 0u, 'A');
+	FIBER_REQUIRE(frame_start <= UINTPTR_MAX - FIBER_PORT_EXC_BASE_BYTES,
+			'O');
+	FIBER_REQUIRE(frame_start >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((frame_start + FIBER_PORT_EXC_BASE_BYTES) <=
+			ctx->boot.stack_top, 'P');
+	fiber_port_validate_hardware_frame(ctx, hardware_frame, &layout);
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_context_validate_running_svc(const FiberContext *ctx,
+		const uint32_t *hardware_frame)
+{
+	fiber_port_context_validate_running_frame(ctx, hardware_frame);
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_context_validate_save_current(const FiberContext *ctx,
+		const uint32_t *hardware_frame)
+{
+	fiber_port_context_validate_running_frame(ctx, hardware_frame);
 }
 
 FIBER_CM0_MPU_BOOT

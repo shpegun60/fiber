@@ -6720,11 +6720,11 @@ function Test-ArmCm0MpuLayoutContract {
             "fiber_port.c",
             "fiber_port_linker_contract.ld")) {
         if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
-            throw "ARM_CM0_MPU slice 4 is missing required file: $requiredFile"
+            throw "ARM_CM0_MPU slice 5 is missing required file: $requiredFile"
         }
     }
     if (-not (Test-Path $bootProbeSource)) {
-        throw "ARM_CM0_MPU slice 4 is missing its linker/global-image fixture"
+        throw "ARM_CM0_MPU slice 5 is missing its linker/global-image fixture"
     }
     if (-not (Test-Path $runtimeStateSource)) {
         throw "ARM_CM0_MPU linker proof is missing common runtime state"
@@ -6755,7 +6755,7 @@ function Test-ArmCm0MpuLayoutContract {
 
     foreach ($forbiddenRuntimeFile in @("fiber_port_exception.c")) {
         if (Test-Path (Join-Path $profileDir $forbiddenRuntimeFile)) {
-            throw "ARM_CM0_MPU slice 4 keeps first-start runtime in fiber_port.c: $forbiddenRuntimeFile"
+            throw "ARM_CM0_MPU slice 5 keeps protected runtime in fiber_port.c: $forbiddenRuntimeFile"
         }
     }
 
@@ -6802,19 +6802,19 @@ function Test-ArmCm0MpuLayoutContract {
 			"fiber_port_context_initial_image_check(ctx, initial_psp, entry_address, arg,")) {
         if ($bootSourceText.IndexOf($requiredText,
                 [System.StringComparison]::Ordinal) -lt 0) {
-                throw "ARM_CM0_MPU slice 4 lost required construction behavior: $requiredText"
+                throw "ARM_CM0_MPU slice 5 lost required construction behavior: $requiredText"
         }
     }
     if ($macroSourceText.IndexOf("uint32_t fiber_port_read_r9(void)",
             [System.StringComparison]::Ordinal) -lt 0) {
-        throw "ARM_CM0_MPU slice 4 lost its live-r9 initial-context helper"
+        throw "ARM_CM0_MPU slice 5 lost its live-r9 initial-context helper"
     }
 	foreach ($requiredInitialRestoreText in @(
 			"void fiber_port_context_validate_initial_restore(const FiberContext *ctx)",
 			"image->r8 == 0u && image->r9 == fiber_port_read_r9()")) {
 		if ($bootSourceText.IndexOf($requiredInitialRestoreText,
 				[System.StringComparison]::Ordinal) -lt 0) {
-			throw "ARM_CM0_MPU slice 4 lost complete first-image validation: $requiredInitialRestoreText"
+			throw "ARM_CM0_MPU slice 5 lost complete first-image validation: $requiredInitialRestoreText"
 		}
 	}
 	foreach ($requiredMacroText in @(
@@ -6829,13 +6829,12 @@ function Test-ArmCm0MpuLayoutContract {
 		}
 	}
     foreach ($forbiddenText in @(
-            "void PendSV_Handler(void)",
             "void fiber_port_runtime_schedule(",
             "void fiber_port_runtime_prepare_start(",
             "MPU->")) {
         if ($bootSourceText.IndexOf($forbiddenText,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM0_MPU slice 4 boot object crossed its staged boundary: $forbiddenText"
+            throw "ARM_CM0_MPU slice 5 boot object crossed its staged boundary: $forbiddenText"
         }
     }
     foreach ($requiredRuntimeText in @(
@@ -6844,24 +6843,35 @@ function Test-ArmCm0MpuLayoutContract {
 			"void fiber_port_start_first_context(FiberContext *first",
 			"void fiber_port_restore_first_context_from_svc(",
 			"void fiber_port_unprivileged_task_return(void)",
+			"void fiber_port_unprivileged_yield(void)",
 			"void SVC_Handler(void)",
+			"void PendSV_Handler(void)",
 			"fiber_port_mpu_activate_first_context(current);",
             "fiber_port_mpu_validate_active_context(first);",
             "fiber_portSVC_START",
+			"fiber_portSVC_YIELD",
+			"fiber_port_pendsv_validate_save_current",
+			"fiber_port_scheduler_pick_next_from_pendsv",
+			"fiber_port_mpu_switch_to_context",
+			"void fiber_port_capture_scheduler_mpu_image(",
+			"void fiber_port_validate_scheduler_mpu_image(",
+			"mpu_regions[fiber_portMPU_TOTAL_REGIONS]",
+			"fiber_port_capture_scheduler_mpu_image(state);",
+			"fiber_port_validate_scheduler_mpu_image(before);",
+			"state->pendsv_pending = fiber_portNVIC_INT_CTRL_REG",
+			"fiber_portNVIC_PENDSVSET_BIT) == before->pendsv_pending",
             "fiber_portSVC_RETURN")) {
         if ($runtimeSourceText.IndexOf($requiredRuntimeText,
                 [System.StringComparison]::Ordinal) -lt 0) {
-            throw "ARM_CM0_MPU slice 4 lost required first-start behavior: $requiredRuntimeText"
+            throw "ARM_CM0_MPU slice 5 lost required protected-switch behavior: $requiredRuntimeText"
         }
     }
     foreach ($forbiddenRuntimeText in @(
-            "void PendSV_Handler(void)",
             "void fiber_port_runtime_schedule(",
-            "void fiber_port_runtime_prepare_start(",
-            "fiber_portSVC_YIELD:\n")) {
+            "void fiber_port_runtime_prepare_start(")) {
         if ($runtimeSourceText.IndexOf($forbiddenRuntimeText,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM0_MPU slice 4 activated a later runtime path: $forbiddenRuntimeText"
+            throw "ARM_CM0_MPU slice 5 activated a later forward runtime path: $forbiddenRuntimeText"
         }
     }
 
@@ -6871,7 +6881,7 @@ function Test-ArmCm0MpuLayoutContract {
         $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
         if ($selectorSource.IndexOf("ARM_CM0_MPU",
                 [System.StringComparison]::Ordinal) -ge 0) {
-        throw "ARM_CM0_MPU slice 4 must not enter architecture selection: $selectorPath"
+		throw "ARM_CM0_MPU slice 5 must not enter architecture selection: $selectorPath"
         }
     }
 
@@ -7087,7 +7097,7 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
                 "-o", $compileUnit.Object
             ))
             if ($LASTEXITCODE -ne 0) {
-                throw "ARM_CM0_MPU slice-4 linker/global-image $($compileUnit.Label) failed compile ($mode)"
+                throw "ARM_CM0_MPU slice-5 linker/global-image $($compileUnit.Label) failed compile ($mode)"
             }
         }
 
@@ -7102,7 +7112,7 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
                 -Disassembly $bootDisassembly -Symbol $functionName `
                 -Path $bootObject
             if ($functionBody -match '\b(svc|cpsid|cpsie|mrs|msr)\b') {
-                throw "ARM_CM0_MPU slice-4 $functionName must build/check storage only, not change CPU state ($mode)"
+                throw "ARM_CM0_MPU slice-5 $functionName must build/check storage only, not change CPU state ($mode)"
             }
         }
 
@@ -7118,6 +7128,10 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
 			-Symbol "SVC_Handler" -Path $runtimeObject
 		$returnBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
 			-Symbol "fiber_port_unprivileged_task_return" -Path $runtimeObject
+		$yieldBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+			-Symbol "fiber_port_unprivileged_yield" -Path $runtimeObject
+		$pendsvBody = Get-DisassemblyFunctionBody -Disassembly $runtimeDisassembly `
+			-Symbol "PendSV_Handler" -Path $runtimeObject
 		foreach ($requiredStartInstruction in @(
 			"fiber_port_prepare_first_start", "cpsid", "svc", "70")) {
 			if ($startBody.IndexOf($requiredStartInstruction,
@@ -7158,12 +7172,76 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
 			($returnBody -match '(?i)\b(msr|mrs|str|stmia|stmdb)\b')) {
 			throw "ARM_CM0_MPU unprivileged return veneer is not one SVC-only route ($mode)"
 		}
+		if (($yieldBody -notmatch '(?i)\bsvc\b.*\b71\b') -or
+			($yieldBody -match '(?i)\b(msr|mrs|str|stmia|stmdb)\b')) {
+			throw "ARM_CM0_MPU unprivileged yield veneer is not one SVC-only route ($mode)"
+		}
+		foreach ($requiredPendSvPattern in @(
+			'(?i)\bmrs\s+r0,\s*PSP\b',
+			'fiber_port_pendsv_validate_save_current',
+			'(?i)\bstmia\s+r3!?,\s*\{r4,\s*r5,\s*r6,\s*r7\}',
+			'(?i)\bldmia\s+r0!?,\s*\{r4,\s*r5,\s*r6,\s*r7\}',
+			'(?i)\bmrs\s+r2,\s*CONTROL\b',
+			'(?i)\bcpsid\s+i\b',
+			'fiber_port_scheduler_pick_next_from_pendsv',
+			'fiber_port_mpu_switch_to_context',
+			'(?i)\bmsr\s+PSP\b',
+			'(?i)\bmsr\s+CONTROL\b',
+			'(?i)\bmov\s+r8,\s*r4\b',
+			'(?i)\bmov\s+r9,\s*r5\b',
+			'(?i)\bmov\s+(r10|sl),\s*r6\b',
+			'(?i)\bmov\s+(r11|fp),\s*r7\b',
+			'(?i)\bcpsie\s+i\b',
+			'(?i)\bbx\s+lr\b')) {
+			if ($pendsvBody -notmatch $requiredPendSvPattern) {
+				throw "ARM_CM0_MPU protected Thumb-1 PendSV lost $requiredPendSvPattern ($mode)"
+			}
+		}
+		if ($pendsvBody -match '(?i)\b(ldmdb|stmdb|vpush|vpop|vldm|vstm|basepri)\b') {
+			throw "ARM_CM0_MPU protected PendSV acquired a non-ARMv6-M transfer or mask ($mode)"
+		}
+		# Prove the assembly-loaded current pointer is used only as an opaque
+		# argument until the C preflight has validated its protected cursor and
+		# immutable metadata. This is deliberately generated-code evidence, not
+		# merely an inline-assembly source-text convention.
+		$currentSlotLoad = [regex]::Match($pendsvBody,
+			'(?im)^\s*[0-9a-f]+:\s+.*\bldr(?:\.w)?\s+r1,\s*\[r1(?:,\s*#0)?\]')
+		$savePreflightCall = [regex]::Match($pendsvBody,
+			'(?im)^\s*[0-9a-f]+:\s+.*\bbl(?:\.w)?\s+.*<fiber_port_pendsv_validate_save_current>')
+		if ((-not $currentSlotLoad.Success) -or
+				(-not $savePreflightCall.Success) -or
+				($currentSlotLoad.Index -ge $savePreflightCall.Index)) {
+			throw "ARM_CM0_MPU PendSV lost the generated current-slot/preflight order ($mode)"
+		}
+		$preflightPrefixStart = $currentSlotLoad.Index + $currentSlotLoad.Length
+		$preflightPrefix = $pendsvBody.Substring($preflightPrefixStart,
+			$savePreflightCall.Index - $preflightPrefixStart)
+		if ($preflightPrefix -match
+				'(?im)\b(?:ldr|str|ldmia|stmia|ldmdb|stmdb)\b[^\r\n]*\[\s*r1(?:\s*,|\s*\])') {
+			throw "ARM_CM0_MPU PendSV dereferenced current before its generated preflight ($mode)"
+		}
+		$firstCursorLoad = [regex]::Match(
+			$pendsvBody.Substring($savePreflightCall.Index +
+				$savePreflightCall.Length),
+			'(?im)^\s*[0-9a-f]+:\s+.*\bldr(?:\.w)?\s+r3,\s*\[r1(?:,\s*#0)?\]')
+		if (-not $firstCursorLoad.Success) {
+			throw "ARM_CM0_MPU PendSV lost its post-preflight protected cursor load ($mode)"
+		}
 		$runtimeDefinedOutput = @(& $Nm --defined-only $runtimeObject)
 		if ($LASTEXITCODE -ne 0) {
 			throw "nm failed for ARM_CM0_MPU first-start runtime ($mode)"
 		}
-		if ($runtimeDefinedOutput -match '\bPendSV_Handler\s*$') {
-			throw "ARM_CM0_MPU slice 4 must not define PendSV_Handler ($mode)"
+		foreach ($requiredRuntimeSymbol in @(
+				"SVC_Handler",
+				"PendSV_Handler",
+				"fiber_port_unprivileged_yield",
+				"fiber_port_pendsv_validate_save_current",
+				"fiber_port_scheduler_pick_next_from_pendsv",
+				"fiber_port_mpu_switch_to_context")) {
+			if (-not ($runtimeDefinedOutput -match ("\b" +
+					[regex]::Escape($requiredRuntimeSymbol) + "\s*$"))) {
+				throw "ARM_CM0_MPU slice 5 runtime lost required symbol ($mode): $requiredRuntimeSymbol"
+			}
 		}
 
         $bootSections = @(& $Objdump -h $bootObject)
@@ -7200,7 +7278,11 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
 				"fiber_port_svc_dispatch",
 				"fiber_port_start_first_context",
 				"fiber_port_restore_first_context_from_svc",
-				"SVC_Handler")) {
+				"fiber_port_pendsv_validate_save_current",
+				"fiber_port_scheduler_pick_next_from_pendsv",
+				"fiber_port_mpu_switch_to_context",
+				"SVC_Handler",
+				"PendSV_Handler")) {
 			$matches = @($runtimeSymbolTable | Where-Object {
 				$_ -match ("\bF\s+\.fiber_port_privileged_functions\s+[0-9a-fA-F]+\s+" +
 					[regex]::Escape($runtimeSymbol) + "$")
@@ -7209,11 +7291,16 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
 				throw "ARM_CM0_MPU privileged first-start symbol escaped its linker section ($mode): $runtimeSymbol"
 			}
 		}
-		$unprivilegedReturnMatches = @($runtimeSymbolTable | Where-Object {
-			$_ -match "\bF\s+\.fiber_port_unprivileged_functions\s+[0-9a-fA-F]+\s+fiber_port_unprivileged_task_return$"
-		})
-		if ($unprivilegedReturnMatches.Count -ne 1) {
-			throw "ARM_CM0_MPU unprivileged return veneer escaped its linker section ($mode)"
+		foreach ($unprivilegedRuntimeSymbol in @(
+				"fiber_port_unprivileged_task_return",
+				"fiber_port_unprivileged_yield")) {
+			$unprivilegedMatches = @($runtimeSymbolTable | Where-Object {
+				$_ -match ("\bF\s+\.fiber_port_unprivileged_functions\s+[0-9a-fA-F]+\s+" +
+					[regex]::Escape($unprivilegedRuntimeSymbol) + "$")
+			})
+			if ($unprivilegedMatches.Count -ne 1) {
+				throw "ARM_CM0_MPU unprivileged runtime veneer escaped its linker section ($mode): $unprivilegedRuntimeSymbol"
+			}
 		}
 
         $fixtureSymbolTable = @(& $Objdump -t $bootProbeObject)
@@ -7250,17 +7337,24 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
         $expectedBootUndefined = @(
             "fiber_panic",
 			"fiber_internal_task_return",
+			"fiber_internal_runtime_select_scheduler_candidate",
+			"fiber_internal_runtime_publish_current_context",
 			"SVC_Handler",
-			"fiber_port_svc_dispatch",
-			"fiber_port_prepare_first_start",
-			"fiber_port_start_first_context",
-			"fiber_port_restore_first_context_from_svc",
+            "fiber_port_svc_dispatch",
+            "fiber_port_prepare_first_start",
+            "fiber_port_start_first_context",
+            "fiber_port_restore_first_context_from_svc",
             "fiber_port_unprivileged_task_return",
+			"fiber_port_unprivileged_yield",
+			"fiber_port_pendsv_validate_save_current",
+			"fiber_port_scheduler_pick_next_from_pendsv",
+			"fiber_port_mpu_switch_to_context",
+			"PendSV_Handler",
             $variantCohorts["vtor-present-$mode"]
         ) + $linkerBoundarySymbols
         Assert-ExactSymbolSet -Expected $expectedBootUndefined `
             -Actual $bootUndefined `
-			-Description "ARM_CM0_MPU slice-4 boot/linker undefined surface ($mode)"
+			-Description "ARM_CM0_MPU slice-5 boot/linker undefined surface ($mode)"
 
 		$runtimeUndefinedOutput = @(& $Nm --undefined-only $runtimeObject)
 		if ($LASTEXITCODE -ne 0) {
@@ -7270,15 +7364,20 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
 			-Path $runtimeObject
 		Assert-ExactSymbolSet -Expected @(
 				"fiber_internal_runtime_current_context_slot",
+				"fiber_internal_runtime_port_abi_v1_anchor",
+				"fiber_internal_runtime_publish_current_context",
+				"fiber_internal_runtime_select_scheduler_candidate",
 				"fiber_internal_task_return",
 				"fiber_panic",
-				"fiber_port_context_seal_check",
 				"fiber_port_context_validate_initial_restore",
+				"fiber_port_context_validate_restore",
+				"fiber_port_context_validate_running_svc",
+				"fiber_port_context_validate_save_current",
 				"fiber_port_mpu_build_global_regions",
 				"fiber_port_mpu_linker_layout_check",
 				"fiber_port_mpu_load_linker_layout") `
 			-Actual $runtimeUndefined `
-			-Description "ARM_CM0_MPU slice-4 first-start runtime undefined surface ($mode)"
+			-Description "ARM_CM0_MPU slice-5 protected runtime undefined surface ($mode)"
 
         $linkerText = @'
 ENTRY(fiber_arm_cm0_mpu_boot_probe)
@@ -7362,11 +7461,11 @@ SECTIONS
         )
         & $Compiler @linkArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-4 linker/global-image synthetic ELF failed link ($mode)"
+			throw "ARM_CM0_MPU slice-5 linker/global-image synthetic ELF failed link ($mode)"
         }
         $bootSymbols = @(& $Nm --defined-only $bootElf)
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM0_MPU slice-4 linker/global-image ELF ($mode)"
+			throw "nm failed for ARM_CM0_MPU slice-5 linker/global-image ELF ($mode)"
         }
         $symbolAddresses = @{}
         foreach ($line in $bootSymbols) {
@@ -7382,26 +7481,31 @@ SECTIONS
                 "fiber_port_mpu_try_encode_exact_region",
                 "fiber_port_mpu_load_linker_layout",
                 "fiber_port_mpu_linker_layout_check",
-                "fiber_port_mpu_build_global_regions",
+			"fiber_port_mpu_build_global_regions",
 			"fiber_port_context_validate_initial_restore",
+			"fiber_port_context_validate_running_svc",
+			"fiber_port_context_validate_save_current",
+			"fiber_port_context_validate_restore",
 			"fiber_port_prepare_first_start",
 			"fiber_port_svc_dispatch",
 			"fiber_port_start_first_context",
 			"fiber_port_restore_first_context_from_svc",
 			"fiber_port_unprivileged_task_return",
+			"fiber_port_unprivileged_yield",
+			"fiber_port_pendsv_validate_save_current",
+			"fiber_port_scheduler_pick_next_from_pendsv",
+			"fiber_port_mpu_switch_to_context",
 			"SVC_Handler",
+			"PendSV_Handler",
+			"fiber_internal_runtime_select_scheduler_candidate",
+			"fiber_internal_runtime_publish_current_context",
                 "fiber_internal_runtime_current_context_slot",
 			"fiber_arm_cm0_mpu_probe_vectors",
                 "fiber_arm_cm0_mpu_boot_probe")) {
             if (-not $symbolAddresses.ContainsKey($requiredSymbol)) {
-                throw "ARM_CM0_MPU slice-4 synthetic ELF lost symbol ($mode): $requiredSymbol"
-            }
-        }
-        foreach ($forbiddenSymbol in @("PendSV_Handler")) {
-            if ($symbolAddresses.ContainsKey($forbiddenSymbol)) {
-                throw "ARM_CM0_MPU slice-4 synthetic ELF acquired later handler ownership ($mode): $forbiddenSymbol"
-            }
-        }
+				throw "ARM_CM0_MPU slice-5 synthetic ELF lost symbol ($mode): $requiredSymbol"
+			}
+		}
         foreach ($privilegedTextSymbol in @(
                 "fiber_port_context_init",
                 "fiber_port_context_compute_seal",
@@ -7409,13 +7513,22 @@ SECTIONS
                 "fiber_port_mpu_try_encode_exact_region",
                 "fiber_port_mpu_load_linker_layout",
                 "fiber_port_mpu_linker_layout_check",
-                "fiber_port_mpu_build_global_regions",
+			"fiber_port_mpu_build_global_regions",
 			"fiber_port_context_validate_initial_restore",
+			"fiber_port_context_validate_running_svc",
+			"fiber_port_context_validate_save_current",
+			"fiber_port_context_validate_restore",
 			"fiber_port_prepare_first_start",
 			"fiber_port_svc_dispatch",
 			"fiber_port_start_first_context",
 			"fiber_port_restore_first_context_from_svc",
+			"fiber_port_pendsv_validate_save_current",
+			"fiber_port_scheduler_pick_next_from_pendsv",
+			"fiber_port_mpu_switch_to_context",
 			"SVC_Handler",
+			"PendSV_Handler",
+			"fiber_internal_runtime_select_scheduler_candidate",
+			"fiber_internal_runtime_publish_current_context",
 			"fiber_internal_task_return",
                 "fiber_panic")) {
             if ((-not $symbolAddresses.ContainsKey($privilegedTextSymbol)) -or
@@ -7424,9 +7537,10 @@ SECTIONS
                 throw "ARM_CM0_MPU privileged text symbol escaped its global region ($mode): $privilegedTextSymbol"
             }
         }
-        foreach ($unprivilegedTextSymbol in @(
-                "fiber_port_unprivileged_task_return",
-                "fiber_arm_cm0_mpu_probe_entry")) {
+		foreach ($unprivilegedTextSymbol in @(
+				"fiber_port_unprivileged_task_return",
+				"fiber_port_unprivileged_yield",
+				"fiber_arm_cm0_mpu_probe_entry")) {
             if ((-not $symbolAddresses.ContainsKey($unprivilegedTextSymbol)) -or
                     ($symbolAddresses[$unprivilegedTextSymbol] -lt 0x08010000) -or
                     ($symbolAddresses[$unprivilegedTextSymbol] -ge 0x08020000)) {
@@ -7452,7 +7566,7 @@ SECTIONS
         }
         $elfSections = (& $Objdump -h $bootElf) -join "`n"
         if ($LASTEXITCODE -ne 0) {
-            throw "objdump failed for ARM_CM0_MPU slice-4 linker/global-image ELF ($mode)"
+			throw "objdump failed for ARM_CM0_MPU slice-5 linker/global-image ELF ($mode)"
         }
         if ($elfSections -notmatch '(?m)^\s*\d+\s+\.fiber_current_context_slot\s+00000100\s+20000000\b') {
             throw "ARM_CM0_MPU current-slot linker output is not one exact 256-byte aperture ($mode)"
@@ -7461,17 +7575,20 @@ SECTIONS
 		& $Objcopy -O binary --only-section=.fiber_privileged_code `
 			$bootElf $vectorBinary
 		if ($LASTEXITCODE -ne 0) {
-			throw "objcopy failed for ARM_CM0_MPU first-start vector ELF ($mode)"
+			throw "objcopy failed for ARM_CM0_MPU protected vector ELF ($mode)"
 		}
 		if (($symbolAddresses["SVC_Handler"] -band 1) -ne 0) {
 			throw "ARM_CM0_MPU strong SVC handler symbol must have an even code address ($mode)"
 		}
+		if (($symbolAddresses["PendSV_Handler"] -band 1) -ne 0) {
+			throw "ARM_CM0_MPU strong PendSV handler symbol must have an even code address ($mode)"
+		}
 		if (($symbolAddresses["fiber_arm_cm0_mpu_probe_vectors"] -lt 0x08000000) -or
 			($symbolAddresses["fiber_arm_cm0_mpu_probe_vectors"] -ge 0x08010000)) {
-			throw "ARM_CM0_MPU synthetic SVC vector table escaped privileged code ($mode)"
+			throw "ARM_CM0_MPU synthetic vector table escaped privileged code ($mode)"
 		}
 		if (($symbolAddresses["fiber_arm_cm0_mpu_probe_vectors"] -band 0x7F) -ne 0) {
-			throw "ARM_CM0_MPU synthetic SVC vector table lost 128-byte alignment ($mode)"
+			throw "ARM_CM0_MPU synthetic vector table lost 128-byte alignment ($mode)"
 		}
 		$vectorBytes = [System.IO.File]::ReadAllBytes($vectorBinary)
 		$vectorOffset = [uint64]$symbolAddresses["fiber_arm_cm0_mpu_probe_vectors"] -
@@ -7486,6 +7603,17 @@ SECTIONS
 		if ($actualSvcVector -ne $expectedSvcVector) {
 			throw ("ARM_CM0_MPU synthetic SVC vector slot mismatch ({0}): expected 0x{1:X8}, got 0x{2:X8}" -f
 				$mode, $expectedSvcVector, $actualSvcVector)
+		}
+		$pendsvSlotOffset = $vectorOffset + ([uint64]14 * [uint64]4)
+		if (($pendsvSlotOffset + [uint64]4) -gt [uint64]$vectorBytes.Length) {
+			throw "ARM_CM0_MPU synthetic PendSV vector slot lies outside privileged code ($mode)"
+		}
+		$actualPendSvVector = [System.BitConverter]::ToUInt32($vectorBytes,
+			[int]$pendsvSlotOffset)
+		$expectedPendSvVector = [uint32]([uint64]$symbolAddresses["PendSV_Handler"] -bor [uint64]1)
+		if ($actualPendSvVector -ne $expectedPendSvVector) {
+			throw ("ARM_CM0_MPU synthetic PendSV vector slot mismatch ({0}): expected 0x{1:X8}, got 0x{2:X8}" -f
+				$mode, $expectedPendSvVector, $actualPendSvVector)
 		}
 
         foreach ($linkerFailure in @(
@@ -7565,39 +7693,23 @@ uint32_t fiber_arm_cm0_mpu_read_static_base_probe(void)
 
         if ($mode -eq "o2") {
             $ltoBootObject = Join-Path $probeDir "boot-lto.o"
-			$ltoRuntimeObject = Join-Path $probeDir "runtime-lto.o"
+            $ltoRuntimeObject = Join-Path $probeDir "runtime-lto.o"
             $ltoProbeObject = Join-Path $probeDir "boot-probe-lto.o"
             $ltoRuntimeStateObject = Join-Path $probeDir "runtime-state-lto.o"
-            $ltoBarrierSource = Join-Path $probeDir "lto-runtime-barrier.c"
-            $ltoBarrierObject = Join-Path $probeDir "lto-runtime-barrier.o"
             $ltoLinkerScript = Join-Path $probeDir "linker-lto.ld"
             $ltoElf = Join-Path $probeDir "boot-lto.elf"
             $ltoCompileArgs = @($sliceCompileArgs + @("-flto"))
-            # GCC LTO materializes otherwise-GC'd common-runtime functions
-            # before section collection. This fixture-only definition resolves
-            # their barrier dependency without adding a runtime operation to
-            # the non-selectable ARM_CM0_MPU port source group.
-            Set-Content -LiteralPath $ltoBarrierSource -Encoding ASCII -Value @"
-#include "fiber_portmacro.h"
-
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-void fiber_port_runtime_memory_barrier(void)
-{
-    __asm volatile("" ::: "memory");
-}
-"@
             foreach ($compileUnit in @(
                     [pscustomobject]@{ Source = $bootSource; Object = $ltoBootObject; Label = "source" },
-					[pscustomobject]@{ Source = $runtimeSource; Object = $ltoRuntimeObject; Label = "first-start runtime" },
+					[pscustomobject]@{ Source = $runtimeSource; Object = $ltoRuntimeObject; Label = "protected runtime" },
                     [pscustomobject]@{ Source = $bootProbeSource; Object = $ltoProbeObject; Label = "fixture" },
-                    [pscustomobject]@{ Source = $runtimeStateSource; Object = $ltoRuntimeStateObject; Label = "common runtime state" },
-                    [pscustomobject]@{ Source = $ltoBarrierSource; Object = $ltoBarrierObject; Label = "barrier fixture" })) {
+                    [pscustomobject]@{ Source = $runtimeStateSource; Object = $ltoRuntimeStateObject; Label = "common runtime state" })) {
                 & $Compiler @($ltoCompileArgs + @(
                     "-c", $compileUnit.Source,
                     "-o", $compileUnit.Object
                 ))
                 if ($LASTEXITCODE -ne 0) {
-                    throw "ARM_CM0_MPU slice-4 LTO $($compileUnit.Label) failed compile"
+                    throw "ARM_CM0_MPU slice-5 LTO $($compileUnit.Label) failed compile"
                 }
             }
             Set-Content -LiteralPath $ltoLinkerScript -Value $linkerText `
@@ -7611,41 +7723,37 @@ void fiber_port_runtime_memory_barrier(void)
                 "-Wl,--gc-sections",
                 "-Wl,-T,$ltoLinkerScript",
                 $ltoBootObject,
-				$ltoRuntimeObject,
+                $ltoRuntimeObject,
                 $ltoProbeObject,
                 $ltoRuntimeStateObject,
-                $ltoBarrierObject,
                 "-o", $ltoElf
             )
             if ($LASTEXITCODE -ne 0) {
-                throw "ARM_CM0_MPU slice-4 first-start LTO ELF failed link"
+                throw "ARM_CM0_MPU slice-5 protected-runtime LTO ELF failed link"
             }
             $ltoSymbols = @(& $Nm --defined-only $ltoElf)
             if ($LASTEXITCODE -ne 0) {
-                throw "nm failed for ARM_CM0_MPU slice-4 LTO ELF"
+                throw "nm failed for ARM_CM0_MPU slice-5 LTO ELF"
             }
             foreach ($requiredSymbol in @(
                     "fiber_port_context_init",
                     "fiber_port_context_seal_check",
-                    "fiber_port_mpu_build_global_regions",
+					"fiber_port_mpu_build_global_regions",
 					"fiber_port_start_first_context",
 					"fiber_port_restore_first_context_from_svc",
 					"fiber_port_unprivileged_task_return",
+					"fiber_port_unprivileged_yield",
 					"SVC_Handler",
+					"PendSV_Handler",
                     "fiber_internal_runtime_current_context_slot")) {
                 if (-not ($ltoSymbols -match "\b$([regex]::Escape($requiredSymbol))\s*$")) {
-                    throw "ARM_CM0_MPU slice-4 LTO ELF lost retained symbol: $requiredSymbol"
-                }
-            }
-            foreach ($forbiddenSymbol in @("PendSV_Handler")) {
-                if ($ltoSymbols -match "\b$([regex]::Escape($forbiddenSymbol))\s*$") {
-                    throw "ARM_CM0_MPU slice-4 LTO ELF acquired later handler ownership: $forbiddenSymbol"
+                    throw "ARM_CM0_MPU slice-5 LTO ELF lost retained symbol: $requiredSymbol"
                 }
             }
             $ltoSections = (& $Objdump -h $ltoElf) -join "`n"
             if (($LASTEXITCODE -ne 0) -or ($ltoSections -notmatch
                     '(?m)^\s*\d+\s+\.fiber_current_context_slot\s+00000100\s+20000000\b')) {
-                throw "ARM_CM0_MPU slice-4 LTO linker output lost the exact current-slot aperture"
+                throw "ARM_CM0_MPU slice-5 LTO linker output lost the exact current-slot aperture"
             }
         }
     }
@@ -7675,14 +7783,14 @@ void fiber_port_runtime_memory_barrier(void)
             "-o", $absentBootObject
         ))
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-4 boot source failed no-VTOR compile ($mode)"
+            throw "ARM_CM0_MPU slice-5 boot source failed no-VTOR compile ($mode)"
         }
 		& $Compiler @($absentCompileArgs + @(
 			"-c", $runtimeSource,
 			"-o", $absentRuntimeObject
 		))
 		if ($LASTEXITCODE -ne 0) {
-			throw "ARM_CM0_MPU slice-4 first-start runtime failed no-VTOR compile ($mode)"
+            throw "ARM_CM0_MPU slice-5 protected runtime failed no-VTOR compile ($mode)"
 		}
         $absentUndefinedOutput = @(& $Nm --undefined-only $absentBootObject)
         if ($LASTEXITCODE -ne 0) {
@@ -7693,15 +7801,22 @@ void fiber_port_runtime_memory_barrier(void)
         Assert-ExactSymbolSet -Expected (@(
             "fiber_panic",
             "fiber_internal_task_return",
+			"fiber_internal_runtime_select_scheduler_candidate",
+			"fiber_internal_runtime_publish_current_context",
             "SVC_Handler",
             "fiber_port_svc_dispatch",
             "fiber_port_prepare_first_start",
             "fiber_port_start_first_context",
             "fiber_port_restore_first_context_from_svc",
             "fiber_port_unprivileged_task_return",
+			"fiber_port_unprivileged_yield",
+			"fiber_port_pendsv_validate_save_current",
+			"fiber_port_scheduler_pick_next_from_pendsv",
+			"fiber_port_mpu_switch_to_context",
+			"PendSV_Handler",
             $variantCohorts["vtor-absent-$mode"]
         ) + $linkerBoundarySymbols) -Actual $absentUndefined `
-            -Description "ARM_CM0_MPU no-VTOR linker/global-image undefined surface ($mode)"
+			-Description "ARM_CM0_MPU no-VTOR slice-5 linker/global-image undefined surface ($mode)"
 
 		$absentRuntimeUndefinedOutput = @(& $Nm --undefined-only $absentRuntimeObject)
 		if ($LASTEXITCODE -ne 0) {
@@ -7711,15 +7826,20 @@ void fiber_port_runtime_memory_barrier(void)
 			-NmOutput $absentRuntimeUndefinedOutput -Path $absentRuntimeObject
 		Assert-ExactSymbolSet -Expected @(
 				"fiber_internal_runtime_current_context_slot",
+				"fiber_internal_runtime_port_abi_v1_anchor",
+				"fiber_internal_runtime_publish_current_context",
+				"fiber_internal_runtime_select_scheduler_candidate",
 				"fiber_internal_task_return",
 				"fiber_panic",
-				"fiber_port_context_seal_check",
 				"fiber_port_context_validate_initial_restore",
+				"fiber_port_context_validate_restore",
+				"fiber_port_context_validate_running_svc",
+				"fiber_port_context_validate_save_current",
 				"fiber_port_mpu_build_global_regions",
 				"fiber_port_mpu_linker_layout_check",
 				"fiber_port_mpu_load_linker_layout") `
 			-Actual $absentRuntimeUndefined `
-			-Description "ARM_CM0_MPU no-VTOR first-start runtime undefined surface ($mode)"
+			-Description "ARM_CM0_MPU no-VTOR slice-5 protected runtime undefined surface ($mode)"
     }
 
     $negativeBaseArgs = @(
@@ -9589,7 +9709,7 @@ try {
     Test-ArmCm33FNtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM0_MPU slice-4 staged first-start/linker/cohort contract =="
+    Write-Host "== ARM_CM0_MPU slice-5 protected PendSV/linker/cohort contract =="
     Test-ArmCm0MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy -CmsisPath $cmsis `
         -BuildRoot $buildRoot

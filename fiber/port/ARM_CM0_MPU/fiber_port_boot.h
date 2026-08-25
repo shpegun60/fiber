@@ -94,9 +94,25 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
 void fiber_port_context_validate_initial_restore(const FiberContext *ctx);
 
+/* Protected PendSV validators. The live hardware frame is copied to/from
+ * privileged storage; no ordinary saved software frame exists on the user PSP. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_port_context_validate_running_svc(const FiberContext *ctx,
+		const uint32_t *hardware_frame);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_port_context_validate_save_current(const FiberContext *ctx,
+		const uint32_t *hardware_frame);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_port_context_validate_restore(FiberContext *ctx);
+
 /* Constructs a default unprivileged context in linker-isolated privileged
- * storage. Slice 4 owns first restore; a later PendSV owner will own ordinary
- * mutable switching mechanics. */
+ * storage. The selected port owns first restore and ordinary protected PendSV
+ * switching; public forward runtime activation remains a separate slice. */
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
 void fiber_port_context_init(FiberContext *ctx,

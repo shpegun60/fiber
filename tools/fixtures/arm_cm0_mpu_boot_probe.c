@@ -1,4 +1,4 @@
-/* Compile/link/ELF-only ARM_CM0_MPU slice-4 first-start fixture. */
+/* Compile/link/ELF-only ARM_CM0_MPU protected switch fixture. */
 
 #include "fiber_port_private.h"
 #include "../../fiber/fiber_panic.h"
@@ -18,8 +18,9 @@ void fiber_arm_cm0_mpu_probe_entry(void *arg)
 	(void)arg;
 }
 
-/* The fixture never executes this table. It gives the synthetic ELF a concrete
- * direct SVC route so slot ownership can be audited before board integration. */
+/* The fixture never executes this table. It gives the synthetic ELF concrete
+ * direct SVC/PendSV routes so both selected handler slots can be audited before
+ * board integration. */
 typedef union FiberArmCm0MpuProbeVector {
 	uintptr_t raw;
 	void (*handler)(void);
@@ -29,8 +30,19 @@ __attribute__((used, aligned(fiber_portVECTOR_ALIGNMENT),
 		section(".fiber_test_vector_table")))
 const FiberArmCm0MpuProbeVector fiber_arm_cm0_mpu_probe_vectors[16] = {
 	[0] = { .raw = UINT32_C(0x2001FF00) },
-	[fiber_portVECTOR_INDEX_SVC] = { .handler = SVC_Handler }
+	[fiber_portVECTOR_INDEX_SVC] = { .handler = SVC_Handler },
+	[fiber_portVECTOR_INDEX_PENDSV] = { .handler = PendSV_Handler }
 };
+
+/* The non-selectable staged port invokes the frozen reverse ABI from PendSV.
+ * Common runtime owns those functions; this fixture-only barrier resolves its
+ * dependency without defining any forward operation in ARM_CM0_MPU itself. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_port_runtime_memory_barrier(void)
+{
+	__asm volatile("" ::: "memory");
+}
 
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_panic(char code)
@@ -70,8 +82,12 @@ int fiber_arm_cm0_mpu_boot_probe(void)
 	fiber_port_context_seal_check(&fiber_arm_cm0_mpu_probe_context);
 	fiber_port_mpu_build_global_regions(
 			&fiber_arm_cm0_mpu_probe_global_regions);
+	const uintptr_t retained_runtime_slice =
+			(uintptr_t)&fiber_port_unprivileged_yield ^
+			(uintptr_t)&PendSV_Handler;
 	return (int)(encoded.rasr |
 			fiber_arm_cm0_mpu_probe_context.boot.hash |
 			fiber_arm_cm0_mpu_probe_context.protected_context.xpsr |
-			fiber_arm_cm0_mpu_probe_global_regions.regions[0].rasr);
+			fiber_arm_cm0_mpu_probe_global_regions.regions[0].rasr |
+			(uint32_t)retained_runtime_slice);
 }

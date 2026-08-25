@@ -51,6 +51,7 @@ is accepted only when the generated object still passes the paired proof.
 | Fiber port | FreeRTOS reference | Generated mechanisms covered |
 | --- | --- | --- |
 | `ARM_CM0` (M0 and M0+) | `GCC/ARM_CM0` | separate M0/no-VTOR and M0+/VTOR builds; first SVC request, first restore, PendSV save/mask/restore |
+| `ARM_CM0_MPU` | `GCC/ARM_CM0`, `configENABLE_MPU=1` | first SVC request, protected Thumb-1 first restore, SVC task return/private yield, protected PendSV frame copy/PRIMASK/MPU replacement/restore |
 | `ARM_CM3` | `GCC/ARM_CM3` | first SVC request, first restore, PendSV save/BASEPRI/restore |
 | `ARM_CM4` | `GCC/ARM_CM4F` | first SVC request, first restore, conditional FP PendSV |
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
@@ -72,13 +73,12 @@ therefore cannot silently reduce coverage.
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
 
-`ARM_CM0_MPU` is the currently explicit staged profile. Slice 4 owns only
-strong SVC first-start, task return, one-time MPU activation, and Thumb-1 first
-restore. It remains `FIBER_PORT_RUNTIME_SELECTABLE == 0`, owns no PendSV
-handler or yield route, and is excluded from the complete parity table until
-the protected PendSV/scheduler/runtime-ABI slice is finished. Its slice-local
-matrix proof compares only the implemented first-start mechanisms with pinned
-`GCC/ARM_CM0` geometry; it makes no complete runtime or hardware claim.
+`ARM_CM0_MPU` is paired for its complete private CPU/context mechanism, but
+remains `FIBER_PORT_RUNTIME_SELECTABLE == 0`. Its private SVC yield veneer,
+strong PendSV handler, protected scheduler bridge, and MPU replacement are not
+yet the public eight-operation forward runtime ABI. Generated parity therefore
+proves the protected execution mechanics, not public selection, archive
+integration, or hardware isolation.
 
 ## Intentional Differences
 
@@ -232,11 +232,16 @@ splitting the functions may not omit or postpone MPU activation.
 
 ### FAP-MPU-ATOMIC-SWITCH
 
-Fiber performs scheduler selection under BASEPRI, then closes PRIMASK while it
-replaces the selected context's MPU image and restore authority. It validates
-the programmed MPU state before reopening PRIMASK. The pinned FreeRTOS path
-programs the same architectural MPU registers but relies on kernel-private TCB
-state and a shorter trust boundary.
+Fiber performs scheduler selection under the selected profile's scheduler mask,
+then keeps the MPU replacement and restore authority atomic under PRIMASK. On
+ARMv7-M/ARMv7E-M that means BASEPRI around scheduler selection followed by
+PRIMASK for the short replacement interval. On ARMv6-M MPU there is no
+BASEPRI: PendSV proves incoming PRIMASK is clear, raises PRIMASK before the
+private scheduler bridge, validates the bridge did not alter handler CPU state
+or any of the eight effective MPU RBAR addresses/RASR values, and re-enables it
+only after the target MPU state has been read back. The pinned FreeRTOS paths program the same
+architectural MPU registers but rely on kernel-private TCB state and a shorter
+trust boundary.
 
 ## Non-Claims
 
