@@ -1,5 +1,28 @@
 # Fiber Decision Log
 
+## 2026-08-25: Stage ARM_CM33_MPU No-TrustZone Layout
+
+`ARM_CM33_MPU/non_secure` starts as an explicit build-selected type and trait
+cohort, not as a partial runtime. Its reference is
+`GCC/ARM_CM33_NTZ/non_secure`, because the generic TrustZone-capable
+`GCC/ARM_CM33/non_secure` group has a different protected-context contract.
+
+For `configENABLE_MPU=1`, `configENABLE_TRUSTZONE=0`, no FPU/MVE/PAC/BTI, and
+eight or sixteen total MPU regions, FreeRTOS reserves `ulContext[21]`. The
+first twenty words are active: `r4-r11`, copied basic hardware frame, `PSP`,
+`PSPLIM`, `CONTROL`, and `EXC_RETURN`. The final word is a one-past
+save/restore cursor target, not `xSecureContext`. The Fiber profile preserves
+that exact protected image behind `FiberPortProtectedContext`, with a separate
+Fiber cursor, MAIR0, RBAR/RLAR pairs, mutable flags, and sealed boot metadata.
+
+Slice 1 rejects Secure CMSE, FPU use, MVE, PAC, BTI, wrong CMSIS core, missing
+MPU/VTOR, invalid region counts, selector mode, and a predeclared runtime
+state. The matrix proves C/C++ type-only layout, selected facade, 8/16 cohort
+separation, and the absence of runtime artifacts. It intentionally adds no
+constructor, MPU write, SVC/PendSV handler, forward ABI, optional MPU API, or
+hardware claim. The next slice is linker/global-image isolation plus sealed
+construction; only then may first-start or PendSV code be introduced.
+
 ## 2026-08-25: Activate ARM_CM0_MPU As An Explicit Runtime Port
 
 `ARM_CM0_MPU` slice 6 completes the frozen eight-operation forward ABI for the

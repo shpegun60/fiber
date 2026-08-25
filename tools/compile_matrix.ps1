@@ -3460,6 +3460,409 @@ typedef enum IRQn {
     }
 }
 
+function Test-ArmCm33MpuLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM33_MPU\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_mpu_layout_probe.c"
+    foreach ($required in @(
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h",
+            "fiber_portmacro.h",
+            "FREERTOS_PARITY.md")) {
+        $path = Join-Path $profileDir $required
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "ARM_CM33_MPU slice 1 is missing required file: $path"
+        }
+    }
+    if (-not (Test-Path -LiteralPath $fixture)) {
+        throw "ARM_CM33_MPU slice 1 is missing its layout fixture"
+    }
+
+    foreach ($forbiddenArtifact in @(
+            "fiber_port_boot.h",
+            "fiber_port_private.h",
+            "fiber_port.c",
+            "fiber_port_boot.c",
+            "fiber_port_exception.c",
+            "fiber_port_linker_contract.ld",
+            "fiber_port_mpu_abi.h",
+            "fiber_port_mpu_abi.c",
+            "fiber_port_secure_context.c")) {
+        if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenArtifact)) {
+            throw "ARM_CM33_MPU slice 1 exposed runtime artifact: $forbiddenArtifact"
+        }
+    }
+
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM33_MPU", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33_MPU slice 1 must not enter global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM33_MPU public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "GCC_ARM_CM33_NTZ_NONSECURE",
+            "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B",
+            "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5",
+            "00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743CE1706F3E",
+            "The first 20 context words are active",
+            "cursor_limit",
+            "There is no `xSecureContext` word",
+            "no runtime source, strong handler, forward ABI")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33_MPU parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm33-mpu-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+#ifndef FIBER_TEST_FPU_USED
+#define FIBER_TEST_FPU_USED 0U
+#endif
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#if FIBER_TEST_FPU_USED != 0U
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $cppWarningArgs = @($warningArgs | Where-Object {
+        ($_ -ne "-Werror=implicit-function-declaration")
+    })
+    $typeIncludeArgs = @("-I$profileDir")
+    $manifestIncludeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(sizeof(FiberPortBoot) == 88u, "boot size");
+_Static_assert(sizeof(FiberPortProtectedContext) == 84u, "protected size");
+_Static_assert(_Alignof(FiberContext) == 8u, "context alignment");
+#if FIBER_PORT_CM33_MPU_TOTAL_REGIONS == 8
+_Static_assert(sizeof(FiberContext) == 216u, "8-region context size");
+_Static_assert(offsetof(FiberContext, protected_context) == 40u, "8-region protected offset");
+#else
+_Static_assert(sizeof(FiberContext) == 280u, "16-region context size");
+_Static_assert(offsetof(FiberContext, protected_context) == 104u, "16-region protected offset");
+#endif
+FiberContext fiber_arm_cm33_mpu_type_only_object;
+'@
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include <cstddef>
+#include "fiber_port_types.h"
+
+static_assert(sizeof(FiberPortBoot) == 88u, "boot size");
+static_assert(sizeof(FiberPortProtectedContext) == 84u, "protected size");
+static_assert(alignof(FiberContext) == 8u, "context alignment");
+#if FIBER_PORT_CM33_MPU_TOTAL_REGIONS == 8
+static_assert(sizeof(FiberContext) == 216u, "8-region context size");
+#else
+static_assert(sizeof(FiberContext) == 280u, "16-region context size");
+#endif
+FiberContext fiber_arm_cm33_mpu_cpp_type_only_object;
+'@
+    $facadeProbe = Join-Path $probeDir "selected-facade.c"
+    Set-Content -LiteralPath $facadeProbe -Encoding ASCII -Value @'
+#include <stddef.h>
+#include "fiber/fiber_core.h"
+
+#if FIBER_PORT_CM33_MPU_TOTAL_REGIONS == 8
+_Static_assert(sizeof(FiberContext) == 216u, "8-region selected facade");
+#else
+_Static_assert(sizeof(FiberContext) == 280u, "16-region selected facade");
+#endif
+int fiber_arm_cm33_mpu_selected_facade_probe(void)
+{
+    return 0;
+}
+'@
+
+    $variantCohorts = @{}
+    foreach ($regions in @(8, 16)) {
+        $layoutToken = if ($regions -eq 8) {
+            "l0x00010008u"
+        } else {
+            "l0x00010010u"
+        }
+        $regionDefines = @("-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=$regions")
+        $typeObject = Join-Path $probeDir "type-only-$regions.o"
+        & $Compiler -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 `
+            @warningArgs @typeIncludeArgs @regionDefines -c $typeProbe -o $typeObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_MPU type-only C header failed without CMSIS ($regions regions)"
+        }
+        $cppObject = Join-Path $probeDir "type-only-$regions-cpp.o"
+        & $Compiler -x c++ -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c++17 `
+            -fno-exceptions -fno-rtti @cppWarningArgs @typeIncludeArgs @regionDefines `
+            -c $cppProbe -o $cppObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_MPU type-only C++ header failed without CMSIS ($regions regions)"
+        }
+
+        $selectedDefines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV8M_MAINLINE=1") + $regionDefines
+        $facadeObject = Join-Path $probeDir "selected-facade-$regions.o"
+        & $Compiler -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 `
+            @warningArgs @selectedDefines @manifestIncludeArgs `
+            -c $facadeProbe -o $facadeObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33_MPU build-selected public facade failed compile ($regions regions)"
+        }
+
+        foreach ($optimization in @("-O2", "-Os")) {
+            $mode = $optimization.Substring(1).ToLowerInvariant()
+            $layoutObject = Join-Path $probeDir "layout-$regions-$mode.o"
+            $manifestArgs = @(
+                "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-std=c11",
+                $optimization) + $warningArgs + $selectedDefines + $manifestIncludeArgs
+            & $Compiler @manifestArgs -c $fixture -o $layoutObject
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU exact layout manifest failed compile ($regions regions/$mode)"
+            }
+            $defined = @(& $Nm -g --defined-only $layoutObject)
+            if ($LASTEXITCODE -ne 0) {
+                throw "nm failed for ARM_CM33_MPU layout probe ($regions regions/$mode)"
+            }
+            $cohorts = @($defined | ForEach-Object {
+                if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                    $Matches[1]
+                }
+            })
+            if ($cohorts.Count -ne 1) {
+                throw "ARM_CM33_MPU layout must define one exact cohort ($regions regions/$mode)"
+            }
+            foreach ($token in @(
+                    "armv8m_mainline",
+                    "p0x4333334Du",
+                    $layoutToken,
+                    "_h1_j1_v1_d1_r1_",
+                    "_z8u_y0_w2_g4_",
+                    "_i0_o0xFFFFFFBCu_c1_s1_x0_m0_a0_b0_t1_n1_k0_q0")) {
+                if ($cohorts[0].IndexOf($token,
+                        [System.StringComparison]::Ordinal) -lt 0) {
+                    throw "ARM_CM33_MPU exact cohort lost token ${token} ($regions regions/$mode): $($cohorts[0])"
+                }
+            }
+            $runtimeDefinitions = @($defined | Where-Object {
+                $_ -match '\b(?:fiber_port_runtime_|SVC_Handler$|PendSV_Handler$)'
+            })
+            if ($runtimeDefinitions.Count -ne 0) {
+                throw "ARM_CM33_MPU layout slice emitted runtime symbols ($regions regions/$mode): $($runtimeDefinitions -join ', ')"
+            }
+            $variantCohorts["$regions-$mode"] = $cohorts[0]
+        }
+    }
+    foreach ($mode in @("o2", "os")) {
+        if ($variantCohorts["8-$mode"] -eq $variantCohorts["16-$mode"]) {
+            throw "ARM_CM33_MPU 8- and 16-region manifests collapsed one exact cohort ($mode)"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "selector-mode"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_PROFILE=5", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "ARM_CM33_MPU is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "missing-mpu"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "manifest requires __MPU_PRESENT == 1"
+            Main = ($mainHeader -replace '__MPU_PRESENT 1U', '__MPU_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "missing-vtor"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "requires __VTOR_PRESENT == 1"
+            Main = ($mainHeader -replace '__VTOR_PRESENT 1U', '__VTOR_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "manifest requires CMSIS __CORTEX_M == 33"
+            Main = ($mainHeader -replace 'core_cm33.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "wrong-architecture"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1")
+            Diagnostic = "requires an ARMv8-M Mainline compiler target"
+            Main = ($mainHeader -replace 'core_cm33.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-mcmse")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "slice 1 excludes Secure CMSE builds"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-DFIBER_TEST_FPU_USED=1")
+            Diagnostic = "requires __FPU_USED == 0"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mve"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_MVE=1")
+            Diagnostic = "does not permit MVE"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pac-default"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_PAC_DEFAULT=0")
+            Diagnostic = "does not permit PAC"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pac-auth"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_PAUTH=1")
+            Diagnostic = "does not permit PAC"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pac-auth-default"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_PAUTH_DEFAULT=0")
+            Diagnostic = "does not permit PAC"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "bti-default"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_BTI_DEFAULT=0")
+            Diagnostic = "does not permit BTI"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "bti"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-D__ARM_FEATURE_BTI=1")
+            Diagnostic = "does not permit BTI"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "invalid-region-count"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=12")
+            Diagnostic = "supports exactly 8 or 16 MPU regions"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "runtime-selectable-override"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8", "-DFIBER_PORT_RUNTIME_SELECTABLE=1")
+            Diagnostic = "runtime-selectable state must not be predefined"
+            Main = $mainHeader
+        }
+    )
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $log = Join-Path $caseDir "compile.log"
+        $arguments = @($case.CompilerArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-common",
+            "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+            "-I$caseDir", "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot", "-I$CmsisPath") +
+            $case.Defines + @(
+            "-c", $fixture, "-o", (Join-Path $caseDir "invalid.o")))
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $arguments -LogPath $log
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM33_MPU manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 function Test-ArmCm33NtzRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -10175,6 +10578,10 @@ try {
     Test-ArmCm23NtzRuntimeIntegration -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33_MPU slice-1 layout/trait contract =="
+    Test-ArmCm33MpuLayoutContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis `
         -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `
