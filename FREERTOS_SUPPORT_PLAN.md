@@ -48,7 +48,8 @@ of every concrete `portable/` implementation.
 
 `STM32_PORT_FREEZE_INVENTORY.md` is the current execution ledger for this plan.
 It records the nine runtime-capable concrete profiles, the staged compile-only
-`ARM_CM0_MPU` layout contract, the remaining CM0 MPU runtime work, CM33
+`ARM_CM0_MPU` construction/encoder contract, the remaining CM0 MPU runtime
+work, CM33
 MPU/security, CM55/N6, and announced CM85/V8 work, planning ranges, and the
 exact gate before Context extraction.
 

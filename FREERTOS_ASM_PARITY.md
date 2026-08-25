@@ -70,6 +70,12 @@ fails the matrix instead of silently reducing coverage.
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
 
+`ARM_CM0_MPU` is also intentionally absent from this executable assembly
+inventory until its later SVC/PendSV runtime slice creates `fiber_port.c`. Its
+slice-2 constructor is compile/link-covered against the pinned
+`pxPortInitialiseStack()` 20-word storage order and r9 preservation, but it
+makes no generated-handler parity or runtime claim yet.
+
 ## Intentional Differences
 
 Every difference ID referenced by the executable proof is normative. A new

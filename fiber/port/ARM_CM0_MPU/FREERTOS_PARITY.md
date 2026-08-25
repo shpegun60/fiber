@@ -2,11 +2,12 @@
 
 ## Status
 
-This is implementation slice 1 for the exact `ARM_CM0_MPU` profile. It freezes
-the public type layout, protected restore image, ARMv6-M MPU dictionary, port
-traits, and exact cohort identity. It deliberately contains no runtime source,
-SVC/PendSV handler, forward ABI implementation, selector route, linker
-contract, public MPU extension ABI, or hardware support claim.
+Slices 1-2 for the exact `ARM_CM0_MPU` profile freeze the public type layout,
+protected restore image, ARMv6-M MPU dictionary, port traits, exact cohort,
+and port-owned construction/seal/strict MPU-region encoder. They deliberately
+contain no SVC/PendSV handler, forward ABI implementation, selector route,
+linker isolation contract, public MPU extension ABI, MPU register programming,
+or hardware support claim.
 
 The pinned FreeRTOS `GCC/ARM_CM0` directory contains both a privileged branch
 and an optional MPU/unprivileged branch. `fiber/port/ARM_CM0` remains the
@@ -41,6 +42,7 @@ VTOR                CMSIS __VTOR_PRESENT == 0 or 1; separate cohorts
 FPU                 absent and unused
 selection           exact build-selected include path and type-only compile
 runtime selectable  no
+slice 2             construction/seal/exact stack-region image only
 ```
 
 The profile fails closed unless `__CORTEX_M == 0`, `__ARM_ARCH_6M__`,
@@ -69,6 +71,17 @@ frame written to an unprivileged stack. Future PendSV must copy the basic
 hardware frame into this image before replacing MPU regions, then rebuild that
 hardware frame on the selected fiber's PSP before exception return, matching
 the underlying FreeRTOS ARM_CM0 MPU mechanism.
+
+The shared `FIBER_PORT_SOFTWARE_FRAME_*` traits intentionally describe the
+19-word logical protected transfer for ABI identity. They are not raw PSP
+geometry for this profile. Slice 2 therefore does not include the generic
+stack-resident `fiber_port_geometry.h`; it uses explicit port facts instead:
+
+```text
+initial PSP reservation     32 bytes (one basic frame)
+maximum physical PSP frame  36 bytes (basic frame plus alignment word)
+minimum admitted usable stack, aligned to 8 bytes  40 bytes
+```
 
 `FiberContext` has this frozen 32-bit GCC layout:
 
@@ -129,9 +142,18 @@ RASR size mask           0x0000003E
 permissions and memory   exact renamed reference values
 ```
 
-All encoder and linker-boundary code remains absent until a later slice can
-validate overflow, power-of-two size, exact base alignment, widened coverage,
-overlap, execute-never policy, and privileged-boundary isolation.
+Slice 2 implements a strict exact-region encoder. It accepts only non-empty,
+power-of-two ranges from 256 bytes through 2GB whose base is aligned to their
+complete extent. It accepts only documented AP/S/C/B/XN bits and never rounds
+the range outward. A representable 4GB MPU region cannot be described by this
+ordinary 32-bit `[start, end)` API, so it is rejected rather than silently
+covering unrelated memory. The encoder writes only an in-memory RBAR/RASR
+pair; it does not program MPU registers.
+
+Linker boundary, range-overlap, code provenance, and privileged-storage checks
+remain deliberately absent until the next linker-isolation slice. Slice 2 can
+prove a structurally valid image, not that an integration placed it in the
+right memory domain.
 
 ## Exact Identity
 
@@ -149,35 +171,35 @@ identity `0x434D3030`.
 
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slice-1 mapping | Decision |
+| FreeRTOS family | Fiber slice-2 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs and stack growth/alignment | `fiber_api_types.h`, selected `FiberContext`, ARMv6-M traits | Adapted; FreeRTOS API typedefs are not exported. |
 | tick type, delay, ready bitmap, scheduler/list macros | user scheduler and later C++ Kernel | Excluded from CPU port. |
 | `configENABLE_MPU`, `portUSING_MPU_WRAPPERS`, privilege bit | exact selected MPU profile identity | Adapted; no compatibility wrappers or no-op feature API. |
 | MPU region numbers | `fiber_portMPU_*_REGION` constants | Adapted as documented above: current-context aperture replaces broad peripherals. |
-| MPU region-size encodings | renamed `fiber_portMPU_REGION_SIZE_*` constants | Retained exactly; no encoder implementation yet. |
-| S/C/B memory type and AP/XN encodings | renamed `fiber_portMPU_REGION_*` constants | Retained exactly; later policy validates every use. |
+| MPU region-size encodings | renamed constants plus `fiber_port_mpu_try_encode_exact_region()` | Retained and strengthened: exact power-of-two/base-aligned ranges only; no widening. |
+| S/C/B memory type and AP/XN encodings | renamed constants plus strict attribute allowlist | Retained; only documented AP/S/C/B/XN bits reach an encoded enabled region. |
 | `MPURegionSettings_t` and task-region descriptors | future optional MPU integration ABI | Deferred; no public header or stub exists. |
 | `xMPU_SETTINGS` | selected `FiberContext` prefix plus `FiberPortBoot` | Adapted. Raw 20-word restore order is exact; FreeRTOS authorization metadata is not imported. |
 | `CONTEXT_SIZE == 20` | `FiberPortProtectedContext` | Retained exactly. |
 | task padding/privilege flags | `runtime_flags` bits | Retained as mutable selected-port state; not a public FreeRTOS flag API. |
 | SVC services 100..103 | future native selected-port SVC namespace | Deferred. Fiber must not copy an unrelated FreeRTOS number space before its dispatcher/provenance design exists. |
-| `portYIELD`, ISR-yield, critical nesting macros | future selected-port runtime and C++ scheduler boundary | Deferred; no runtime path exists in slice 1. |
+| `portYIELD`, ISR-yield, critical nesting macros | future selected-port runtime and C++ scheduler boundary | Deferred; no runtime path exists in slice 2. |
 | `portMAX_DELAY`, tickless, timer configuration | user scheduler/platform | Excluded. |
 | privilege query/raise/reset macros | future optional MPU ABI and checked SVC routes | Deferred; no public stubs. |
 
 ## `port.c` And `portasm.c` Ledger
 
-| FreeRTOS path | Planned Fiber owner | Slice-1 decision |
+| FreeRTOS path | Planned Fiber owner | Slice-2 status |
 | --- | --- | --- |
-| MPU `pxPortInitialiseStack` | selected port context constructor | Raw layout, CONTROL values, EXC_RETURN, and cursor are frozen; code deferred. |
+| MPU `pxPortInitialiseStack` | `fiber_port_context_init()` | Implemented for the exact 20-word protected image. Fiber seeds r9 from the live platform value, zeros other saved registers, sets unprivileged CONTROL, and keeps the complete initial hardware frame in privileged context storage. |
 | `vRestoreContextOfFirstTask` / `vStartFirstTask` | strong selected-port SVC first-start path | Deferred. Startup must preserve ARMv6-M VTOR/no-VTOR behavior and validate provenance. |
 | `SVC_Handler` / `vPortSVCHandler_C` | strong selected-port SVC dispatcher | Deferred. First start, unprivileged yield, and return require an explicit native service contract. |
 | MPU `PendSV_Handler` | strong selected-port protected switch path | Deferred. It will copy the full basic hardware frame into privileged storage and program the exact MPU image. |
 | `ulSetInterruptMask` / `vClearInterruptMask` | selected PRIMASK scheduler envelope | Deferred to runtime; BASEPRI and FAULTMASK are prohibited by traits. |
-| `prvGetMPURegionSizeSetting` | selected MPU encoder | Deferred with stricter overflow/alignment/coverage checks. |
+| `prvGetMPURegionSizeSetting` | `fiber_port_mpu_try_encode_exact_region()` | Implemented with stronger exact coverage, AP/S/C/B/XN allowlist, base alignment, 256B minimum, and a fail-closed 2GB maximum for the 32-bit exclusive-end API. |
 | `prvSetupMPU` | selected pre-start MPU setup/readback | Deferred with exact linker boundaries and mandatory type/control readback. |
-| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Deferred. Default stack region and optional heterogeneous regions must remain separately versioned. |
+| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Slice 2 implements only the safe default: regions 0-2 disabled, region 3 exact raw stack RW/XN. Optional heterogeneous regions remain separately versioned. |
 | `xPortStartScheduler` | common start plus selected operations | Deferred; FreeRTOS scheduler/tick mechanics are excluded. |
 | `vPortEndScheduler`, SysTick handler/setup, tickless | none / user scheduler | Excluded. |
 | `xIsPrivileged`, raise/reset privilege | optional MPU ABI and SVC paths | Deferred. |
@@ -196,10 +218,52 @@ ABI when it mutates context policy, a new exact layout/cohort version if it adds
 storage, a dedicated parity ledger, negative privilege tests, and hardware
 MemManage/SVC evidence. Until then no file claims wrapper-v2 support.
 
+## Slice-2 Construction Contract
+
+`fiber_port_context_init()` is port-owned and currently compile/link-covered
+only. It requires an aligned `FiberContext` that does not overlap its raw stack
+allocation, a Thumb entry, and a raw stack range representable by exactly one
+ARMv6-M MPU region. The default policy is intentionally conservative:
+
+```text
+regions 0..2  disabled
+region 3      exact complete raw stack, privileged/unprivileged RW and XN
+CONTROL       0x00000003 (unprivileged Thread mode using PSP)
+PSP           stack_top - one basic hardware frame
+```
+
+The initial basic hardware frame stays in words 8..15 of the protected image,
+matching `pxPortInitialiseStack()`. No synthetic frame is written to the user
+stack; only the optional red-zone canary (`0xDEADBEEF`) is initialized there.
+The final word
+of the protected image is the one-past cursor target, so the later Thumb-1
+save path begins at the same geometry as FreeRTOS.
+
+The initial PSP value is intentionally expressed against Fiber's exclusive
+aligned `stack_top`: `stack_top - 32`. FreeRTOS receives `pxTopOfStack` as its
+last usable stack word and stores `pxTopOfStack - 8` words. The two spellings
+are not numerically identical because their top-of-stack conventions differ;
+both reserve exactly the copied eight-word hardware frame below the usable
+stack top. Fiber keeps its established exclusive-bound convention rather than
+adding a profile-specific off-by-one stack API.
+
+The seal covers immutable boot/ABI facts and all four RBAR/RASR pairs. It
+excludes saved registers, the live cursor, and `runtime_flags`, because a later
+PendSV owner must mutate those fields. The slice-2 fixture provides a
+link-only dummy return veneer solely to prove this object's exact unresolved
+surface; it is not a port runtime implementation.
+
+Before `fiber_port_context_init()` returns, a constructor-only check verifies
+every word of the initial 20-word protected image, including the live-r9 seed,
+all zeroed registers, explicit Thumb-bit return veneer, normalized stacked PC,
+xPSR, PSP, CONTROL, EXC_RETURN, and the one-past cursor. It is intentionally
+not a switch-time check: later PendSV save/restore legitimately mutates that
+image.
+
 ## Required Later Slices
 
-1. Add port-owned context construction, immutable seal/hash, exact MPU region
-   encoding, linker ranges, and a safe default stack/current-context policy.
+1. Add linker ranges, global MPU image construction, and privileged/current-
+   context isolation checks for the slice-2 image.
 2. Add strong SVC first start plus controlled unprivileged yield and return
    services with complete opcode/origin/provenance validation.
 3. Add strong Thumb-1 PendSV protected save/copy/scheduler/MPU/restore logic.

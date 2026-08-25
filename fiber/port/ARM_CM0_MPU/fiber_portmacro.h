@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Compile-only ARM_CM0_MPU dictionary, implementation slice 1. This exact
- * Cortex-M0+ MPU profile freezes its protected layout and traits only. It
- * deliberately provides no runtime source, SVC/PendSV handler, selector route,
- * linker contract, or public MPU extension ABI.
+ * ARM_CM0_MPU dictionary through implementation slice 2. This exact Cortex-M0+
+ * MPU profile freezes its protected layout/traits and port-owned construction
+ * contract. It deliberately provides no SVC/PendSV handler, selector route,
+ * linker isolation contract, or public MPU extension ABI.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORTMACRO_H_
@@ -22,6 +22,18 @@
 #include "../fiber_settings.h"
 #include "../fiber_compiler.h"
 #include "fiber_port_types.h"
+
+#ifndef fiber_portFORCE_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+# else
+#  define fiber_portFORCE_INLINE static inline
+# endif
+#endif
+
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
 
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM0_MPU is build-selected only"
@@ -71,6 +83,7 @@
 #define fiber_portSTACK_GROWTH (-1)
 #define fiber_portBYTE_ALIGNMENT 8u
 #define fiber_portINITIAL_XPSR 0x01000000u
+#define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFFDu
 #define fiber_portINITIAL_CONTROL_PRIVILEGED 0x00000002u
 #define fiber_portINITIAL_CONTROL_UNPRIVILEGED 0x00000003u
@@ -101,12 +114,18 @@
 #define fiber_portMPU_RASR_AP_MASK (0x07u << 24u)
 #define fiber_portMPU_RASR_S_C_B_MASK 0x07u
 #define fiber_portMPU_RASR_S_C_B_LOCATION 16u
+#define fiber_portMPU_RASR_MEMORY_MASK \
+	(fiber_portMPU_RASR_S_C_B_MASK << fiber_portMPU_RASR_S_C_B_LOCATION)
 #define fiber_portMPU_RASR_SIZE_MASK (0x1Fu << 1u)
 #define fiber_portMPU_RASR_REGION_ENABLE 0x00000001u
 #define fiber_portMPU_RBAR_ADDRESS_MASK 0xFFFFFF00u
 #define fiber_portMPU_RBAR_REGION_VALID 0x00000010u
 #define fiber_portMPU_RBAR_REGION_NUMBER_MASK 0x0000000Fu
 #define fiber_portMPU_MIN_REGION_SIZE 256u
+/* A 4GB MPU region has no representable exclusive end in a 32-bit range API.
+ * The slice-2 exact encoder therefore fails closed above 2GB instead of
+ * rounding an arbitrary range up to 4GB. */
+#define fiber_portMPU_MAX_EXACT_REGION_SIZE UINT32_C(0x80000000)
 
 #define fiber_portMPU_REGION_SIZE_256B (0x07u << 1u)
 #define fiber_portMPU_REGION_SIZE_512B (0x08u << 1u)
@@ -149,10 +168,20 @@
 #define fiber_portMPU_REGION_PRIV_RO_UNPRIV_RO (0x06u << 24u)
 #define fiber_portMPU_REGION_EXECUTE_NEVER (0x01u << 28u)
 
+/* FreeRTOS defaults configS_C_B_SRAM to S=1, C=1, B=1. The initial Fiber
+ * stack image pins that same normal/cacheable/bufferable policy. */
+#define fiber_portMPU_DEFAULT_SRAM_MEMORY \
+	fiber_portMPU_REGION_NORMAL_OIWBNOWA_SHARED
+#define fiber_portMPU_DEFAULT_STACK_ATTRIBUTES \
+	(fiber_portMPU_REGION_PRIV_RW_UNPRIV_RW | \
+	 fiber_portMPU_DEFAULT_SRAM_MEMORY | \
+	 fiber_portMPU_REGION_EXECUTE_NEVER)
+
 #define fiber_portPROTECTED_CONTEXT_WORDS 20u
 #define fiber_portPROTECTED_RESTORE_WORDS 19u
 #define fiber_portSTACK_FRAME_HAS_PADDING_FLAG (1u << 0u)
 #define fiber_portTASK_IS_PRIVILEGED_FLAG (1u << 1u)
+#define fiber_portSTACK_CANARY_VALUE UINT32_C(0xDEADBEEF)
 
 #define FIBER_PORT_HAS_BASEPRI 0
 #define FIBER_PORT_HAS_FAULTMASK 0
@@ -213,7 +242,9 @@
 /*
  * Generic traits describe the complete logical restore transfer, excluding
  * cursor_limit. That image is privileged storage, not a software frame on the
- * unprivileged stack. The later runtime must preserve this distinction.
+ * unprivileged stack. The generic fiber_port_geometry.h model is therefore not
+ * applicable to this profile; slice 2 uses the explicit physical-PSP geometry
+ * below for raw-stack admission.
  */
 #define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
 #define FIBER_PORT_EXC_FP_EXT_BYTES 0u
@@ -230,6 +261,18 @@
 	(FIBER_PORT_SOFTWARE_FRAME_BYTES + FIBER_PORT_EXC_PER_LEVEL_BYTES + \
 	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
 #define FIBER_PORT_SAVED_SP_MOD8 0u
+
+/* Physical user-PSP geometry. PendSV copies the basic frame to and from
+ * privileged storage, so this must not include the protected 19-word image. */
+#define FIBER_PORT_CM0_MPU_PSP_INITIAL_FRAME_BYTES \
+	FIBER_PORT_EXC_BASE_BYTES
+#define FIBER_PORT_CM0_MPU_PSP_MAX_FRAME_BYTES \
+	(FIBER_PORT_EXC_PER_LEVEL_BYTES + \
+	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
+#define FIBER_PORT_CM0_MPU_STACK_REQUIRED_BYTES \
+	((FIBER_PORT_CM0_MPU_PSP_MAX_FRAME_BYTES + \
+	  FIBER_PORT_STACK_ALIGNMENT - 1u) & \
+	 ~((uint32_t)FIBER_PORT_STACK_ALIGNMENT - 1u))
 
 /* Frozen 32-bit GCC layout consumed by the later Thumb-1 assembly port. */
 #define FIBER_PORT_CM0_MPU_REGION_RBAR_OFFSET 0u
@@ -291,12 +334,22 @@
 #define FIBER_PORT_CM0_MPU_BOOT_HASH_OFFSET 84u
 #define FIBER_PORT_CM0_MPU_BOOT_SIZE 88u
 
+/* Preserve an optional platform/static-base register in the synthetic first
+ * context. This is the same Fiber ABI precaution used by the privileged
+ * ARM_CM0 port; FreeRTOS uses diagnostic seed values instead. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
+
 FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM0_MPU slice 1 must not activate runtime selection");
+		"[fiber]: ARM_CM0_MPU must not activate runtime selection before its complete port proof");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_PORT_ID != 0x434D3030u,
 		"[fiber]: ARM_CM0_MPU must not reuse privileged ARM_CM0 identity");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C04u,
@@ -326,20 +379,31 @@ FIBER_STATIC_ASSERT(fiber_portMPU_STACK_REGION == 3u &&
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 20u &&
 		fiber_portPROTECTED_RESTORE_WORDS == 19u,
 		"[fiber]: ARM_CM0_MPU protected context geometry changed");
+FIBER_STATIC_ASSERT(fiber_portSTACK_CANARY_VALUE == UINT32_C(0xDEADBEEF),
+		"[fiber]: ARM_CM0_MPU stack canary value changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 18u &&
 		FIBER_PORT_INITIAL_CONTEXT_BYTES == 108u &&
 		FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 112u,
 		"[fiber]: ARM_CM0_MPU logical restore geometry changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM0_MPU_PSP_INITIAL_FRAME_BYTES == 32u &&
+		FIBER_PORT_CM0_MPU_PSP_MAX_FRAME_BYTES == 36u &&
+		FIBER_PORT_CM0_MPU_STACK_REQUIRED_BYTES == 40u,
+		"[fiber]: ARM_CM0_MPU physical PSP geometry changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_MIN_REGION_SIZE == 256u,
 		"[fiber]: ARM_CM0_MPU minimum MPU region size changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_MAX_EXACT_REGION_SIZE ==
+		UINT32_C(0x80000000),
+		"[fiber]: ARM_CM0_MPU exact MPU range limit changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_RBAR_ADDRESS_MASK == 0xFFFFFF00u &&
 		fiber_portMPU_RBAR_REGION_VALID == 0x10u &&
-		fiber_portMPU_RASR_SIZE_MASK == 0x3Eu,
+		fiber_portMPU_RASR_SIZE_MASK == 0x3Eu &&
+		fiber_portMPU_RASR_MEMORY_MASK == 0x00070000u,
 		"[fiber]: ARM_CM0_MPU register encodings changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_REGION_PRIV_RW_UNPRIV_RW == 0x03000000u &&
 		fiber_portMPU_REGION_PRIV_RO_UNPRIV_NA == 0x05000000u &&
 		fiber_portMPU_REGION_PRIV_RO_UNPRIV_RO == 0x06000000u &&
-		fiber_portMPU_REGION_EXECUTE_NEVER == 0x10000000u,
+		fiber_portMPU_REGION_EXECUTE_NEVER == 0x10000000u &&
+		fiber_portMPU_DEFAULT_STACK_ATTRIBUTES == 0x13070000u,
 		"[fiber]: ARM_CM0_MPU permission encodings changed");
 
 FIBER_STATIC_ASSERT(offsetof(FiberPortMpuRegionRegisters, rbar) ==
