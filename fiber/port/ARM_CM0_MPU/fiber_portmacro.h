@@ -1,11 +1,12 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM0_MPU dictionary through implementation slice 5. This exact Cortex-M0+
+ * ARM_CM0_MPU dictionary through implementation slice 6. This exact Cortex-M0+
  * MPU profile freezes its protected layout/traits, linker-isolation contract,
- * construction/global-image contract, first-start SVC/MPU activation, and
- * protected Thumb-1 PendSV switching. It deliberately provides no selector
- * route, public forward runtime ABI, or public MPU extension ABI.
+ * construction/global-image contract, first-start SVC/MPU activation,
+ * protected Thumb-1 PendSV switching, and the frozen eight-operation forward
+ * ABI. It deliberately provides no architecture auto-selector route or public
+ * MPU extension ABI.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORTMACRO_H_
@@ -74,11 +75,11 @@
 # error "[fiber]: ARM_CM0_MPU requires 1..8 implemented NVIC priority bits"
 #endif
 
-/* This is a staged compile-proof fact, not an application setting. */
+/* This exact profile is selectable only by an explicit build manifest. */
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM0_MPU runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Exact ARMv6-M MPU profile facts. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -440,8 +441,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM0_MPU must not activate runtime selection before its complete port proof");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM0_MPU must provide its complete forward runtime ABI");
 FIBER_STATIC_ASSERT(fiber_portSVC_START <= 255u &&
 		fiber_portSVC_YIELD <= 255u && fiber_portSVC_RETURN <= 255u,
 		"[fiber]: ARM_CM0_MPU SVC services must fit imm8");

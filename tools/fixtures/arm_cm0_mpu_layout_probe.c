@@ -2,8 +2,8 @@
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
 
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM0_MPU slice 1 must remain compile-only");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM0_MPU must expose the complete forward runtime ABI");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C04u,
 		"[fiber]: ARM_CM0_MPU feature identity changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT == 4u,

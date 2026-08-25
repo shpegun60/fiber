@@ -1,5 +1,36 @@
 # Fiber Decision Log
 
+## 2026-08-25: Activate ARM_CM0_MPU As An Explicit Runtime Port
+
+`ARM_CM0_MPU` slice 6 completes the frozen eight-operation forward ABI for the
+exact ARMv6-M MPU profile. It is selectable only by an explicit
+`FIBER_PORT_BUILD_SELECTED=1` manifest; `__MPU_PRESENT` never changes global
+auto/profile selection because hardware capability cannot infer an application's
+privilege policy.
+
+The forward ABI deliberately composes the audited protected mechanism rather
+than adding a second transfer path. `fiber_port_runtime_prepare_start()` checks
+the privileged Thread/MSP environment, exact linker layout, vectors, priorities
+and MPU-disabled initial state before the first scheduler callback.
+`fiber_port_runtime_select_first()` runs that callback under the selected
+PRIMASK envelope and validates the returned protected image. Common publishes
+the result, then `fiber_port_runtime_start_first()` enters the existing SVC 70
+first-start path. The naked first-start veneer no longer performs preparation.
+The public `fiber_schedule()` path reaches the existing unprivileged SVC 71
+yield veneer; PendSV remains the sole protected save/select/MPU-replace/restore
+owner.
+
+The matrix now proves the build-selected runtime as a static archive in normal
+and LTO modes: all eight forward definitions, exact reverse ABI and cohort,
+strong SVC/PendSV extraction over weak startup aliases, vector slots 11/14,
+the port linker contract, privileged/unprivileged code and data placement,
+duplicate-handler failure, and both directions of VTOR cohort mismatch. Paired
+FreeRTOS generated assembly remains mandatory at `-O2` and `-Os`.
+
+This activation creates no global selector route, public optional MPU API,
+heterogeneous per-fiber MPU policy, or hardware support claim. Matching
+Cortex-M0+ MPU hardware and isolation validation remain required.
+
 ## 2026-08-24: Freeze The Remaining STM32 Port Inventory
 
 `STM32_PORT_FREEZE_INVENTORY.md` is the current planning ledger for the port

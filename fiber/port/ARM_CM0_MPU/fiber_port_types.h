@@ -1,9 +1,10 @@
 /*
- * Type-only public storage for the staged ARM_CM0_MPU profile.
+ * Public storage for the build-selected ARM_CM0_MPU profile.
  *
  * The layout preserves the 20-word protected restore image from the pinned
- * FreeRTOS GCC ARM_CM0 MPU branch. It is compile-only in this slice: there is
- * no selected runtime, handler, or public MPU feature API yet.
+ * FreeRTOS GCC ARM_CM0 MPU branch. The selected runtime owns the matching
+ * protected SVC/PendSV transfer. Optional heterogeneous MPU configuration is
+ * intentionally a separate feature ABI, not part of this storage contract.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORT_TYPES_H_

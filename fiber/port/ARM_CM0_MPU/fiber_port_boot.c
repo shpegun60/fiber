@@ -295,18 +295,28 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_mpu_build_global_regions);
 	const uintptr_t panic_target = fiber_port_function_address(
 			(uintptr_t)&fiber_panic);
+	const uintptr_t panic_wait = fiber_port_function_address(
+			(uintptr_t)&fiber_port_panic_wait);
 	const uintptr_t task_return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_internal_task_return);
 	const uintptr_t scheduler_candidate = fiber_port_function_address(
 			(uintptr_t)&fiber_internal_runtime_select_scheduler_candidate);
 	const uintptr_t publish_current = fiber_port_function_address(
 			(uintptr_t)&fiber_internal_runtime_publish_current_context);
+	const uintptr_t require_current = fiber_port_function_address(
+			(uintptr_t)&fiber_internal_runtime_require_current_context);
 	const uintptr_t svc_handler = fiber_port_function_address(
 			(uintptr_t)&SVC_Handler);
 	const uintptr_t svc_dispatch = fiber_port_function_address(
 			(uintptr_t)&fiber_port_svc_dispatch);
-	const uintptr_t first_prepare = fiber_port_function_address(
-			(uintptr_t)&fiber_port_prepare_first_start);
+	const uintptr_t scheduler_environment = fiber_port_function_address(
+			(uintptr_t)&fiber_port_require_scheduler_configuration_environment);
+	const uintptr_t runtime_prepare = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_prepare_start);
+	const uintptr_t runtime_select = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_select_first);
+	const uintptr_t runtime_start = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_start_first);
 	const uintptr_t first_start = fiber_port_function_address(
 			(uintptr_t)&fiber_port_start_first_context);
 	const uintptr_t first_restore = fiber_port_function_address(
@@ -321,14 +331,17 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&PendSV_Handler);
 	const uintptr_t return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_port_unprivileged_task_return);
-	const uintptr_t yield_target = fiber_port_function_address(
-			(uintptr_t)&fiber_port_unprivileged_yield);
+	const uintptr_t barrier_target = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_memory_barrier);
+	const uintptr_t schedule_target = fiber_port_function_address(
+			(uintptr_t)&fiber_port_runtime_schedule);
 	const uintptr_t privileged_targets[] = {
 		context_init, seal_compute, seal_check, initial_restore_check,
 		running_svc_check, save_current_check, restore_check, encoder, layout_load,
-		layout_check, global_builder, panic_target, task_return_target,
-		scheduler_candidate, publish_current,
-		svc_handler, svc_dispatch, first_prepare, first_start, first_restore,
+		layout_check, global_builder, panic_target, panic_wait, task_return_target,
+		scheduler_candidate, publish_current, require_current,
+		scheduler_environment, runtime_prepare, runtime_select, runtime_start,
+		svc_handler, svc_dispatch, first_start, first_restore,
 		pendsv_preflight, scheduler_pick, mpu_switch, pendsv_handler
 	};
 
@@ -347,10 +360,16 @@ void fiber_port_mpu_linker_layout_check(
 			layout->privileged_code_end, return_target), 'L');
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->unprivileged_code_start,
-			layout->unprivileged_code_end, yield_target), 'L');
+			layout->unprivileged_code_end, barrier_target), 'L');
 	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
 			layout->privileged_code_start,
-			layout->privileged_code_end, yield_target), 'L');
+			layout->privileged_code_end, barrier_target), 'L');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end, schedule_target), 'L');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end, schedule_target), 'L');
 }
 
 FIBER_CM0_MPU_BOOT

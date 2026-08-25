@@ -2,18 +2,19 @@
 
 ## Status
 
-Slices 1-5 for the exact `ARM_CM0_MPU` profile freeze the public type layout,
+Slices 1-6 for the exact `ARM_CM0_MPU` profile freeze the public type layout,
 protected restore image, ARMv6-M MPU dictionary, port traits, exact cohort,
 construction/seal/strict MPU-region encoder, linker-isolation contract, and
 the in-memory global MPU image. Slice 5 adds strong direct SVC/PendSV handlers,
-the private unprivileged yield SVC route, protected save/copy/select/MPU-
-replace/restore mechanics, exact vector/priority setup, and full MPU readback.
+the unprivileged yield SVC route, protected save/copy/select/MPU-replace/restore
+mechanics, exact vector/priority setup, and full MPU readback. Slice 6 adds all
+eight frozen forward runtime operations as thin adapters over that mechanism.
 
-The profile deliberately contains no forward runtime ABI implementation,
-selector route, public MPU extension ABI, or hardware support claim. It remains
-explicitly non-selectable while its private protected execution mechanics are
-paired against FreeRTOS. Forward-ABI/archive activation and board isolation are
-separate proof slices.
+The profile is runtime-complete only through its explicit
+`FIBER_PORT_BUILD_SELECTED=1` manifest. It deliberately has no architecture
+auto-selector route, public heterogeneous-MPU extension ABI, or hardware
+support claim. Archive/ELF activation is complete; board isolation remains a
+separate proof obligation.
 
 The pinned FreeRTOS `GCC/ARM_CM0` directory contains both a privileged branch
 and an optional MPU/unprivileged branch. `fiber/port/ARM_CM0` remains the
@@ -37,7 +38,7 @@ a50edad08b29052631aa469d4df6e6ec7ff68878
 | `portable/GCC/ARM_CM0/portasm.c` | 491 | `1696254d07ebe24cd635067b0449e8c156e948967d07ca2b0e09b0d577c55395` |
 | `portable/GCC/ARM_CM0/mpu_wrappers_v2_asm.c` | 1976 | `d93213034e67fbf076d8025007ca9b7bc31df8642256df44659e37f8d7df0a3e` |
 
-## Exact Slice-1 Manifest
+## Exact Profile Manifest
 
 ```text
 architecture        ARMv6-M
@@ -46,12 +47,13 @@ compiler ABI        GCC-compatible Thumb, soft-float
 MPU                 CMSIS __MPU_PRESENT == 1
 VTOR                CMSIS __VTOR_PRESENT == 0 or 1; separate cohorts
 FPU                 absent and unused
-selection           exact build-selected include path and type-only compile
-runtime selectable  no
-  slice 5             construction/seal/exact stack-region image, exact linker
+selection           exact build-selected include path only; never auto-inferred
+runtime selectable  yes, only with FIBER_PORT_BUILD_SELECTED=1
+  slice 6             construction/seal/exact stack-region image, exact linker
                       contract, SVC first start/yield/task return, protected
                       PendSV switch, MPU replacement/readback, and Thumb-1
-                      first/ordinary restore
+                      first/ordinary restore; all eight forward runtime ABI
+                      operations and archive/ELF/cohort proof
 ```
 
 The profile fails closed unless `__CORTEX_M == 0`, `__ARM_ARCH_6M__`,
@@ -248,24 +250,24 @@ identity `0x434D3030`.
 | `xMPU_SETTINGS` | selected `FiberContext` prefix plus `FiberPortBoot` | Adapted. Raw 20-word restore order is exact; FreeRTOS authorization metadata is not imported. |
 | `CONTEXT_SIZE == 20` | `FiberPortProtectedContext` | Retained exactly. |
 | task padding/privilege flags | `runtime_flags` bits | Retained as mutable selected-port state; not a public FreeRTOS flag API. |
-| SVC services 100..103 | native `70` start, native `71` private yield, native `72` return | Adapted. Fiber owns a smaller profile-private namespace and validates exact opcode, origin, frame, and continuation for every service. |
-| `portYIELD`, ISR-yield, critical nesting macros | private yield veneer plus PRIMASK-protected scheduler bridge | Adapted. The slice owns the unprivileged SVC yield and PendSV mechanics, but exposes no public forward scheduling operation or ISR API. |
+| SVC services 100..103 | native `70` start, native `71` yield, native `72` return | Adapted. Fiber owns a smaller profile-private namespace and validates exact opcode, origin, frame, and continuation for every service. |
+| `portYIELD`, ISR-yield, critical nesting macros | `fiber_port_runtime_schedule()` plus PRIMASK-protected scheduler bridge | Adapted. Public `fiber_schedule()` reaches the unprivileged SVC yield; no ISR scheduling API is exposed. |
 | `portMAX_DELAY`, tickless, timer configuration | user scheduler/platform | Excluded. |
 | privilege query/raise/reset macros | future optional MPU ABI and checked SVC routes | Deferred; no public stubs. |
 
 ## `port.c` And `portasm.c` Ledger
 
-| FreeRTOS path | Fiber owner | Slice-5 status |
+| FreeRTOS path | Fiber owner | Slice-6 status |
 | --- | --- | --- |
 | MPU `pxPortInitialiseStack` | `fiber_port_context_init()` | Implemented for the exact 20-word protected image. Fiber seeds r9 from the live platform value, zeros other saved registers, sets unprivileged CONTROL, and keeps the complete initial hardware frame in privileged context storage. |
 | `vRestoreContextOfFirstTask` / `vStartFirstTask` | `fiber_port_start_first_context()` and `fiber_port_restore_first_context_from_svc()` | Implemented. The `+20/-32/-48/-32/-16` Thumb-1 cursor geometry and copied basic frame match the reference; Fiber adds first-image and PSP/CONTROL/EXC_RETURN readback checks. ARM_CM0 behavior intentionally does not rewind MSP. |
-| `SVC_Handler` / `vPortSVCHandler_C` | strong `SVC_Handler()` and `fiber_port_svc_dispatch()` | Implemented for first start, private yield, and task return. It validates IPSR, exception origin, privileged/unprivileged frame range, xPSR, SVC opcode/immediate, and exact post-SVC continuation. Service 71 pends only the selected protected PendSV route. |
+| `SVC_Handler` / `vPortSVCHandler_C` | strong `SVC_Handler()` and `fiber_port_svc_dispatch()` | Implemented for first start, public scheduling yield, and task return. It validates IPSR, exception origin, privileged/unprivileged frame range, xPSR, SVC opcode/immediate, and exact post-SVC continuation. Service 71 pends only the selected protected PendSV route. |
 | MPU `PendSV_Handler` | strong selected-port protected switch path | Implemented. It validates before the first protected-cursor load, copies the complete basic frame into privileged storage, calls the scheduler under PRIMASK, replaces per-context MPU regions, and restores the selected image. |
-| `ulSetInterruptMask` / `vClearInterruptMask` | selected PRIMASK scheduler envelope | Adapted for the private protected handler. BASEPRI and FAULTMASK are prohibited by traits; public forward runtime activation is still deferred. |
+| `ulSetInterruptMask` / `vClearInterruptMask` | selected PRIMASK scheduler envelope | Adapted for first selection and the protected handler. BASEPRI and FAULTMASK are prohibited by traits. |
 | `prvGetMPURegionSizeSetting` | `fiber_port_mpu_try_encode_exact_region()` | Implemented with stronger exact coverage, AP/S/C/B/XN allowlist, base alignment, 256B minimum, and a fail-closed 2GB maximum for the 32-bit exclusive-end API. |
 | `prvSetupMPU` | `fiber_port_mpu_activate_first_context()` and `fiber_port_mpu_switch_to_context()` | Implemented. First start writes all context/global regions. Ordinary switches atomically replace only regions 0-3, retain immutable globals 4-7, and prove the complete active image by readback. |
-| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Slices 2-5 implement only the safe default: regions 0-2 disabled, region 3 exact raw stack RW/XN, and linker-defined regions 4-7. Optional heterogeneous regions remain separately versioned. |
-| `xPortStartScheduler` | private first-start helper plus later common forward adapters | FreeRTOS scheduler/tick mechanics are excluded. The protected first-start and switch mechanics are private and non-selectable until the separate forward-ABI/archive proof. |
+| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Slices 2-6 implement only the safe default: regions 0-2 disabled, region 3 exact raw stack RW/XN, and linker-defined regions 4-7. Optional heterogeneous regions remain separately versioned. |
+| `xPortStartScheduler` | `fiber_port_runtime_prepare_start()`, `fiber_port_runtime_select_first()`, and `fiber_port_runtime_start_first()` | Adapted. FreeRTOS scheduler/tick mechanics are excluded; common owns scheduler policy and publishes the selected first context before the port transfers through SVC. |
 | `vPortEndScheduler`, SysTick handler/setup, tickless | none / user scheduler | Excluded. |
 | `xIsPrivileged`, raise/reset privilege | optional MPU ABI and SVC paths | Deferred. |
 
@@ -325,7 +327,7 @@ full first-image check immediately before first restore, including the current
 r9 platform/static-base value. It is intentionally not a switch-time check:
 ordinary PendSV save/restore legitimately mutates the protected image.
 
-## Slice-5 Protected SVC And PendSV Contract
+## Protected SVC And PendSV Contract (Slice 5)
 
 `fiber_port_start_first_context()` is a private staged entry only. It verifies
 privileged Thread/MSP state, validates the exact selected first image and both
@@ -343,15 +345,16 @@ dispatcher accepts only:
 
 ```text
 service 70  privileged Thread/MSP first start, EXC_RETURN 0xFFFFFFF9
-service 71  unprivileged Thread/PSP private yield, EXC_RETURN 0xFFFFFFFD
+service 71  unprivileged Thread/PSP public scheduling yield, EXC_RETURN 0xFFFFFFFD
 service 72  unprivileged Thread/PSP task return, EXC_RETURN 0xFFFFFFFD
 ```
 
 Every service requires a valid SVC opcode, exact continuation address, expected
 stack origin and range, xPSR Thumb/Thread shape, and the exact linked code
 domain. A foreign SVC fails closed with `'u'`. Service 71 is reachable only
-through the private unprivileged yield veneer; it pends PendSV under PRIMASK,
-checks the pending bit, and returns so PendSV owns the actual save.
+through the selected-port unprivileged `fiber_port_runtime_schedule()` veneer;
+it pends PendSV under PRIMASK, checks the pending bit, and returns so PendSV
+owns the actual save.
 
 For service 70, the dispatcher disables interrupts, requires the exact
 eight-region ARMv6-M MPU type and `MPU_CTRL == 0`, writes all four context and
@@ -390,29 +393,41 @@ exception return. The protected transfer has exactly eight hardware-frame words;
 an xPSR `STACKALIGN` padding word is rejected with `'a'` rather than silently
 copying an unmodelled ninth word.
 
-The private SVC yield veneer and strong PendSV handler do not activate
-`fiber_port_runtime_schedule()` or the other seven forward operations.
-`FIBER_PORT_RUNTIME_SELECTABLE` remains zero.
+Slice 6 maps the complete frozen forward ABI onto this protected mechanism:
+`fiber_port_runtime_memory_barrier()` and
+`fiber_port_runtime_schedule()` are unprivileged Thread-mode operations;
+`fiber_port_panic_wait()`, scheduler configuration/start preparation, first
+selection, and first transfer are privileged operations. Common `fiber_start()`
+therefore prepares the selected port, asks the protected port bridge to select
+the first context, publishes it in common-owned state, then enters service 70.
+The naked first-start veneer no longer performs preparation itself.
 
-## Slice-5 Evidence
+The exact eight symbols are `fiber_port_context_init()`, runtime memory barrier,
+panic wait, scheduler-configuration environment check, start preparation, first
+selection, first transfer, and runtime schedule. No optional heterogeneous-MPU
+operation is hidden in this mandatory surface.
+
+## Slice-6 Evidence
 
 The compile matrix builds the profile at `-O2` and `-Os`, then repeats the
-synthetic linker/ELF retention proof under LTO. It proves all ten
-linker-boundary relocations, privileged/unprivileged input-section placement,
-one exact 256-byte current-slot output section containing the common slot,
-privileged `FiberContext`/global image storage, unprivileged entry/return code
-and raw stack placement, direct slot-11/slot-14 Thumb-vector ownership by the
-strong `SVC_Handler`/`PendSV_Handler`, exact first-start/restore and
-protected PendSV assembly shapes, the PRIMASK/MPU replacement envelope, and
-generated-code proof that the current pointer is not dereferenced before its
-preflight.
+synthetic linker/ELF retention proof under LTO. It proves all eight forward ABI
+definitions, all ten linker-boundary relocations, privileged/unprivileged
+input-section placement, one exact 256-byte current-slot output section
+containing the common slot, privileged `FiberContext`/global image storage,
+unprivileged entry/barrier/yield code and raw stack placement, direct
+slot-11/slot-14 Thumb-vector ownership by the strong
+`SVC_Handler`/`PendSV_Handler`, exact first-start/restore and protected PendSV
+assembly shapes, the PRIMASK/MPU replacement envelope, and generated-code proof
+that the current pointer is not dereferenced before its preflight.
 
-The synthetic positive link includes the actual
-`fiber_port_linker_contract.ld` fragment. Two negative links deliberately
-shrink the current-slot aperture and make the unprivileged-code range
-non-power-of-two; both must fail. It repeats the boot and first-start runtime
-compile/undefined-surface proof for both VTOR-present and VTOR-absent cohorts.
-The construction/global-image builder must emit no CPU-state instruction; the
+The portable application is compiled outside the selected static archive and
+the application-owned cohort expectation must resolve exactly one matching
+archive cohort. The same proof rejects duplicate strong handlers and both
+directions of a VTOR-present/VTOR-absent stale archive or stale expectation.
+The synthetic positive link includes the actual `fiber_port_linker_contract.ld`
+fragment. Two negative links deliberately shrink the current-slot aperture and
+make the unprivileged-code range non-power-of-two; both must fail. The
+construction/global-image builder must emit no CPU-state instruction; the
 runtime object is the sole owner of SVC/PendSV/MPU writes. The separate
 `freertos_asm_parity.ps1` proof compares first start, every protected
 save/restore segment, the PRIMASK scheduler envelope, and MPU replacement
@@ -420,14 +435,12 @@ against the pinned FreeRTOS ARM_CM0 MPU branch at both optimization levels.
 
 ## Required Later Slices
 
-1. Add all eight forward runtime ABI adapters, archive/cohort/vector/ELF/LTO
-   proofs, and only then allow this exact build-selected source group to link.
-2. Add the optional pre-start MPU configuration ABI only if heterogeneous
+1. Add the optional pre-start MPU configuration ABI only if heterogeneous
    per-fiber policy is required.
-3. Run matching Cortex-M0+ MPU hardware and isolation tests before any STM32
+2. Run matching Cortex-M0+ MPU hardware and isolation tests before any STM32
    support claim.
 
 No later slice may reuse privileged `ARM_CM0` saved-frame assembly, restore a
 protected context from unprivileged memory, reintroduce a broad general
-peripherals region, infer selection from `__MPU_PRESENT`, or activate this
-profile before the complete runtime and link proof exists.
+peripherals region, infer selection from `__MPU_PRESENT`, or turn the optional
+MPU configuration feature into an unconditional portable API.

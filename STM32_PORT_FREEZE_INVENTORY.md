@@ -51,12 +51,13 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Nine complete parity profiles currently have selected-port source groups and
+Ten complete parity profiles currently have selected-port source groups and
 pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
 | --- | --- | --- |
 | `ARM_CM0` | M0 and M0+ privileged Thumb-1 start/save/restore, separate VTOR traits | compile/assembly/ELF validated |
+| `ARM_CM0_MPU` | build-selected M0+ protected context, MPU replacement, unprivileged yield/return | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM3` | privileged ARMv7-M SVC/PendSV and BASEPRI path | compile/assembly/ELF validated |
 | `ARM_CM4` | privileged M4/M4F conditional FP context | compile/assembly/ELF validated |
 | `ARM_CM7/r0p1` | privileged M7/M7F conditional FP context and errata 837070 policy | compile/assembly/ELF validated; refreshed H7 run pending |
@@ -66,14 +67,13 @@ pinned FreeRTOS parity ledgers:
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
-The current matrix pairs all nine source groups against the pinned FreeRTOS
+The current matrix pairs all ten source groups against the pinned FreeRTOS
 reference where applicable and passes the existing directional ABI, exact
 cohort, vector, archive, section-GC, LTO, and negative-link proofs.
 
-`ARM_CM0_MPU` is additionally present as an explicit non-selectable staged
-profile. Its private protected SVC/PendSV/MPU mechanics are paired against the
-pinned reference, but it remains outside the complete-profile count until the
-eight-operation forward runtime ABI and archive proof are activated.
+`ARM_CM0_MPU` is complete only as an explicit build-selected profile. It is not
+inferred from `__MPU_PRESENT` and remains outside global auto/profile routing;
+hardware execution and MPU isolation remain unvalidated.
 
 This does not promote the profiles without current board evidence to
 `hardware validated`.
@@ -86,26 +86,28 @@ The pinned FreeRTOS `GCC/ARM_CM0` directory contains a distinct optional
 MPU/unprivileged branch. The current `ARM_CM0` profile intentionally implements
 only the privileged branch.
 
-`ARM_CM0_MPU` slices 1-5 now freeze an exact build-selected type/layout/trait
+`ARM_CM0_MPU` slices 1-6 freeze an exact build-selected type/layout/trait
 and cohort contract, port-owned construction/seal, strict MPU encoder, linker
 isolation, global MPU image, strong SVC first start, unprivileged task return,
-private unprivileged yield, protected PendSV save/select/MPU-replace/restore,
-full MPU readback, and the reference-derived Thumb-1 first/ordinary restore.
+public `fiber_schedule()` yield, protected PendSV save/select/MPU-replace/
+restore, full MPU readback, the reference-derived Thumb-1 first/ordinary
+restore, and all eight frozen forward runtime ABI operations.
 It preserves the reference raw 20-word protected image while
 deliberately replacing broad unprivileged peripheral access with one exact
 256-byte current-context aperture, leaving three configurable regions plus the
 stack. The default image disables regions 0-2, uses region 3 for the exact raw
 stack RW/XN range, and builds regions 4-7 from ten required linker boundaries.
 
-The profile remains non-selectable and exposes no forward runtime ABI. Its
-`-O2`/`-Os` and LTO proof covers direct slots 11/14, exact first and
-ordinary protected restores, private yield provenance, first activation and
-ordinary MPU replacement/readback, VTOR-present/absent cohorts, current
-preflight ordering, and linker isolation. It is software evidence only, not a
-hardware support claim.
+The profile remains build-selected only and exposes no public optional MPU
+configuration ABI. Its `-O2`/`-Os` and normal/LTO archive proof covers direct
+slots 11/14, exact first and ordinary protected restores, public yield
+provenance, first activation and ordinary MPU replacement/readback,
+VTOR-present/absent cohorts, current preflight ordering, linker isolation, and
+both stale archive/expectation cohort failures. It is software evidence only,
+not a hardware support claim.
 
-Remaining work is the eight forward runtime ABI operations and archive/ELF
-negative proofs, followed by hardware and isolation validation.
+Remaining work is Cortex-M0+ MPU hardware and isolation validation, followed by
+the optional heterogeneous-MPU feature only if a product needs it.
 
 ### 2. Cortex-M33 MPU Cohorts
 
@@ -226,8 +228,7 @@ STM32 hardware claim.
 ## Recommended Execution Order
 
 ```text
-ARM_CM0_MPU
-  -> ARM_CM33_MPU
+ARM_CM33_MPU
   -> ARM_CM33 TrustZone/SecureContext
   -> ARM_CM33 TF-M integration
   -> ARM_CM55/STM32N6

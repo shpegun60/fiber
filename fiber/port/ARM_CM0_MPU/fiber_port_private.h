@@ -4,15 +4,12 @@
 
 #include "fiber_port_boot.h"
 #include "../fiber_port_context_cohort.h"
+#include "../fiber_port_runtime_abi.h"
 #include "../../fiber_runtime_port_abi.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-fiber_portPRIVILEGED_FUNCTION
-void fiber_port_prepare_first_start(FiberContext *first);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
@@ -46,12 +43,6 @@ void fiber_port_restore_first_context_from_svc(FiberContext *first);
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FIBER_ATTR_NAKED_ASM fiber_portUNPRIVILEGED_FUNCTION
 void fiber_port_unprivileged_task_return(void);
-
-/* Private staged veneer. It becomes the forward runtime schedule operation
- * only when the separate eight-operation ABI activation slice is complete. */
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-FIBER_ATTR_NAKED_ASM fiber_portUNPRIVILEGED_FUNCTION
-void fiber_port_unprivileged_yield(void);
 
 FIBER_ATTR_NAKED_ASM fiber_portPRIVILEGED_FUNCTION
 void SVC_Handler(void);

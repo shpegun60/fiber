@@ -51,7 +51,7 @@ is accepted only when the generated object still passes the paired proof.
 | Fiber port | FreeRTOS reference | Generated mechanisms covered |
 | --- | --- | --- |
 | `ARM_CM0` (M0 and M0+) | `GCC/ARM_CM0` | separate M0/no-VTOR and M0+/VTOR builds; first SVC request, first restore, PendSV save/mask/restore |
-| `ARM_CM0_MPU` | `GCC/ARM_CM0`, `configENABLE_MPU=1` | first SVC request, protected Thumb-1 first restore, SVC task return/private yield, protected PendSV frame copy/PRIMASK/MPU replacement/restore |
+| `ARM_CM0_MPU` | `GCC/ARM_CM0`, `configENABLE_MPU=1` | first SVC request, protected Thumb-1 first restore, SVC task return/public yield, protected PendSV frame copy/PRIMASK/MPU replacement/restore |
 | `ARM_CM3` | `GCC/ARM_CM3` | first SVC request, first restore, PendSV save/BASEPRI/restore |
 | `ARM_CM4` | `GCC/ARM_CM4F` | first SVC request, first restore, conditional FP PendSV |
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
@@ -73,12 +73,13 @@ therefore cannot silently reduce coverage.
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
 
-`ARM_CM0_MPU` is paired for its complete private CPU/context mechanism, but
-remains `FIBER_PORT_RUNTIME_SELECTABLE == 0`. Its private SVC yield veneer,
-strong PendSV handler, protected scheduler bridge, and MPU replacement are not
-yet the public eight-operation forward runtime ABI. Generated parity therefore
-proves the protected execution mechanics, not public selection, archive
-integration, or hardware isolation.
+`ARM_CM0_MPU` now provides the complete eight-operation forward runtime ABI
+when explicitly `FIBER_PORT_BUILD_SELECTED=1`. Its public `fiber_schedule()`
+path is the unprivileged SVC-yield veneer, while strong SVC/PendSV handlers,
+protected scheduler bridge, and MPU replacement remain selected-port-owned.
+The matrix additionally proves normal/LTO archive extraction, exact cohort
+expectation, linker MPU isolation, slots 11/14, and stale-cohort rejection.
+The profile still has no auto-selector route or hardware isolation claim.
 
 ## Intentional Differences
 

@@ -47,11 +47,10 @@ C++ Kernel layers consume the Context dispatcher surface and remain independent
 of every concrete `portable/` implementation.
 
 `STM32_PORT_FREEZE_INVENTORY.md` is the current execution ledger for this plan.
-It records the nine runtime-capable concrete profiles, the staged compile-only
-`ARM_CM0_MPU` construction/encoder/linker/global-image contract, the remaining
-CM0 MPU runtime work, CM33
-MPU/security, CM55/N6, and announced CM85/V8 work, planning ranges, and the
-exact gate before Context extraction.
+It records ten runtime-capable concrete profiles, including the explicitly
+build-selected `ARM_CM0_MPU` protected runtime and its archive/linker proof,
+then the remaining CM33 MPU/security, CM55/N6, and announced CM85/V8 work,
+planning ranges, and the exact gate before Context extraction.
 
 The required common-core boundary before production ports are added in bulk is
 defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. `fiber_api_types.h` exposes only
@@ -97,7 +96,7 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 Closed hardening items from the FreeRTOS comparison:
 
 - the compile matrix now runs one paired generated-assembly cohort for M0,
-  M0+, M3, M4F, M7 r0p1, M23 NTZ, M33 NTZ, M33F NTZ,
+  M0+, M0+ MPU, M3, M4F, M7 r0p1, M23 NTZ, M33 NTZ, M33F NTZ,
   CM3 MPU, and CM4 MPU. It verifies the pinned FreeRTOS commit plus every
   consumed portable-file hash, compiles both objects with identical CPU/FPU
   flags, and checks ordered first-start, save, mask, MPU/FP, restore, and
@@ -170,7 +169,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Core family | Current state | Target state |
 | --- | --- | --- |
 | Cortex-M0/M0+ | Concrete `port/ARM_CM0` SVC/PendSV/frame code is compile/link-covered | Validate on hardware and document MSP rewind policy |
-| Cortex-M0+ MPU | Exact build-selected `ARM_CM0_MPU` slices 1-5 implement protected construction/linker isolation, strong SVC/PendSV ownership, first-start/private-yield/task-return SVC services, full protected Thumb-1 save/select/MPU-replace/restore, and MPU readback. It remains non-selectable and exposes no forward runtime ABI or public MPU extension. `-O2`/`-Os`, LTO, direct SVC/PendSV vectors, VTOR-present/absent, generated FreeRTOS assembly parity, and negative linker proofs pass. | Add the eight forward runtime adapters and archive/ELF proof, then run Cortex-M0+ MPU hardware and isolation validation. |
+| Cortex-M0+ MPU | Exact build-selected `ARM_CM0_MPU` slices 1-6 implement protected construction/linker isolation, all eight forward runtime ABI operations, strong SVC/PendSV ownership, first-start/public-yield/task-return SVC services, full protected Thumb-1 save/select/MPU-replace/restore, and MPU readback. Normal/LTO archive extraction, exact MPU section placement, VTOR-present/absent cohort expectation, direct vectors, generated FreeRTOS assembly parity, and stale/duplicate negative links pass. It remains outside global auto/profile selection and exposes no public optional MPU extension. | Run Cortex-M0+ MPU hardware and isolation validation; add the optional heterogeneous-MPU feature only if a product needs it. |
 | Cortex-M3 | Concrete `port/ARM_CM3` SVC/PendSV/frame code is compile/link-covered | Validate on hardware |
 | Cortex-M3 MPU | Exact reference audit plus slices 1-4, 6, and 7 are complete: type/layout, MPU construction, linker isolation, protected SVC/PendSV, all eight forward ABI operations, exact build-selected facade, portable-application archive extraction, exact MPU section placement, cohort, section-GC, normal/LTO, vector, and duplicate-handler proofs pass; hardware runtime is unvalidated | Run the complete Cortex-M3 MPU hardware and isolation suite before any STM32/runtime claim |
 | Cortex-M4F | Concrete `port/ARM_CM4` source group is compile/link-covered and FPU-aware | Run M4F hardware FP stress validation |
@@ -222,6 +221,8 @@ Closed hardening items from the FreeRTOS comparison:
    Current matrix set:
 
    - Cortex-M0 or M0+
+   - explicit build-selected Cortex-M0+ MPU profile with normal/LTO archive,
+     exact MPU linker, vector, and stale-cohort negative proofs
    - Cortex-M3
    - Cortex-M4 without FPU
    - Cortex-M4F

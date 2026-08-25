@@ -1,10 +1,11 @@
 /*
  * ARM_CM0_MPU protected first-start service.
  *
- * This slice owns the strong SVC/PendSV handlers, the native start/yield/return
- * services, protected MPU replacement, and Thumb-1 first/ordinary restore.
- * It deliberately owns no forward runtime ABI operation yet: the private yield
- * veneer exists only with its matching protected PendSV owner.
+ * This selected port owns the strong SVC/PendSV handlers, the native
+ * start/yield/return services, protected MPU replacement, and Thumb-1
+ * first/ordinary restore. The frozen forward ABI below is deliberately thin:
+ * it composes this already-audited protected mechanism rather than introducing
+ * a second context-transfer path.
  */
 
 #include "fiber_port_private.h"
@@ -22,6 +23,25 @@
 	fiber_portUNPRIVILEGED_FUNCTION
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
+
+/* Thread-mode common helpers must be executable by an unprivileged fiber.
+ * They contain no privileged state access. */
+FIBER_CM0_MPU_UNPRIVILEGED
+void fiber_port_runtime_memory_barrier(void)
+{
+	__DMB();
+	__COMPILER_BARRIER();
+}
+
+FIBER_API_NORETURN FIBER_CM0_MPU_PRIVILEGED
+void fiber_port_panic_wait(void)
+{
+	__DSB();
+	__ISB();
+	for (;;) {
+		__WFE();
+	}
+}
 
 static FIBER_CM0_MPU_PRIVILEGED
 uintptr_t fiber_port_code_address(uintptr_t address)
@@ -495,20 +515,61 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 }
 
 FIBER_CM0_MPU_PRIVILEGED
-void fiber_port_prepare_first_start(FiberContext *first)
+void fiber_port_require_scheduler_configuration_environment(void)
 {
-	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
-	FIBER_PORT_CONTEXT_COHORT_RETAIN();
-	FIBER_REQUIRE(first != NULL, 'N');
 	fiber_port_require_privileged_thread_msp();
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE, 'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
-	fiber_port_context_validate_initial_restore(first);
+}
+
+/* Common fiber_start() calls this before it asks the scheduler for the first
+ * context. That ordering means the first hook runs only after the selected
+ * port has established and read back its exception and linker contract. */
+FIBER_CM0_MPU_PRIVILEGED
+void fiber_port_runtime_prepare_start(void)
+{
+	FiberPortMpuMemoryLayout layout;
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
+	FIBER_PORT_CONTEXT_COHORT_RETAIN();
+	fiber_port_require_scheduler_configuration_environment();
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
 	fiber_port_validate_exception_vectors();
 	fiber_port_validate_priority_contract();
 	fiber_port_configure_exception_priorities();
 	fiber_port_validate_exception_vectors();
-	fiber_port_require_privileged_thread_msp();
+	fiber_port_require_scheduler_configuration_environment();
+}
+
+FIBER_CM0_MPU_PRIVILEGED
+FiberContext *fiber_port_runtime_select_first(void)
+{
+	fiber_port_require_scheduler_configuration_environment();
+
+	/* The first hook is privileged and runs with the MPU disabled, exactly as
+	 * the selected first-start flow requires. Preserve and verify the complete
+	 * CPU/MPU image so the hook cannot alter the prepared transfer contract. */
+	const uint32_t previous = fiber_port_primask_save_disable();
+	FIBER_REQUIRE(previous == 0u, 'p');
+	FiberPortMpuSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const first =
+			fiber_internal_runtime_select_scheduler_candidate(NULL);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_primask_restore(previous);
+	return first;
+}
+
+FIBER_API_NORETURN FIBER_CM0_MPU_PRIVILEGED
+void fiber_port_runtime_start_first(FiberContext *first)
+{
+	FIBER_REQUIRE(first != NULL, 'N');
+	fiber_internal_runtime_require_current_context();
+	fiber_port_require_scheduler_configuration_environment();
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_start_first_context(first);
+	FIBER_API_UNREACHABLE();
 }
 
 FIBER_CM0_MPU_PRIVILEGED
@@ -590,7 +651,6 @@ void fiber_port_start_first_context(FiberContext *first FIBER_ATTR_UNUSED_PARAM)
 {
 	__ASM volatile(
 			".syntax unified                                      \n"
-			"bl    fiber_port_prepare_first_start                 \n"
 			"mrs   r3, ipsr                                       \n"
 			"cmp   r3, #0                                         \n"
 			"bne   90f                                            \n"
@@ -709,7 +769,7 @@ void fiber_port_unprivileged_task_return(void)
 }
 
 FIBER_ATTR_NAKED_ASM FIBER_CM0_MPU_UNPRIVILEGED
-void fiber_port_unprivileged_yield(void)
+void fiber_port_runtime_schedule(void)
 {
 	__ASM volatile(
 			".syntax unified                                      \n"

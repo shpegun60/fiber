@@ -613,16 +613,33 @@ try {
         -ReferencePatterns @('\bcpsie\s+i\b', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+\b') `
         -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
         -FiberSymbol "fiber_port_start_first_context" `
-        -FiberPatterns @('fiber_port_prepare_first_start', '\bcpsid\s+i\b',
-            '\bcpsie\s+i\b', '\bdsb\b', '\bisb\b', '\bsvc\s+70\b') `
+        -FiberPatterns @('\bcpsid\s+i\b', '\bcpsie\s+i\b', '\bdsb\b',
+            '\bisb\b', '\bsvc\s+70\b') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE",
             "FAP-MPU-FIRST-ACTIVATION-SPLIT") `
         -Ledger $ledger
     $cm0MpuStart = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
         -Symbol "fiber_port_start_first_context" -Path $pair.FiberPath
-    Assert-AbsentPatterns -Body $cm0MpuStart -Patterns @('\bmsr\s+MSP\b') `
+    Assert-AbsentPatterns -Body $cm0MpuStart -Patterns @('\bmsr\s+MSP\b',
+        'fiber_port_runtime_prepare_start') `
         -Label "ARM_CM0_MPU Fiber first-start"
+    $cm0MpuPrepare = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+        -Symbol "fiber_port_runtime_prepare_start" -Path $pair.FiberPath
+    Assert-OrderedPatterns -Body $cm0MpuPrepare -Patterns @(
+        'fiber_port_mpu_load_linker_layout',
+        'fiber_port_mpu_linker_layout_check',
+        'fiber_port_validate_exception_vectors',
+        'fiber_port_configure_exception_priorities') `
+        -Label "ARM_CM0_MPU Fiber forward start preparation"
+    $cm0MpuSelectFirst = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+        -Symbol "fiber_port_runtime_select_first" -Path $pair.FiberPath
+    Assert-OrderedPatterns -Body $cm0MpuSelectFirst -Patterns @(
+        'fiber_port_primask_save_disable',
+        'fiber_internal_runtime_select_scheduler_candidate',
+        'fiber_port_context_validate_initial_restore',
+        'fiber_port_primask_restore') `
+        -Label "ARM_CM0_MPU Fiber first-selection envelope"
 
     Assert-MechanismParity -PortName "ARM_CM0_MPU" -Mechanism "first-restore-special" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs_first_task" `
