@@ -245,7 +245,8 @@ function Assert-ReferenceIdentity {
 function Assert-ProductionPortCoverage {
     param(
         [string]$RepositoryRoot,
-        [object[]]$PortDefinitions
+        [object[]]$PortDefinitions,
+        [string[]]$StagedRuntimeProfiles
     )
 
     $portRoot = Join-Path $RepositoryRoot "fiber\port"
@@ -258,8 +259,39 @@ function Assert-ProductionPortCoverage {
     $coveredProfiles = @($PortDefinitions |
         ForEach-Object { $_.ProfileDir } |
         Sort-Object -Unique)
+    $stagedProfiles = @($StagedRuntimeProfiles | Sort-Object -Unique)
+    $stagedCoveredOverlap = @($stagedProfiles | Where-Object {
+        $coveredProfiles -contains $_
+    })
+    if ($stagedCoveredOverlap.Count -ne 0) {
+        throw "A staged runtime profile must not also claim complete generated parity: $($stagedCoveredOverlap -join ', ')"
+    }
+
+    foreach ($profile in $stagedProfiles) {
+        if ($actualProfiles -notcontains $profile) {
+            throw "Staged runtime profile has no fiber_port.c: $profile"
+        }
+
+        $record = Join-Path (Join-Path $RepositoryRoot $profile) `
+            "FREERTOS_PARITY.md"
+        if (-not (Test-Path -LiteralPath $record)) {
+            throw "Staged runtime profile has no FreeRTOS parity record: $profile"
+        }
+
+        $macro = Join-Path (Join-Path $RepositoryRoot $profile) `
+            "fiber_portmacro.h"
+        if (-not (Test-Path -LiteralPath $macro)) {
+            throw "Staged runtime profile has no selected port macro header: $profile"
+        }
+        $macroText = Get-Content -LiteralPath $macro -Raw
+        if ($macroText -notmatch '(?m)^\s*#define\s+FIBER_PORT_RUNTIME_SELECTABLE\s+0\s*$') {
+            throw "Staged runtime profile must remain non-selectable until complete parity: $profile"
+        }
+    }
+
+    $knownProfiles = @($coveredProfiles + $stagedProfiles | Sort-Object -Unique)
     $coverageDifference = @(Compare-Object -ReferenceObject $actualProfiles `
-        -DifferenceObject $coveredProfiles)
+        -DifferenceObject $knownProfiles)
     if ($coverageDifference.Count -ne 0) {
         $details = ($coverageDifference | ForEach-Object {
             "$($_.SideIndicator) $($_.InputObject)"
@@ -267,7 +299,7 @@ function Assert-ProductionPortCoverage {
         throw "Generated assembly parity production-port inventory drifted:`n$details"
     }
 
-    foreach ($profile in $actualProfiles) {
+    foreach ($profile in $coveredProfiles) {
         $record = Join-Path (Join-Path $RepositoryRoot $profile) `
             "FREERTOS_PARITY.md"
         if (-not (Test-Path -LiteralPath $record)) {
@@ -446,8 +478,12 @@ $ports = @(
     }
 )
 
+$stagedRuntimeProfiles = @(
+    "fiber\port\ARM_CM0_MPU"
+)
+
 Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
-    -PortDefinitions $ports
+    -PortDefinitions $ports -StagedRuntimeProfiles $stagedRuntimeProfiles
 
 $compiler = Find-ArmGcc
 $toolDir = Split-Path -Parent $compiler

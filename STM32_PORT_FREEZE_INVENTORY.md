@@ -51,8 +51,8 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Nine concrete profiles currently have selected-port source groups and pinned
-FreeRTOS parity ledgers:
+Nine complete parity profiles currently have selected-port source groups and
+pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
 | --- | --- | --- |
@@ -70,6 +70,11 @@ The current matrix pairs all nine source groups against the pinned FreeRTOS
 reference where applicable and passes the existing directional ABI, exact
 cohort, vector, archive, section-GC, LTO, and negative-link proofs.
 
+`ARM_CM0_MPU` is additionally present as an explicit non-selectable staged
+profile. It has its own pinned ledger and slice-local generated-assembly/ELF
+proof, but it is intentionally outside the complete-profile count until its
+protected PendSV and eight-operation runtime ABI are implemented together.
+
 This does not promote the profiles without current board evidence to
 `hardware validated`.
 
@@ -81,20 +86,25 @@ The pinned FreeRTOS `GCC/ARM_CM0` directory contains a distinct optional
 MPU/unprivileged branch. The current `ARM_CM0` profile intentionally implements
 only the privileged branch.
 
-`ARM_CM0_MPU` slices 1-3 now freeze an exact build-selected type/layout/trait
-and cohort contract, compile/link-covered port-owned construction/seal, a
-strict in-memory MPU encoder, linker isolation, and an in-memory global MPU
-image without a selector route. They preserve the reference raw 20-word
-protected image while deliberately replacing broad unprivileged peripheral
-access with one exact 256-byte current-context aperture, leaving three
-configurable regions plus the stack. The default image disables regions 0-2,
-uses region 3 for the exact raw stack RW/XN range, and builds regions 4-7 from
-ten required linker boundaries. This is compile/link/ELF evidence only, not
-active MPU programming or hardware support.
+`ARM_CM0_MPU` slices 1-4 now freeze an exact build-selected type/layout/trait
+and cohort contract, port-owned construction/seal, strict MPU encoder, linker
+isolation, global MPU image, strong SVC first start, unprivileged task return,
+one-time MPU activation/readback, and the reference-derived Thumb-1 first
+restore. It preserves the reference raw 20-word protected image while
+deliberately replacing broad unprivileged peripheral access with one exact
+256-byte current-context aperture, leaving three configurable regions plus the
+stack. The default image disables regions 0-2, uses region 3 for the exact raw
+stack RW/XN range, and builds regions 4-7 from ten required linker boundaries.
 
-Remaining work includes first restore, unprivileged SVC services, PendSV MPU
-replacement, paired generated assembly, archive/ELF negative proofs, active
-MPU setup/readback, and hardware validation.
+The profile remains non-selectable and has no `PendSV_Handler`, accepted yield
+service, or forward runtime ABI. Its `-O2`/`-Os` and LTO proof covers direct
+slot-11 SVC vector ownership, exact first restore, first activation/readback,
+VTOR-present and VTOR-absent cohorts, and linker isolation. It is software
+evidence only, not a hardware support claim.
+
+Remaining work is the protected PendSV save/copy/scheduler/MPU-replace/restore
+path, then the eight forward runtime ABI operations and archive/ELF negative
+proofs, followed by hardware validation.
 
 ### 2. Cortex-M33 MPU Cohorts
 

@@ -61,21 +61,24 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
 
 The script derives the port inventory from every `fiber/port/**/fiber_port.c`.
-The inventory must exactly match the paired profiles above, and every directory
-must contain `FREERTOS_PARITY.md`. A staged partial-runtime profile is listed
-explicitly with only its implemented mechanisms; it does not inherit a complete
-runtime claim. Adding any port source without a generated-code pair therefore
-fails the matrix instead of silently reducing coverage.
+The inventory must exactly match either a paired profile above or an explicit
+non-selectable staged runtime profile, and every directory must contain
+`FREERTOS_PARITY.md`. A staged profile may implement only the mechanisms named
+in its own record; it never inherits a complete runtime claim. The script fails
+if a staged profile becomes selectable, is also listed as complete parity, or a
+new port source is neither paired nor explicitly staged. Adding a port source
+therefore cannot silently reduce coverage.
 
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
 
-`ARM_CM0_MPU` is also intentionally absent from this executable assembly
-inventory until its later SVC/PendSV runtime slice creates `fiber_port.c`. Its
-slice-3 constructor/linker/global-image contract is compile/link/ELF-covered
-against the pinned `pxPortInitialiseStack()` 20-word storage order and r9
-preservation. It makes no generated-handler parity, active MPU, or runtime
-claim yet.
+`ARM_CM0_MPU` is the currently explicit staged profile. Slice 4 owns only
+strong SVC first-start, task return, one-time MPU activation, and Thumb-1 first
+restore. It remains `FIBER_PORT_RUNTIME_SELECTABLE == 0`, owns no PendSV
+handler or yield route, and is excluded from the complete parity table until
+the protected PendSV/scheduler/runtime-ABI slice is finished. Its slice-local
+matrix proof compares only the implemented first-start mechanisms with pinned
+`GCC/ARM_CM0` geometry; it makes no complete runtime or hardware claim.
 
 ## Intentional Differences
 

@@ -2,12 +2,18 @@
 
 ## Status
 
-Slices 1-3 for the exact `ARM_CM0_MPU` profile freeze the public type layout,
+Slices 1-4 for the exact `ARM_CM0_MPU` profile freeze the public type layout,
 protected restore image, ARMv6-M MPU dictionary, port traits, exact cohort,
 construction/seal/strict MPU-region encoder, linker-isolation contract, and
-the in-memory global MPU image. They deliberately contain no SVC/PendSV
-handler, forward ABI implementation, selector route, public MPU extension ABI,
-active MPU register programming/readback, or hardware support claim.
+the in-memory global MPU image. Slice 4 additionally owns one strong SVC
+first-start route, the unprivileged task-return SVC route, one-time MPU
+activation/readback, and the exact Thumb-1 first restore.
+
+The profile deliberately contains no PendSV handler, accepted yield route,
+forward runtime ABI implementation, selector route, public MPU extension ABI,
+or hardware support claim. It remains explicitly non-selectable until the
+protected save/select/MPU-replace/restore PendSV path lands as one atomic
+runtime slice.
 
 The pinned FreeRTOS `GCC/ARM_CM0` directory contains both a privileged branch
 and an optional MPU/unprivileged branch. `fiber/port/ARM_CM0` remains the
@@ -42,8 +48,9 @@ VTOR                CMSIS __VTOR_PRESENT == 0 or 1; separate cohorts
 FPU                 absent and unused
 selection           exact build-selected include path and type-only compile
 runtime selectable  no
-slice 3             construction/seal/exact stack-region image, exact linker
-                    contract, and in-memory global MPU image only
+slice 4             construction/seal/exact stack-region image, exact linker
+                    contract, SVC first start and task return, one-time MPU
+                    activation/readback, and Thumb-1 first restore
 ```
 
 The profile fails closed unless `__CORTEX_M == 0`, `__ARM_ARCH_6M__`,
@@ -75,8 +82,9 @@ the underlying FreeRTOS ARM_CM0 MPU mechanism.
 
 The shared `FIBER_PORT_SOFTWARE_FRAME_*` traits intentionally describe the
 19-word logical protected transfer for ABI identity. They are not raw PSP
-geometry for this profile. Slices 2-3 therefore do not include the generic
-stack-resident `fiber_port_geometry.h`; it uses explicit port facts instead:
+geometry for this profile. Slices 2-4 therefore do not include the generic
+stack-resident `fiber_port_geometry.h`; the selected port uses explicit facts
+instead:
 
 ```text
 initial PSP reservation     32 bytes (one basic frame)
@@ -227,7 +235,7 @@ identity `0x434D3030`.
 
 ## `portmacro.h` Ledger
 
-| FreeRTOS family | Fiber slices 1-3 mapping | Decision |
+| FreeRTOS family | Fiber slices 1-4 mapping | Decision |
 | --- | --- | --- |
 | scalar/task typedefs and stack growth/alignment | `fiber_api_types.h`, selected `FiberContext`, ARMv6-M traits | Adapted; FreeRTOS API typedefs are not exported. |
 | tick type, delay, ready bitmap, scheduler/list macros | user scheduler and later C++ Kernel | Excluded from CPU port. |
@@ -239,24 +247,24 @@ identity `0x434D3030`.
 | `xMPU_SETTINGS` | selected `FiberContext` prefix plus `FiberPortBoot` | Adapted. Raw 20-word restore order is exact; FreeRTOS authorization metadata is not imported. |
 | `CONTEXT_SIZE == 20` | `FiberPortProtectedContext` | Retained exactly. |
 | task padding/privilege flags | `runtime_flags` bits | Retained as mutable selected-port state; not a public FreeRTOS flag API. |
-| SVC services 100..103 | future native selected-port SVC namespace | Deferred. Fiber must not copy an unrelated FreeRTOS number space before its dispatcher/provenance design exists. |
-| `portYIELD`, ISR-yield, critical nesting macros | future selected-port runtime and C++ scheduler boundary | Deferred; no runtime path exists in slice 3. |
+| SVC services 100..103 | native `70` start, reserved `71` yield, native `72` return | Adapted. Fiber owns a smaller profile-private namespace, validates exact opcode/origin/continuation, and rejects yield until PendSV owns it. |
+| `portYIELD`, ISR-yield, critical nesting macros | future selected-port runtime and C++ scheduler boundary | Deferred. Slice 4 must not pend an unowned PendSV. |
 | `portMAX_DELAY`, tickless, timer configuration | user scheduler/platform | Excluded. |
 | privilege query/raise/reset macros | future optional MPU ABI and checked SVC routes | Deferred; no public stubs. |
 
 ## `port.c` And `portasm.c` Ledger
 
-| FreeRTOS path | Planned Fiber owner | Slice-3 status |
+| FreeRTOS path | Fiber owner | Slice-4 status |
 | --- | --- | --- |
 | MPU `pxPortInitialiseStack` | `fiber_port_context_init()` | Implemented for the exact 20-word protected image. Fiber seeds r9 from the live platform value, zeros other saved registers, sets unprivileged CONTROL, and keeps the complete initial hardware frame in privileged context storage. |
-| `vRestoreContextOfFirstTask` / `vStartFirstTask` | strong selected-port SVC first-start path | Deferred. Startup must preserve ARMv6-M VTOR/no-VTOR behavior and validate provenance. |
-| `SVC_Handler` / `vPortSVCHandler_C` | strong selected-port SVC dispatcher | Deferred. First start, unprivileged yield, and return require an explicit native service contract. |
+| `vRestoreContextOfFirstTask` / `vStartFirstTask` | `fiber_port_start_first_context()` and `fiber_port_restore_first_context_from_svc()` | Implemented. The `+20/-32/-48/-32/-16` Thumb-1 cursor geometry and copied basic frame match the reference; Fiber adds first-image and PSP/CONTROL/EXC_RETURN readback checks. ARM_CM0 behavior intentionally does not rewind MSP. |
+| `SVC_Handler` / `vPortSVCHandler_C` | strong `SVC_Handler()` and `fiber_port_svc_dispatch()` | Implemented for first start and task return. It validates IPSR, exception origin, privileged/unprivileged frame range, xPSR, SVC opcode/immediate, and exact post-SVC continuation. Service 71 is reserved and rejected. |
 | MPU `PendSV_Handler` | strong selected-port protected switch path | Deferred. It will copy the full basic hardware frame into privileged storage and program the exact MPU image. |
 | `ulSetInterruptMask` / `vClearInterruptMask` | selected PRIMASK scheduler envelope | Deferred to runtime; BASEPRI and FAULTMASK are prohibited by traits. |
 | `prvGetMPURegionSizeSetting` | `fiber_port_mpu_try_encode_exact_region()` | Implemented with stronger exact coverage, AP/S/C/B/XN allowlist, base alignment, 256B minimum, and a fail-closed 2GB maximum for the 32-bit exclusive-end API. |
-| `prvSetupMPU` | selected pre-start MPU setup/readback | Slice 3 constructs exact regions 4-7 from linker boundaries in memory. MPU type/control/fault checks, register writes, barriers, and readback remain deferred. |
-| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Slices 2-3 implement only the safe default: regions 0-2 disabled, region 3 exact raw stack RW/XN, and linker-defined regions 4-7. Optional heterogeneous regions remain separately versioned. |
-| `xPortStartScheduler` | common start plus selected operations | Deferred; FreeRTOS scheduler/tick mechanics are excluded. |
+| `prvSetupMPU` | `fiber_port_mpu_activate_first_context()` | Implemented for first start. It requires the exact eight-region type and disabled control state, replaces all context/global regions under PRIMASK, enables `MPU_CTRL == ENABLE | PRIVDEFENA`, barriers, and reads back every region before unprivileged exception return. PendSV replacement remains deferred. |
+| `vPortStoreTaskMPUSettings` | base stack image plus optional MPU API | Slices 2-4 implement only the safe default: regions 0-2 disabled, region 3 exact raw stack RW/XN, and linker-defined regions 4-7. Optional heterogeneous regions remain separately versioned. |
+| `xPortStartScheduler` | future common start plus selected operations | Still deferred as a public runtime operation; FreeRTOS scheduler/tick mechanics are excluded. The staged first-start helper is private and non-selectable. |
 | `vPortEndScheduler`, SysTick handler/setup, tickless | none / user scheduler | Excluded. |
 | `xIsPrivileged`, raise/reset privilege | optional MPU ABI and SVC paths | Deferred. |
 
@@ -274,7 +282,7 @@ ABI when it mutates context policy, a new exact layout/cohort version if it adds
 storage, a dedicated parity ledger, negative privilege tests, and hardware
 MemManage/SVC evidence. Until then no file claims wrapper-v2 support.
 
-## Slices 2-3 Construction And Linker Contract
+## Slices 2-4 Construction And Linker Contract
 
 `fiber_port_context_init()` is port-owned and currently compile/link-covered
 only. It requires an aligned `FiberContext` in linker-isolated privileged data,
@@ -306,42 +314,80 @@ adding a profile-specific off-by-one stack API.
 
 The seal covers immutable boot/ABI facts and all four RBAR/RASR pairs. It
 excludes saved registers, the live cursor, and `runtime_flags`, because a later
-PendSV owner must mutate those fields. The slice-3 fixture provides a link-only
-dummy return veneer solely to prove this object's exact unresolved surface; it
-is not a port runtime implementation.
+PendSV owner must mutate those fields. Slice 4 provides the real unprivileged
+return veneer; the synthetic fixture uses it only for compile/link/ELF proof.
 
 Before `fiber_port_context_init()` returns, a constructor-only check verifies
 every word of the initial 20-word protected image, including the live-r9 seed,
 all zeroed registers, explicit Thumb-bit return veneer, normalized stacked PC,
-xPSR, PSP, CONTROL, EXC_RETURN, and the one-past cursor. It is intentionally
-not a switch-time check: later PendSV save/restore legitimately mutates that
-image.
+xPSR, PSP, CONTROL, EXC_RETURN, and the one-past cursor. Slice 4 repeats that
+full first-image check immediately before first restore, including the current
+r9 platform/static-base value. It is intentionally not a switch-time check:
+later PendSV save/restore legitimately mutates the protected image.
 
-## Slice-3 Evidence
+## Slice-4 First Start And SVC Contract
+
+`fiber_port_start_first_context()` is a private staged entry only. It verifies
+privileged Thread/MSP state, validates the exact selected first image and SVC
+vector, programs SVCall priority zero with readback, clears stale PendSV while
+PRIMASK is set, then issues `svc #70`. It intentionally does not write MSP:
+the pinned FreeRTOS ARM_CM0 first-start path also preserves the caller's MSP.
+
+The strong `SVC_Handler()` passes only the hardware frame, incoming
+EXC_RETURN, and the assembly-loaded common current slot to the privileged C
+dispatcher. The handler uses a literal Thumb-address tail branch rather than a
+narrow Thumb-1 `b`, so LTO cannot make the dispatcher out of range. The
+dispatcher accepts only:
+
+```text
+service 70  privileged Thread/MSP first start, EXC_RETURN 0xFFFFFFF9
+service 72  unprivileged Thread/PSP task return, EXC_RETURN 0xFFFFFFFD
+```
+
+Both services require a valid SVC opcode, exact continuation address, expected
+stack origin and range, xPSR Thumb/Thread shape, and the exact linked code
+domain. A yielded or foreign SVC fails closed with `'u'`. It does not publish
+PendSV, choose a scheduler candidate, or expose a public scheduling route.
+
+For service 70, the dispatcher disables interrupts, requires the exact
+eight-region ARMv6-M MPU type and `MPU_CTRL == 0`, writes all four context and
+four linker-derived global regions, enables `MPU_CTRL == 0x5`, issues barriers,
+and reads every programmed register back before restoring the first context.
+The Thumb-1 restore preserves the pinned FreeRTOS protected-image geometry:
+it copies the eight-word hardware frame to PSP, restores r8-r11 and r4-r7,
+advances the protected cursor, switches to unprivileged PSP Thread mode, then
+returns through `0xFFFFFFFD`. Fiber's extra PSP/CONTROL/EXC_RETURN readbacks
+are an intentional validation difference; they do not replace the reference
+transfer order.
+
+## Slice-4 Evidence
 
 The compile matrix builds the profile at `-O2` and `-Os`, then repeats the
 synthetic linker/ELF retention proof under LTO. It proves all ten
 linker-boundary relocations, privileged/unprivileged input-section placement,
 one exact 256-byte current-slot output section containing the common slot,
 privileged `FiberContext`/global image storage, unprivileged entry/return code
-and raw stack placement, and the absence of SVC/PendSV ownership.
+and raw stack placement, direct slot-11 Thumb-vector ownership by the strong
+`SVC_Handler`, the exact first-start/restore SVC assembly shape, and the
+absence of `PendSV_Handler` ownership.
 
 The synthetic positive link includes the actual
 `fiber_port_linker_contract.ld` fragment. Two negative links deliberately
 shrink the current-slot aperture and make the unprivileged-code range
-non-power-of-two; both must fail. The matrix also requires the construction and
-global-image builder to emit no SVC, mask, or system-register instruction.
+non-power-of-two; both must fail. It repeats the boot and first-start runtime
+compile/undefined-surface proof for both VTOR-present and VTOR-absent cohorts.
+The construction/global-image builder must emit no CPU-state instruction; the
+new runtime object is the sole staged owner of SVC/MPU writes.
 
 ## Required Later Slices
 
-1. Add strong SVC first start plus controlled unprivileged yield and return
-   services with complete opcode/origin/provenance validation.
-2. Add strong Thumb-1 PendSV protected save/copy/scheduler/MPU/restore logic.
-3. Add all eight forward runtime ABI adapters, archive/cohort/vector/ELF/LTO
+1. Add strong Thumb-1 PendSV protected save/copy/scheduler/MPU/restore logic,
+   then introduce the reserved unprivileged yield service atomically with it.
+2. Add all eight forward runtime ABI adapters, archive/cohort/vector/ELF/LTO
    proofs, and only then allow this exact build-selected source group to link.
-4. Add the optional pre-start MPU configuration ABI only if heterogeneous
+3. Add the optional pre-start MPU configuration ABI only if heterogeneous
    per-fiber policy is required.
-5. Run matching Cortex-M0+ MPU hardware tests before any STM32 support claim.
+4. Run matching Cortex-M0+ MPU hardware tests before any STM32 support claim.
 
 No later slice may reuse privileged `ARM_CM0` saved-frame assembly, restore a
 protected context from unprivileged memory, reintroduce a broad general

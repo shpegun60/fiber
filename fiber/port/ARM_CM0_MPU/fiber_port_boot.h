@@ -87,9 +87,16 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
 void fiber_port_context_seal_check(const FiberContext *ctx);
 
+/* First-start-only validation of the mutable protected frame. PendSV will
+ * later own and change this image, so this is intentionally not a switch-time
+ * validator. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portPRIVILEGED_FUNCTION
+void fiber_port_context_validate_initial_restore(const FiberContext *ctx);
+
 /* Constructs a default unprivileged context in linker-isolated privileged
- * storage. The future SVC/PendSV port owns first restore and all mutable
- * switching mechanics. */
+ * storage. Slice 4 owns first restore; a later PendSV owner will own ordinary
+ * mutable switching mechanics. */
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
 void fiber_port_context_init(FiberContext *ctx,

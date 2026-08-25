@@ -1,9 +1,7 @@
-/* Compile/link/ELF-only ARM_CM0_MPU slice-3 linker/global-image fixture. */
+/* Compile/link/ELF-only ARM_CM0_MPU slice-4 first-start fixture. */
 
-#include "fiber_port_boot.h"
+#include "fiber_port_private.h"
 #include "../../fiber/fiber_panic.h"
-
-FIBER_PORT_CONTEXT_COHORT_DEFINE();
 
 static fiber_portPRIVILEGED_DATA
 FiberContext fiber_arm_cm0_mpu_probe_context;
@@ -20,6 +18,20 @@ void fiber_arm_cm0_mpu_probe_entry(void *arg)
 	(void)arg;
 }
 
+/* The fixture never executes this table. It gives the synthetic ELF a concrete
+ * direct SVC route so slot ownership can be audited before board integration. */
+typedef union FiberArmCm0MpuProbeVector {
+	uintptr_t raw;
+	void (*handler)(void);
+} FiberArmCm0MpuProbeVector;
+
+__attribute__((used, aligned(fiber_portVECTOR_ALIGNMENT),
+		section(".fiber_test_vector_table")))
+const FiberArmCm0MpuProbeVector fiber_arm_cm0_mpu_probe_vectors[16] = {
+	[0] = { .raw = UINT32_C(0x2001FF00) },
+	[fiber_portVECTOR_INDEX_SVC] = { .handler = SVC_Handler }
+};
+
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_panic(char code)
 {
@@ -29,11 +41,9 @@ void fiber_panic(char code)
 	}
 }
 
-/* This is a fixture-only definition for the slice-3 linker/global-image link.
- * The real port-owned SVC veneer is intentionally deferred to slice 4. */
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-fiber_portUNPRIVILEGED_FUNCTION
-void fiber_port_unprivileged_task_return(void)
+fiber_portPRIVILEGED_FUNCTION
+void fiber_internal_task_return(void)
 {
 	for (;;) {
 		__asm volatile("nop");

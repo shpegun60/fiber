@@ -1,24 +1,18 @@
-/* ARM_CM0_MPU slice-3 linker isolation and exact MPU-image mechanics.
+/* ARM_CM0_MPU linker isolation, exact MPU image, and first-start mechanics.
  *
- * This source owns no exception handler, does not program MPU registers, and
- * does not enter the forward runtime ABI. It validates linker-owned placement,
- * builds and seals the exact privileged image, and constructs the global image
- * that a later Thumb-1 SVC/PendSV slice will program and consume.
+ * This source does not enter the forward runtime ABI. It validates linker-owned
+ * placement, builds and seals the exact privileged image, and supplies the
+ * first-image validation consumed by slice-4 SVC/MPU activation. A later
+ * protected PendSV slice will own ordinary MPU replacement and switching.
  */
 
-#include "fiber_port_boot.h"
+#include "fiber_port_private.h"
 
 #include "../../fiber_panic.h"
 
 #define FIBER_CM0_MPU_BOOT \
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
 	fiber_portPRIVILEGED_FUNCTION
-
-/* Slice 4 will define this as a port-owned unprivileged SVC-return veneer.
- * Keeping the unresolved reference here preserves the required initial LR
- * provenance without introducing a premature runtime implementation. */
-extern FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-void fiber_port_unprivileged_task_return(void);
 
 static FIBER_CM0_MPU_BOOT
 uint32_t fiber_port_hash32_accum(uint32_t hash, uint32_t value)
@@ -282,6 +276,8 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_context_compute_seal);
 	const uintptr_t seal_check = fiber_port_function_address(
 			(uintptr_t)&fiber_port_context_seal_check);
+	const uintptr_t initial_restore_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_validate_initial_restore);
 	const uintptr_t encoder = fiber_port_function_address(
 			(uintptr_t)&fiber_port_mpu_try_encode_exact_region);
 	const uintptr_t layout_load = fiber_port_function_address(
@@ -292,11 +288,24 @@ void fiber_port_mpu_linker_layout_check(
 			(uintptr_t)&fiber_port_mpu_build_global_regions);
 	const uintptr_t panic_target = fiber_port_function_address(
 			(uintptr_t)&fiber_panic);
+	const uintptr_t task_return_target = fiber_port_function_address(
+			(uintptr_t)&fiber_internal_task_return);
+	const uintptr_t svc_handler = fiber_port_function_address(
+			(uintptr_t)&SVC_Handler);
+	const uintptr_t svc_dispatch = fiber_port_function_address(
+			(uintptr_t)&fiber_port_svc_dispatch);
+	const uintptr_t first_prepare = fiber_port_function_address(
+			(uintptr_t)&fiber_port_prepare_first_start);
+	const uintptr_t first_start = fiber_port_function_address(
+			(uintptr_t)&fiber_port_start_first_context);
+	const uintptr_t first_restore = fiber_port_function_address(
+			(uintptr_t)&fiber_port_restore_first_context_from_svc);
 	const uintptr_t return_target = fiber_port_function_address(
 			(uintptr_t)&fiber_port_unprivileged_task_return);
 	const uintptr_t privileged_targets[] = {
-		context_init, seal_compute, seal_check, encoder, layout_load,
-		layout_check, global_builder, panic_target
+		context_init, seal_compute, seal_check, initial_restore_check, encoder, layout_load,
+		layout_check, global_builder, panic_target, task_return_target,
+		svc_handler, svc_dispatch, first_prepare, first_start, first_restore
 	};
 
 	for (uint32_t index = 0u;
@@ -550,6 +559,43 @@ void fiber_port_context_initial_image_check(const FiberContext *ctx,
 	FIBER_REQUIRE(image->psp == (uint32_t)initial_psp, 'P');
 	FIBER_REQUIRE(image->control ==
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'q');
+	FIBER_REQUIRE(image->exc_return == fiber_portINITIAL_EXC_RETURN, 'x');
+	FIBER_REQUIRE(image->cursor_limit == 0u, 'P');
+	FIBER_REQUIRE(ctx->protected_context_cursor == &image->cursor_limit, 'P');
+	FIBER_REQUIRE(ctx->runtime_flags == 0u, 'q');
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_context_validate_initial_restore(const FiberContext *ctx)
+{
+	fiber_port_context_seal_check(ctx);
+	const FiberPortProtectedContext *const image = &ctx->protected_context;
+	const uintptr_t expected_psp = ctx->boot.stack_top -
+			(uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
+	const uint32_t expected_return =
+			((uint32_t)(uintptr_t)&fiber_port_unprivileged_task_return) | 1u;
+	const uint32_t expected_pc = (uint32_t)((uintptr_t)ctx->boot.entry &
+			(uintptr_t)fiber_portSTART_ADDRESS_MASK);
+
+	FIBER_REQUIRE(ctx->boot.stack_top >= FIBER_PORT_EXC_BASE_BYTES, 'H');
+	FIBER_REQUIRE((expected_psp & 7u) == 0u, 'A');
+	FIBER_REQUIRE(expected_psp >= ctx->boot.stack_base, 'P');
+	FIBER_REQUIRE((expected_psp + FIBER_PORT_EXC_BASE_BYTES) <=
+			ctx->boot.stack_top, 'P');
+	FIBER_REQUIRE(image->r4 == 0u && image->r5 == 0u &&
+			image->r6 == 0u && image->r7 == 0u, 'x');
+	FIBER_REQUIRE(image->r8 == 0u && image->r9 == fiber_port_read_r9() &&
+			image->r10 == 0u &&
+			image->r11 == 0u, 'x');
+	FIBER_REQUIRE(image->r0 == (uint32_t)(uintptr_t)ctx->boot.arg, 'P');
+	FIBER_REQUIRE(image->r1 == 0u && image->r2 == 0u &&
+			image->r3 == 0u && image->r12 == 0u, 'x');
+	FIBER_REQUIRE(image->lr == expected_return, 'x');
+	FIBER_REQUIRE(image->pc == expected_pc, 'x');
+	FIBER_REQUIRE(image->xpsr == fiber_portINITIAL_XPSR, 'x');
+	FIBER_REQUIRE(image->psp == (uint32_t)expected_psp, 'P');
+	FIBER_REQUIRE(image->control == fiber_portINITIAL_CONTROL_UNPRIVILEGED,
+			'q');
 	FIBER_REQUIRE(image->exc_return == fiber_portINITIAL_EXC_RETURN, 'x');
 	FIBER_REQUIRE(image->cursor_limit == 0u, 'P');
 	FIBER_REQUIRE(ctx->protected_context_cursor == &image->cursor_limit, 'P');

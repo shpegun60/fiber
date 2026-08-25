@@ -1,10 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM0_MPU dictionary through implementation slice 3. This exact Cortex-M0+
+ * ARM_CM0_MPU dictionary through implementation slice 4. This exact Cortex-M0+
  * MPU profile freezes its protected layout/traits, linker-isolation contract,
- * and port-owned construction/global-image contract. It deliberately provides
- * no SVC/PendSV handler, selector route, or public MPU extension ABI.
+ * construction/global-image contract, and first-start SVC/MPU activation. It
+ * deliberately provides no PendSV handler, selector route, or public MPU
+ * extension ABI.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORTMACRO_H_
@@ -87,6 +88,49 @@
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFFDu
 #define fiber_portINITIAL_CONTROL_PRIVILEGED 0x00000002u
 #define fiber_portINITIAL_CONTROL_UNPRIVILEGED 0x00000003u
+
+/*
+ * Port-owned SVC namespace. The values are part of the protected execution
+ * ABI, therefore application code cannot override them. Slice 4 implements
+ * start and task-return. Yield remains reserved until it is introduced
+ * atomically with the protected PendSV owner.
+ */
+#ifdef FIBER_SVC_START_NUMBER
+# error "[fiber]: ARM_CM0_MPU owns its complete SVC namespace"
+#endif
+#define FIBER_SVC_START_NUMBER 70
+#define fiber_portSVC_START FIBER_SVC_START_NUMBER
+#define fiber_portSVC_YIELD 71
+#define fiber_portSVC_RETURN 72
+
+/* ARMv6-M system-control and MPU register dictionary. These raw definitions
+ * keep the selected port independent from a particular CMSIS device header. */
+#define fiber_portNVIC_INT_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
+#define fiber_portNVIC_PENDSVCLR_BIT (1u << 27u)
+#define fiber_portNVIC_SHPR2_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED1Cu))
+#define fiber_portSCB_VTOR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
+#define fiber_portMPU_TYPE_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED90u))
+#define fiber_portMPU_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED94u))
+#define fiber_portMPU_RNR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED98u))
+#define fiber_portMPU_RBAR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED9Cu))
+#define fiber_portMPU_RASR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000EDA0u))
+
+#define fiber_portNVIC_SVC_PRIORITY_SHIFT 24u
+#define fiber_portNVIC_PRIORITY_BYTE_MASK 0xFFu
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_ALIGNMENT 128u
+#define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
+#define fiber_portXPSR_IPSR_MASK 0x000001FFu
+#define fiber_portXPSR_STACK_ALIGN_BIT (1u << 9u)
+#define fiber_portXPSR_THUMB_BIT (1u << 24u)
 
 /*
  * The reference reserves region four for broad peripheral access. Fiber uses
@@ -256,7 +300,7 @@
  * Generic traits describe the complete logical restore transfer, excluding
  * cursor_limit. That image is privileged storage, not a software frame on the
  * unprivileged stack. The generic fiber_port_geometry.h model is therefore not
- * applicable to this profile; slices 2-3 use the explicit physical-PSP geometry
+ * applicable to this profile; slices 2-4 use the explicit physical-PSP geometry
  * below for raw-stack admission.
  */
 #define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
@@ -357,12 +401,56 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 	return value;
 }
 
+/* VTOR is optional on ARMv6-M. A no-VTOR profile is required to use the
+ * architected/remapped vector base at address zero; its board policy is later
+ * checked by the selected-port integration proof. */
+fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+{
+#if FIBER_PORT_HAS_VTOR
+	return (uintptr_t)fiber_portSCB_VTOR_REG &
+		~((uintptr_t)fiber_portVECTOR_ALIGNMENT - 1u);
+#else
+	return 0u;
+#endif
+}
+
+fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+{
+	return (const uint32_t *)fiber_port_vectors_base_addr();
+}
+
+/* On an ARMv6-M implementation without VTOR, address zero is the active
+ * architecture/remapped vector base, not a C null object. Keep that fact out
+ * of GCC's null-array analysis while retaining a volatile hardware read. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
+{
+	uintptr_t base = fiber_port_vectors_base_addr();
+#if !FIBER_PORT_HAS_VTOR
+	fiber_portASM volatile("" : "+r"(base) :: "memory");
+#endif
+	return *(const volatile uint32_t *)(base +
+			((uintptr_t)index * sizeof(uint32_t)));
+}
+
 FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM0_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
 		"[fiber]: ARM_CM0_MPU must not activate runtime selection before its complete port proof");
+FIBER_STATIC_ASSERT(fiber_portSVC_START <= 255u &&
+		fiber_portSVC_YIELD <= 255u && fiber_portSVC_RETURN <= 255u,
+		"[fiber]: ARM_CM0_MPU SVC services must fit imm8");
+FIBER_STATIC_ASSERT(fiber_portSVC_START != fiber_portSVC_YIELD &&
+		fiber_portSVC_START != fiber_portSVC_RETURN &&
+		fiber_portSVC_YIELD != fiber_portSVC_RETURN,
+		"[fiber]: ARM_CM0_MPU SVC services must be distinct");
+FIBER_STATIC_ASSERT(fiber_portEXC_RETURN_THREAD_MSP == 0xFFFFFFF9u &&
+		fiber_portINITIAL_EXC_RETURN == 0xFFFFFFFDu,
+		"[fiber]: ARM_CM0_MPU exception-return encodings changed");
+FIBER_STATIC_ASSERT(fiber_portVECTOR_INDEX_SVC == 11u &&
+		fiber_portVECTOR_ALIGNMENT == 128u,
+		"[fiber]: ARM_CM0_MPU SVC vector facts changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_PORT_ID != 0x434D3030u,
 		"[fiber]: ARM_CM0_MPU must not reuse privileged ARM_CM0 identity");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C04u,

@@ -68,6 +68,39 @@ linker configurations, no runtime handler symbols, and no CPU-state instruction
 in construction/global-image code. The next slice is strong SVC first start and
 unprivileged service provenance, not selector activation.
 
+## 2026-08-25: Stage ARM_CM0_MPU SVC First Start And MPU Activation
+
+`ARM_CM0_MPU` slice 4 adds only the protected first-start half of the selected
+runtime. The source group remains `FIBER_PORT_RUNTIME_SELECTABLE == 0`; it
+still defines no `PendSV_Handler`, no public forward runtime ABI operation, and
+no accepted yield route. This avoids an unsafe intermediate state where an
+unprivileged fiber could pend a vector without the matching protected
+save/select/MPU-replace/restore owner.
+
+The selected port now owns a strong `SVC_Handler`, `svc #70` first start, and
+`svc #72` unprivileged task return. It rejects the reserved yield service 71
+and every foreign/mis-originated SVC after checking IPSR, EXC_RETURN, stack
+origin/range, xPSR, instruction opcode/immediate, code domain, and exact
+continuation address. The first start preserves the ARM_CM0 FreeRTOS policy of
+not rewinding MSP, clears stale PendSV under PRIMASK, and enters SVC only after
+the selected first image, SVC vector, and SVCall priority readback are valid.
+
+Inside SVC, the port requires the exact eight-region MPU type and disabled
+control state, programs all context/global regions, enables
+`MPU_CTRL == ENABLE | PRIVDEFENA`, barriers, and reads every region back before
+the unprivileged exception return. The restore keeps the FreeRTOS ARM_CM0 MPU
+Thumb-1 `+20/-32/-48/-32/-16` protected-frame geometry and copied eight-word
+hardware frame, while Fiber adds PSP/CONTROL/EXC_RETURN readback and seals the
+complete first image, including live r9. The naked handler uses a literal
+Thumb-address tail branch to the C dispatcher so LTO cannot make a narrow
+Thumb-1 branch out of range.
+
+The matrix proves this staged scope at `-O2`, `-Os`, and LTO: direct strong
+slot-11 SVC vector ownership, exact first-start/restore assembly structure,
+VTOR-present and VTOR-absent compilation, linker-section placement, exact
+undefined surfaces, and absence of `PendSV_Handler`. It is compile/assembly/
+ELF evidence only; it creates no Cortex-M0+ MPU hardware support claim.
+
 ## 2026-08-24: Freeze Context, Fiber, And Kernel Layer Separation
 
 The current five-function v2 runtime remains the active porting and validation
