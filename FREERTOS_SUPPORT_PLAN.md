@@ -47,8 +47,9 @@ C++ Kernel layers consume the Context dispatcher surface and remain independent
 of every concrete `portable/` implementation.
 
 `STM32_PORT_FREEZE_INVENTORY.md` is the current execution ledger for this plan.
-It records the nine concrete profiles already present, the remaining CM0 MPU,
-CM33 MPU/security, CM55/N6, and announced CM85/V8 work, planning ranges, and the
+It records the nine runtime-capable concrete profiles, the staged compile-only
+`ARM_CM0_MPU` layout contract, the remaining CM0 MPU runtime work, CM33
+MPU/security, CM55/N6, and announced CM85/V8 work, planning ranges, and the
 exact gate before Context extraction.
 
 The required common-core boundary before production ports are added in bulk is

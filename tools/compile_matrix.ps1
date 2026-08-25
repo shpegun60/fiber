@@ -6659,6 +6659,303 @@ function Test-ArmCm4MpuRuntimeIntegration {
     }
 }
 
+function Test-ArmCm0MpuLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileRelative = "fiber\port\ARM_CM0_MPU"
+    $profileDir = Join-Path $RepositoryRoot $profileRelative
+    $probeSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm0_mpu_layout_probe.c"
+    $probeDir = Join-Path $BuildRoot "arm-cm0-mpu-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value "#ifndef MAIN_H_`n#define MAIN_H_`n#endif`n" -Encoding ASCII
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+
+    foreach ($requiredFile in @(
+            "FREERTOS_PARITY.md",
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h",
+            "fiber_portmacro.h")) {
+        if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
+            throw "ARM_CM0_MPU slice 1 is missing required file: $requiredFile"
+        }
+    }
+
+    foreach ($forbiddenRuntimeFile in @(
+            "fiber_port.c",
+            "fiber_port_boot.c",
+            "fiber_port_boot.h",
+            "fiber_port_exception.c",
+            "fiber_port_private.h")) {
+        if (Test-Path (Join-Path $profileDir $forbiddenRuntimeFile)) {
+            throw "ARM_CM0_MPU slice 1 must remain layout-only: $forbiddenRuntimeFile"
+        }
+    }
+
+    foreach ($selectorPath in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
+        if ($selectorSource.IndexOf("ARM_CM0_MPU",
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM0_MPU slice 1 must not enter architecture selection: $selectorPath"
+        }
+    }
+
+    $typeSource = Join-Path $probeDir "type-only.c"
+    $typeObject = Join-Path $probeDir "type-only.o"
+    $typeText = @"
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: ARM_CM0_MPU cursor offset changed");
+_Static_assert(offsetof(FiberContext, mpu_regions) == 4u,
+    "[fiber]: ARM_CM0_MPU MPU image offset changed");
+_Static_assert(offsetof(FiberContext, protected_context) == 36u,
+    "[fiber]: ARM_CM0_MPU protected context offset changed");
+_Static_assert(offsetof(FiberContext, runtime_flags) == 116u,
+    "[fiber]: ARM_CM0_MPU runtime flags offset changed");
+_Static_assert(offsetof(FiberContext, boot) == 120u,
+    "[fiber]: ARM_CM0_MPU boot offset changed");
+_Static_assert(sizeof(FiberPortProtectedContext) == 80u,
+    "[fiber]: ARM_CM0_MPU protected image changed");
+_Static_assert(sizeof(FiberPortBoot) == 88u,
+    "[fiber]: ARM_CM0_MPU boot record changed");
+_Static_assert(sizeof(FiberContext) == 208u,
+    "[fiber]: ARM_CM0_MPU context size changed");
+_Static_assert(_Alignof(FiberContext) == 8u,
+    "[fiber]: ARM_CM0_MPU context alignment changed");
+
+int fiber_arm_cm0_mpu_type_only_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $typeSource -Value $typeText -Encoding ASCII
+
+    $typeIncludeArgs = @(
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot"
+    )
+    $manifestIncludeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $typeArgs = @(
+        "-mcpu=cortex-m0plus",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $typeIncludeArgs + @(
+        "-c", $typeSource,
+        "-o", $typeObject
+    )
+    & $Compiler @typeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM0_MPU type-only header failed without CMSIS"
+    }
+
+    $selectedFacadeSource = Join-Path $probeDir "selected-facade.c"
+    $selectedFacadeObject = Join-Path $probeDir "selected-facade.o"
+    $selectedFacadeText = @"
+#include <stddef.h>
+#include "fiber/fiber_core.h"
+
+_Static_assert(offsetof(FiberContext, protected_context_cursor) == 0u,
+    "[fiber]: ARM_CM0_MPU selected facade lost the protected cursor");
+_Static_assert(sizeof(FiberContext) == 208u,
+    "[fiber]: ARM_CM0_MPU selected facade lost exact context layout");
+
+int fiber_arm_cm0_mpu_selected_facade_probe(void)
+{
+    return 0;
+}
+"@
+    Set-Content -LiteralPath $selectedFacadeSource -Value $selectedFacadeText `
+        -Encoding ASCII
+    $selectedFacadeDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV6M=1",
+        "-D__CORTEX_M=0",
+        "-D__MPU_PRESENT=1",
+        "-D__VTOR_PRESENT=1",
+        "-D__FPU_PRESENT=0",
+        "-D__FPU_USED=0",
+        "-D__NVIC_PRIO_BITS=2"
+    )
+    $selectedFacadeArgs = @(
+        "-mcpu=cortex-m0plus",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $selectedFacadeDefines + $manifestIncludeArgs + @(
+        "-c", $selectedFacadeSource,
+        "-o", $selectedFacadeObject
+    )
+    & $Compiler @selectedFacadeArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM0_MPU build-selected public facade failed compile"
+    }
+    $selectedFacadePreprocessorArgs = @(
+        "-mcpu=cortex-m0plus",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + $selectedFacadeDefines + $manifestIncludeArgs + @(
+        "-dM", "-E", $selectedFacadeSource
+    )
+    $selectedFacadeMacros = (& $Compiler @selectedFacadePreprocessorArgs) -join "`n"
+    if (($LASTEXITCODE -ne 0) -or ($selectedFacadeMacros -notmatch
+            '(?m)^#define FIBER_PORT_NAME "ARM_CM0_MPU"$')) {
+        throw "ARM_CM0_MPU build-selected facade lost its exact diagnostic name"
+    }
+
+    $variantCohorts = @{}
+    foreach ($variant in @(
+            [pscustomobject]@{ Name = "vtor-absent"; Vtor = 0 },
+            [pscustomobject]@{ Name = "vtor-present"; Vtor = 1 })) {
+        $manifestDefines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV6M=1",
+            "-D__CORTEX_M=0",
+            "-D__MPU_PRESENT=1",
+            "-D__VTOR_PRESENT=$($variant.Vtor)",
+            "-D__FPU_PRESENT=0",
+            "-D__FPU_USED=0",
+            "-D__NVIC_PRIO_BITS=2"
+        )
+        foreach ($optimization in @("-O2", "-Os")) {
+            $mode = $optimization.Substring(1).ToLowerInvariant()
+            $layoutObject = Join-Path $probeDir `
+                ("layout-" + $variant.Name + "-" + $mode + ".o")
+            $layoutArgs = @(
+                "-mcpu=cortex-m0plus",
+                "-mthumb",
+                "-mfloat-abi=soft",
+                "-std=gnu11",
+                $optimization
+            ) + $warningArgs + $manifestDefines + $manifestIncludeArgs + @(
+                "-c", $probeSource,
+                "-o", $layoutObject
+            )
+            & $Compiler @layoutArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM0_MPU exact layout manifest failed compile ($($variant.Name)/$mode)"
+            }
+
+            $nmOutput = & $Nm --defined-only $layoutObject
+            if ($LASTEXITCODE -ne 0) {
+                throw "nm failed for ARM_CM0_MPU layout probe ($($variant.Name)/$mode)"
+            }
+            $cohorts = @($nmOutput | ForEach-Object {
+                if ($_ -match '\b(?<symbol>fiber_port_context_cohort_\S+)$') {
+                    $Matches['symbol']
+                }
+            })
+            if ($cohorts.Count -ne 1) {
+                throw "ARM_CM0_MPU layout probe must define exactly one cohort ($($variant.Name)/$mode)"
+            }
+            $expectedPrefix = "fiber_port_context_cohort_armv6m_p0x434D304Du_l0x00010001u_"
+            if (-not $cohorts[0].StartsWith($expectedPrefix,
+                    [System.StringComparison]::Ordinal)) {
+                throw "ARM_CM0_MPU cohort identity mismatch ($($variant.Name)/$mode): $($cohorts[0])"
+            }
+            $expectedVtorToken = "_v$($variant.Vtor)_"
+            if ($cohorts[0].IndexOf($expectedVtorToken,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "ARM_CM0_MPU cohort lost its VTOR fact ($($variant.Name)/$mode): $($cohorts[0])"
+            }
+            $variantCohorts["$($variant.Name)-$mode"] = $cohorts[0]
+        }
+    }
+
+    foreach ($mode in @("o2", "os")) {
+        if ($variantCohorts["vtor-absent-$mode"] -eq
+                $variantCohorts["vtor-present-$mode"]) {
+            throw "ARM_CM0_MPU VTOR-present and VTOR-absent manifests collapsed one cohort ($mode)"
+        }
+    }
+
+    $negativeBaseArgs = @(
+        "-mcpu=cortex-m0plus",
+        "-mthumb",
+        "-mfloat-abi=soft",
+        "-std=gnu11"
+    ) + $warningArgs + @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV6M=1",
+        "-D__CORTEX_M=0",
+        "-D__NVIC_PRIO_BITS=2"
+    ) + $manifestIncludeArgs
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "mpu-absent"
+            Defines = @("-D__MPU_PRESENT=0", "-D__VTOR_PRESENT=1", "-D__FPU_PRESENT=0", "-D__FPU_USED=0")
+            Diagnostic = "[fiber]: ARM_CM0_MPU manifest requires __MPU_PRESENT == 1"
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            Defines = @("-D__MPU_PRESENT=1", "-D__VTOR_PRESENT=1", "-D__FPU_PRESENT=0", "-D__FPU_USED=1")
+            Diagnostic = "[fiber]: ARM_CM0_MPU requires __FPU_USED == 0"
+        },
+        [pscustomobject]@{
+            Name = "invalid-vtor"
+            Defines = @("-D__MPU_PRESENT=1", "-D__VTOR_PRESENT=2", "-D__FPU_PRESENT=0", "-D__FPU_USED=0")
+            Diagnostic = "[fiber]: ARM_CM0_MPU requires CMSIS __VTOR_PRESENT == 0 or 1"
+        },
+        [pscustomobject]@{
+            Name = "basepri"
+            Defines = @("-D__MPU_PRESENT=1", "-D__VTOR_PRESENT=1", "-D__FPU_PRESENT=0", "-D__FPU_USED=0", "-DFIBER_SCHEDULER_BASEPRI=64")
+            Diagnostic = "[fiber]: ARM_CM0_MPU has no BASEPRI; FIBER_SCHEDULER_BASEPRI must be zero"
+        },
+        [pscustomobject]@{
+            Name = "runtime-selectable"
+            Defines = @("-D__MPU_PRESENT=1", "-D__VTOR_PRESENT=1", "-D__FPU_PRESENT=0", "-D__FPU_USED=0", "-DFIBER_PORT_RUNTIME_SELECTABLE=1")
+            Diagnostic = "[fiber]: ARM_CM0_MPU runtime-selectable state must not be predefined"
+        }
+    )
+    foreach ($case in $negativeCases) {
+        $objectPath = Join-Path $probeDir ("invalid-" + $case.Name + ".o")
+        $logPath = Join-Path $probeDir ("invalid-" + $case.Name + ".log")
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments ($negativeBaseArgs + $case.Defines + @(
+                "-c", $probeSource, "-o", $objectPath)) `
+            -LogPath $logPath
+        if ($result.ExitCode -eq 0) {
+            throw "Invalid ARM_CM0_MPU layout manifest unexpectedly compiled: $($case.Name)"
+        }
+        $normalizedOutput = $result.Output -replace '\s+', ' '
+        if ($normalizedOutput -notmatch [regex]::Escape($case.Diagnostic)) {
+            throw "ARM_CM0_MPU negative probe failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 function Test-ArmCm3MpuLayoutContract {
     param(
         [string]$RepositoryRoot,
@@ -8470,6 +8767,9 @@ try {
     Test-ArmCm33FNtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM0_MPU slice-1 layout/cohort contract =="
+    Test-ArmCm0MpuLayoutContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM4_MPU slice-5 full runtime contract =="
     Test-ArmCm4MpuSlice5Contract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -Objcopy $objcopy `

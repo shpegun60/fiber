@@ -81,9 +81,16 @@ The pinned FreeRTOS `GCC/ARM_CM0` directory contains a distinct optional
 MPU/unprivileged branch. The current `ARM_CM0` profile intentionally implements
 only the privileged branch.
 
-Remaining work includes the protected context image, MPU region construction,
-first restore, unprivileged SVC services, PendSV MPU replacement, exact cohort,
-paired assembly, linker isolation, and negative proofs.
+`ARM_CM0_MPU` slice 1 now freezes an exact build-selected type/layout/trait and
+cohort contract without a runtime source or selector route. It preserves the
+reference raw 20-word protected image while deliberately replacing broad
+unprivileged peripheral access with a current-context aperture, leaving three
+configurable regions plus the stack. It is compile-only, not hardware support.
+
+Remaining work includes context construction and sealing, MPU region encoding
+and linker isolation, first restore, unprivileged SVC services, PendSV MPU
+replacement, paired generated assembly, archive/ELF negative proofs, and
+hardware validation.
 
 ### 2. Cortex-M33 MPU Cohorts
 
