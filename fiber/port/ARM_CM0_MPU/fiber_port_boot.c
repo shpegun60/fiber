@@ -1,8 +1,9 @@
-/* ARM_CM0_MPU slice-2 construction and exact MPU-image mechanics.
+/* ARM_CM0_MPU slice-3 linker isolation and exact MPU-image mechanics.
  *
  * This source owns no exception handler, does not program MPU registers, and
- * does not enter the forward runtime ABI. It only builds and seals the exact
- * privileged image that a later Thumb-1 SVC/PendSV slice will consume.
+ * does not enter the forward runtime ABI. It validates linker-owned placement,
+ * builds and seals the exact privileged image, and constructs the global image
+ * that a later Thumb-1 SVC/PendSV slice will program and consume.
  */
 
 #include "fiber_port_boot.h"
@@ -10,9 +11,10 @@
 #include "../../fiber_panic.h"
 
 #define FIBER_CM0_MPU_BOOT \
-	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
+	fiber_portPRIVILEGED_FUNCTION
 
-/* Slice 3 will define this as a port-owned unprivileged SVC-return veneer.
+/* Slice 4 will define this as a port-owned unprivileged SVC-return veneer.
  * Keeping the unresolved reference here preserves the required initial LR
  * provenance without introducing a premature runtime implementation. */
 extern FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -39,6 +41,32 @@ int fiber_port_ranges_overlap(uintptr_t first_start,
 		uintptr_t second_end)
 {
 	return (first_start < second_end) && (second_start < first_end);
+}
+
+static FIBER_CM0_MPU_BOOT
+int fiber_port_range_contains(uintptr_t outer_start,
+		uintptr_t outer_end,
+		uintptr_t inner_start,
+		uintptr_t inner_end)
+{
+	return (outer_end > outer_start) && (inner_end > inner_start) &&
+			(inner_start >= outer_start) && (inner_end <= outer_end);
+}
+
+static FIBER_CM0_MPU_BOOT
+uintptr_t fiber_port_function_address(uintptr_t address)
+{
+	return address & ~(uintptr_t)1u;
+}
+
+static FIBER_CM0_MPU_BOOT
+int fiber_port_code_address_is_in_range(uintptr_t range_start,
+		uintptr_t range_end,
+		uintptr_t address)
+{
+	return (address <= UINTPTR_MAX - 2u) &&
+			fiber_port_range_contains(range_start, range_end, address,
+					address + 2u);
 }
 
 static FIBER_CM0_MPU_BOOT
@@ -132,6 +160,196 @@ void fiber_port_mpu_disable_region(uint32_t region_number,
 	encoded->rasr = 0u;
 }
 
+FIBER_CM0_MPU_BOOT
+void fiber_port_mpu_load_linker_layout(FiberPortMpuMemoryLayout *layout)
+{
+	FIBER_REQUIRE(layout != NULL, 'L');
+	layout->unprivileged_code_start =
+			(uintptr_t)__fiber_mpu_unprivileged_code_start__;
+	layout->unprivileged_code_end =
+			(uintptr_t)__fiber_mpu_unprivileged_code_end__;
+	layout->privileged_code_start =
+			(uintptr_t)__fiber_mpu_privileged_code_start__;
+	layout->privileged_code_end =
+			(uintptr_t)__fiber_mpu_privileged_code_end__;
+	layout->privileged_data_start =
+			(uintptr_t)__fiber_mpu_privileged_data_start__;
+	layout->privileged_data_end =
+			(uintptr_t)__fiber_mpu_privileged_data_end__;
+	layout->current_context_slot_start =
+			(uintptr_t)__fiber_mpu_current_context_slot_start__;
+	layout->current_context_slot_end =
+			(uintptr_t)__fiber_mpu_current_context_slot_end__;
+	layout->unprivileged_ram_start =
+			(uintptr_t)__fiber_mpu_unprivileged_ram_start__;
+	layout->unprivileged_ram_end =
+			(uintptr_t)__fiber_mpu_unprivileged_ram_end__;
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_mpu_linker_layout_check(
+		const FiberPortMpuMemoryLayout *layout)
+{
+	FiberPortMpuRegionRegisters encoded;
+	FIBER_REQUIRE(layout != NULL, 'L');
+
+	fiber_port_mpu_encode_exact_region(layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			fiber_portMPU_UNPRIVILEGED_CODE_REGION,
+			fiber_portMPU_REGION_PRIV_RO_UNPRIV_RO |
+			fiber_portMPU_DEFAULT_FLASH_MEMORY, &encoded);
+	fiber_port_mpu_encode_exact_region(layout->privileged_code_start,
+			layout->privileged_code_end,
+			fiber_portMPU_PRIVILEGED_CODE_REGION,
+			fiber_portMPU_REGION_PRIV_RO_UNPRIV_NA |
+			fiber_portMPU_DEFAULT_FLASH_MEMORY, &encoded);
+	fiber_port_mpu_encode_exact_region(layout->privileged_data_start,
+			layout->privileged_data_end,
+			fiber_portMPU_PRIVILEGED_DATA_REGION,
+			fiber_portMPU_REGION_PRIV_RW_UNPRIV_NA |
+			fiber_portMPU_DEFAULT_SRAM_MEMORY |
+			fiber_portMPU_REGION_EXECUTE_NEVER, &encoded);
+	fiber_port_mpu_encode_exact_region(layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			fiber_portMPU_CURRENT_CONTEXT_REGION,
+			fiber_portMPU_REGION_PRIV_RW_UNPRIV_RO |
+			fiber_portMPU_DEFAULT_SRAM_MEMORY |
+			fiber_portMPU_REGION_EXECUTE_NEVER, &encoded);
+	FIBER_REQUIRE((layout->current_context_slot_end -
+			layout->current_context_slot_start) ==
+			fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES, 'L');
+
+	FIBER_REQUIRE(layout->unprivileged_ram_end >
+			layout->unprivileged_ram_start, 'L');
+	FIBER_REQUIRE((layout->unprivileged_ram_start &
+			(fiber_portMPU_MIN_REGION_SIZE - 1u)) == 0u, 'L');
+	FIBER_REQUIRE((layout->unprivileged_ram_end &
+			(fiber_portMPU_MIN_REGION_SIZE - 1u)) == 0u, 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->privileged_data_start,
+			layout->privileged_data_end,
+			layout->current_context_slot_start,
+			layout->current_context_slot_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->privileged_data_start,
+			layout->privileged_data_end,
+			layout->unprivileged_ram_start,
+			layout->unprivileged_ram_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(
+			layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			layout->unprivileged_ram_start,
+			layout->unprivileged_ram_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(
+			layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(
+			layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			layout->privileged_code_start,
+			layout->privileged_code_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			layout->privileged_data_start,
+			layout->privileged_data_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->privileged_code_start,
+			layout->privileged_code_end,
+			layout->privileged_data_start,
+			layout->privileged_data_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			layout->unprivileged_ram_start,
+			layout->unprivileged_ram_end), 'L');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout->privileged_code_start,
+			layout->privileged_code_end,
+			layout->unprivileged_ram_start,
+			layout->unprivileged_ram_end), 'L');
+
+	if (fiber_port_ranges_overlap(layout->unprivileged_code_start,
+			layout->unprivileged_code_end,
+			layout->privileged_code_start,
+			layout->privileged_code_end)) {
+		FIBER_REQUIRE(fiber_port_range_contains(
+				layout->unprivileged_code_start,
+				layout->unprivileged_code_end,
+				layout->privileged_code_start,
+				layout->privileged_code_end), 'L');
+	}
+
+	const uintptr_t context_init = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_init);
+	const uintptr_t seal_compute = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_compute_seal);
+	const uintptr_t seal_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_context_seal_check);
+	const uintptr_t encoder = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_try_encode_exact_region);
+	const uintptr_t layout_load = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_load_linker_layout);
+	const uintptr_t layout_check = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_linker_layout_check);
+	const uintptr_t global_builder = fiber_port_function_address(
+			(uintptr_t)&fiber_port_mpu_build_global_regions);
+	const uintptr_t panic_target = fiber_port_function_address(
+			(uintptr_t)&fiber_panic);
+	const uintptr_t return_target = fiber_port_function_address(
+			(uintptr_t)&fiber_port_unprivileged_task_return);
+	const uintptr_t privileged_targets[] = {
+		context_init, seal_compute, seal_check, encoder, layout_load,
+		layout_check, global_builder, panic_target
+	};
+
+	for (uint32_t index = 0u;
+			index < (sizeof(privileged_targets) / sizeof(privileged_targets[0]));
+			++index) {
+		FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+				layout->privileged_code_start,
+				layout->privileged_code_end, privileged_targets[index]), 'L');
+	}
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout->unprivileged_code_start,
+			layout->unprivileged_code_end, return_target), 'L');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout->privileged_code_start,
+			layout->privileged_code_end, return_target), 'L');
+}
+
+FIBER_CM0_MPU_BOOT
+void fiber_port_mpu_build_global_regions(
+		FiberPortMpuGlobalRegionImage *image)
+{
+	FiberPortMpuMemoryLayout layout;
+	FIBER_REQUIRE(image != NULL, 'M');
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
+
+	/* Region 4 replaces the FreeRTOS broad peripheral mapping. ARMv6-M needs a
+	 * full 256-byte aperture even though the common current slot itself is one
+	 * word, so nothing else may share the linker output section. */
+	fiber_port_mpu_encode_exact_region(layout.current_context_slot_start,
+			layout.current_context_slot_end,
+			fiber_portMPU_CURRENT_CONTEXT_REGION,
+			fiber_portMPU_REGION_PRIV_RW_UNPRIV_RO |
+			fiber_portMPU_DEFAULT_SRAM_MEMORY |
+			fiber_portMPU_REGION_EXECUTE_NEVER, &image->regions[0]);
+	fiber_port_mpu_encode_exact_region(layout.unprivileged_code_start,
+			layout.unprivileged_code_end,
+			fiber_portMPU_UNPRIVILEGED_CODE_REGION,
+			fiber_portMPU_REGION_PRIV_RO_UNPRIV_RO |
+			fiber_portMPU_DEFAULT_FLASH_MEMORY, &image->regions[1]);
+	fiber_port_mpu_encode_exact_region(layout.privileged_code_start,
+			layout.privileged_code_end,
+			fiber_portMPU_PRIVILEGED_CODE_REGION,
+			fiber_portMPU_REGION_PRIV_RO_UNPRIV_NA |
+			fiber_portMPU_DEFAULT_FLASH_MEMORY, &image->regions[2]);
+	fiber_port_mpu_encode_exact_region(layout.privileged_data_start,
+			layout.privileged_data_end,
+			fiber_portMPU_PRIVILEGED_DATA_REGION,
+			fiber_portMPU_REGION_PRIV_RW_UNPRIV_NA |
+			fiber_portMPU_DEFAULT_SRAM_MEMORY |
+			fiber_portMPU_REGION_EXECUTE_NEVER, &image->regions[3]);
+}
+
 static FIBER_CM0_MPU_BOOT
 void fiber_port_context_pointer_check(const FiberContext *ctx)
 {
@@ -145,9 +363,17 @@ void fiber_port_context_pointer_check(const FiberContext *ctx)
 FIBER_CM0_MPU_BOOT
 uint32_t fiber_port_context_compute_seal(const FiberContext *ctx)
 {
-	/* This helper is selected-port surface, so preserve the same pointer
-	 * precondition as the full checker before reading boot metadata. */
+	FiberPortMpuMemoryLayout layout;
+	/* This helper is selected-port surface. Prove the complete privileged
+	 * context extent before it reads immutable metadata, even when a future
+	 * caller bypasses the full seal-check wrapper. */
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
 	fiber_port_context_pointer_check(ctx);
+	const uintptr_t context_start = (uintptr_t)ctx;
+	const uintptr_t context_end = context_start + sizeof(*ctx);
+	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_data_start,
+			layout.privileged_data_end, context_start, context_end), 'C');
 	const FiberPortBoot *const boot = &ctx->boot;
 	uint32_t hash = 2166136261u;
 
@@ -222,16 +448,36 @@ void fiber_port_context_fast_check(const FiberContext *ctx)
 FIBER_CM0_MPU_BOOT
 void fiber_port_context_seal_check(const FiberContext *ctx)
 {
+	FiberPortMpuMemoryLayout layout;
 	FiberPortMpuRegionRegisters expected_stack;
-	fiber_port_context_fast_check(ctx);
-	FIBER_REQUIRE(ctx->boot.hash == fiber_port_context_compute_seal(ctx), 'h');
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
 
+	fiber_port_context_pointer_check(ctx);
 	const uintptr_t context_start = (uintptr_t)ctx;
 	const uintptr_t context_end = context_start + sizeof(*ctx);
+	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_data_start,
+			layout.privileged_data_end, context_start, context_end), 'C');
+	/* Do not read metadata until the exact privileged-data range proves the
+	 * complete context extent. */
+	fiber_port_context_fast_check(ctx);
+	FIBER_REQUIRE(ctx->boot.hash == fiber_port_context_compute_seal(ctx), 'h');
 	const uintptr_t raw_stack_start = (uintptr_t)ctx->boot.begin;
 	const uintptr_t raw_stack_end = (uintptr_t)ctx->boot.end;
+	const uintptr_t entry_address = fiber_port_function_address(
+			(uintptr_t)ctx->boot.entry);
 	FIBER_REQUIRE(!fiber_port_ranges_overlap(context_start, context_end,
 			raw_stack_start, raw_stack_end), 'O');
+	FIBER_REQUIRE(fiber_port_range_contains(layout.unprivileged_ram_start,
+			layout.unprivileged_ram_end, raw_stack_start, raw_stack_end), 'P');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout.privileged_data_start,
+			layout.privileged_data_end, raw_stack_start, raw_stack_end), 'O');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout.unprivileged_code_start, layout.unprivileged_code_end,
+			entry_address), 'c');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout.privileged_code_start, layout.privileged_code_end,
+			entry_address), 'c');
 
 	fiber_port_mpu_encode_exact_region(raw_stack_start, raw_stack_end,
 			fiber_portMPU_STACK_REGION,
@@ -317,6 +563,7 @@ void fiber_port_context_init(FiberContext *ctx,
 		entry_t entry,
 		void *arg)
 {
+	FiberPortMpuMemoryLayout layout;
 	FiberPortMpuRegionRegisters stack_region;
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
 	FIBER_REQUIRE(ctx != NULL, 'C');
@@ -324,6 +571,8 @@ void fiber_port_context_init(FiberContext *ctx,
 	FIBER_REQUIRE(stack_end != NULL, 'T');
 	FIBER_REQUIRE(entry != NULL, 'E');
 	fiber_port_context_pointer_check(ctx);
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
 
 	const uintptr_t context_start = (uintptr_t)ctx;
 	const uintptr_t context_end = context_start + sizeof(*ctx);
@@ -338,6 +587,18 @@ void fiber_port_context_init(FiberContext *ctx,
 	FIBER_REQUIRE((initial_return_address & 1u) != 0u, 'x');
 	FIBER_REQUIRE(!fiber_port_ranges_overlap(context_start, context_end,
 			raw_stack_start, raw_stack_end), 'O');
+	FIBER_REQUIRE(fiber_port_range_contains(layout.privileged_data_start,
+			layout.privileged_data_end, context_start, context_end), 'C');
+	FIBER_REQUIRE(fiber_port_range_contains(layout.unprivileged_ram_start,
+			layout.unprivileged_ram_end, raw_stack_start, raw_stack_end), 'P');
+	FIBER_REQUIRE(!fiber_port_ranges_overlap(layout.privileged_data_start,
+			layout.privileged_data_end, raw_stack_start, raw_stack_end), 'O');
+	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+			layout.unprivileged_code_start, layout.unprivileged_code_end,
+			fiber_port_function_address(entry_address)), 'c');
+	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+			layout.privileged_code_start, layout.privileged_code_end,
+			fiber_port_function_address(entry_address)), 'c');
 
 	fiber_port_mpu_encode_exact_region(raw_stack_start, raw_stack_end,
 			fiber_portMPU_STACK_REGION,

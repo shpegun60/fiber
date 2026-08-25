@@ -81,18 +81,20 @@ The pinned FreeRTOS `GCC/ARM_CM0` directory contains a distinct optional
 MPU/unprivileged branch. The current `ARM_CM0` profile intentionally implements
 only the privileged branch.
 
-`ARM_CM0_MPU` slices 1-2 now freeze an exact build-selected type/layout/trait
-and cohort contract, then add compile/link-covered port-owned construction,
-seal, and a strict in-memory MPU encoder without a selector route. They
-preserve the reference raw 20-word protected image while deliberately replacing
-broad unprivileged peripheral access with a current-context aperture, leaving
-three configurable regions plus the stack. The default image disables regions
-0-2 and uses region 3 for the exact raw stack RW/XN range. This is compile-only,
-not hardware support.
+`ARM_CM0_MPU` slices 1-3 now freeze an exact build-selected type/layout/trait
+and cohort contract, compile/link-covered port-owned construction/seal, a
+strict in-memory MPU encoder, linker isolation, and an in-memory global MPU
+image without a selector route. They preserve the reference raw 20-word
+protected image while deliberately replacing broad unprivileged peripheral
+access with one exact 256-byte current-context aperture, leaving three
+configurable regions plus the stack. The default image disables regions 0-2,
+uses region 3 for the exact raw stack RW/XN range, and builds regions 4-7 from
+ten required linker boundaries. This is compile/link/ELF evidence only, not
+active MPU programming or hardware support.
 
-Remaining work includes linker isolation/global MPU regions, first restore,
-unprivileged SVC services, PendSV MPU replacement, paired generated assembly,
-archive/ELF negative proofs, and hardware validation.
+Remaining work includes first restore, unprivileged SVC services, PendSV MPU
+replacement, paired generated assembly, archive/ELF negative proofs, active
+MPU setup/readback, and hardware validation.
 
 ### 2. Cortex-M33 MPU Cohorts
 

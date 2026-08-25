@@ -31,6 +31,43 @@ removal, then the final software and available-hardware freeze.
 This is documentation-only. It changes no current port, ABI, context cohort,
 handler, frame, or generated code.
 
+## 2026-08-25: Stage ARM_CM0_MPU linker isolation and global image
+
+`ARM_CM0_MPU` slice 3 remains a build-selected, non-runtime source group. It
+adds no selector route, forward runtime operation, SVC/PendSV handler, MPU
+register write, or hardware claim. It only makes the memory-domain contract
+required before a protected ARMv6-M first restore can exist.
+
+The application linker owns all addresses and must include the port-owned
+`fiber/port/ARM_CM0_MPU/fiber_port_linker_contract.ld` assertion fragment after
+it defines ten exact privileged-code, unprivileged-code, privileged-data,
+current-slot, and unprivileged-RAM boundaries. There is no weak fallback or
+architecture guess. Global code/data ranges must be exact MPU regions, the raw
+unprivileged-RAM envelope must be 256-byte aligned, and disallowed overlap
+fails at link time.
+
+Cortex-M0+ has a 256-byte MPU minimum region. Therefore global region 4 is one
+exact 256-byte privileged-RW/unprivileged-RO/XN current-slot aperture, not the
+32-byte aperture used by ARMv7-M MPU profiles. The common slot remains the sole
+object in that output section, and the complete aperture must be zeroed by the
+application startup path.
+
+`fiber_port_mpu_build_global_regions()` now constructs in memory the exact
+regions 4-7: current slot, unprivileged code, privileged code, and privileged
+data. `fiber_port_context_init()` and the full seal check reject a context
+outside privileged data, a raw stack outside unprivileged RAM, or an entry
+outside unprivileged executable text before accepting the protected image.
+This is deliberately only the pure layout/image portion of FreeRTOS
+`prvSetupMPU()`: MPU type/control/fault policy, register writes, barriers, and
+readback are deferred to the SVC start slice.
+
+The matrix proves this at `-O2` and `-Os`, then repeats linker/ELF retention
+under LTO: all linker-boundary relocations, section placement, one exact
+256-byte current-slot output section, positive ELF placement, two negative
+linker configurations, no runtime handler symbols, and no CPU-state instruction
+in construction/global-image code. The next slice is strong SVC first start and
+unprivileged service provenance, not selector activation.
+
 ## 2026-08-24: Freeze Context, Fiber, And Kernel Layer Separation
 
 The current five-function v2 runtime remains the active porting and validation

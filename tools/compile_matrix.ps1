@@ -6676,6 +6676,20 @@ function Test-ArmCm0MpuLayoutContract {
     $bootProbeSource = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm0_mpu_boot_probe.c"
     $bootSource = Join-Path $profileDir "fiber_port_boot.c"
+    $linkerContractPath = Join-Path $profileDir "fiber_port_linker_contract.ld"
+    $runtimeStateSource = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
+    $linkerBoundarySymbols = @(
+        "__fiber_mpu_unprivileged_code_start__",
+        "__fiber_mpu_unprivileged_code_end__",
+        "__fiber_mpu_privileged_code_start__",
+        "__fiber_mpu_privileged_code_end__",
+        "__fiber_mpu_privileged_data_start__",
+        "__fiber_mpu_privileged_data_end__",
+        "__fiber_mpu_current_context_slot_start__",
+        "__fiber_mpu_current_context_slot_end__",
+        "__fiber_mpu_unprivileged_ram_start__",
+        "__fiber_mpu_unprivileged_ram_end__"
+    )
     $probeDir = Join-Path $BuildRoot "arm-cm0-mpu-layout"
     New-Item -ItemType Directory -Path $probeDir | Out-Null
     Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
@@ -6698,13 +6712,40 @@ function Test-ArmCm0MpuLayoutContract {
             "fiber_port_types.h",
             "fiber_portmacro.h",
             "fiber_port_boot.h",
-            "fiber_port_boot.c")) {
+            "fiber_port_boot.c",
+            "fiber_port_linker_contract.ld")) {
         if (-not (Test-Path (Join-Path $profileDir $requiredFile))) {
-            throw "ARM_CM0_MPU slice 2 is missing required file: $requiredFile"
+            throw "ARM_CM0_MPU slice 3 is missing required file: $requiredFile"
         }
     }
     if (-not (Test-Path $bootProbeSource)) {
-        throw "ARM_CM0_MPU slice 2 is missing its construction fixture"
+        throw "ARM_CM0_MPU slice 3 is missing its linker/global-image fixture"
+    }
+    if (-not (Test-Path $runtimeStateSource)) {
+        throw "ARM_CM0_MPU linker proof is missing common runtime state"
+    }
+    $linkerContractText = Get-Content -LiteralPath $linkerContractPath -Raw
+    foreach ($boundarySymbol in $linkerBoundarySymbols) {
+        if ($linkerContractText.IndexOf("ASSERT(DEFINED($boundarySymbol)",
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM0_MPU linker contract lost required boundary assertion: $boundarySymbol"
+        }
+    }
+    foreach ($requiredLinkerText in @(
+            "current-slot aperture must be exactly 256 bytes",
+			"current-slot output section must begin at its aperture",
+			"current-slot output section must be exactly 256 bytes",
+			"current-slot aperture overlaps unprivileged code",
+			"current-slot aperture overlaps privileged code",
+            "unprivileged code must be an exact MPU region",
+            "privileged code must be an exact MPU region",
+            "privileged data must be an exact MPU region",
+            "unprivileged RAM must be non-empty and 256-byte aligned",
+            "privileged code may only be disjoint or nested in unprivileged code")) {
+        if ($linkerContractText.IndexOf($requiredLinkerText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM0_MPU linker contract lost mandatory rule: $requiredLinkerText"
+        }
     }
 
     foreach ($forbiddenRuntimeFile in @(
@@ -6712,7 +6753,7 @@ function Test-ArmCm0MpuLayoutContract {
             "fiber_port_exception.c",
             "fiber_port_private.h")) {
         if (Test-Path (Join-Path $profileDir $forbiddenRuntimeFile)) {
-            throw "ARM_CM0_MPU slice 2 must not introduce runtime ownership: $forbiddenRuntimeFile"
+            throw "ARM_CM0_MPU slice 3 must not introduce runtime ownership: $forbiddenRuntimeFile"
         }
     }
 
@@ -6724,6 +6765,9 @@ function Test-ArmCm0MpuLayoutContract {
             "void fiber_port_context_seal_check(",
             "uint32_t fiber_port_context_compute_seal(",
             "int fiber_port_mpu_try_encode_exact_region(",
+			"void fiber_port_mpu_load_linker_layout(",
+			"void fiber_port_mpu_linker_layout_check(",
+			"void fiber_port_mpu_build_global_regions(",
             "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
 			"void fiber_port_context_initial_image_check(",
 			"const uint32_t initial_r9 = fiber_port_read_r9();",
@@ -6749,26 +6793,39 @@ function Test-ArmCm0MpuLayoutContract {
             "ctx->protected_context_cursor = &ctx->protected_context.cursor_limit;",
             "ctx->mpu_regions[fiber_portMPU_STACK_REGION] = stack_region;",
 			"fiber_portMPU_DEFAULT_STACK_ATTRIBUTES",
+			"fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES",
+			"__fiber_mpu_unprivileged_code_start__",
+			"__fiber_mpu_privileged_data_end__",
 			"fiber_port_context_initial_image_check(ctx, initial_psp, entry_address, arg,")) {
         if ($bootSourceText.IndexOf($requiredText,
                 [System.StringComparison]::Ordinal) -lt 0) {
-            throw "ARM_CM0_MPU slice 2 lost required construction behavior: $requiredText"
+            throw "ARM_CM0_MPU slice 3 lost required construction behavior: $requiredText"
         }
     }
     if ($macroSourceText.IndexOf("uint32_t fiber_port_read_r9(void)",
             [System.StringComparison]::Ordinal) -lt 0) {
-        throw "ARM_CM0_MPU slice 2 lost its live-r9 initial-context helper"
+        throw "ARM_CM0_MPU slice 3 lost its live-r9 initial-context helper"
     }
+	foreach ($requiredMacroText in @(
+			"fiber_portPRIVILEGED_FUNCTION",
+			"fiber_portUNPRIVILEGED_FUNCTION",
+			"fiber_portPRIVILEGED_DATA",
+			"fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES",
+			"current-context aperture must be one MPU region")) {
+		if ($macroSourceText.IndexOf($requiredMacroText,
+				[System.StringComparison]::Ordinal) -lt 0) {
+			throw "ARM_CM0_MPU linker slice lost section or aperture policy: $requiredMacroText"
+		}
+	}
     foreach ($forbiddenText in @(
             "void SVC_Handler(void)",
             "void PendSV_Handler(void)",
             "void fiber_port_runtime_schedule(",
             "void fiber_port_runtime_prepare_start(",
-            "fiber_port_mpu_load_linker_layout(",
-            "__fiber_mpu_")) {
+            "MPU->")) {
         if ($bootSourceText.IndexOf($forbiddenText,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM0_MPU slice 2 crossed its construction-only boundary: $forbiddenText"
+            throw "ARM_CM0_MPU slice 3 crossed its construction-only boundary: $forbiddenText"
         }
     }
 
@@ -6778,7 +6835,7 @@ function Test-ArmCm0MpuLayoutContract {
         $selectorSource = Get-Content -LiteralPath $selectorPath -Raw
         if ($selectorSource.IndexOf("ARM_CM0_MPU",
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM0_MPU slice 2 must not enter architecture selection: $selectorPath"
+            throw "ARM_CM0_MPU slice 3 must not enter architecture selection: $selectorPath"
         }
     }
 
@@ -6967,6 +7024,8 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
         $mode = $optimization.Substring(1).ToLowerInvariant()
         $bootObject = Join-Path $probeDir ("boot-" + $mode + ".o")
         $bootProbeObject = Join-Path $probeDir ("boot-probe-" + $mode + ".o")
+        $runtimeStateObject = Join-Path $probeDir ("runtime-state-" + $mode + ".o")
+        $linkerScript = Join-Path $probeDir ("linker-" + $mode + ".ld")
         $bootElf = Join-Path $probeDir ("boot-" + $mode + ".elf")
         $sliceCompileArgs = @(
             "-mcpu=cortex-m0plus",
@@ -6980,35 +7039,89 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
             "-fno-asynchronous-unwind-tables"
         ) + $warningArgs + $selectedFacadeDefines + $manifestIncludeArgs
 
-        & $Compiler @($sliceCompileArgs + @(
-            "-c", $bootSource,
-            "-o", $bootObject
-        ))
-        if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-2 construction source failed compile ($mode)"
-        }
-        & $Compiler @($sliceCompileArgs + @(
-            "-c", $bootProbeSource,
-            "-o", $bootProbeObject
-        ))
-        if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-2 construction fixture failed compile ($mode)"
+        foreach ($compileUnit in @(
+                [pscustomobject]@{ Source = $bootSource; Object = $bootObject; Label = "source" },
+                [pscustomobject]@{ Source = $bootProbeSource; Object = $bootProbeObject; Label = "fixture" },
+                [pscustomobject]@{ Source = $runtimeStateSource; Object = $runtimeStateObject; Label = "common runtime state" })) {
+            & $Compiler @($sliceCompileArgs + @(
+                "-c", $compileUnit.Source,
+                "-o", $compileUnit.Object
+            ))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM0_MPU slice-3 linker/global-image $($compileUnit.Label) failed compile ($mode)"
+            }
         }
 
         $bootDisassembly = (& $Objdump -dr $bootObject) -join "`n"
         if ($LASTEXITCODE -ne 0) {
-            throw "objdump failed for ARM_CM0_MPU construction source ($mode)"
+            throw "objdump failed for ARM_CM0_MPU linker/global-image source ($mode)"
         }
-        $contextInitBody = Get-DisassemblyFunctionBody `
-            -Disassembly $bootDisassembly -Symbol "fiber_port_context_init" `
-            -Path $bootObject
-        if ($contextInitBody -match '\b(svc|cpsid|cpsie|mrs|msr)\b') {
-            throw "ARM_CM0_MPU slice-2 constructor must build storage only, not change CPU state ($mode)"
+        foreach ($functionName in @(
+                "fiber_port_context_init",
+                "fiber_port_mpu_build_global_regions")) {
+            $functionBody = Get-DisassemblyFunctionBody `
+                -Disassembly $bootDisassembly -Symbol $functionName `
+                -Path $bootObject
+            if ($functionBody -match '\b(svc|cpsid|cpsie|mrs|msr)\b') {
+                throw "ARM_CM0_MPU slice-3 $functionName must build/check storage only, not change CPU state ($mode)"
+            }
+        }
+
+        $bootSections = @(& $Objdump -h $bootObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM0_MPU privileged source sections ($mode)"
+        }
+        if (-not ($bootSections -match '(?m)^\s*\d+\s+\.fiber_port_privileged_functions\b')) {
+            throw "ARM_CM0_MPU linker/global-image source lost privileged text section ($mode)"
+        }
+        $bootSymbolTable = @(& $Objdump -t $bootObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM0_MPU privileged source symbols ($mode)"
+        }
+        $privilegedFunctionCount = 0
+        foreach ($line in $bootSymbolTable) {
+            if ($line -notmatch '^\s*[0-9a-fA-F]+\s+\w+\s+F\s+(?<section>\S+)\s+[0-9a-fA-F]+\s+(?<symbol>fiber_port_\S+)\s*$') {
+                continue
+            }
+            ++$privilegedFunctionCount
+            if ($Matches['section'] -ne '.fiber_port_privileged_functions') {
+                throw "ARM_CM0_MPU port function escaped privileged text ($mode): $($Matches['symbol']) -> $($Matches['section'])"
+            }
+        }
+        if ($privilegedFunctionCount -eq 0) {
+            throw "ARM_CM0_MPU privileged text proof matched no port functions ($mode)"
+        }
+
+        $fixtureSymbolTable = @(& $Objdump -t $bootProbeObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM0_MPU linker/global-image fixture symbols ($mode)"
+        }
+        foreach ($fixtureSymbol in @(
+                "fiber_arm_cm0_mpu_probe_entry",
+                "fiber_port_unprivileged_task_return")) {
+            $matches = @($fixtureSymbolTable | Where-Object {
+                $_ -match ("\bF\s+\.fiber_port_unprivileged_functions\s+[0-9a-fA-F]+\s+" +
+                    [regex]::Escape($fixtureSymbol) + "$")
+            })
+            if ($matches.Count -ne 1) {
+                throw "ARM_CM0_MPU unprivileged fixture function escaped its linker section ($mode): $fixtureSymbol"
+            }
+        }
+        foreach ($fixtureSymbol in @(
+                "fiber_arm_cm0_mpu_probe_context",
+                "fiber_arm_cm0_mpu_probe_global_regions")) {
+            $matches = @($fixtureSymbolTable | Where-Object {
+                $_ -match ("\bO\s+\.fiber_port_privileged_data\s+[0-9a-fA-F]+\s+" +
+                    [regex]::Escape($fixtureSymbol) + "$")
+            })
+            if ($matches.Count -ne 1) {
+                throw "ARM_CM0_MPU privileged fixture storage escaped its linker section ($mode): $fixtureSymbol"
+            }
         }
 
         $bootUndefinedOutput = @(& $Nm --undefined-only $bootObject)
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM0_MPU construction source ($mode)"
+            throw "nm failed for ARM_CM0_MPU linker/global-image source ($mode)"
         }
         $bootUndefined = Get-NmUndefinedSymbolNames -NmOutput $bootUndefinedOutput `
             -Path $bootObject
@@ -7016,42 +7129,211 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
             "fiber_panic",
             "fiber_port_unprivileged_task_return",
             $variantCohorts["vtor-present-$mode"]
-        )
+        ) + $linkerBoundarySymbols
         Assert-ExactSymbolSet -Expected $expectedBootUndefined `
             -Actual $bootUndefined `
-            -Description "ARM_CM0_MPU slice-2 construction undefined surface ($mode)"
+            -Description "ARM_CM0_MPU slice-3 linker/global-image undefined surface ($mode)"
 
-        & $Compiler @(
+        $linkerText = @'
+ENTRY(fiber_arm_cm0_mpu_boot_probe)
+
+SECTIONS
+{
+	.fiber_unprivileged_code 0x08010000 :
+	{
+		__fiber_mpu_unprivileged_code_start__ = .;
+		KEEP(*(.fiber_port_unprivileged_functions))
+		KEEP(*(.fiber_test_unprivileged_code))
+		__fiber_mpu_unprivileged_code_end__ =
+			__fiber_mpu_unprivileged_code_start__ + 0x10000;
+	}
+	ASSERT(SIZEOF(.fiber_unprivileged_code) <= 0x10000,
+		"[fiber]: ARM_CM0_MPU synthetic unprivileged code exceeds its MPU region")
+
+	.fiber_privileged_code 0x08000000 :
+	{
+		__fiber_mpu_privileged_code_start__ = .;
+		KEEP(*(.fiber_port_privileged_functions))
+		*(.text*)
+		*(.rodata*)
+		__fiber_mpu_privileged_code_end__ =
+			__fiber_mpu_privileged_code_start__ + 0x10000;
+	}
+	ASSERT(SIZEOF(.fiber_privileged_code) <= 0x10000,
+		"[fiber]: ARM_CM0_MPU synthetic privileged code exceeds its MPU region")
+
+	.fiber_current_context_slot 0x20000000 (NOLOAD) :
+	{
+		__fiber_mpu_current_context_slot_start__ = .;
+		KEEP(*(.bss.fiber_runtime_current_context_slot))
+		. = __fiber_mpu_current_context_slot_start__ + 0x100;
+		__fiber_mpu_current_context_slot_end__ = .;
+	}
+	ASSERT(SIZEOF(.fiber_current_context_slot) == 0x100,
+		"[fiber]: ARM_CM0_MPU synthetic current-slot aperture changed")
+
+	.fiber_privileged_data 0x20010000 (NOLOAD) :
+	{
+		__fiber_mpu_privileged_data_start__ = .;
+		KEEP(*(.fiber_port_privileged_data))
+		*(.data*)
+		*(.bss*)
+		*(COMMON)
+		__fiber_mpu_privileged_data_end__ =
+			__fiber_mpu_privileged_data_start__ + 0x10000;
+	}
+	ASSERT(SIZEOF(.fiber_privileged_data) <= 0x10000,
+		"[fiber]: ARM_CM0_MPU synthetic privileged data exceeds its MPU region")
+
+	.fiber_unprivileged_ram 0x20020000 (NOLOAD) :
+	{
+		__fiber_mpu_unprivileged_ram_start__ = .;
+		KEEP(*(.fiber_test_unprivileged_ram))
+		__fiber_mpu_unprivileged_ram_end__ =
+			__fiber_mpu_unprivileged_ram_start__ + 0x10000;
+	}
+	ASSERT(SIZEOF(.fiber_unprivileged_ram) <= 0x10000,
+		"[fiber]: ARM_CM0_MPU synthetic unprivileged RAM exceeds its integration range")
+
+	/DISCARD/ : { *(.comment*) *(.note*) *(.ARM.attributes) }
+}
+'@ + "`n" + $linkerContractText
+        Set-Content -LiteralPath $linkerScript -Value $linkerText -Encoding ASCII
+
+        $linkArgs = @(
             "-mcpu=cortex-m0plus",
             "-mthumb",
             "-mfloat-abi=soft",
             "-nostdlib",
             "-Wl,--gc-sections",
-            "-Wl,-e,fiber_arm_cm0_mpu_boot_probe",
+            "-Wl,-T,$linkerScript",
             $bootObject,
             $bootProbeObject,
+            $runtimeStateObject,
             "-o", $bootElf
         )
+        & $Compiler @linkArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-2 construction synthetic ELF failed link ($mode)"
+            throw "ARM_CM0_MPU slice-3 linker/global-image synthetic ELF failed link ($mode)"
         }
         $bootSymbols = @(& $Nm --defined-only $bootElf)
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM0_MPU slice-2 synthetic ELF ($mode)"
+            throw "nm failed for ARM_CM0_MPU slice-3 linker/global-image ELF ($mode)"
+        }
+        $symbolAddresses = @{}
+        foreach ($line in $bootSymbols) {
+            if ($line -match '^\s*(?<address>[0-9a-fA-F]+)\s+\S\s+(?<symbol>\S+)\s*$') {
+                $symbolAddresses[$Matches['symbol']] =
+                    [Convert]::ToUInt64($Matches['address'], 16)
+            }
         }
         foreach ($requiredSymbol in @(
                 "fiber_port_context_init",
                 "fiber_port_context_compute_seal",
                 "fiber_port_context_seal_check",
                 "fiber_port_mpu_try_encode_exact_region",
+                "fiber_port_mpu_load_linker_layout",
+                "fiber_port_mpu_linker_layout_check",
+                "fiber_port_mpu_build_global_regions",
+                "fiber_internal_runtime_current_context_slot",
+                "fiber_port_unprivileged_task_return",
                 "fiber_arm_cm0_mpu_boot_probe")) {
-            if (-not ($bootSymbols -match "\b$([regex]::Escape($requiredSymbol))\s*$")) {
-                throw "ARM_CM0_MPU slice-2 synthetic ELF lost symbol ($mode): $requiredSymbol"
+            if (-not $symbolAddresses.ContainsKey($requiredSymbol)) {
+                throw "ARM_CM0_MPU slice-3 synthetic ELF lost symbol ($mode): $requiredSymbol"
             }
         }
         foreach ($forbiddenSymbol in @("SVC_Handler", "PendSV_Handler")) {
-            if ($bootSymbols -match "\b$([regex]::Escape($forbiddenSymbol))\s*$") {
-                throw "ARM_CM0_MPU slice-2 synthetic ELF acquired handler ownership ($mode): $forbiddenSymbol"
+            if ($symbolAddresses.ContainsKey($forbiddenSymbol)) {
+                throw "ARM_CM0_MPU slice-3 synthetic ELF acquired handler ownership ($mode): $forbiddenSymbol"
+            }
+        }
+        foreach ($privilegedTextSymbol in @(
+                "fiber_port_context_init",
+                "fiber_port_context_compute_seal",
+                "fiber_port_context_seal_check",
+                "fiber_port_mpu_try_encode_exact_region",
+                "fiber_port_mpu_load_linker_layout",
+                "fiber_port_mpu_linker_layout_check",
+                "fiber_port_mpu_build_global_regions",
+                "fiber_panic")) {
+            if ((-not $symbolAddresses.ContainsKey($privilegedTextSymbol)) -or
+                    ($symbolAddresses[$privilegedTextSymbol] -lt 0x08000000) -or
+                    ($symbolAddresses[$privilegedTextSymbol] -ge 0x08010000)) {
+                throw "ARM_CM0_MPU privileged text symbol escaped its global region ($mode): $privilegedTextSymbol"
+            }
+        }
+        foreach ($unprivilegedTextSymbol in @(
+                "fiber_port_unprivileged_task_return",
+                "fiber_arm_cm0_mpu_probe_entry")) {
+            if ((-not $symbolAddresses.ContainsKey($unprivilegedTextSymbol)) -or
+                    ($symbolAddresses[$unprivilegedTextSymbol] -lt 0x08010000) -or
+                    ($symbolAddresses[$unprivilegedTextSymbol] -ge 0x08020000)) {
+                throw "ARM_CM0_MPU unprivileged text symbol escaped its global region ($mode): $unprivilegedTextSymbol"
+            }
+        }
+        foreach ($privilegedDataSymbol in @(
+                "fiber_arm_cm0_mpu_probe_context",
+                "fiber_arm_cm0_mpu_probe_global_regions")) {
+            if ((-not $symbolAddresses.ContainsKey($privilegedDataSymbol)) -or
+                    ($symbolAddresses[$privilegedDataSymbol] -lt 0x20010000) -or
+                    ($symbolAddresses[$privilegedDataSymbol] -ge 0x20020000)) {
+                throw "ARM_CM0_MPU privileged data escaped its global region ($mode): $privilegedDataSymbol"
+            }
+        }
+        if (($symbolAddresses["fiber_internal_runtime_current_context_slot"] -ne 0x20000000)) {
+            throw "ARM_CM0_MPU current slot escaped its exact aperture ($mode)"
+        }
+        if ((-not $symbolAddresses.ContainsKey("fiber_arm_cm0_mpu_probe_stack")) -or
+                ($symbolAddresses["fiber_arm_cm0_mpu_probe_stack"] -lt 0x20020000) -or
+                ($symbolAddresses["fiber_arm_cm0_mpu_probe_stack"] -ge 0x20030000)) {
+            throw "ARM_CM0_MPU raw stack escaped unprivileged RAM ($mode)"
+        }
+        $elfSections = (& $Objdump -h $bootElf) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM0_MPU slice-3 linker/global-image ELF ($mode)"
+        }
+        if ($elfSections -notmatch '(?m)^\s*\d+\s+\.fiber_current_context_slot\s+00000100\s+20000000\b') {
+            throw "ARM_CM0_MPU current-slot linker output is not one exact 256-byte aperture ($mode)"
+        }
+
+        foreach ($linkerFailure in @(
+                [pscustomobject]@{
+                    Name = "current-slot-size"
+                    Search = ". = __fiber_mpu_current_context_slot_start__ + 0x100;"
+                    Replace = ". = __fiber_mpu_current_context_slot_start__ + 0x20;"
+                    Diagnostic = "[fiber]: ARM_CM0_MPU current-slot aperture must be exactly 256 bytes"
+                },
+                [pscustomobject]@{
+                    Name = "unprivileged-code-extent"
+                    Search = "__fiber_mpu_unprivileged_code_start__ + 0x10000;"
+                    Replace = "__fiber_mpu_unprivileged_code_start__ + 0x18000;"
+                    Diagnostic = "[fiber]: ARM_CM0_MPU unprivileged code must be an exact MPU region"
+                })) {
+            if ($linkerText.IndexOf($linkerFailure.Search,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "ARM_CM0_MPU synthetic linker negative fixture lost replacement anchor ($mode): $($linkerFailure.Name)"
+            }
+            $invalidScript = Join-Path $probeDir ("linker-" + $mode + "-invalid-" + $linkerFailure.Name + ".ld")
+            $invalidElf = Join-Path $probeDir ("boot-" + $mode + "-invalid-" + $linkerFailure.Name + ".elf")
+            Set-Content -LiteralPath $invalidScript -Encoding ASCII -Value `
+                $linkerText.Replace($linkerFailure.Search, $linkerFailure.Replace)
+            $invalidLog = Join-Path $probeDir ("linker-" + $mode + "-invalid-" + $linkerFailure.Name + ".log")
+            $invalidArgs = @(
+                "-mcpu=cortex-m0plus",
+                "-mthumb",
+                "-mfloat-abi=soft",
+                "-nostdlib",
+                "-Wl,--gc-sections",
+                "-Wl,-T,$invalidScript",
+                $bootObject,
+                $bootProbeObject,
+                $runtimeStateObject,
+                "-o", $invalidElf
+            )
+            $negativeResult = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments $invalidArgs -LogPath $invalidLog
+            if ($negativeResult.ExitCode -eq 0) {
+                throw "ARM_CM0_MPU linker contract negative proof failed ($mode): $($linkerFailure.Name)`n$($negativeResult.Output)"
             }
         }
 
@@ -7087,6 +7369,85 @@ uint32_t fiber_arm_cm0_mpu_read_static_base_probe(void)
                 ($r9ProbeBody -notmatch '\bbx\s+lr\b')) {
             throw "ARM_CM0_MPU reserved-r9 helper no longer reads the live static base ($mode)"
         }
+
+        if ($mode -eq "o2") {
+            $ltoBootObject = Join-Path $probeDir "boot-lto.o"
+            $ltoProbeObject = Join-Path $probeDir "boot-probe-lto.o"
+            $ltoRuntimeStateObject = Join-Path $probeDir "runtime-state-lto.o"
+            $ltoBarrierSource = Join-Path $probeDir "lto-runtime-barrier.c"
+            $ltoBarrierObject = Join-Path $probeDir "lto-runtime-barrier.o"
+            $ltoLinkerScript = Join-Path $probeDir "linker-lto.ld"
+            $ltoElf = Join-Path $probeDir "boot-lto.elf"
+            $ltoCompileArgs = @($sliceCompileArgs + @("-flto"))
+            # GCC LTO materializes otherwise-GC'd common-runtime functions
+            # before section collection. This fixture-only definition resolves
+            # their barrier dependency without adding a runtime operation to
+            # the non-selectable ARM_CM0_MPU port source group.
+            Set-Content -LiteralPath $ltoBarrierSource -Encoding ASCII -Value @"
+#include "fiber_portmacro.h"
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_memory_barrier(void)
+{
+    __asm volatile("" ::: "memory");
+}
+"@
+            foreach ($compileUnit in @(
+                    [pscustomobject]@{ Source = $bootSource; Object = $ltoBootObject; Label = "source" },
+                    [pscustomobject]@{ Source = $bootProbeSource; Object = $ltoProbeObject; Label = "fixture" },
+                    [pscustomobject]@{ Source = $runtimeStateSource; Object = $ltoRuntimeStateObject; Label = "common runtime state" },
+                    [pscustomobject]@{ Source = $ltoBarrierSource; Object = $ltoBarrierObject; Label = "barrier fixture" })) {
+                & $Compiler @($ltoCompileArgs + @(
+                    "-c", $compileUnit.Source,
+                    "-o", $compileUnit.Object
+                ))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ARM_CM0_MPU slice-3 LTO $($compileUnit.Label) failed compile"
+                }
+            }
+            Set-Content -LiteralPath $ltoLinkerScript -Value $linkerText `
+                -Encoding ASCII
+            & $Compiler @(
+                "-mcpu=cortex-m0plus",
+                "-mthumb",
+                "-mfloat-abi=soft",
+                "-flto",
+                "-nostdlib",
+                "-Wl,--gc-sections",
+                "-Wl,-T,$ltoLinkerScript",
+                $ltoBootObject,
+                $ltoProbeObject,
+                $ltoRuntimeStateObject,
+                $ltoBarrierObject,
+                "-o", $ltoElf
+            )
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM0_MPU slice-3 linker/global-image LTO ELF failed link"
+            }
+            $ltoSymbols = @(& $Nm --defined-only $ltoElf)
+            if ($LASTEXITCODE -ne 0) {
+                throw "nm failed for ARM_CM0_MPU slice-3 LTO ELF"
+            }
+            foreach ($requiredSymbol in @(
+                    "fiber_port_context_init",
+                    "fiber_port_context_seal_check",
+                    "fiber_port_mpu_build_global_regions",
+                    "fiber_internal_runtime_current_context_slot")) {
+                if (-not ($ltoSymbols -match "\b$([regex]::Escape($requiredSymbol))\s*$")) {
+                    throw "ARM_CM0_MPU slice-3 LTO ELF lost retained symbol: $requiredSymbol"
+                }
+            }
+            foreach ($forbiddenSymbol in @("SVC_Handler", "PendSV_Handler")) {
+                if ($ltoSymbols -match "\b$([regex]::Escape($forbiddenSymbol))\s*$") {
+                    throw "ARM_CM0_MPU slice-3 LTO ELF acquired handler ownership: $forbiddenSymbol"
+                }
+            }
+            $ltoSections = (& $Objdump -h $ltoElf) -join "`n"
+            if (($LASTEXITCODE -ne 0) -or ($ltoSections -notmatch
+                    '(?m)^\s*\d+\s+\.fiber_current_context_slot\s+00000100\s+20000000\b')) {
+                throw "ARM_CM0_MPU slice-3 LTO linker output lost the exact current-slot aperture"
+            }
+        }
     }
 
     # The constructor does not consume VTOR today, but it must still compile
@@ -7113,7 +7474,7 @@ uint32_t fiber_arm_cm0_mpu_read_static_base_probe(void)
             "-o", $absentBootObject
         ))
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM0_MPU slice-2 construction source failed no-VTOR compile ($mode)"
+            throw "ARM_CM0_MPU slice-3 linker/global-image source failed no-VTOR compile ($mode)"
         }
         $absentUndefinedOutput = @(& $Nm --undefined-only $absentBootObject)
         if ($LASTEXITCODE -ne 0) {
@@ -7121,12 +7482,12 @@ uint32_t fiber_arm_cm0_mpu_read_static_base_probe(void)
         }
         $absentUndefined = Get-NmUndefinedSymbolNames `
             -NmOutput $absentUndefinedOutput -Path $absentBootObject
-        Assert-ExactSymbolSet -Expected @(
+        Assert-ExactSymbolSet -Expected (@(
             "fiber_panic",
             "fiber_port_unprivileged_task_return",
             $variantCohorts["vtor-absent-$mode"]
-        ) -Actual $absentUndefined `
-            -Description "ARM_CM0_MPU no-VTOR construction undefined surface ($mode)"
+        ) + $linkerBoundarySymbols) -Actual $absentUndefined `
+            -Description "ARM_CM0_MPU no-VTOR linker/global-image undefined surface ($mode)"
     }
 
     $negativeBaseArgs = @(
@@ -8996,7 +9357,7 @@ try {
     Test-ArmCm33FNtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM0_MPU slice-2 construction/cohort contract =="
+    Write-Host "== ARM_CM0_MPU slice-3 linker/global-image/cohort contract =="
     Test-ArmCm0MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -Objdump $objdump -CmsisPath $cmsis `
         -BuildRoot $buildRoot

@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * ARM_CM0_MPU dictionary through implementation slice 2. This exact Cortex-M0+
- * MPU profile freezes its protected layout/traits and port-owned construction
- * contract. It deliberately provides no SVC/PendSV handler, selector route,
- * linker isolation contract, or public MPU extension ABI.
+ * ARM_CM0_MPU dictionary through implementation slice 3. This exact Cortex-M0+
+ * MPU profile freezes its protected layout/traits, linker-isolation contract,
+ * and port-owned construction/global-image contract. It deliberately provides
+ * no SVC/PendSV handler, selector route, or public MPU extension ABI.
  */
 
 #ifndef FIBER_PORT_ARM_CM0_MPU_FIBER_PORTMACRO_H_
@@ -90,8 +90,9 @@
 
 /*
  * The reference reserves region four for broad peripheral access. Fiber uses
- * that slot as a 32-byte unprivileged-read-only current-context aperture, so
- * three configurable regions plus the stack remain in each context image.
+ * that slot as one exact ARMv6-M minimum-region unprivileged-read-only
+ * current-context aperture, so three configurable regions plus the stack
+ * remain in each context image.
  */
 #define fiber_portMPU_TOTAL_REGIONS 8u
 #define fiber_portMPU_FIRST_CONFIGURABLE_REGION 0u
@@ -122,8 +123,10 @@
 #define fiber_portMPU_RBAR_REGION_VALID 0x00000010u
 #define fiber_portMPU_RBAR_REGION_NUMBER_MASK 0x0000000Fu
 #define fiber_portMPU_MIN_REGION_SIZE 256u
+#define fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES \
+	fiber_portMPU_MIN_REGION_SIZE
 /* A 4GB MPU region has no representable exclusive end in a 32-bit range API.
- * The slice-2 exact encoder therefore fails closed above 2GB instead of
+ * The exact encoder therefore fails closed above 2GB instead of
  * rounding an arbitrary range up to 4GB. */
 #define fiber_portMPU_MAX_EXACT_REGION_SIZE UINT32_C(0x80000000)
 
@@ -172,10 +175,20 @@
  * stack image pins that same normal/cacheable/bufferable policy. */
 #define fiber_portMPU_DEFAULT_SRAM_MEMORY \
 	fiber_portMPU_REGION_NORMAL_OIWBNOWA_SHARED
+#define fiber_portMPU_DEFAULT_FLASH_MEMORY \
+	fiber_portMPU_REGION_NORMAL_OIWBNOWA_SHARED
 #define fiber_portMPU_DEFAULT_STACK_ATTRIBUTES \
 	(fiber_portMPU_REGION_PRIV_RW_UNPRIV_RW | \
 	 fiber_portMPU_DEFAULT_SRAM_MEMORY | \
 	 fiber_portMPU_REGION_EXECUTE_NEVER)
+
+/* Exact linker sections consumed by the ARM_CM0_MPU integration contract. */
+#define fiber_portPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_privileged_functions")))
+#define fiber_portUNPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_unprivileged_functions")))
+#define fiber_portPRIVILEGED_DATA \
+	__attribute__((section(".fiber_port_privileged_data")))
 
 #define fiber_portPROTECTED_CONTEXT_WORDS 20u
 #define fiber_portPROTECTED_RESTORE_WORDS 19u
@@ -243,7 +256,7 @@
  * Generic traits describe the complete logical restore transfer, excluding
  * cursor_limit. That image is privileged storage, not a software frame on the
  * unprivileged stack. The generic fiber_port_geometry.h model is therefore not
- * applicable to this profile; slice 2 uses the explicit physical-PSP geometry
+ * applicable to this profile; slices 2-3 use the explicit physical-PSP geometry
  * below for raw-stack admission.
  */
 #define FIBER_PORT_EXC_BASE_BYTES (8u * 4u)
@@ -391,6 +404,8 @@ FIBER_STATIC_ASSERT(FIBER_PORT_CM0_MPU_PSP_INITIAL_FRAME_BYTES == 32u &&
 		"[fiber]: ARM_CM0_MPU physical PSP geometry changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_MIN_REGION_SIZE == 256u,
 		"[fiber]: ARM_CM0_MPU minimum MPU region size changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES == 256u,
+		"[fiber]: ARM_CM0_MPU current-context aperture must be one MPU region");
 FIBER_STATIC_ASSERT(fiber_portMPU_MAX_EXACT_REGION_SIZE ==
 		UINT32_C(0x80000000),
 		"[fiber]: ARM_CM0_MPU exact MPU range limit changed");
@@ -403,7 +418,8 @@ FIBER_STATIC_ASSERT(fiber_portMPU_REGION_PRIV_RW_UNPRIV_RW == 0x03000000u &&
 		fiber_portMPU_REGION_PRIV_RO_UNPRIV_NA == 0x05000000u &&
 		fiber_portMPU_REGION_PRIV_RO_UNPRIV_RO == 0x06000000u &&
 		fiber_portMPU_REGION_EXECUTE_NEVER == 0x10000000u &&
-		fiber_portMPU_DEFAULT_STACK_ATTRIBUTES == 0x13070000u,
+		fiber_portMPU_DEFAULT_STACK_ATTRIBUTES == 0x13070000u &&
+		fiber_portMPU_DEFAULT_FLASH_MEMORY == 0x00070000u,
 		"[fiber]: ARM_CM0_MPU permission encodings changed");
 
 FIBER_STATIC_ASSERT(offsetof(FiberPortMpuRegionRegisters, rbar) ==

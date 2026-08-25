@@ -72,9 +72,10 @@ and is not a production FreeRTOS-parity port.
 
 `ARM_CM0_MPU` is also intentionally absent from this executable assembly
 inventory until its later SVC/PendSV runtime slice creates `fiber_port.c`. Its
-slice-2 constructor is compile/link-covered against the pinned
-`pxPortInitialiseStack()` 20-word storage order and r9 preservation, but it
-makes no generated-handler parity or runtime claim yet.
+slice-3 constructor/linker/global-image contract is compile/link/ELF-covered
+against the pinned `pxPortInitialiseStack()` 20-word storage order and r9
+preservation. It makes no generated-handler parity, active MPU, or runtime
+claim yet.
 
 ## Intentional Differences
 
