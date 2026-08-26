@@ -2,12 +2,22 @@
 
 ## Status
 
-Slices 1-2 of the explicit build-selected `ARM_CM33_MPU/non_secure` profile
+Slices 1-3 of the explicit build-selected `ARM_CM33_MPU/non_secure` profile
 freeze public storage, traits, MPU geometry, exact cohort identity, sealed
-context construction, and linker-derived global MPU images. The construction
-source writes only `FiberContext`; it does not program MPU registers. There is
-still no SVC, PendSV, forward runtime ABI symbol, optional MPU API, or
-hardware-support claim.
+context construction, linker-derived global MPU images, and the protected first
+SVC transition. The selected port now owns one strong `SVC_Handler`, validates
+the active vector slot and first SVC provenance, installs and reads back the
+four global MPU pairs while disabled, then restores MAIR0, the selected
+context's RBAR/RLAR pairs, `PSP`, `PSPLIM`, `CONTROL`, and the protected basic
+frame before exception return.
+
+This remains a deliberately staged profile: there is no `PendSV_Handler`,
+scheduler selection, eight-function forward runtime ABI, public MPU-management
+API, SecureContext, TF-M, or hardware-support claim. The original SVC
+`EXC_RETURN` is passed explicitly from the C dispatcher into naked restore;
+the naked code revalidates the original `0xFFFFFFB8` SVC-origin token before
+the selected context's own `EXC_RETURN` deliberately replaces `LR`. The normal
+C call return address is never used as exception-return authority.
 
 The reference is the no-TrustZone ARMv8-M Mainline source group, not the
 TrustZone-capable `ARM_CM33/non_secure` source group. That distinction changes
@@ -21,7 +31,7 @@ FreeRTOS CMake port: GCC_ARM_CM33_NTZ_NONSECURE
 Reference directory: portable/GCC/ARM_CM33_NTZ/non_secure
 ```
 
-| Reference file | SHA-256 | Slice-1 disposition |
+| Reference file | SHA-256 | Fiber disposition through slice 3 |
 | --- | --- | --- |
 | `portmacro.h` | `F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B` | M33/Mainline identity and no-MVE policy mapped to the selected manifest. |
 | `portmacrocommon.h` | `324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2` | MPU region roles, RBAR/RLAR/MAIR dictionary, `xMPU_SETTINGS`, and `MAX_CONTEXT_SIZE` audited. |
@@ -200,7 +210,7 @@ flash too; construction validates that exact target before accepting a layout.
 
 ## Function And Macro Ledger
 
-| FreeRTOS symbol or family | Fiber slice-1 disposition |
+| FreeRTOS symbol or family | Fiber disposition through slice 3 |
 | --- | --- |
 | `portARCH_NAME`, Mainline identity, byte alignment, BASEPRI traits | Implemented as selected-port manifest and trait facts. |
 | `portTOTAL_NUM_REGIONS`, `portSTACK_REGION`, configurable region range | Implemented as the explicit 8/16-region type and macro contract. |
@@ -208,14 +218,16 @@ flash too; construction validates that exact target before accepting a layout.
 | `MAX_CONTEXT_SIZE == 21` | Implemented exactly as 20 active words plus final `cursor_limit`. |
 | `pxPortInitialiseStack()` | Implemented as `fiber_port_context_init()`: FreeRTOS-compatible no-TrustZone protected layout plus one-past cursor. Fiber deliberately uses zero scratch seeds and preserves live r9 instead of FreeRTOS debug markers. |
 | `vPortStoreTaskMPUSettings()` | Implemented for the default Fiber policy: exact raw stack pair at context index 0; all configurable pairs disabled until a future optional MPU API exists. |
-| `prvSetupMPU()` | Implemented as `fiber_port_mpu_build_global_regions()`, which builds the four RBAR/RLAR pairs and never writes MPU registers in this slice. |
-| `vRestoreContextOfFirstTask()` | Deferred to a separately audited first-start slice. |
+| `prvSetupMPU()` | The construction helper `fiber_port_mpu_build_global_regions()` builds the four pairs. Slice 3 writes and reads them back in `fiber_port_mpu_program_global_image_while_disabled()` before naked per-context restore. |
+| `vStartFirstTask()` | Implemented as `fiber_port_start_first_context()`: validates the direct SVC vector and initial MSP, clears stale PendSV, resets MSP, then invokes SVC 70. |
+| `vRestoreContextOfFirstTask()` | Implemented as `fiber_port_restore_first_context_from_svc()`: MPU off, MAIR0, RNR 4/8/12 pair blocks, exact MPU enable, active-image readback, protected frame restore, and exception return. |
+| `SVC_Handler` / `vPortSVCHandler_C()` | Implemented as the direct strong `SVC_Handler` plus fail-closed `fiber_port_svc_dispatch()`. Only SVC 70 first start and SVC 72 task return are recognized; 71 is reserved until PendSV exists. |
 | MPU `PendSV_Handler` | Deferred to a separately audited save/select/program/restore slice. |
 | `xIsPrivileged`, `vRaisePrivilege`, `vResetPrivilege`, syscall dispatch | Deferred with the optional MPU application policy ABI; no no-op public stubs are exported. |
 | `mpu_wrappers_v2_asm.c`, ACL, system-call stack | Deferred as optional MPU-wrapper functionality. The basic selected CPU profile does not pretend to implement FreeRTOS queue/wrapper policy. |
 | SecureContext, TF-M, PAC, BTI, FPU, MVE | Absent by construction. Each needs a distinct selected-port or optional ABI cohort. |
 
-## Slice-2 Proof
+## Slice-3 Proof
 
 The compile matrix must prove all of the following before this slice is
 accepted:
@@ -232,20 +244,33 @@ the construction object has the exact linker-boundary/cohort dependency surface
 synthetic 8/16-region linker images retain privileged, unprivileged, syscall,
 current-slot, and stack sections with section GC enabled at -O2, -Os, and LTO
 the linker fragment rejects a missing syscall-flash boundary
-construction emits no SVC, PendSV, `msr`, or MPU-register write instruction
+construction remains separate from runtime and emits no SVC, PendSV, `msr`, or
+MPU-register write instruction
 Secure CMSE, missing MPU/VTOR, FPU, MVE, PAC/BTI, wrong core, invalid region
 count, runtime-selectable override, and selector mode fail closed
-there is no runtime source, strong handler, forward ABI, or optional MPU API
+the runtime has exactly one strong SVC handler, no PendSV handler, no forward
+runtime ABI, and no optional MPU API
+the protected first-start runtime compiles for 8 and 16 regions at `-O2`,
+`-Os`, and LTO; it retains exactly the required strong symbols and code/data
+sections under section GC
+synthetic vectors retain strong SVC in slot 11, and a competing strong SVC
+handler fails link
+generated assembly proves explicit SVC 70/72, MPU/MAIR0/RNR/RBAR/RLAR writes,
+`PSP`/`PSPLIM`/`CONTROL`/`BASEPRI` restore, and explicit SVC `EXC_RETURN`
+transfer and `0xFFFFFFB8` provenance revalidation in naked restore
+pinned FreeRTOS generated-assembly parity covers first start, MPU activation,
+and protected special/general/completion restore at `-O2` and `-Os`
 ```
 
-No generated SVC/PendSV assembly parity or board validation is claimed until
-the corresponding source exists. That omission is deliberate and tested as
-absence, not hidden behind a placeholder implementation.
+SVC generated-assembly parity is now claimed only for the mechanisms listed
+above. PendSV generated parity and board validation remain absent by design;
+the matrix proves there is no placeholder `PendSV_Handler` that could imply
+otherwise.
 
 ## Next Slice
 
-The next implementation slice may add protected SVC first start and the first
-real MPU activation/readback. It must consume the sealed context image without
-changing the 20-active-word plus `cursor_limit` semantics, program the exact
-global image plus context pairs through RNR, and add paired generated-assembly
-proof before introducing PendSV save/select/replace/restore.
+The next implementation slice is protected PendSV save/select/MPU-
+replace/restore. It must consume the sealed 20-active-word plus `cursor_limit`
+image without changing its geometry, preserve the direct SVC ownership already
+introduced here, and add paired generated-assembly, archive/ELF/cohort, and
+negative handler proof before becoming runtime-selectable.

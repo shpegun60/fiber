@@ -434,7 +434,8 @@ function Test-ContextPortBoundary {
         "fiber\port\ARM_CM33F_NTZ\non_secure\fiber_port.c",
         "fiber\port\ARM_CM3_MPU\fiber_port.c",
 		"fiber\port\ARM_CM4_MPU\fiber_port.c",
-		"fiber\port\ARM_CM0_MPU\fiber_port.c"
+		"fiber\port\ARM_CM0_MPU\fiber_port.c",
+		"fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c"
     )
     $expectedSlotOwners = @($slotOwnerSources | ForEach-Object {
         (Join-Path $RepositoryRoot $_).ToLowerInvariant()
@@ -3483,22 +3484,20 @@ function Test-ArmCm33MpuLayoutContract {
             "FREERTOS_PARITY.md")) {
         $path = Join-Path $profileDir $required
         if (-not (Test-Path -LiteralPath $path)) {
-            throw "ARM_CM33_MPU slice 1 is missing required file: $path"
+            throw "ARM_CM33_MPU layout contract is missing required file: $path"
         }
     }
     if (-not (Test-Path -LiteralPath $fixture)) {
-        throw "ARM_CM33_MPU slice 1 is missing its layout fixture"
+        throw "ARM_CM33_MPU layout contract is missing its layout fixture"
     }
 
     foreach ($forbiddenArtifact in @(
-            "fiber_port_private.h",
-            "fiber_port.c",
             "fiber_port_exception.c",
             "fiber_port_mpu_abi.h",
             "fiber_port_mpu_abi.c",
             "fiber_port_secure_context.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenArtifact)) {
-            throw "ARM_CM33_MPU slice 1 exposed runtime artifact: $forbiddenArtifact"
+            throw "ARM_CM33_MPU staged profile exposed forbidden artifact: $forbiddenArtifact"
         }
     }
 
@@ -3507,7 +3506,7 @@ function Test-ArmCm33MpuLayoutContract {
             (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
         if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
                 "ARM_CM33_MPU", [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM33_MPU slice 1 must not enter global selection: $selector"
+            throw "ARM_CM33_MPU staged profile must not enter global selection: $selector"
         }
     }
 
@@ -3538,7 +3537,9 @@ function Test-ArmCm33MpuLayoutContract {
             "The first 20 context words are active",
             "cursor_limit",
             "There is no `xSecureContext` word",
-            "no runtime source, strong handler, forward ABI")) {
+            "the runtime has exactly one strong SVC handler, no PendSV handler, no forward",
+            "protected first-start runtime compiles for 8 and 16 regions",
+            "is passed explicitly from the C dispatcher into naked restore")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM33_MPU parity ledger lost reference evidence: $requiredParity"
@@ -3771,7 +3772,7 @@ int fiber_arm_cm33_mpu_selected_facade_probe(void)
             Name = "secure-cmse"
             CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-mcmse")
             Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
-            Diagnostic = "slice 1 excludes Secure CMSE builds"
+            Diagnostic = "selected profile excludes Secure CMSE builds"
             Main = $mainHeader
         },
         [pscustomobject]@{
@@ -3863,6 +3864,281 @@ int fiber_arm_cm33_mpu_selected_facade_probe(void)
     }
 }
 
+function Test-ArmCm33MpuFirstStartContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$Objcopy,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM33_MPU\non_secure"
+    $runtimeSource = Join-Path $profileDir "fiber_port.c"
+    $bootSource = Join-Path $profileDir "fiber_port_boot.c"
+    $privateHeader = Join-Path $profileDir "fiber_port_private.h"
+    $linkerContract = Join-Path $profileDir "fiber_port_linker_contract.ld"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_mpu_first_start_probe.c"
+    $fixtureLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_mpu_first_start.ld"
+    $competing = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_mpu_competing_svc.c"
+
+    foreach ($required in @($runtimeSource, $bootSource, $privateHeader,
+            $linkerContract, $fixture, $fixtureLinker, $competing)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "ARM_CM33_MPU first-start slice is missing: $required"
+        }
+    }
+
+    $runtimeText = Get-Content -LiteralPath $runtimeSource -Raw
+    foreach ($requiredText in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "fiber_port_prepare_first_start",
+            "fiber_port_svc_dispatch",
+            "fiber_port_mpu_program_global_image_while_disabled",
+            "fiber_port_mpu_validate_active_initial_context",
+            "fiber_port_start_first_context",
+            "fiber_port_restore_first_context_from_svc",
+            "fiber_port_restore_first_context_from_svc(current, exc_return);",
+            "fiber_port_unprivileged_task_return",
+            "void SVC_Handler(void)",
+            "fiber_portSVC_START",
+            "fiber_portSVC_RETURN",
+            "fiber_portMPU_MAIR0_REG",
+            "fiber_portMPU_CTRL_REQUIRED")) {
+        if ($runtimeText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33_MPU first-start source lost required mechanism: $requiredText"
+        }
+    }
+    foreach ($forbiddenText in @(
+            "void PendSV_Handler(",
+            "fiber_port_runtime_",
+            "fiber_runtime_port_abi.h",
+            "fiber_internal_runtime_select_scheduler_candidate",
+            "fiber_internal_runtime_publish_current_context")) {
+        if ($runtimeText.IndexOf($forbiddenText,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33_MPU first-start slice acquired forbidden ownership: $forbiddenText"
+        }
+    }
+
+    $privateText = Get-Content -LiteralPath $privateHeader -Raw
+    foreach ($forbiddenInclude in @(
+            "fiber_port_runtime_abi.h",
+            "fiber_runtime_port_abi.h")) {
+        if ($privateText.IndexOf($forbiddenInclude,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33_MPU private first-start boundary acquired runtime ABI: $forbiddenInclude"
+        }
+    }
+
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM33_MPU", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Staged ARM_CM33_MPU first-start profile entered global selection: $selector"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm33-mpu-first-start"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SVCall_IRQn = -5,
+    DebugMonitor_IRQn = -4, PendSV_IRQn = -2,
+    SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#endif
+"@
+    $warningArgs = @(
+        "-ffreestanding", "-fno-builtin", "-fno-common",
+        "-ffunction-sections", "-fdata-sections", "-Wall", "-Wextra",
+        "-Werror", "-Wundef", "-Werror=undef",
+        "-Werror=implicit-function-declaration", "-Werror=return-type")
+    $requiredRuntimeSymbols = @(
+        "fiber_port_prepare_first_start",
+        "fiber_port_svc_dispatch",
+        "fiber_port_start_first_context",
+        "fiber_port_restore_first_context_from_svc",
+        "fiber_port_unprivileged_task_return",
+        "SVC_Handler")
+
+    foreach ($regions in @(8, 16)) {
+        $variantDir = Join-Path $probeDir "regions-$regions"
+        New-Item -ItemType Directory -Path $variantDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $variantDir "main.h") `
+            -Value $mainHeader -Encoding ASCII
+        $defines = @(
+            "-DFIBER_PORT_BUILD_SELECTED=1",
+            "-DFIBER_PORT_ARMV8M_MAINLINE=1",
+            "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=$regions")
+        $includes = @(
+            "-I$variantDir", "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot", "-I$CmsisPath")
+
+        foreach ($modeSpec in @(
+                [pscustomobject]@{ Name = "o2"; Optimization = "-O2"; Lto = 0 },
+                [pscustomobject]@{ Name = "os"; Optimization = "-Os"; Lto = 0 },
+                [pscustomobject]@{ Name = "o2-lto"; Optimization = "-O2"; Lto = 1 })) {
+            $mode = $modeSpec.Name
+            $ltoArgs = if ($modeSpec.Lto -ne 0) { @("-flto") } else { @() }
+            $baseArgs = @(
+                "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft",
+                "-std=gnu11", $modeSpec.Optimization) + $ltoArgs +
+                $warningArgs + $defines + $includes
+            $runtimeObject = Join-Path $variantDir "fiber_port-$mode.o"
+            $bootObject = Join-Path $variantDir "fiber_port_boot-$mode.o"
+            $fixtureObject = Join-Path $variantDir "probe-$mode.o"
+            & $Compiler @($baseArgs + @("-save-temps=obj", "-c",
+                $runtimeSource, "-o", $runtimeObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU first-start source failed compile ($regions/$mode)"
+            }
+            & $Compiler @($baseArgs + @("-c", $bootSource, "-o", $bootObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU first-start boot source failed compile ($regions/$mode)"
+            }
+            & $Compiler @($baseArgs + @("-c", $fixture, "-o", $fixtureObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU first-start fixture failed compile ($regions/$mode)"
+            }
+
+            $objectNm = if ($modeSpec.Lto -ne 0) { $GccNm } else { $Nm }
+            $runtimeDefined = @(& $objectNm -g --defined-only $runtimeObject)
+            foreach ($symbol in $requiredRuntimeSymbols) {
+                if (-not ($runtimeDefined -match
+                        "\bT\s+$([regex]::Escape($symbol))$")) {
+                    throw "ARM_CM33_MPU first-start object lost strong symbol: $symbol / $regions/$mode"
+                }
+            }
+            if ($runtimeDefined -match '\bPendSV_Handler$|\bfiber_port_runtime_') {
+                throw "ARM_CM33_MPU first-start object exposed unowned runtime symbol: $regions/$mode"
+            }
+
+            if ($modeSpec.Lto -eq 0) {
+                $runtimeSymbols = (& $Objdump -t $runtimeObject) -join "`n"
+                foreach ($symbol in @(
+                        "fiber_port_prepare_first_start",
+                        "fiber_port_svc_dispatch",
+                        "fiber_port_start_first_context",
+                        "fiber_port_restore_first_context_from_svc",
+                        "SVC_Handler")) {
+                    if ($runtimeSymbols -notmatch
+                            "(?m)\bF\s+\.fiber_port_privileged_functions\s+[0-9a-fA-F]+\s+$([regex]::Escape($symbol))$") {
+                        throw "ARM_CM33_MPU first-start escaped privileged section: $symbol / $regions/$mode"
+                    }
+                }
+                if ($runtimeSymbols -notmatch
+                        "(?m)\bF\s+\.fiber_port_syscalls\s+[0-9a-fA-F]+\s+fiber_port_unprivileged_task_return$") {
+                    throw "ARM_CM33_MPU task-return veneer escaped syscall flash: $regions/$mode"
+                }
+                $runtimeDisassembly = (& $Objdump -dr $runtimeObject) -join "`n"
+                foreach ($requiredPattern in @(
+                        '(?im)\bsvc\s+70\b',
+                        '(?im)\bsvc\s+72\b',
+                        '(?im)0xe000ed08', '(?im)0xe000ed94',
+                        '(?im)0xe000ed98', '(?im)0xe000ed9c',
+                        '(?im)0xe000edc0', '(?im)\bmsr\s+psp',
+                        '(?im)\bmsr\s+psplim', '(?im)\bmsr\s+control',
+                        '(?im)\bmsr\s+basepri', '(?im)\bmov\s+lr,\s*r1',
+                        '(?im)\bmvn(?:\.w)?\s+r5,\s*#71',
+                        '(?im)\bcmp\s+lr,\s*r5',
+                        '(?im)\bldmia(?:\.w)?\s+r0!',
+                        '(?im)\bstmia(?:\.w)?\s+r2', '(?im)\bbx\s+lr')) {
+                    if ($runtimeDisassembly -notmatch $requiredPattern) {
+                        throw "ARM_CM33_MPU first-start generated assembly lost $requiredPattern / $regions/$mode"
+                    }
+                }
+                if ($runtimeDisassembly -match '(?im)\bPendSV_Handler\b') {
+                    throw "ARM_CM33_MPU first-start generated assembly acquired PendSV: $regions/$mode"
+                }
+            }
+
+            $elf = Join-Path $variantDir "first-start-$mode.elf"
+            & $Compiler @($baseArgs + @(
+                "-nostdlib", "-Wl,--gc-sections",
+                "-Wl,-T,$fixtureLinker", "-Wl,-T,$linkerContract",
+                $runtimeObject, $bootObject, $fixtureObject, "-o", $elf))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU first-start synthetic ELF failed link ($regions/$mode)"
+            }
+            $elfDefined = @(& $objectNm -g --defined-only $elf)
+            foreach ($symbol in @($requiredRuntimeSymbols + @(
+                    "fiber_arm_cm33_mpu_first_start_probe"))) {
+                if (-not ($elfDefined -match
+                        "\bT\s+$([regex]::Escape($symbol))$")) {
+                    throw "ARM_CM33_MPU first-start ELF lost symbol: $symbol / $regions/$mode"
+                }
+            }
+            if ($elfDefined -match '\bPendSV_Handler$') {
+                throw "ARM_CM33_MPU first-start ELF must not own PendSV: $regions/$mode"
+            }
+            $svcSymbols = @($elfDefined | Where-Object {
+                $_ -match '^([0-9a-fA-F]+)\s+T\s+SVC_Handler$'
+            })
+            if ($svcSymbols.Count -ne 1) {
+                throw "ARM_CM33_MPU first-start ELF must retain one strong SVC_Handler: $regions/$mode"
+            }
+            [void]($svcSymbols[0] -match '^([0-9a-fA-F]+)')
+            $svcAddress = [Convert]::ToUInt32($Matches[1], 16)
+            $vectorBinary = Join-Path $variantDir "vectors-$mode.bin"
+            & $Objcopy -O binary --only-section=.fiber_test_vectors $elf $vectorBinary
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU first-start vector extraction failed: $regions/$mode"
+            }
+            $vectorBytes = [IO.File]::ReadAllBytes($vectorBinary)
+            if ($vectorBytes.Length -lt (16 * 4)) {
+                throw "ARM_CM33_MPU first-start vector fixture is truncated: $regions/$mode"
+            }
+            if ([BitConverter]::ToUInt32($vectorBytes, 11 * 4) -ne
+                    ($svcAddress -bor [uint32]1)) {
+                throw "ARM_CM33_MPU first-start vector slot 11 lost SVC_Handler: $regions/$mode"
+            }
+
+            $competingObject = Join-Path $variantDir "competing-$mode.o"
+            & $Compiler @($baseArgs + @("-c", $competing, "-o", $competingObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33_MPU competing-SVC fixture failed compile ($regions/$mode)"
+            }
+            $duplicateLog = Join-Path $variantDir "duplicate-$mode.log"
+            $duplicate = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+                @($baseArgs + @(
+                    "-nostdlib", "-Wl,--gc-sections",
+                    "-Wl,-T,$fixtureLinker", "-Wl,-T,$linkerContract",
+                    $runtimeObject, $bootObject, $fixtureObject, $competingObject,
+                    "-o", (Join-Path $variantDir "duplicate-$mode.elf"))) `
+                -LogPath $duplicateLog
+            if (($duplicate.ExitCode -eq 0) -or
+                    ($duplicate.Output -notmatch '(?s)multiple definition.*SVC_Handler')) {
+                throw "ARM_CM33_MPU competing strong SVC handlers must fail link ($regions/$mode)`n$($duplicate.Output)"
+            }
+        }
+    }
+}
+
 function Test-ArmCm33MpuConstructionContract {
     param(
         [string]$RepositoryRoot,
@@ -3891,8 +4167,6 @@ function Test-ArmCm33MpuConstructionContract {
         }
     }
     foreach ($forbiddenArtifact in @(
-            "fiber_port_private.h",
-            "fiber_port.c",
             "fiber_port_exception.c",
             "fiber_port_mpu_abi.h",
             "fiber_port_mpu_abi.c",
@@ -5990,7 +6264,7 @@ SECTIONS
             CpuArgs = $hardCpuArgs
             Defines = $manifestDefines + @(
                 "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
-            Diagnostic = "is non-MPU; select a separate MPU profile"
+            Diagnostic = "ARM_CM33F_NTZ is non-MPU"
         },
         [pscustomobject]@{
             Name = "wrong-cmsis-core"
@@ -10909,7 +11183,7 @@ try {
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
         -BuildRoot $buildRoot
-    Write-Host "== ARM_CM33_MPU slice-2 layout/trait contract =="
+    Write-Host "== ARM_CM33_MPU layout/trait contract through slice 3 =="
     Test-ArmCm33MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis `
         -BuildRoot $buildRoot
@@ -10917,6 +11191,10 @@ try {
     Test-ArmCm33MpuConstructionContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -CmsisPath $cmsis `
         -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33_MPU protected SVC first-start contract =="
+    Test-ArmCm33MpuFirstStartContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -Objcopy $objcopy -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `

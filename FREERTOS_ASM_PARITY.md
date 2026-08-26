@@ -57,6 +57,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
+| `ARM_CM33_MPU/non_secure` (staged) | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | protected first SVC request, MPU disable/MAIR0/per-context RBAR-RLAR/enable, protected first restore; PendSV intentionally absent |
 | `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
@@ -69,6 +70,12 @@ in its own record; it never inherits a complete runtime claim. The script fails
 if a staged profile becomes selectable, is also listed as complete parity, or a
 new port source is neither paired nor explicitly staged. Adding a port source
 therefore cannot silently reduce coverage.
+
+The staged `ARM_CM33_MPU/non_secure` profile is compiled against the pinned
+8- and 16-region MPU reference configurations at both optimization levels. Its
+executable proof covers only the protected first SVC transition and the first
+MPU activation/restore; it is intentionally not counted as a complete runtime
+profile until protected PendSV save/select/MPU-replace/restore exists.
 
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
@@ -230,6 +237,22 @@ the selected-port MPU activation helper and only then enters
 `fiber_port_restore_first_context_from_svc()`. The executable proof checks this
 cross-function order as well as the register restore performed by the helper;
 splitting the functions may not omit or postpone MPU activation.
+
+### FAP-CM33-MPU-STAGED-SVC
+
+The staged M33 MPU profile deliberately has one strong SVC owner but no PendSV
+owner. Its SVC dispatcher proves vector and frame provenance, installs and
+reads back the four linker-derived global regions while the MPU is disabled,
+then passes and revalidates the original SVC `EXC_RETURN` in naked restore.
+The restore writes MAIR0 and the selected context's RNR `4..N-1` pairs, enables
+the exact `MPU_CTRL=ENABLE|PRIVDEFENA` image, validates the active image, and
+only then restores PSP, PSPLIM, CONTROL, core registers, protected hardware
+frame, and the selected context's final `EXC_RETURN`. FreeRTOS performs
+equivalent first-task machinery across
+`prvSetupMPU()` and `vRestoreContextOfFirstTask()`; Fiber keeps the split
+explicit so the selected context and SVC origin remain independently checked.
+This difference does not claim PendSV, scheduler, public MPU API, or hardware
+runtime support.
 
 ### FAP-MPU-ATOMIC-SWITCH
 

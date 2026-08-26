@@ -59,9 +59,9 @@ extern const unsigned char __fiber_mpu_current_context_slot_end__[];
 extern const unsigned char __fiber_mpu_unprivileged_ram_start__[];
 extern const unsigned char __fiber_mpu_unprivileged_ram_end__[];
 
-/* The later SVC-return slice owns this continuation. Construction deliberately
- * references it now so an integration cannot place task-return code outside
- * the linker-owned syscall flash range. */
+/* The staged SVC-return veneer owns this continuation. Construction references
+ * it so an integration cannot place task-return code outside the linker-owned
+ * syscall flash range. */
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portSYSCALL_FUNCTION
 void fiber_port_unprivileged_task_return(void);

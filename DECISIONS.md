@@ -1,5 +1,33 @@
 # Fiber Decision Log
 
+## 2026-08-26: Add ARM_CM33_MPU Protected SVC First Start
+
+`ARM_CM33_MPU/non_secure` slice 3 adds exactly one behavior path: the protected
+first transition from privileged Thread mode through strong direct `SVC_Handler`
+to the selected unprivileged context. It remains outside the global selector and
+the eight-function forward ABI, and it does not define `PendSV_Handler` or a
+scheduler bridge.
+
+The implementation follows pinned `GCC/ARM_CM33_NTZ/non_secure` MPU mechanics:
+the SVC dispatcher disables PRIMASK, installs and reads back the four
+linker-derived global region pairs with the MPU disabled, then naked restore
+writes MAIR0 and the selected context pairs via RNR/RBAR/RLAR before enabling
+the exact `ENABLE|PRIVDEFENA` control image. It validates the enabled image,
+restores `PSP`, `PSPLIM`, `CONTROL`, core registers and copied hardware frame,
+then exception-returns using the selected context's validated `EXC_RETURN`
+token.
+
+The original SVC `EXC_RETURN` is passed as an explicit C argument into naked
+restore, moved back to `LR`, and revalidated before target-context restore
+replaces `LR` with the selected context's token. A normal C call otherwise
+replaces `LR` with its ordinary return address; treating that address as
+`EXC_RETURN` would be a real first-start fault. The compile matrix now proves
+this generated sequence at 8 and 16 MPU regions under `-O2`, `-Os`, and LTO,
+as well as direct slot-11 vector ownership and duplicate-handler rejection.
+
+PendSV save/select/MPU replacement, runtime-selectability, optional MPU API,
+and hardware isolation remain separate future work.
+
 ## 2026-08-26: Construct ARM_CM33_MPU Protected Images Before Runtime
 
 `ARM_CM33_MPU/non_secure` slice 2 adds only the exact construction and linker

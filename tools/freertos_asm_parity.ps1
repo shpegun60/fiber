@@ -442,6 +442,22 @@ $ports = @(
         ReferenceDefines = @()
     },
     [pscustomobject]@{
+        Name = "ARM_CM33_MPU_STAGE_8"; CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33_MPU\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
+        ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_MPU_STAGE_16"; CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33_MPU\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=16")
+        ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=16")
+    },
+    [pscustomobject]@{
         Name = "ARM_CM33F_NTZ_CONSTRUCTION"
         CpuArgs = @("-mcpu=cortex-m33", "-mfpu=fpv5-sp-d16", "-mfloat-abi=hard")
         CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
@@ -486,7 +502,17 @@ $ports = @(
     }
 )
 
-$stagedRuntimeProfiles = @()
+$stagedRuntimeProfiles = @(
+    "fiber\port\ARM_CM33_MPU\non_secure"
+)
+
+# The staged profile compiles against the same pinned FreeRTOS source, but it
+# is intentionally excluded from the complete-runtime inventory until PendSV
+# and the forward ABI arrive.
+$stagedAssemblyPorts = @(
+    $ports | Where-Object { $_.Name -like "ARM_CM33_MPU_STAGE_*" }
+)
+$ports = @($ports | Where-Object { $_.Name -notlike "ARM_CM33_MPU_STAGE_*" })
 
 Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
     -PortDefinitions $ports -StagedRuntimeProfiles $stagedRuntimeProfiles
@@ -520,7 +546,7 @@ try {
     Write-Host "Parity optimization: $Optimization"
 
     $compiled = @{}
-    foreach ($port in $ports) {
+    foreach ($port in @($ports + $stagedAssemblyPorts)) {
         $portBuild = Join-Path $BuildRoot $port.Name
         New-Item -ItemType Directory -Path $portBuild -Force | Out-Null
         Write-CmsisMainHeader -Directory $portBuild `
@@ -819,6 +845,89 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
         -Ledger $ledger
+
+    # ARM_CM33_MPU is intentionally staged: this slice proves its protected
+    # first SVC transfer and MPU activation only. PendSV remains absent until
+    # the matching save/select/replace/restore slice exists. Both supported
+    # global MPU geometries must preserve the same reference mechanism.
+    foreach ($armCm33MpuStageName in @(
+            "ARM_CM33_MPU_STAGE_8",
+            "ARM_CM33_MPU_STAGE_16")) {
+    $pair = $compiled[$armCm33MpuStageName]
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-start" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f',
+            '\bdsb\b', '\bisb\b', '\bsvc\s+\d+\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('fiber_port_prepare_first_start', '\bcpsid\s+i',
+            '\bmsr\s+MSP', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b',
+            '\bisb\b', '\bsvc\s+70\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE",
+            "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "MPU-activation" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bbic(?:\.w)?\s+r2,\s*r2,\s*#1',
+            '\bstr\s+r2,\s*\[r1,\s*#0\]', '\badds\s+r0,\s*#4',
+            '\bldr\s+r1,\s*\[r0,\s*#0\]', '\bstr\s+r1,\s*\[r2,\s*#0\]',
+            '\bmovs\s+r3,\s*#4', '\bstr\s+r3,\s*\[r1,\s*#0\]',
+            '\bldmia(?:\.w)?\s+r0!', '\bstmia(?:\.w)?\s+r2',
+            '\borr(?:\.w)?\s+r2,\s*r2,\s*#1', '\bdsb\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bmov\s+lr,\s*r1', '\bpush\s+\{r0,\s*lr\}',
+            '\bbic(?:\.w)?\s+r2,\s*r2,\s*#1',
+            '\bstr\s+r2,\s*\[r1,\s*#0\]', '\badds\s+r0,\s*#4',
+            '\bldr\s+r1,\s*\[r0,\s*#0\]', '\bstr\s+r1,\s*\[r2,\s*#0\]',
+            '\bmovs\s+r3,\s*#4', '\bstr\s+r3,\s*\[r1,\s*#0\]',
+            '\bldmia(?:\.w)?\s+r0!', '\bstmia(?:\.w)?\s+r2',
+            '\borr(?:\.w)?\s+r2,\s*r2,\s*#5',
+            'fiber_port_mpu_validate_active_initial_context', '\bdsb\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-FIRST-ACTIVATION-SPLIT", "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-special" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs_first_task" `
+        -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-general" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs_first_task" `
+        -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-complete" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done_first_task" `
+        -ReferencePatterns @('\bstr\s+r1,\s*\[r0,\s*#0\]',
+            '\bmsr\s+BASEPRI', '\bbx\s+lr\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bstr\s+r1,\s*\[r0,\s*#0\]',
+            '\bmsr\s+BASEPRI', '\bcpsie\s+i', '\bbx\s+lr\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    }
 
     # ARMv7-M uses BASEPRI in both implementations. Fiber additionally carries
     # EXC_RETURN per context instead of manufacturing FD in the SVC handler.

@@ -1,11 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 1.
+ * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 3.
  * This is the FreeRTOS ARM_CM33_NTZ no-FPU/no-TrustZone/no-SecureContext
- * profile with an explicit 8- or 16-region manifest. It intentionally exports
- * types and traits only; SVC/PendSV and the forward runtime ABI arrive in
- * later separately validated slices.
+ * profile with an explicit 8- or 16-region manifest. It owns protected
+ * construction and first-start SVC/MPU mechanics only. PendSV and the forward
+ * runtime ABI remain separate later slices.
  */
 #ifndef FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_
@@ -47,7 +47,7 @@
 #endif
 
 #if defined(__ARM_FEATURE_CMSE) && ((__ARM_FEATURE_CMSE + 0) >= 3)
-# error "[fiber]: ARM_CM33_MPU slice 1 excludes Secure CMSE builds"
+# error "[fiber]: ARM_CM33_MPU selected profile excludes Secure CMSE builds"
 #endif
 
 #if defined(__FPU_PRESENT) && ((__FPU_PRESENT + 0) != 0) && \
@@ -56,28 +56,28 @@
 #endif
 
 #if defined(__FPU_USED) && ((__FPU_USED + 0) != 0)
-# error "[fiber]: ARM_CM33_MPU slice 1 requires __FPU_USED == 0"
+# error "[fiber]: ARM_CM33_MPU selected profile requires __FPU_USED == 0"
 #endif
 
 #if defined(__ARM_FP) && ((__ARM_FP + 0) != 0)
-# error "[fiber]: ARM_CM33_MPU slice 1 does not permit an FP register ABI"
+# error "[fiber]: ARM_CM33_MPU selected profile does not permit an FP register ABI"
 #endif
 
 #if defined(__VFP_FP__) && !defined(__SOFTFP__)
-# error "[fiber]: ARM_CM33_MPU slice 1 does not permit a hard-FP compiler ABI"
+# error "[fiber]: ARM_CM33_MPU selected profile does not permit a hard-FP compiler ABI"
 #endif
 
 #if defined(__ARM_FEATURE_MVE) && ((__ARM_FEATURE_MVE + 0) != 0)
-# error "[fiber]: ARM_CM33_MPU slice 1 does not permit MVE"
+# error "[fiber]: ARM_CM33_MPU selected profile does not permit MVE"
 #endif
 
 #if defined(__ARM_FEATURE_PAC_DEFAULT) || defined(__ARM_FEATURE_PAUTH) || \
 		defined(__ARM_FEATURE_PAUTH_DEFAULT)
-# error "[fiber]: ARM_CM33_MPU slice 1 does not permit PAC"
+# error "[fiber]: ARM_CM33_MPU selected profile does not permit PAC"
 #endif
 
 #if defined(__ARM_FEATURE_BTI_DEFAULT) || defined(__ARM_FEATURE_BTI)
-# error "[fiber]: ARM_CM33_MPU slice 1 does not permit BTI"
+# error "[fiber]: ARM_CM33_MPU selected profile does not permit BTI"
 #endif
 
 #if !defined(__NVIC_PRIO_BITS) || (__NVIC_PRIO_BITS < 1) || \
@@ -130,6 +130,51 @@
 #define fiber_portSVC_YIELD 71u
 #define fiber_portSVC_RETURN 72u
 
+/* ARMv8-M Mainline system-control and MPU register dictionary.  Keep these
+ * selected-port facts explicit instead of relying on device-header aliases;
+ * the exact addresses are part of the protected first-start assembly ABI. */
+#define fiber_portNVIC_INT_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED04u))
+#define fiber_portNVIC_PENDSVSET_BIT (1u << 28u)
+#define fiber_portNVIC_PENDSVCLEAR_BIT (1u << 27u)
+#define fiber_portSCB_VTOR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED08u))
+#define fiber_portSCB_CCR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED14u))
+#define fiber_portSCB_SHCSR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED24u))
+#define fiber_portSCB_CCR_STKALIGN_BIT (1u << 9u)
+#define fiber_portSCB_MEMFAULTENA_BIT (1u << 16u)
+
+#define fiber_portMPU_TYPE_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED90u))
+#define fiber_portMPU_CTRL_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED94u))
+#define fiber_portMPU_RNR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED98u))
+#define fiber_portMPU_RBAR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000ED9Cu))
+#define fiber_portMPU_RLAR_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000EDA0u))
+#define fiber_portMPU_MAIR0_REG \
+	(*((volatile uint32_t *)(uintptr_t)0xE000EDC0u))
+#define fiber_portMPU_TYPE_DREGION_MASK 0x0000FF00u
+
+#define fiber_portVECTOR_INDEX_SVC 11u
+#define fiber_portVECTOR_INDEX_PENDSV 14u
+#define fiber_portVECTOR_ALIGNMENT 128u
+#define fiber_portXPSR_IPSR_MASK 0x000001FFu
+#define fiber_portXPSR_STACK_ALIGN_BIT (1u << 9u)
+#define fiber_portXPSR_THUMB_BIT (1u << 24u)
+
+#define fiber_portBASEPRI_SYM "BASEPRI"
+#define fiber_portASM_WRITE_BASEPRI_R0 \
+	"msr   " fiber_portBASEPRI_SYM ", r0           \n"
+#define fiber_portASM_WRITE_BASEPRI_R0_SYNC \
+	fiber_portASM_WRITE_BASEPRI_R0 \
+	"dsb                                  \n" \
+	"isb                                  \n"
+
 /* Exact ARMv8-M Mainline MPU layout used by the pinned GCC ARM_CM33_NTZ port.
  *
  * Hardware region numbers and FiberContext::mpu_regions[] indexes are
@@ -160,6 +205,8 @@
 #define fiber_portMPU_CTRL_PRIVDEFENA 0x00000004u
 #define fiber_portMPU_CTRL_REQUIRED \
 	(fiber_portMPU_CTRL_ENABLE | fiber_portMPU_CTRL_PRIVDEFENA)
+#define fiber_portMPU_LAST_CONTEXT_BLOCK_REGION \
+	(fiber_portMPU_TOTAL_REGIONS - 4u)
 
 #define fiber_portMPU_RBAR_ADDRESS_MASK UINT32_C(0xFFFFFFE0)
 #define fiber_portMPU_RLAR_ADDRESS_MASK UINT32_C(0xFFFFFFE0)
@@ -205,6 +252,44 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 	uint32_t value;
 	fiber_portASM volatile("mov %0, r9" : "=r"(value));
 	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, " fiber_portBASEPRI_SYM
+			: "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
+{
+	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0"
+			:: "r"(value) : "memory");
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+}
+
+fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+{
+	return (uintptr_t)fiber_portSCB_VTOR_REG &
+		~((uintptr_t)fiber_portVECTOR_ALIGNMENT - 1u);
+}
+
+fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+{
+	return (const uint32_t *)fiber_port_vectors_base_addr();
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
+{
+	return *(const volatile uint32_t *)(fiber_port_vectors_base_addr() +
+			((uintptr_t)index * sizeof(uint32_t)));
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
+{
+	return fiber_port_read_vector_slot(0u);
 }
 
 #ifdef __cplusplus
@@ -408,7 +493,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM33_MPU slice 1 must not expose runtime operations");
+		"[fiber]: ARM_CM33_MPU must remain non-selectable until full runtime parity");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
 		"[fiber]: ARM_CM33_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
@@ -419,6 +504,13 @@ FIBER_STATIC_ASSERT((fiber_portSVC_START != fiber_portSVC_YIELD) &&
 		(fiber_portSVC_START != fiber_portSVC_RETURN) &&
 		(fiber_portSVC_YIELD != fiber_portSVC_RETURN),
 		"[fiber]: ARM_CM33_MPU SVC namespace collided");
+FIBER_STATIC_ASSERT(fiber_portVECTOR_INDEX_SVC == 11u &&
+		fiber_portVECTOR_INDEX_PENDSV == 14u &&
+		fiber_portVECTOR_ALIGNMENT == 128u,
+		"[fiber]: ARM_CM33_MPU vector facts changed");
+FIBER_STATIC_ASSERT((fiber_portMPU_LAST_CONTEXT_BLOCK_REGION == 4u) ||
+		(fiber_portMPU_LAST_CONTEXT_BLOCK_REGION == 12u),
+		"[fiber]: ARM_CM33_MPU context MPU block geometry changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		FIBER_PORT_CM33_MPU_CONTEXT_REGION_COUNT,
 		"[fiber]: ARM_CM33_MPU per-context region count changed");
@@ -455,13 +547,13 @@ FIBER_STATIC_ASSERT(FIBER_PORT_HAS_CONTROL_SLOT == 1,
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_PSPLIM_SLOT == 1,
 		"[fiber]: ARM_CM33_MPU must preserve PSPLIM per context");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 0,
-		"[fiber]: ARM_CM33_MPU slice 1 must not expose SecureContext");
+		"[fiber]: ARM_CM33_MPU selected profile must not expose SecureContext");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_PAC_KEY_SLOT == 0,
-		"[fiber]: ARM_CM33_MPU slice 1 must not expose PAC state");
+		"[fiber]: ARM_CM33_MPU selected profile must not expose PAC state");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_FPU == 0 &&
 		FIBER_PORT_HAS_MVE == 0 && FIBER_PORT_HAS_PAC == 0 &&
 		FIBER_PORT_HAS_BTI == 0,
-		"[fiber]: ARM_CM33_MPU slice 1 feature cohort changed");
+		"[fiber]: ARM_CM33_MPU selected feature cohort changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C86u,
 		"[fiber]: ARM_CM33_MPU context feature identity changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_CM33_MPU_PSP_INITIAL_FRAME_BYTES == 32u &&
