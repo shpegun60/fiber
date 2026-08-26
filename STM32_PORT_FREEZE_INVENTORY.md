@@ -65,6 +65,7 @@ pinned FreeRTOS parity ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
+| `ARM_CM33/non_secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request | compile/cohort validated only; no runtime, gateway, API, or assembly claim |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
@@ -147,10 +148,15 @@ hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
 
-The TrustZone-capable Non-secure scheduler profile is distinct from the current
-NTZ profile. It needs the matching security-domain EXC_RETURN, banked register
-policy, vector source, NSACR/CPACR policy, and the versioned SecureContext
-companion defined in `TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.
+`ARM_CM33/non_secure` slice 1 now freezes the separate companion-aware
+Non-secure public layout from `GCC/ARM_CM33/non_secure`: the 11-word
+`[xSecureContext, PSPLIM, EXC_RETURN, r4-r11]` software frame and sealed
+pre-start `secure_stack_bytes` request. It is type/layout evidence only, not a
+runtime or SecureContext support claim. The TrustZone-capable scheduler remains
+distinct from the current NTZ profile and still needs security-domain
+EXC_RETURN/banked-register policy, vector source, NSACR/CPACR policy, a
+versioned SecureContext companion, and all SVC/PendSV mechanics defined in
+`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.
 
 A fiber without an attached SecureContext must retain the ordinary Non-secure
 switch path. A fiber with an attachment must save and load the matching Secure

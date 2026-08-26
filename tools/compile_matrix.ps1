@@ -5068,6 +5068,333 @@ typedef enum IRQn {
     }
 }
 
+function Test-ArmCm33SecureContextLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM33\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_context_layout_probe.c"
+    foreach ($required in @(
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h",
+            "fiber_portmacro.h",
+            "FREERTOS_PARITY.md")) {
+        $path = Join-Path $profileDir $required
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "ARM_CM33 SecureContext layout is missing required file: $path"
+        }
+    }
+    if (-not (Test-Path -LiteralPath $fixture)) {
+        throw "ARM_CM33 SecureContext layout is missing its layout fixture"
+    }
+
+    foreach ($forbiddenArtifact in @(
+            "fiber_port_boot.h",
+            "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_port.c",
+            "fiber_port_secure_context_abi.h",
+            "fiber_port_secure_context_abi.c",
+            "fiber_port_secure_context.c")) {
+        if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenArtifact)) {
+            throw "ARM_CM33 SecureContext layout exposed premature artifact: $forbiddenArtifact"
+        }
+    }
+
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM33\non_secure", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33 SecureContext layout must not enter global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM33 SecureContext public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "GCC/ARM_CM33/non_secure",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "60DB3E36671EA9075ED11F369940330355377B7B0B2F044E843E8853BFC9FBAE",
+            "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
+            "6F39F5CB7A24766DF3FA025E41E0E502301550136151B5E2EABDFA9AC4E42D60",
+            "8209F4BAF60741E8ED5516AF9706FC4B5B2EE3CF16452EDB0C034B7DDDE443B4",
+            "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72",
+            "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E",
+            "xSecureContext = 0 initially",
+            "eleven software words / 44 bytes",
+            "secure_stack_bytes",
+            "not a runtime port")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm33-secure-context-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+#ifndef FIBER_TEST_FPU_USED
+#define FIBER_TEST_FPU_USED 0U
+#endif
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#if FIBER_TEST_FPU_USED != 0U
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $cppWarningArgs = @($warningArgs | Where-Object {
+        ($_ -ne "-Werror=implicit-function-declaration")
+    })
+    $typeIncludeArgs = @("-I$profileDir")
+    $manifestIncludeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
+_Static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
+_Static_assert(sizeof(FiberContext) == 80u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_arm_cm33_secure_context_type_only_object;
+'@
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include <cstddef>
+#include "fiber_port_types.h"
+
+static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
+static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
+static_assert(sizeof(FiberContext) == 80u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_arm_cm33_secure_context_cpp_type_only_object;
+'@
+    $facadeProbe = Join-Path $probeDir "selected-facade.c"
+    Set-Content -LiteralPath $facadeProbe -Encoding ASCII -Value @'
+#include <stddef.h>
+#include "fiber/fiber_core.h"
+
+_Static_assert(sizeof(FiberContext) == 80u, "selected facade size");
+_Static_assert(offsetof(FiberContext, boot.secure_stack_bytes) == 32u,
+               "selected facade secure request offset");
+int fiber_arm_cm33_secure_context_selected_facade_probe(void)
+{
+    return 0;
+}
+'@
+
+    $typeObject = Join-Path $probeDir "type-only.o"
+    & $Compiler -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 `
+        @warningArgs @typeIncludeArgs -c $typeProbe -o $typeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33 SecureContext type-only C header failed without CMSIS"
+    }
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    & $Compiler -x c++ -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c++17 `
+        -fno-exceptions -fno-rtti @cppWarningArgs @typeIncludeArgs `
+        -c $cppProbe -o $cppObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33 SecureContext type-only C++ header failed without CMSIS"
+    }
+
+    $selectedDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+    $facadeObject = Join-Path $probeDir "selected-facade.o"
+    & $Compiler -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -std=c11 `
+        @warningArgs @selectedDefines @manifestIncludeArgs `
+        -c $facadeProbe -o $facadeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM33 SecureContext build-selected public facade failed compile"
+    }
+
+    foreach ($optimization in @("-O2", "-Os")) {
+        $mode = $optimization.Substring(1).ToLowerInvariant()
+        $layoutObject = Join-Path $probeDir "layout-$mode.o"
+        $manifestArgs = @(
+            "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-std=c11",
+            $optimization) + $warningArgs + $selectedDefines + $manifestIncludeArgs
+        & $Compiler @manifestArgs -c $fixture -o $layoutObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 SecureContext exact layout manifest failed compile ($mode)"
+        }
+        $defined = @(& $Nm -g --defined-only $layoutObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM33 SecureContext layout probe ($mode)"
+        }
+        $cohorts = @($defined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if ($cohorts.Count -ne 1) {
+            throw "ARM_CM33 SecureContext layout must define one exact cohort ($mode)"
+        }
+        foreach ($token in @(
+                "armv8m_mainline",
+                "p0x43333353u",
+                "l0x00010001u",
+                "_h1_j1_v1_d1_r1_",
+                "_z8u_y0_w2_g3_",
+                "_i0_o0xFFFFFFBCu_c0_s1_x1_m0_a0_b0_t1_n1_k0_q0")) {
+            if ($cohorts[0].IndexOf($token,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "ARM_CM33 SecureContext exact cohort lost token ${token} ($mode): $($cohorts[0])"
+            }
+        }
+        $runtimeDefinitions = @($defined | Where-Object {
+            $_ -match '\b(?:fiber_port_runtime_|fiber_port_context_init$|SVC_Handler$|PendSV_Handler$)'
+        })
+        if ($runtimeDefinitions.Count -ne 0) {
+            throw "ARM_CM33 SecureContext layout probe emitted runtime symbols ($mode): $($runtimeDefinitions -join ', ')"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "selector-mode"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_PROFILE=5")
+            Diagnostic = "ARM_CM33 is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "missing-vtor"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "requires __VTOR_PRESENT == 1"
+            Main = ($mainHeader -replace '__VTOR_PRESENT 1U', '__VTOR_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "manifest requires CMSIS __CORTEX_M == 33"
+            Main = ($mainHeader -replace 'core_cm33.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "wrong-architecture"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1")
+            Diagnostic = "requires an ARMv8-M Mainline compiler target"
+            Main = ($mainHeader -replace 'core_cm33.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-mcmse")
+            Defines = $selectedDefines
+            Diagnostic = "requires a Non-secure CMSE level 1 build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_TEST_FPU_USED=1")
+            Diagnostic = "requires __FPU_USED == 0"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mve"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-D__ARM_FEATURE_MVE=1")
+            Diagnostic = "does not permit MVE"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "runtime-selectable-override"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_PORT_RUNTIME_SELECTABLE=1")
+            Diagnostic = "runtime-selectable state must not be predefined"
+            Main = $mainHeader
+        }
+    )
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $log = Join-Path $caseDir "compile.log"
+        $arguments = @($case.CompilerArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-common",
+            "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+            "-I$caseDir", "-I$profileDir",
+            "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+            "-I$(Join-Path $RepositoryRoot 'fiber')",
+            "-I$RepositoryRoot", "-I$CmsisPath") +
+            $case.Defines + @(
+            "-c", $fixture, "-o", (Join-Path $caseDir "invalid.o")))
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments $arguments -LogPath $log
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM33 SecureContext manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 function Test-ArmCm33NtzRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -11800,6 +12127,10 @@ try {
     Test-ArmCm33MpuRuntimeIntegration -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33 SecureContext layout/trait contract =="
+    Test-ArmCm33SecureContextLayoutContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis `
         -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `

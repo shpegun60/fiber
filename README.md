@@ -63,10 +63,11 @@ production profile must provide a safe default that runs the same feature-blind
 application source without any extension call; optional headers are for
 deliberate non-portable profile integration only.
 
-`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md` defines the future TrustZone
-SecureContext lifecycle: a selected TrustZone port attaches Secure state to a
-specific fiber before `fiber_start()`, then owns all Secure save/load work at
-switch time. It is a design contract only; no current port exports that API.
+`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md` defines the TrustZone SecureContext
+lifecycle: a selected TrustZone port attaches Secure state to a specific fiber
+before `fiber_start()`, then owns all Secure save/load work at switch time.
+`ARM_CM33/non_secure` currently freezes only the companion-aware layout; no
+current runtime exports the attach API or implements Secure save/load.
 
 This portability guarantee covers the fiber lifecycle and context-switch
 mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another
@@ -189,6 +190,12 @@ M33 NTZ full build-selected runtime source group:
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_private.h
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
+
+M33 TrustZone companion-aware staged layout source group:
+               fiber/port/ARM_CM33/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM33/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33/non_secure/FREERTOS_PARITY.md
 
 M33F NTZ full build-selected FPU runtime source group:
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_types.h

@@ -2,9 +2,13 @@
 
 ## Status
 
-This is a future selected-port contract. No current fiber port implements it.
-In particular, `ARM_CM23_NTZ`, `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and
-`ARM_CM7/r0p1` do not export a SecureContext API.
+No current fiber runtime implements this contract. `ARM_CM23_NTZ`,
+`ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not export a
+SecureContext API. `ARM_CM33/non_secure` slice 1 freezes only the
+companion-aware public storage and 11-word saved-frame layout; it has no
+runtime source, gateway, or user-facing attach API. A working SecureContext
+profile requires that selected runtime plus a separately versioned Secure
+companion artifact.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in

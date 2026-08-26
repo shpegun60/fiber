@@ -1,5 +1,30 @@
 # Fiber Decision Log
 
+## 2026-08-26: Stage ARM_CM33 TrustZone SecureContext Layout
+
+`ARM_CM33/non_secure` slice 1 is an explicit build-selected, non-MPU, no-FPU
+TrustZone Non-secure type/layout cohort pinned to
+`GCC/ARM_CM33/non_secure` plus its `secure/` companion reference group. It is
+not a partial runtime and does not enter global selection.
+
+The frozen software frame is eleven words:
+
+```text
+[xSecureContext][PSPLIM][EXC_RETURN][r4-r11]
+```
+
+This is intentionally distinct from the ten-word `ARM_CM33_NTZ` frame. The
+public boot record reserves one sealed `secure_stack_bytes` pre-start request;
+the live opaque SecureContext handle stays only in the saved frame's low word,
+matching FreeRTOS `xSecureContext` ownership. No public attach header, Secure
+gateway, SVC/PendSV implementation, or runtime claim exists in this slice.
+
+The next implementation work must first introduce the separate optional common
+pre-publication lifecycle guard and a versioned cross-image companion ABI. Only
+then may the port add attachment, first-start allocation/load, and exact
+PendSV SecureContext save/load mechanics. TF-M remains mutually exclusive with
+the fiber-owned companion for this selected profile.
+
 ## 2026-08-26: Activate ARM_CM33_MPU As An Explicit Runtime Port
 
 `ARM_CM33_MPU/non_secure` slice 5 activates the frozen eight-operation forward
