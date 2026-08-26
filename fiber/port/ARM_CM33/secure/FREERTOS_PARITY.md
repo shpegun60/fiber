@@ -2,10 +2,12 @@
 
 ## Status
 
-This is a gateway-only Secure companion artifact for the exact no-MPU, no-FPU
-`ARM_CM33/non_secure` layout profile. It exports four versioned NSC identity
-queries and no SecureContext state, stack allocator, Secure service, SVC,
-PendSV, or user-facing API. It is not a SecureContext runtime claim.
+This is a Secure companion foundation for the exact no-MPU, no-FPU
+`ARM_CM33/non_secure` layout profile. Its NSC surface remains exactly four
+versioned identity queries. A Secure-private fixed pool now provides the later
+allocation substrate, but it exports no allocator/handle entry through NSC and
+still has no Secure service, SVC, PendSV, selected runtime, or user-facing API.
+It is not a SecureContext runtime claim.
 
 ## Pinned Reference
 
@@ -22,8 +24,8 @@ secure_init.c:         1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3
 
 FreeRTOS exposes `SecureContext_Init`, allocation, load, save, free, and
 Secure initialization services as NSC functions. It does not define a
-companion-version handshake. Fiber therefore adds a smaller gateway-only v1
-identity surface before introducing any stateful operation:
+companion-version handshake. Fiber therefore adds a smaller v1 identity-only
+gateway surface while keeping its pool state Secure-private:
 
 ```text
 fiber_secure_gateway_v1_abi_version
@@ -39,8 +41,38 @@ context cohort.
 
 ## Deliberate Boundary
 
-The next Secure companion slice owns fixed-pool/application-storage policy and
-the exact `SecureContext_AllocateContext` equivalent. The later selected
-Non-secure runtime must then prove FreeRTOS-shaped handler-side allocation,
-save, and load ordering at `-O2` and `-Os`. This gateway artifact does not
-pretend to perform any of those actions.
+## Static Storage Mapping
+
+FreeRTOS keeps an eight-entry metadata array and obtains every Secure stack from
+`secure_heap` through `pvPortMalloc`; `SecureContext_FreeContext` later returns
+that stack through `vPortFree`. That matches a dynamic task lifecycle but is the
+wrong ownership model for sealed static fibers.
+
+Fiber therefore maps only the durable parts of `SecureContext_AllocateContext`:
+
+```text
+FreeRTOS record prefix       -> FiberSecureContextRecord first four words
+index + 1 opaque handle      -> identical zero-invalid handle convention
+two 0xFEF5EDA5 seal words    -> identical per-request stack-top seal
+one task / one context       -> one opaque owner token / one handle
+secure_heap allocation       -> manifest-budgeted fixed Secure pool
+SecureContext_FreeContext    -> intentionally absent for static Fiber lifetime
+```
+
+`FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT` and
+`FIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES` are mandatory Secure-image
+configuration, not defaults in the portable API. A slot reserves exactly the
+configured capacity plus eight seal bytes; a future attach request may use an
+eight-byte-aligned size no larger than that capacity. The pool metadata and
+stack slots live in `.fiber_secure_context_pool`, which the Secure linker must
+map to Secure RAM only. Pool initialization explicitly clears every record and
+every fixed stack slot, so that custom `NOLOAD` placement never relies on a
+generic startup `.bss` clear to erase stale Secure RAM. It is an explicit,
+destructive Secure-boot operation and must never be called again after an
+allocation exists.
+
+The pool only initializes, reserves, validates, and looks up Secure records. It
+does not expose NSC allocation, mutate a Non-secure `FiberContext`, write PSP or
+PSPLIM, or participate in SVC/PendSV. The later selected Non-secure runtime
+must prove the FreeRTOS-shaped allocation, save, and load ordering at `-O2` and
+`-Os`.

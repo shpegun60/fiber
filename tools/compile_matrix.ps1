@@ -5673,11 +5673,15 @@ function Test-ArmCm33SecureGatewayAbi {
     $secureSource = Join-Path $secureDir "fiber_secure_gateway.c"
     $secureHeader = Join-Path $secureDir "fiber_secure_gateway_abi.h"
     $contractHeader = Join-Path $secureDir "fiber_secure_gateway_contract.h"
+    $securePoolSource = Join-Path $secureDir "fiber_secure_context_pool.c"
+    $securePoolHeader = Join-Path $secureDir "fiber_secure_context_pool.h"
     $nonSecureHeader = Join-Path $nonSecureDir `
         "fiber_port_secure_gateway_abi.h"
     $secureParity = Join-Path $secureDir "FREERTOS_PARITY.md"
     $secureProbe = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_secure_probe.c"
+    $securePoolProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_context_pool_probe.c"
     $nonSecureProbe = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_non_secure_probe.c"
     $secureLinker = Join-Path $RepositoryRoot `
@@ -5685,8 +5689,9 @@ function Test-ArmCm33SecureGatewayAbi {
     $nonSecureLinker = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_non_secure.ld"
     foreach ($required in @($secureSource, $secureHeader, $contractHeader,
-            $nonSecureHeader, $secureParity, $secureProbe, $nonSecureProbe,
-            $secureLinker, $nonSecureLinker)) {
+            $securePoolSource, $securePoolHeader, $nonSecureHeader, $secureParity,
+            $secureProbe, $securePoolProbe, $nonSecureProbe, $secureLinker,
+            $nonSecureLinker)) {
         if (-not (Test-Path -LiteralPath $required)) {
             throw "ARM_CM33 Secure gateway ABI is missing: $required"
         }
@@ -5748,6 +5753,43 @@ function Test-ArmCm33SecureGatewayAbi {
             [System.StringComparison]::Ordinal) -ge 0) {
         throw "Non-secure gateway import header must not declare Secure entry attributes"
     }
+    $securePoolHeaderText = Get-Content -LiteralPath $securePoolHeader -Raw
+    foreach ($requiredText in @(
+            "FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT",
+            "FIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES",
+            "FIBER_SECURE_CONTEXT_HANDLE_INVALID",
+            "FiberSecureContextRecord",
+            "fiber_secure_context_pool_boot_initialize",
+            "fiber_secure_context_pool_allocate",
+            "fiber_secure_context_pool_lookup_owned")) {
+        if ($securePoolHeaderText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext pool header lost required contract: $requiredText"
+        }
+    }
+    if ($securePoolHeaderText.IndexOf("cmse_nonsecure_entry",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM33 SecureContext pool must remain Secure-private, not an NSC ABI"
+    }
+    $securePoolText = Get-Content -LiteralPath $securePoolSource -Raw
+    foreach ($requiredText in @(
+            ".fiber_secure_context_pool",
+            "FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE",
+            "fiber_secure_context_pool_clear_stack",
+            "fiber_secure_context_pool_record_is_valid",
+            "fiber_secure_context_pool_fail_closed")) {
+        if ($securePoolText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext pool source lost required invariant: $requiredText"
+        }
+    }
+    foreach ($forbiddenText in @("pvPortMalloc", "vPortFree",
+            "cmse_nonsecure_entry", "SecureContext_FreeContext")) {
+        if ($securePoolText.IndexOf($forbiddenText,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33 SecureContext pool reintroduced a forbidden runtime dependency: $forbiddenText"
+        }
+    }
 
     $parity = Get-Content -LiteralPath $secureParity -Raw
     foreach ($requiredParity in @(
@@ -5758,7 +5800,8 @@ function Test-ArmCm33SecureGatewayAbi {
             "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E",
             "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149",
             "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
-            "companion-version handshake")) {
+            "companion-version handshake", "secure_heap", "fixed Secure pool",
+            "0xFEF5EDA5")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM33 Secure gateway parity ledger lost reference evidence: $requiredParity"
@@ -5824,6 +5867,15 @@ typedef enum IRQn {
         "-DFIBER_PORT_BUILD_SELECTED=1",
         "-DFIBER_PORT_ARMV8M_MAINLINE=1"
     )
+    $securePoolCount = [uint64]3
+    $securePoolStackBytes = [uint64]256
+    $securePoolSealBytes = [uint64]8
+    $securePoolRecordBytes = [uint64]24
+    $securePoolDefines = @(
+        ("-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=" + $securePoolCount + "u"),
+        ("-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=" +
+            $securePoolStackBytes + "u")
+    )
 
     foreach ($modeSpec in @(
             [pscustomobject]@{ Name = "o2"; Optimization = "-O2"; Lto = 0 },
@@ -5836,22 +5888,33 @@ typedef enum IRQn {
         $secureArgs = @(
             "-mcpu=cortex-m33", "-mthumb", "-mcmse", "-mfloat-abi=soft",
             "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
-            $secureIncludes
+            $securePoolDefines + $secureIncludes
         $nonSecureArgs = @(
             "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft",
             "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
             $selectedDefines +
             $nonSecureIncludes
         $secureObject = Join-Path $modeDir "secure-gateway.o"
+        $securePoolObject = Join-Path $modeDir "secure-context-pool.o"
         $secureProbeObject = Join-Path $modeDir "secure-probe.o"
+        $securePoolProbeObject = Join-Path $modeDir "secure-context-pool-probe.o"
         $nonSecureProbeObject = Join-Path $modeDir "non-secure-probe.o"
         & $Compiler @($secureArgs + @("-c", $secureSource, "-o", $secureObject))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Secure gateway source failed compile ($mode)"
         }
+        & $Compiler @($secureArgs + @("-c", $securePoolSource, "-o", $securePoolObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 SecureContext pool source failed compile ($mode)"
+        }
         & $Compiler @($secureArgs + @("-c", $secureProbe, "-o", $secureProbeObject))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Secure gateway fixture failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $securePoolProbe,
+            "-o", $securePoolProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 SecureContext pool fixture failed compile ($mode)"
         }
         & $Compiler @($nonSecureArgs + @("-c", $nonSecureProbe,
             "-o", $nonSecureProbeObject))
@@ -5874,7 +5937,8 @@ typedef enum IRQn {
         & $Compiler @($secureArgs + @(
             "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
             "-Wl,--out-implib,$importLibrary", "-Wl,-T,$secureLinker",
-            $secureObject, $secureProbeObject, "-o", $secureElf))
+            $secureObject, $securePoolObject, $secureProbeObject,
+            $securePoolProbeObject, "-o", $secureElf))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Secure CMSE gateway image failed link ($mode)"
         }
@@ -5882,6 +5946,21 @@ typedef enum IRQn {
             throw "ARM_CM33 Secure CMSE link did not create an import library ($mode)"
         }
         $importDefinitions = @(& $Nm -g --defined-only $importLibrary)
+        $actualGatewayImports = @($importDefinitions | ForEach-Object {
+            if ($_ -match '\b(fiber_secure_gateway_v[0-9]+_[A-Za-z0-9_]+)$') {
+                $Matches[1]
+            }
+        } | Sort-Object -Unique)
+        if (($actualGatewayImports.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $actualGatewayImports)) {
+            throw "ARM_CM33 Secure CMSE import surface changed ($mode)"
+        }
+        if (@($importDefinitions | Where-Object {
+                $_ -match '\bfiber_secure_context_pool_'
+            }).Count -ne 0) {
+            throw "ARM_CM33 SecureContext pool leaked into the NSC import library ($mode)"
+        }
         $nscStart = [uint64]0x0C010000
         $nscEnd = [uint64]0x0C011000
         foreach ($symbol in $expectedGatewayFunctions) {
@@ -5912,6 +5991,50 @@ typedef enum IRQn {
                 ($secureNscSection[0] -notmatch "\s0c010000\s") -or
                 ($secureNscSection[0] -notmatch "2\*\*5$")) {
             throw "ARM_CM33 Secure CMSE image lost the aligned NSC veneer section ($mode)"
+        }
+        $securePoolSection = @($secureSections | Where-Object {
+            $_ -match "\.fiber_secure_context_pool"
+        })
+        if (($securePoolSection.Count -ne 1) -or
+                ($securePoolSection[0] -notmatch "\s30000000\s") -or
+                ($securePoolSection[0] -notmatch "2\*\*3$")) {
+            throw "ARM_CM33 SecureContext pool lost its aligned Secure-RAM section ($mode)"
+        }
+        $poolSymbolExpectations = @(
+            [pscustomobject]@{
+                Name = "fiber_secure_context_pool_initialized"
+                Size = [uint64]4
+            },
+            [pscustomobject]@{
+                Name = "fiber_secure_context_pool_records"
+                Size = $securePoolCount * $securePoolRecordBytes
+            },
+            [pscustomobject]@{
+                Name = "fiber_secure_context_pool_stacks"
+                Size = $securePoolCount *
+                    ($securePoolStackBytes + $securePoolSealBytes)
+            }
+        )
+        $securePoolSymbols = @(& $Nm -S -a $secureElf)
+        foreach ($expected in $poolSymbolExpectations) {
+            $definition = @($securePoolSymbols | Where-Object {
+                $_ -match ("\b" + [regex]::Escape($expected.Name) + "$")
+            })
+            if ($definition.Count -ne 1) {
+                throw "ARM_CM33 SecureContext pool lost storage symbol $($expected.Name) ($mode)"
+            }
+            $definitionMatch = [regex]::Match($definition[0],
+                ("^\s*([0-9A-Fa-f]+)\s+([0-9A-Fa-f]+)\s+[A-Za-z]\s+" +
+                 [regex]::Escape($expected.Name) + "$"))
+            if (-not $definitionMatch.Success) {
+                throw "ARM_CM33 SecureContext pool storage symbol is malformed: $($expected.Name) ($mode)"
+            }
+            $address = [Convert]::ToUInt64($definitionMatch.Groups[1].Value, 16)
+            $size = [Convert]::ToUInt64($definitionMatch.Groups[2].Value, 16)
+            if (($size -ne $expected.Size) -or ($address -lt [uint64]0x30000000) -or
+                    (($address + $size) -gt [uint64]0x30010000)) {
+                throw "ARM_CM33 SecureContext pool storage escaped its exact Secure-RAM contract: $($expected.Name) ($mode)"
+            }
         }
 
         $nonSecureElf = Join-Path $modeDir "non-secure.elf"
@@ -6004,6 +6127,51 @@ void Reset_Handler(void)
             ($secureWithoutCmse.Output.IndexOf("Secure CMSE level 3 build",
                 [System.StringComparison]::Ordinal) -lt 0)) {
         throw "ARM_CM33 Secure gateway must reject a non-CMSE build.`n$($secureWithoutCmse.Output)"
+    }
+
+    $poolInvalidCases = @(
+        [pscustomobject]@{
+            Name = "missing-config"
+            Defines = @()
+            Expected = "requires FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT"
+        },
+        [pscustomobject]@{
+            Name = "zero-count"
+            Defines = @(
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=0u",
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u"
+            )
+            Expected = "pool count must be non-zero"
+        },
+        [pscustomobject]@{
+            Name = "too-small-stack"
+            Defines = @(
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=7u"
+            )
+            Expected = "stack capacity is too small"
+        },
+        [pscustomobject]@{
+            Name = "unaligned-stack"
+            Defines = @(
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+                "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=260u"
+            )
+            Expected = "stack capacity must be eight-byte aligned"
+        }
+    )
+    foreach ($case in $poolInvalidCases) {
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments (@(
+            "-mcpu=cortex-m33", "-mthumb", "-mcmse", "-mfloat-abi=soft",
+            "-std=gnu11") + $warningArgs + $case.Defines + $secureIncludes + @(
+                "-c", $securePoolSource, "-o",
+                (Join-Path $probeDir ("invalid-pool-" + $case.Name + ".o")))) `
+            -LogPath (Join-Path $probeDir ("invalid-pool-" + $case.Name + ".log"))
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Expected,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM33 SecureContext pool invalid manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
     }
 }
 

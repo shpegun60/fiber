@@ -25,6 +25,12 @@ SECTIONS
 		KEEP(*(.gnu.sgstubs*))
 		. = ALIGN(32);
 	} > FLASH_NSC
+	.fiber_secure_context_pool (NOLOAD) : ALIGN(8)
+	{
+		. = ALIGN(8);
+		KEEP(*(.fiber_secure_context_pool))
+		. = ALIGN(8);
+	} > RAM
 	.bss (NOLOAD) :
 	{
 		*(.bss*)

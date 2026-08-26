@@ -4,7 +4,8 @@
 
 Slices 1-2 freeze the build-selected public storage and physical saved-frame
 dictionary for the no-MPU, no-FPU Cortex-M33 TrustZone Non-secure profile, plus
-the paired gateway-only Secure companion identity ABI. They do not provide
+the paired identity-only NSC gateway plus Secure-private storage foundation.
+They do not provide
 `fiber_port_context_init()`, SVC, PendSV, Secure allocation/save/load, or
 `fiber_port_secure_context_abi.h`; consequently this is not a runtime port or a
 SecureContext support claim.

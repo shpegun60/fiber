@@ -6,11 +6,12 @@ No current fiber runtime implements this contract. `ARM_CM23_NTZ`,
 `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not export a
 SecureContext API. The reusable optional common pre-publication lifecycle ABI
 is implemented and link-versioned, but no selected port currently retains it.
-`ARM_CM33/non_secure` and `ARM_CM33/secure` now provide only a gateway-only
-v1 companion identity artifact; they do not provide a selected runtime,
-user-facing attach API, Secure allocation, or SecureContext save/load. A
-working SecureContext profile requires those later runtime slices in addition
-to the separately versioned Secure companion artifact.
+`ARM_CM33/non_secure` and `ARM_CM33/secure` now provide a versioned companion
+identity artifact plus a Secure-private static storage foundation; they do not
+provide a selected runtime, user-facing attach API, selected-port allocation
+bridge, or SecureContext save/load. A working SecureContext profile requires
+those later runtime slices in addition to the separately versioned Secure
+companion artifact.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in
@@ -63,9 +64,10 @@ TF-M is an alternative Secure provider. A TF-M profile uses its matching
 NTZ-style CPU port plus TF-M integration; it does not also use a fiber-owned
 SecureContext companion for the same profile.
 
-## Implemented Gateway-Only V1
+## Implemented Gateway And Secure Storage Foundation
 
-The first concrete paired CM33 artifact is deliberately limited to identity:
+The public NSC surface of the first concrete paired CM33 artifact is deliberately
+limited to identity:
 
 ```text
 Non-secure import header
@@ -92,10 +94,40 @@ It also proves that a missing import library and a v2-only import library fail
 on the required v1 symbol at `-O2`, `-Os`, and `-O2 -flto`.
 
 The returned identity values are reserved for the later first-start runtime
-cohort check. This slice allocates no Secure state, stores no per-fiber handle,
-offers no public attachment header, and does not run SecureContext code from
-SVC or PendSV. It is build/link evidence only, not a SecureContext or hardware
-support claim.
+cohort check. Gateway v1 still exposes only those four immutable NSC functions.
+
+The paired Secure image now also has the private foundation:
+
+```text
+fiber/port/ARM_CM33/secure/fiber_secure_context_pool.h
+fiber/port/ARM_CM33/secure/fiber_secure_context_pool.c
+```
+
+It is deliberately not an NSC API and is never included by the Non-secure
+image. The Secure manifest must explicitly define both
+`FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT` and
+`FIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES`; there is no hidden RAM-cost
+default. One attached fiber reserves one fixed-capacity Secure stack slot plus
+two ARM stack-seal words (`0xFEF5EDA5`). The requested size must be nonzero,
+eight-byte aligned, and no larger than the manifest capacity. The pool preserves
+the FreeRTOS record prefix `[saved PSP, PSPLIM, stack top, owner]`, checks that
+an owner receives at most one handle, and treats handle zero as invalid.
+
+This is a static-lifetime Fiber replacement for the FreeRTOS heap-backed
+allocator: it intentionally has no `secure_heap`, `pvPortMalloc`, `vPortFree`,
+detach, or `SecureContext_FreeContext` equivalent. Its storage is emitted only
+into `.fiber_secure_context_pool`; a real Secure linker manifest must place that
+section in Secure RAM and never in NSC or Non-secure RAM. The Secure pool
+boot initialization explicitly clears every record and stack slot, so its
+correctness does not depend on a generic startup `.bss` loop covering this
+custom `NOLOAD` section. It is destructive by contract and must run exactly
+once before any allocation, never as a runtime reinitialization. The matrix
+proves the section, alignment, exact four-function NSC import surface, and invalid Secure
+configuration failures under `-O2`, `-Os`, and `-O2 -flto`.
+
+The selected runtime still stores no per-fiber handle, offers no public
+attachment header, and does not run SecureContext code from SVC or PendSV. This
+remains build/link evidence only, not a SecureContext or hardware support claim.
 
 ## Future User-Facing Selected-Port API
 

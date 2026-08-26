@@ -14,7 +14,7 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          ARM_CM33 Secure gateway slice-2 working checkpoint
+audited tree:          ARM_CM33 Secure companion pool slice-3 working checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
@@ -66,7 +66,7 @@ ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
-| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request plus four versioned NSC identity veneers | compile/cohort/CMSE-link validated only; no runtime, SecureContext API, assembly, or hardware claim |
+| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request, four versioned NSC identity veneers, and a Secure-private fixed stack pool | compile/cohort/CMSE-link/pool-placement validated only; no runtime, SecureContext API, assembly, or hardware claim |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
@@ -150,12 +150,14 @@ hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
 
-`ARM_CM33/non_secure` slices 1-2 now freeze the separate companion-aware
+`ARM_CM33/non_secure` slices 1-2 plus Secure slice 3 now freeze the separate companion-aware
 Non-secure public layout from `GCC/ARM_CM33/non_secure`: the 11-word
 `[xSecureContext, PSPLIM, EXC_RETURN, r4-r11]` software frame and sealed
 pre-start `secure_stack_bytes` request. The paired Secure artifact exports four
-versioned immutable NSC identity queries and passes real GNU CMSE Secure image,
-import-library, matching-image, missing-import, and v1/v2 mismatch proofs at
+versioned immutable NSC identity queries and owns a manifest-budgeted, static
+Secure-only pool with exact FreeRTOS two-word stack seals. It passes real GNU
+CMSE Secure image, import-library, matching-image, missing-import, v1/v2
+mismatch, exact NSC surface, Secure-RAM section, and invalid-manifest proofs at
 `-O2`, `-Os`, and `-O2 -flto`. It is not a runtime or SecureContext support claim. The common
 optional pre-publication lifecycle guard and its versioned link proof now exist,
 but this profile does not retain the guard or expose a feature API yet. The
