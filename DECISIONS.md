@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-08-26: Construct ARM_CM33_MPU Protected Images Before Runtime
+
+`ARM_CM33_MPU/non_secure` slice 2 adds only the exact construction and linker
+boundary that the next SVC/PendSV slices will consume. It does not activate the
+port through the global selector or the eight-function forward ABI.
+
+The pinned FreeRTOS ARMv8-M mapping has two distinct number spaces. Hardware
+MPU RNR `4` is the stack region, while the corresponding pair is stored in
+`FiberContext::mpu_regions[0]`; RNR `5..N-1` maps to context indexes `1..`.
+The selected port therefore has explicit `*_REGION_NUMBER` and
+`*_CONTEXT_*_INDEX` macros. An ambiguous `STACK_REGION` macro could otherwise
+write four entries past the four-pair 8-region context image.
+
+The slice builds four global RBAR/RLAR pairs in memory: privileged flash,
+unprivileged flash, syscall flash, and privileged SRAM. The common current
+context slot stays as a precisely placed 32-bit object inside privileged SRAM,
+not a separate MPU aperture. The linker contract owns twelve range boundaries,
+requires all MPU ranges to be exact 32-byte exclusive intervals, and rejects
+overlap among fixed global regions.
+
+`fiber_port_context_init()` creates only an unprivileged Fiber context. It
+requires context storage in privileged SRAM, the raw task stack in unprivileged
+RAM, task entry in unprivileged flash, and the future task-return continuation
+in syscall flash. It seals immutable boot metadata, MAIR0, and context MPU
+pairs. It deliberately does not write an MPU register, define a handler, or
+introduce a partial public runtime path.
+
 ## 2026-08-25: Stage ARM_CM33_MPU No-TrustZone Layout
 
 `ARM_CM33_MPU/non_secure` starts as an explicit build-selected type and trait

@@ -123,17 +123,21 @@ unprivileged yield and return services
 MPU linker isolation and stale-cohort rejection
 ```
 
-`ARM_CM33_MPU/non_secure` slice 1 now freezes the first of those cohorts as an
-explicit build-selected GCC profile. It is pinned to FreeRTOS
+`ARM_CM33_MPU/non_secure` slices 1-2 now freeze the first of those cohorts as
+an explicit build-selected GCC profile. It is pinned to FreeRTOS
 `GCC/ARM_CM33_NTZ/non_secure` with MPU enabled and TrustZone, FPU, MVE, PAC,
 and BTI disabled. The profile owns the exact 8- or 16-region MPU storage
 layout, 20 active protected words plus a final one-past cursor target, and an
-exact cohort identity. It deliberately provides no context constructor, MPU
-register write, SVC/PendSV handler, forward ABI, optional MPU API, or hardware
-claim yet; it is not counted among the complete runtime profiles above.
+exact cohort identity. Slice 2 adds sealed construction, strict 32-byte
+RBAR/RLAR encoding, default stack pair plus disabled configurable pairs, MAIR0,
+and linker-derived global images. The common current slot is exactly one pointer
+inside privileged SRAM, not an extra global MPU region. It deliberately
+provides no MPU register write, SVC/PendSV handler, forward ABI, optional MPU
+API, or hardware claim yet; it is not counted among the complete runtime
+profiles above.
 
-The next M33 MPU slice is sealed construction plus linker/global-image
-isolation. Only after that may first-start and PendSV save/program/restore be
+The next M33 MPU slice is protected SVC first start plus exact MPU
+activation/readback. Only after that may PendSV save/program/restore be
 implemented and compared against the pinned generated FreeRTOS assembly.
 
 ### 3. Cortex-M33 TrustZone And SecureContext

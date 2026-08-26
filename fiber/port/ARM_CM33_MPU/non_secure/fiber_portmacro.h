@@ -130,20 +130,30 @@
 #define fiber_portSVC_YIELD 71u
 #define fiber_portSVC_RETURN 72u
 
-/* Exact ARMv8-M Mainline MPU layout used by the pinned GCC ARM_CM33_NTZ port. */
+/* Exact ARMv8-M Mainline MPU layout used by the pinned GCC ARM_CM33_NTZ port.
+ *
+ * Hardware region numbers and FiberContext::mpu_regions[] indexes are
+ * intentionally named separately.  FreeRTOS programs the first context pair
+ * through RNR 4, but stores it at xRegionsSettings[0].  Treating both as
+ * "stack region" would index four words past the 8-region context image. */
 #define fiber_portMPU_TOTAL_REGIONS FIBER_PORT_CM33_MPU_TOTAL_REGIONS
-#define fiber_portMPU_PRIVILEGED_FLASH_REGION 0u
-#define fiber_portMPU_UNPRIVILEGED_FLASH_REGION 1u
-#define fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION 2u
-#define fiber_portMPU_PRIVILEGED_DATA_REGION 3u
-#define fiber_portMPU_STACK_REGION 4u
-#define fiber_portMPU_FIRST_CONFIGURABLE_REGION 5u
-#define fiber_portMPU_LAST_CONFIGURABLE_REGION \
+#define fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER 0u
+#define fiber_portMPU_UNPRIVILEGED_FLASH_REGION_NUMBER 1u
+#define fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER 2u
+#define fiber_portMPU_PRIVILEGED_DATA_REGION_NUMBER 3u
+#define fiber_portMPU_STACK_REGION_NUMBER 4u
+#define fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER 5u
+#define fiber_portMPU_LAST_CONFIGURABLE_REGION_NUMBER \
 	(fiber_portMPU_TOTAL_REGIONS - 1u)
 #define fiber_portMPU_CONFIGURABLE_REGION_COUNT \
-	(fiber_portMPU_TOTAL_REGIONS - fiber_portMPU_FIRST_CONFIGURABLE_REGION)
+	(fiber_portMPU_TOTAL_REGIONS - \
+	 fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER)
 #define fiber_portMPU_CONTEXT_REGION_COUNT \
 	FIBER_PORT_CM33_MPU_CONTEXT_REGION_COUNT
+#define fiber_portMPU_CONTEXT_STACK_INDEX 0u
+#define fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX 1u
+#define fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX \
+	(fiber_portMPU_CONTEXT_REGION_COUNT - 1u)
 #define fiber_portMPU_GLOBAL_REGION_COUNT 4u
 #define fiber_portMPU_EXPECTED_TYPE (fiber_portMPU_TOTAL_REGIONS << 8u)
 #define fiber_portMPU_CTRL_ENABLE 0x00000001u
@@ -154,12 +164,16 @@
 #define fiber_portMPU_RBAR_ADDRESS_MASK UINT32_C(0xFFFFFFE0)
 #define fiber_portMPU_RLAR_ADDRESS_MASK UINT32_C(0xFFFFFFE0)
 #define fiber_portMPU_RBAR_ACCESS_MASK (3u << 1u)
+#define fiber_portMPU_RBAR_SHAREABILITY_MASK (3u << 3u)
 #define fiber_portMPU_REGION_NON_SHAREABLE (0u << 3u)
+#define fiber_portMPU_REGION_INNER_SHAREABLE (1u << 3u)
+#define fiber_portMPU_REGION_OUTER_SHAREABLE (2u << 3u)
 #define fiber_portMPU_REGION_PRIVILEGED_READ_WRITE (0u << 1u)
 #define fiber_portMPU_REGION_READ_WRITE (1u << 1u)
 #define fiber_portMPU_REGION_PRIVILEGED_READ_ONLY (2u << 1u)
 #define fiber_portMPU_REGION_READ_ONLY (3u << 1u)
 #define fiber_portMPU_REGION_EXECUTE_NEVER 1u
+#define fiber_portMPU_RLAR_ATTR_INDEX_MASK (7u << 1u)
 #define fiber_portMPU_RLAR_ATTR_INDEX0 (0u << 1u)
 #define fiber_portMPU_RLAR_ATTR_INDEX1 (1u << 1u)
 #define fiber_portMPU_RLAR_REGION_ENABLE 1u
@@ -168,6 +182,34 @@
 #define fiber_portMPU_MAIR0_DEFAULT \
 	(fiber_portMPU_MAIR_NORMAL_MEMORY_BUFFERABLE_CACHEABLE | \
 	 (fiber_portMPU_MAIR_DEVICE_MEMORY_NGNRE << 8u))
+
+/* Exact linker sections consumed by the protected MPU construction and later
+ * SVC/PendSV slices.  The application linker script owns their addresses. */
+#define fiber_portPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_privileged_functions")))
+#define fiber_portUNPRIVILEGED_FUNCTION \
+	__attribute__((section(".fiber_port_unprivileged_functions")))
+#define fiber_portSYSCALL_FUNCTION \
+	__attribute__((section(".fiber_port_syscalls")))
+#define fiber_portPRIVILEGED_DATA \
+	__attribute__((section(".fiber_port_privileged_data")))
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Preserve r9 because an integration may use it as the platform/static-base
+ * register even though the pinned FreeRTOS debug seed uses a marker value. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 /* Frame and selected-port trait facts. */
 #define fiber_portSTACK_GROWTH (-1)
@@ -383,10 +425,23 @@ FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		(fiber_portMPU_TOTAL_REGIONS - 4u),
 		"[fiber]: ARM_CM33_MPU global/per-context region geometry changed");
-FIBER_STATIC_ASSERT(fiber_portMPU_STACK_REGION == 4u,
-		"[fiber]: ARM_CM33_MPU stack region changed");
-FIBER_STATIC_ASSERT(fiber_portMPU_FIRST_CONFIGURABLE_REGION == 5u,
-		"[fiber]: ARM_CM33_MPU configurable region origin changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER == 0u &&
+		fiber_portMPU_UNPRIVILEGED_FLASH_REGION_NUMBER == 1u &&
+		fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER == 2u &&
+		fiber_portMPU_PRIVILEGED_DATA_REGION_NUMBER == 3u &&
+		fiber_portMPU_STACK_REGION_NUMBER == 4u &&
+		fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER == 5u,
+		"[fiber]: ARM_CM33_MPU hardware MPU region numbering changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_STACK_INDEX == 0u &&
+		fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX == 1u &&
+		fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX ==
+			(fiber_portMPU_CONTEXT_REGION_COUNT - 1u),
+		"[fiber]: ARM_CM33_MPU context-image indexes changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
+		(1u + fiber_portMPU_CONFIGURABLE_REGION_COUNT) &&
+		fiber_portMPU_LAST_CONFIGURABLE_REGION_NUMBER ==
+			(fiber_portMPU_TOTAL_REGIONS - 1u),
+		"[fiber]: ARM_CM33_MPU context/hardware region mapping changed");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 21u,
 		"[fiber]: ARM_CM33_MPU protected context must contain 21 words");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_RESTORE_WORDS == 20u,

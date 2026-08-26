@@ -2,11 +2,12 @@
 
 ## Status
 
-This is slice 1 of the explicit build-selected `ARM_CM33_MPU/non_secure`
-profile. It freezes public storage, traits, MPU geometry, and exact cohort
-identity only. It does not yet provide context construction, MPU register
-writes, SVC, PendSV, any forward runtime ABI symbol, or a hardware-support
-claim.
+Slices 1-2 of the explicit build-selected `ARM_CM33_MPU/non_secure` profile
+freeze public storage, traits, MPU geometry, exact cohort identity, sealed
+context construction, and linker-derived global MPU images. The construction
+source writes only `FiberContext`; it does not program MPU registers. There is
+still no SVC, PendSV, forward runtime ABI symbol, optional MPU API, or
+hardware-support claim.
 
 The reference is the no-TrustZone ARMv8-M Mainline source group, not the
 TrustZone-capable `ARM_CM33/non_secure` source group. That distinction changes
@@ -24,7 +25,7 @@ Reference directory: portable/GCC/ARM_CM33_NTZ/non_secure
 | --- | --- | --- |
 | `portmacro.h` | `F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B` | M33/Mainline identity and no-MVE policy mapped to the selected manifest. |
 | `portmacrocommon.h` | `324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2` | MPU region roles, RBAR/RLAR/MAIR dictionary, `xMPU_SETTINGS`, and `MAX_CONTEXT_SIZE` audited. |
-| `port.c` | `BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A` | `pxPortInitialiseStack()` and MPU image construction recorded for later slices. |
+| `port.c` | `BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A` | `pxPortInitialiseStack()`, `vPortStoreTaskMPUSettings()`, and `prvSetupMPU()` adapted into sealed construction and in-memory global-image encoding. |
 | `portasm.c` | `DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5` | First restore and PendSV save/program/restore order recorded for later assembly proof. |
 | `mpu_wrappers_v2_asm.c` | `00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743CE1706F3E` | Deferred to a future optional MPU-wrapper ABI. It is not copied as a stub. |
 
@@ -122,19 +123,80 @@ the existing ARM_CM23_NTZ and ARM_CM33_NTZ cohorts.
 The FreeRTOS ARMv8-M MPU region roles are retained:
 
 ```text
-0  privileged flash
-1  unprivileged flash
-2  unprivileged syscall flash
-3  privileged RAM
-4  current fiber stack
-5..N-1  configurable per-fiber regions
+hardware RNR 0  privileged flash
+hardware RNR 1  unprivileged flash
+hardware RNR 2  unprivileged syscall flash
+hardware RNR 3  privileged SRAM
+hardware RNR 4  current fiber stack, stored at ctx->mpu_regions[0]
+hardware RNR 5..N-1  configurable pairs, stored at ctx->mpu_regions[1..]
 ```
 
 Thus the per-context image has four RBAR/RLAR pairs for an 8-region MPU and
-twelve pairs for a 16-region MPU. The slice freezes MAIR0, RBAR/RLAR encoding,
-region numbering, and the required `MPU_CTRL` bits. It does not yet write MPU
-registers; a later linker/global-image slice must establish the memory-domain
-contract before that is permitted.
+twelve pairs for a 16-region MPU. The selected port has separate macro names
+for hardware region numbers and context-array indexes, preventing the invalid
+`ctx->mpu_regions[4]` access that an ambiguous `STACK_REGION` name would cause
+for the four-pair 8-region cohort.
+
+The global in-memory image has exactly four pairs, indexed by hardware region
+numbers `0..3`. The common `fiber_internal_runtime_current_context_slot` is a
+single 32-bit object inside the privileged-SRAM linker range; it is not a fifth
+global MPU aperture. This follows the ARMv8-M reference layout, whose global
+region 3 protects kernel SRAM.
+
+## Slice-2 Construction And Linker Policy
+
+`fiber_port_context_init()` is port-private construction surface, not a newly
+activated public runtime operation. It requires:
+
+```text
+FiberContext              fully contained in privileged SRAM
+common current slot       exactly one 32-bit object in privileged SRAM
+raw task stack            fully contained in unprivileged RAM
+task entry                Thumb address in unprivileged flash only
+task return continuation  selected-port symbol in syscall flash only
+```
+
+The raw stack range must be non-empty and have 32-byte-aligned exclusive
+boundaries. `fiber_port_mpu_try_encode_exact_region()` then emits an RBAR/RLAR
+pair without rounding the caller's range outward. It encodes an exclusive end
+as `(end - 1) & RLAR_ADDRESS_MASK`, after proving the endpoint is exactly
+representable. This is intentionally stricter and less ambiguous than relying
+on the reference linker's inclusive end-symbol convention.
+
+Construction reserves the common red zone inside the raw stack mapping,
+initializes `PSPLIM` to the usable `stack_base`, writes the canary when enabled,
+and requires at least the physical 40-byte M33-MPU PSP frame budget. It fills
+the exact 20 active protected words, places `protected_context_cursor` at the
+final one-past `cursor_limit`, assigns MAIR0 (`normal=0xFF`, `device=0x04`),
+enables only the stack pair at context index zero, and disables all configurable
+pairs. The word layout is FreeRTOS-compatible, but Fiber intentionally seeds
+scratch registers with zero instead of FreeRTOS debug marker values and copies
+the live `r9` value rather than the reference's marker. This preserves a
+platform/static-base ABI while keeping deterministic initial state; it does not
+change the saved-word order or restore semantics. Immutable boot metadata,
+MAIR0, and every RBAR/RLAR pair are sealed; the protected saved
+registers/cursor and runtime flags remain mutable for the future protected
+PendSV owner.
+
+`fiber_port_mpu_build_global_regions()` builds, but does not write, these
+four FreeRTOS-derived global images:
+
+```text
+image[0]  privileged flash, privileged read-only
+image[1]  unprivileged flash, read-only
+image[2]  unprivileged syscall flash, read-only
+image[3]  privileged SRAM, privileged read-write and XN
+```
+
+`fiber_port_linker_contract.ld` is an application-owned assertion fragment.
+It requires twelve exact boundaries for those four global regions, the
+contained current-slot object, and unprivileged RAM. It rejects missing ranges,
+non-32-byte MPU boundaries, a slot that is not exactly one pointer inside
+privileged SRAM, and every overlap among the fixed code/RAM regions. It never
+chooses STM32 addresses itself. It also requires the selected protected-code,
+syscall, protected-data, and current-slot output sections to stay within their
+respective ranges. The integration must place `fiber_panic()` in privileged
+flash too; construction validates that exact target before accepting a layout.
 
 ## Function And Macro Ledger
 
@@ -144,15 +206,16 @@ contract before that is permitted.
 | `portTOTAL_NUM_REGIONS`, `portSTACK_REGION`, configurable region range | Implemented as the explicit 8/16-region type and macro contract. |
 | `MPURegionSettings_t`, `ulMAIR0`, `xMPU_SETTINGS.ulContext`, `ulTaskFlags` | Implemented as `FiberPortMpuRegionRegisters`, `mair0`, `FiberPortProtectedContext`, and `runtime_flags`; Fiber adds sealed immutable boot metadata. |
 | `MAX_CONTEXT_SIZE == 21` | Implemented exactly as 20 active words plus final `cursor_limit`. |
-| `pxPortInitialiseStack()` | Deferred. It must seed the exact protected image and set `protected_context_cursor` to `cursor_limit`. |
-| `vPortStoreTaskMPUSettings()` and global MPU setup | Deferred to the linker/global-image slice. |
+| `pxPortInitialiseStack()` | Implemented as `fiber_port_context_init()`: FreeRTOS-compatible no-TrustZone protected layout plus one-past cursor. Fiber deliberately uses zero scratch seeds and preserves live r9 instead of FreeRTOS debug markers. |
+| `vPortStoreTaskMPUSettings()` | Implemented for the default Fiber policy: exact raw stack pair at context index 0; all configurable pairs disabled until a future optional MPU API exists. |
+| `prvSetupMPU()` | Implemented as `fiber_port_mpu_build_global_regions()`, which builds the four RBAR/RLAR pairs and never writes MPU registers in this slice. |
 | `vRestoreContextOfFirstTask()` | Deferred to a separately audited first-start slice. |
 | MPU `PendSV_Handler` | Deferred to a separately audited save/select/program/restore slice. |
 | `xIsPrivileged`, `vRaisePrivilege`, `vResetPrivilege`, syscall dispatch | Deferred with the optional MPU application policy ABI; no no-op public stubs are exported. |
 | `mpu_wrappers_v2_asm.c`, ACL, system-call stack | Deferred as optional MPU-wrapper functionality. The basic selected CPU profile does not pretend to implement FreeRTOS queue/wrapper policy. |
 | SecureContext, TF-M, PAC, BTI, FPU, MVE | Absent by construction. Each needs a distinct selected-port or optional ABI cohort. |
 
-## Slice-1 Proof
+## Slice-2 Proof
 
 The compile matrix must prove all of the following before this slice is
 accepted:
@@ -163,9 +226,16 @@ the build-selected public facade resolves exactly this complete type
 the full M33 MPU manifest compiles at -O2 and -Os for 8 and 16 regions
 one exact cohort symbol is emitted per manifest and the two spellings differ
 all context, boot, MPU pair, and cursor-limit offsets are static-asserted
+hardware MPU region numbers and context-image indexes are distinct and pinned
+sealed construction emits only port-private code in privileged code sections
+the construction object has the exact linker-boundary/cohort dependency surface
+synthetic 8/16-region linker images retain privileged, unprivileged, syscall,
+current-slot, and stack sections with section GC enabled at -O2, -Os, and LTO
+the linker fragment rejects a missing syscall-flash boundary
+construction emits no SVC, PendSV, `msr`, or MPU-register write instruction
 Secure CMSE, missing MPU/VTOR, FPU, MVE, PAC/BTI, wrong core, invalid region
 count, runtime-selectable override, and selector mode fail closed
-no runtime source, strong handler, forward ABI, or optional MPU API exists yet
+there is no runtime source, strong handler, forward ABI, or optional MPU API
 ```
 
 No generated SVC/PendSV assembly parity or board validation is claimed until
@@ -174,7 +244,8 @@ absence, not hidden behind a placeholder implementation.
 
 ## Next Slice
 
-The next implementation slice may add sealed construction and the linker/global
-MPU image. It must preserve the 20-active-word plus `cursor_limit` semantics,
-build regions 4 through N-1 using the pinned RBAR/RLAR/MAIR rules, and add
-generated-assembly proof before activating any first-start or PendSV path.
+The next implementation slice may add protected SVC first start and the first
+real MPU activation/readback. It must consume the sealed context image without
+changing the 20-active-word plus `cursor_limit` semantics, program the exact
+global image plus context pairs through RNR, and add paired generated-assembly
+proof before introducing PendSV save/select/replace/restore.
