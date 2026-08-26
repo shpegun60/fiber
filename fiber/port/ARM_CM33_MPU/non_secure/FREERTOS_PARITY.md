@@ -2,22 +2,28 @@
 
 ## Status
 
-Slices 1-3 of the explicit build-selected `ARM_CM33_MPU/non_secure` profile
+Slices 1-4 of the explicit build-selected `ARM_CM33_MPU/non_secure` profile
 freeze public storage, traits, MPU geometry, exact cohort identity, sealed
 context construction, linker-derived global MPU images, and the protected first
-SVC transition. The selected port now owns one strong `SVC_Handler`, validates
-the active vector slot and first SVC provenance, installs and reads back the
-four global MPU pairs while disabled, then restores MAIR0, the selected
-context's RBAR/RLAR pairs, `PSP`, `PSPLIM`, `CONTROL`, and the protected basic
-frame before exception return.
+SVC transition. The selected port owns strong `SVC_Handler` and
+`PendSV_Handler`, validates the active vector slots and SVC/PendSV provenance,
+installs and reads back the four global MPU pairs while disabled, then restores
+MAIR0, the selected context's RBAR/RLAR pairs, `PSP`, `PSPLIM`, `CONTROL`, and
+the protected basic frame before exception return. Its private PendSV path
+copies the complete basic hardware frame into privileged context storage,
+invokes the frozen reverse scheduler bridge under BASEPRI, replaces the
+selected MPU image while PRIMASK protects the disabled-MPU interval, and
+restores the selected protected frame.
 
-This remains a deliberately staged profile: there is no `PendSV_Handler`,
-scheduler selection, eight-function forward runtime ABI, public MPU-management
-API, SecureContext, TF-M, or hardware-support claim. The original SVC
-`EXC_RETURN` is passed explicitly from the C dispatcher into naked restore;
-the naked code revalidates the original `0xFFFFFFB8` SVC-origin token before
-the selected context's own `EXC_RETURN` deliberately replaces `LR`. The normal
-C call return address is never used as exception-return authority.
+This remains a deliberately staged profile: there is no eight-function forward
+runtime ABI, global selector route, public MPU-management API, SecureContext,
+TF-M, or hardware-support claim. SVC 70 is first start, SVC 71 is the exact
+private unprivileged-yield veneer that only pends PendSV, and SVC 72 is task
+return. The original SVC `EXC_RETURN` is passed explicitly from the C dispatcher
+into naked first restore; the naked code revalidates the original `0xFFFFFFB8`
+SVC-origin token before the selected context's own `EXC_RETURN` deliberately
+replaces `LR`. The normal C call return address is never used as
+exception-return authority.
 
 The reference is the no-TrustZone ARMv8-M Mainline source group, not the
 TrustZone-capable `ARM_CM33/non_secure` source group. That distinction changes
@@ -31,12 +37,12 @@ FreeRTOS CMake port: GCC_ARM_CM33_NTZ_NONSECURE
 Reference directory: portable/GCC/ARM_CM33_NTZ/non_secure
 ```
 
-| Reference file | SHA-256 | Fiber disposition through slice 3 |
+| Reference file | SHA-256 | Fiber disposition through slice 4 |
 | --- | --- | --- |
 | `portmacro.h` | `F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B` | M33/Mainline identity and no-MVE policy mapped to the selected manifest. |
 | `portmacrocommon.h` | `324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2` | MPU region roles, RBAR/RLAR/MAIR dictionary, `xMPU_SETTINGS`, and `MAX_CONTEXT_SIZE` audited. |
 | `port.c` | `BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A` | `pxPortInitialiseStack()`, `vPortStoreTaskMPUSettings()`, and `prvSetupMPU()` adapted into sealed construction and in-memory global-image encoding. |
-| `portasm.c` | `DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5` | First restore and PendSV save/program/restore order recorded for later assembly proof. |
+| `portasm.c` | `DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5` | First restore plus PendSV save/program/restore order implemented and paired against generated assembly. |
 | `mpu_wrappers_v2_asm.c` | `00B42952962E48F8C9421F5EC66BBCE9E02465760560728FEE2D743CE1706F3E` | Deferred to a future optional MPU-wrapper ABI. It is not copied as a stub. |
 
 ## Exact Reference Configuration
@@ -210,7 +216,7 @@ flash too; construction validates that exact target before accepting a layout.
 
 ## Function And Macro Ledger
 
-| FreeRTOS symbol or family | Fiber disposition through slice 3 |
+| FreeRTOS symbol or family | Fiber disposition through slice 4 |
 | --- | --- |
 | `portARCH_NAME`, Mainline identity, byte alignment, BASEPRI traits | Implemented as selected-port manifest and trait facts. |
 | `portTOTAL_NUM_REGIONS`, `portSTACK_REGION`, configurable region range | Implemented as the explicit 8/16-region type and macro contract. |
@@ -221,13 +227,13 @@ flash too; construction validates that exact target before accepting a layout.
 | `prvSetupMPU()` | The construction helper `fiber_port_mpu_build_global_regions()` builds the four pairs. Slice 3 writes and reads them back in `fiber_port_mpu_program_global_image_while_disabled()` before naked per-context restore. |
 | `vStartFirstTask()` | Implemented as `fiber_port_start_first_context()`: validates the direct SVC vector and initial MSP, clears stale PendSV, resets MSP, then invokes SVC 70. |
 | `vRestoreContextOfFirstTask()` | Implemented as `fiber_port_restore_first_context_from_svc()`: MPU off, MAIR0, RNR 4/8/12 pair blocks, exact MPU enable, active-image readback, protected frame restore, and exception return. |
-| `SVC_Handler` / `vPortSVCHandler_C()` | Implemented as the direct strong `SVC_Handler` plus fail-closed `fiber_port_svc_dispatch()`. Only SVC 70 first start and SVC 72 task return are recognized; 71 is reserved until PendSV exists. |
-| MPU `PendSV_Handler` | Deferred to a separately audited save/select/program/restore slice. |
+| `SVC_Handler` / `vPortSVCHandler_C()` | Implemented as the direct strong `SVC_Handler` plus fail-closed `fiber_port_svc_dispatch()`. SVC 70 is first start, SVC 71 is the exact private yield veneer that only pends PendSV, and SVC 72 is task return. |
+| MPU `PendSV_Handler` | Implemented as direct strong `PendSV_Handler`: preflight before cursor access, `r4-r11` plus complete basic-frame copy into privileged storage, BASEPRI scheduler bridge, PRIMASK-protected MAIR0/context-pair replacement, and inverse protected restore. |
 | `xIsPrivileged`, `vRaisePrivilege`, `vResetPrivilege`, syscall dispatch | Deferred with the optional MPU application policy ABI; no no-op public stubs are exported. |
 | `mpu_wrappers_v2_asm.c`, ACL, system-call stack | Deferred as optional MPU-wrapper functionality. The basic selected CPU profile does not pretend to implement FreeRTOS queue/wrapper policy. |
 | SecureContext, TF-M, PAC, BTI, FPU, MVE | Absent by construction. Each needs a distinct selected-port or optional ABI cohort. |
 
-## Slice-3 Proof
+## Slice-4 Proof
 
 The compile matrix must prove all of the following before this slice is
 accepted:
@@ -248,29 +254,30 @@ construction remains separate from runtime and emits no SVC, PendSV, `msr`, or
 MPU-register write instruction
 Secure CMSE, missing MPU/VTOR, FPU, MVE, PAC/BTI, wrong core, invalid region
 count, runtime-selectable override, and selector mode fail closed
-the runtime has exactly one strong SVC handler, no PendSV handler, no forward
-runtime ABI, and no optional MPU API
-the protected first-start runtime compiles for 8 and 16 regions at `-O2`,
+the runtime has exactly one strong SVC handler and one strong PendSV handler,
+no forward runtime ABI, and no optional MPU API
+the protected SVC/PendSV runtime compiles for 8 and 16 regions at `-O2`,
 `-Os`, and LTO; it retains exactly the required strong symbols and code/data
 sections under section GC
-synthetic vectors retain strong SVC in slot 11, and a competing strong SVC
-handler fails link
-generated assembly proves explicit SVC 70/72, MPU/MAIR0/RNR/RBAR/RLAR writes,
-`PSP`/`PSPLIM`/`CONTROL`/`BASEPRI` restore, and explicit SVC `EXC_RETURN`
-transfer and `0xFFFFFFB8` provenance revalidation in naked restore
+synthetic vectors retain strong SVC in slot 11 and strong PendSV in slot 14;
+competing strong SVC and PendSV handlers each fail link
+generated assembly proves exact SVC 70/71/72 provenance, PendSV preflight
+before the first current-cursor load, protected basic-frame copy, BASEPRI
+scheduler bridge, PRIMASK-protected MPU replacement, and inverse restore
 pinned FreeRTOS generated-assembly parity covers first start, MPU activation,
-and protected special/general/completion restore at `-O2` and `-Os`
+protected special/general/completion restore, and PendSV
+save/program/restore at `-O2` and `-Os`
 ```
 
-SVC generated-assembly parity is now claimed only for the mechanisms listed
-above. PendSV generated parity and board validation remain absent by design;
-the matrix proves there is no placeholder `PendSV_Handler` that could imply
-otherwise.
+The generated-assembly claim is limited to the mechanisms listed above. It is
+not a board claim: this profile remains compile, link, ELF, and generated-
+assembly validated only.
 
 ## Next Slice
 
-The next implementation slice is protected PendSV save/select/MPU-
-replace/restore. It must consume the sealed 20-active-word plus `cursor_limit`
-image without changing its geometry, preserve the direct SVC ownership already
-introduced here, and add paired generated-assembly, archive/ELF/cohort, and
-negative handler proof before becoming runtime-selectable.
+The next implementation slice may activate this already-proven private engine
+through the frozen eight-function forward ABI, complete archive/ELF/cohort
+proof, and add runtime selectability. It must not change the sealed
+20-active-word plus `cursor_limit` image, the SVC/PendSV vector ownership, or
+the private MPU replacement sequence. Public MPU policy and hardware isolation
+validation remain separate work.

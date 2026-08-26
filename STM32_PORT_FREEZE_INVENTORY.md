@@ -123,25 +123,26 @@ unprivileged yield and return services
 MPU linker isolation and stale-cohort rejection
 ```
 
-`ARM_CM33_MPU/non_secure` slices 1-3 now freeze the first of those cohorts as
+`ARM_CM33_MPU/non_secure` slices 1-4 now freeze the first of those cohorts as
 an explicit build-selected GCC profile. It is pinned to FreeRTOS
 `GCC/ARM_CM33_NTZ/non_secure` with MPU enabled and TrustZone, FPU, MVE, PAC,
 and BTI disabled. The profile owns the exact 8- or 16-region MPU storage
 layout, 20 active protected words plus a final one-past cursor target, and an
 exact cohort identity. Slice 2 adds sealed construction, strict 32-byte
 RBAR/RLAR encoding, default stack pair plus disabled configurable pairs, MAIR0,
-and linker-derived global images. Slice 3 adds only the protected SVC first
-start: it owns strong slot-11 SVC, validates the direct vector/frame origin,
-writes and reads back the global image while disabled, programs MAIR0 and
-context pairs through RNR, enables the MPU, and restores the protected frame.
-The common current slot is exactly one pointer inside privileged SRAM, not an
-extra global MPU region. It has no PendSV, scheduler selection, forward ABI,
-optional MPU API, or hardware claim, and is not counted among the complete
-runtime profiles above.
+and linker-derived global images. Slice 3 adds protected SVC first start. Slice
+4 adds strong slot-14 PendSV, preflight-before-cursor access, complete basic
+hardware-frame copying into protected storage, reverse-ABI scheduler selection
+under BASEPRI, and PRIMASK-protected MAIR0/context-pair replacement followed by
+inverse protected restore. SVC 71 is an exact private unprivileged-yield veneer
+that only pends this owned PendSV. The common current slot is exactly one
+pointer inside privileged SRAM, not an extra global MPU region. The profile has
+no forward ABI, global selector route, optional MPU API, or hardware claim, and
+is not counted among the complete runtime profiles above.
 
-The next M33 MPU slice is protected PendSV save/select/MPU-replace/restore.
-Only after that may archive/ELF/cohort proof and runtime-selectability be
-introduced.
+The next M33 MPU slice can activate the already-proven private engine through
+the frozen forward ABI and add archive/ELF/cohort proof. Public MPU policy and
+hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
 

@@ -1,11 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 3.
+ * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 4.
  * This is the FreeRTOS ARM_CM33_NTZ no-FPU/no-TrustZone/no-SecureContext
  * profile with an explicit 8- or 16-region manifest. It owns protected
- * construction and first-start SVC/MPU mechanics only. PendSV and the forward
- * runtime ABI remain separate later slices.
+ * construction plus private SVC/PendSV MPU mechanics. The public forward
+ * runtime ABI remains a separate later slice.
  */
 #ifndef FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_

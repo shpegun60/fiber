@@ -1,5 +1,29 @@
 # Fiber Decision Log
 
+## 2026-08-26: Add ARM_CM33_MPU Protected PendSV
+
+`ARM_CM33_MPU/non_secure` slice 4 adds the private protected PendSV engine to
+the earlier no-FPU/no-TrustZone 8- and 16-region cohort. It keeps the exact
+FreeRTOS `GCC/ARM_CM33_NTZ/non_secure` protected-image geometry: save
+`r4-r11`, copy the complete basic hardware frame into privileged context
+storage, save `PSP`/`PSPLIM`/`CONTROL`/`EXC_RETURN`, select under BASEPRI,
+replace MAIR0 plus context MPU pairs while the MPU is disabled, and restore the
+inverse image before exception return.
+
+Fiber deliberately inserts fail-closed checks before those operations: PendSV
+preflight validates the current pointer, seal, running PSP frame, canary,
+special-register state, and active MPU image before it reads the mutable cursor;
+the scheduler bridge snapshots and validates CPU/MPU state; and the MPU writer
+runs with PRIMASK asserted and reads back the selected image. SVC 71 is an
+exact private syscall-flash yield veneer that only pends the selected port's
+strong PendSV handler. It is not yet the public `fiber_schedule()` operation.
+
+This slice uses frozen reverse ABI v1, but it does not activate the eight
+forward ABI operations, global selector routing, or a public MPU-management
+API. It remains compile/link/ELF/generated-assembly validated only; hardware
+MPU-isolation and runtime support are not claimed. The next slice may activate
+the proven engine without changing this context geometry or handler ownership.
+
 ## 2026-08-26: Add ARM_CM33_MPU Protected SVC First Start
 
 `ARM_CM33_MPU/non_secure` slice 3 adds exactly one behavior path: the protected

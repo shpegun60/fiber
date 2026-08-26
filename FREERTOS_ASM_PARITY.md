@@ -57,7 +57,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
-| `ARM_CM33_MPU/non_secure` (staged) | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | protected first SVC request, MPU disable/MAIR0/per-context RBAR-RLAR/enable, protected first restore; PendSV intentionally absent |
+| `ARM_CM33_MPU/non_secure` (staged) | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | protected SVC 70/71/72 provenance, first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
 | `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
@@ -73,9 +73,10 @@ therefore cannot silently reduce coverage.
 
 The staged `ARM_CM33_MPU/non_secure` profile is compiled against the pinned
 8- and 16-region MPU reference configurations at both optimization levels. Its
-executable proof covers only the protected first SVC transition and the first
-MPU activation/restore; it is intentionally not counted as a complete runtime
-profile until protected PendSV save/select/MPU-replace/restore exists.
+executable proof covers the protected first SVC transition and the private
+PendSV save/select/MAIR0-plus-MPU-replace/restore engine. It remains staged and
+is intentionally not counted as a complete runtime profile until the frozen
+forward ABI/archive cohort is activated in a later isolated slice.
 
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
@@ -240,10 +241,11 @@ splitting the functions may not omit or postpone MPU activation.
 
 ### FAP-CM33-MPU-STAGED-SVC
 
-The staged M33 MPU profile deliberately has one strong SVC owner but no PendSV
-owner. Its SVC dispatcher proves vector and frame provenance, installs and
-reads back the four linker-derived global regions while the MPU is disabled,
-then passes and revalidates the original SVC `EXC_RETURN` in naked restore.
+The staged M33 MPU profile owns strong SVC and PendSV handlers but deliberately
+does not export the forward runtime ABI. Its SVC dispatcher proves vector and
+frame provenance, installs and reads back the four linker-derived global
+regions while the MPU is disabled, then passes and revalidates the original
+SVC `EXC_RETURN` in naked restore.
 The restore writes MAIR0 and the selected context's RNR `4..N-1` pairs, enables
 the exact `MPU_CTRL=ENABLE|PRIVDEFENA` image, validates the active image, and
 only then restores PSP, PSPLIM, CONTROL, core registers, protected hardware
@@ -251,8 +253,29 @@ frame, and the selected context's final `EXC_RETURN`. FreeRTOS performs
 equivalent first-task machinery across
 `prvSetupMPU()` and `vRestoreContextOfFirstTask()`; Fiber keeps the split
 explicit so the selected context and SVC origin remain independently checked.
-This difference does not claim PendSV, scheduler, public MPU API, or hardware
+SVC 71 is accepted only from the exact private syscall-flash yield veneer and
+only requests PendSV; it does not run scheduler policy. This difference does
+not claim public MPU API, selected-port runtime activation, or hardware
 runtime support.
+
+### FAP-CM33-MPU-PENDSV-PREFLIGHT
+
+FreeRTOS directly reads the current TCB/cursor before saving its protected
+frame. Fiber first calls a privileged C preflight that verifies exact PendSV
+provenance, current-context pointer/seal, live PSP frame extent, canary,
+CONTROL/PSPLIM/EXC_RETURN state, and the active MPU image. The generated
+assembly proof requires that call before the first cursor load. The 20 active
+saved-word order remains identical to the reference.
+
+### FAP-CM33-MPU-PENDSV-C-SWITCH
+
+FreeRTOS programs MAIR0 and RNR 4/8/12 alias blocks inline in naked PendSV.
+Fiber keeps the same MPU disable, MAIR0, selected context-pair, enable, and
+restore ordering but performs the replacement in a privileged C helper while
+PRIMASK is asserted. The helper validates the selected image before writes and
+reads back the complete active MPU image before BASEPRI is released. This is a
+deliberate strengthening; it does not alter the protected frame layout or
+selected hardware regions.
 
 ### FAP-MPU-ATOMIC-SWITCH
 

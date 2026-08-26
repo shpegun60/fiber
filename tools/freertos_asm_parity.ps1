@@ -846,10 +846,9 @@ try {
             "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
         -Ledger $ledger
 
-    # ARM_CM33_MPU is intentionally staged: this slice proves its protected
-    # first SVC transfer and MPU activation only. PendSV remains absent until
-    # the matching save/select/replace/restore slice exists. Both supported
-    # global MPU geometries must preserve the same reference mechanism.
+    # ARM_CM33_MPU remains staged because the forward ABI is not activated, but
+    # its protected SVC/PendSV engine now has the complete reference save,
+    # MPU-replace, and restore mechanics for both supported MPU geometries.
     foreach ($armCm33MpuStageName in @(
             "ARM_CM33_MPU_STAGE_8",
             "ARM_CM33_MPU_STAGE_16")) {
@@ -926,6 +925,86 @@ try {
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-save" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_general_regs" `
+        -ReferencePatterns @('(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmia(?:\.w)?\s+r2,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bmrs\s+r0,\s*psp',
+            'fiber_port_pendsv_validate_save_current',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmia(?:\.w)?\s+r0,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-save-special" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_special_regs" `
+        -ReferencePatterns @('(?i)\bmrs\s+r3,\s*psplim', '(?i)\bmrs\s+r4,\s*control',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r2[^\r\n]*lr\}',
+            '(?i)\bstr\s+r1,\s*\[r0') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bmrs\s+r3,\s*psplim', '(?i)\bmrs\s+r4,\s*control',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r0[^\r\n]*lr\}',
+            '(?i)\bstr\s+r1,\s*\[r2') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-MPU-replace" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "program_mpu" `
+        -ReferencePatterns @('(?i)\bdmb\b', '(?i)\bbic(?:\.w)?\s+r2',
+            '(?i)\badds\s+r0,\s*#4', '(?i)\bmovs\s+r3,\s*#4',
+            '(?i)\bldmia(?:\.w)?\s+r0!', '(?i)\bstmia(?:\.w)?\s+r2',
+            '(?i)\borr(?:\.w)?\s+r2', '(?i)\bdsb\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_mpu_switch_to_context" `
+        -FiberPatterns @('fiber_port_context_validate_restore', '(?i)\bdsb\b',
+            '(?i)\bstr\b', '(?i)\bisb\b',
+            'fiber_port_mpu_validate_active_context') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-MPU-ATOMIC-SWITCH",
+            "FAP-CM33-MPU-PENDSV-C-SWITCH") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs" `
+        -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '(?i)\bmsr\s+psp', '(?i)\bmsr\s+psplim', '(?i)\bmsr\s+control') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bldmdb\s+r1!,\s*\{r0,\s*r3,\s*r4,\s*lr\}',
+            '(?i)\bmsr\s+psp', '(?i)\bmsr\s+psplim', '(?i)\bmsr\s+control') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore-general" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs" `
+        -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bstmia(?:\.w)?\s+r0!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore-complete" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done" `
+        -ReferencePatterns @('(?i)\bstr\s+r1,\s*\[r0', '(?i)\bbx\s+lr\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bstr\s+r1,\s*\[r2', '(?i)\bcpsie\s+i',
+            '(?i)\bbx\s+lr\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
         -Ledger $ledger
     }
 
