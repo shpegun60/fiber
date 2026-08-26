@@ -1481,6 +1481,14 @@ Its exact service is
 link anchor. Ports without such an extension do not include or build this
 module.
 
+The common lifecycle marker closes the configuration window immediately after
+the existing `fiber_start()` scheduler/current checks and before selected-port
+preparation. It never reopens. This preserves `'K'` then `'k'` panic precedence
+while making a context-mutating extension fail closed as soon as startup begins.
+The marker itself is common-private state, not a selected-port extension symbol;
+the optional ABI source remains absent unless a feature source retains its v1
+anchor.
+
 MPU extensions configure same-image region, privilege, system-call-stack, and
 initial CONTROL/frame policy. TrustZone SecureContext support additionally uses
 a separately versioned cross-image gateway ABI and compatibility proof. TF-M

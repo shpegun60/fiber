@@ -494,8 +494,19 @@ void fiber_internal_runtime_require_context_configuration_open(
         const FiberContext *ctx);
 ```
 
+This ABI is implemented by `fiber_runtime_context_configuration_abi.h` and
+`fiber_runtime_context_configuration.c`. The common mandatory runtime closes
+the configuration window once, immediately after `fiber_start()` has preserved
+its existing `'K'` and `'k'` precedence and before selected-port start
+preparation. That marker exposes no feature operation and adds no selected-port
+dependency; it merely makes the future optional guard fail closed before any
+port-owned startup work begins.
+
 This helper rejects NULL, a running/started runtime, and selection-time
 reconfiguration. It does not validate or mutate selected-port context fields.
+It is not an interrupt-synchronization primitive: an actual selected-port
+configuration API must reject Handler-mode use through its own CPU-environment
+check before calling this common helper.
 After it returns, the feature implementation validates its private layout,
 applies the change, rebuilds affected synthetic state, and reseals the context.
 The application contract still forbids mutation after publishing the context
@@ -505,8 +516,10 @@ publication.
 The optional common source and selected-port feature source are linked only
 when that feature module is enabled. A port without such an API does not include
 the optional reverse header, does not retain its anchor, and does not build
-either source. This optional ABI therefore does not add a symbol to the base
-reverse v1 allowlist or a function to `fiber_core.h`.
+either source. The one-shot common lifecycle marker is not the optional module:
+it exposes no feature symbol and is needed only to close the window before
+startup. This optional ABI therefore does not add a symbol to the base reverse
+v1 allowlist or a function to `fiber_core.h`.
 
 The three extension classes have different boundaries:
 

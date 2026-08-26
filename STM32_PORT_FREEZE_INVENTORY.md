@@ -152,8 +152,10 @@ hardware MPU-isolation validation remain later work.
 Non-secure public layout from `GCC/ARM_CM33/non_secure`: the 11-word
 `[xSecureContext, PSPLIM, EXC_RETURN, r4-r11]` software frame and sealed
 pre-start `secure_stack_bytes` request. It is type/layout evidence only, not a
-runtime or SecureContext support claim. The TrustZone-capable scheduler remains
-distinct from the current NTZ profile and still needs security-domain
+runtime or SecureContext support claim. The common optional pre-publication
+lifecycle guard and its versioned link proof now exist, but this profile does
+not retain the guard or expose a feature API yet. The TrustZone-capable
+scheduler remains distinct from the current NTZ profile and still needs security-domain
 EXC_RETURN/banked-register policy, vector source, NSACR/CPACR policy, a
 versioned SecureContext companion, and all SVC/PendSV mechanics defined in
 `TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.

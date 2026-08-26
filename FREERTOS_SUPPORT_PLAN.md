@@ -35,6 +35,12 @@ pre-start attachment rather than copying FreeRTOS's task-side allocation macro:
 fiber contexts are static and sealed before `fiber_start()`, while PendSV still
 owns all automatic Secure save/load work.
 
+The common pre-publication lifecycle guard is implemented as a separate
+versioned optional ABI. It closes at the beginning of `fiber_start()` after the
+portable scheduler/current checks and before port preparation. It is not a
+SecureContext implementation: no selected port currently retains it or exports
+an attach operation.
+
 The policy for using FreeRTOS `portable/` as a reference, rather than as a
 compiled backend, is documented in `V2_FREERTOS_PORT_REFERENCE_POLICY.md`.
 

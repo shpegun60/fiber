@@ -34,6 +34,7 @@ void fiber_start(void)
 {
 	FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');
 	FIBER_REQUIRE(fiber_current() == 0, 'k');
+	fiber_internal_runtime_close_context_configuration();
 	fiber_port_runtime_prepare_start();
 
 	FiberContext *const first = fiber_port_runtime_select_first();

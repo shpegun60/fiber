@@ -90,10 +90,11 @@ saved task frame.
 
 This slice provides neither a selected-port SecureContext header nor a stub.
 It cannot allocate, save, load, free, or otherwise touch Secure state. The
-next slices must introduce, in order:
+common pre-publication lifecycle guard is now implemented separately and has a
+versioned optional link anchor, but this layout-only profile does not retain or
+call it. The next slices must introduce, in order:
 
-1. the optional common pre-publication lifecycle guard and a versioned
-   Non-secure-to-Secure companion gateway ABI;
+1. a versioned Non-secure-to-Secure companion gateway ABI;
 2. a matching `ARM_CM33/secure` companion artifact and two-image compatibility
    proofs;
 3. sealed pre-start attachment plus first-start allocation/load;
@@ -109,5 +110,7 @@ The compile matrix proves C and C++ public-type consumption without CMSIS, the
 exact build-selected CM33 manifest, one retained context cohort with distinct
 `C33S` identity and SecureContext-slot token, fixed 11-word geometry, and
 fail-closed rejection of selector mode, Secure CMSE, wrong core/architecture,
-VTOR-less, FPU, MVE, and a runtime-selectable override. It also proves that no
-runtime or SecureContext API artifact has been introduced yet.
+VTOR-less, FPU, MVE, and a runtime-selectable override. A separate optional
+common ABI probe proves matching and mismatched lifecycle-anchor links under
+normal and LTO builds. It also proves that no selected runtime or SecureContext
+API artifact has been introduced yet.

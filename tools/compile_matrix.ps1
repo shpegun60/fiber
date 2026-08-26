@@ -261,9 +261,12 @@ function Test-ContextPortBoundary {
 
     $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
     $runtimePath = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
+    $configurationPath = Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_context_configuration.c"
     $sources = @{
         $corePath = Get-Content -LiteralPath $corePath -Raw
         $runtimePath = Get-Content -LiteralPath $runtimePath -Raw
+        $configurationPath = Get-Content -LiteralPath $configurationPath -Raw
     }
 
     $forbiddenLayoutKnowledge = @(
@@ -346,6 +349,7 @@ function Test-ContextPortBoundary {
     $startSteps = @(
         "FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');",
         "FIBER_REQUIRE(fiber_current() == 0, 'k');",
+        "fiber_internal_runtime_close_context_configuration();",
         "fiber_port_runtime_prepare_start();",
         "FiberContext *const first = fiber_port_runtime_select_first();",
         "fiber_internal_runtime_publish_current_context(first);",
@@ -407,6 +411,46 @@ function Test-ContextPortBoundary {
     if ([regex]::IsMatch($candidateBody,
             'fiber_internal_runtime_scheduler_first_selection_started\s*=\s*0')) {
         throw "First-selection lifecycle marker must never reopen scheduler replacement"
+    }
+
+    $configurationCloseBody = Get-CFunctionBody -Source $sources[$runtimePath] `
+        -Signature "void fiber_internal_runtime_close_context_configuration(void)" `
+        -Path $runtimePath
+    $configurationBarrier = "fiber_port_runtime_memory_barrier();"
+    $configurationFirstBarrier = $configurationCloseBody.IndexOf(
+        $configurationBarrier, [System.StringComparison]::Ordinal)
+    $configurationRequire = $configurationCloseBody.IndexOf(
+        "FIBER_REQUIRE(fiber_internal_runtime_context_configuration_closed == 0u,",
+        [System.StringComparison]::Ordinal)
+    $configurationStore = $configurationCloseBody.IndexOf(
+        "fiber_internal_runtime_context_configuration_closed = 1u;",
+        [System.StringComparison]::Ordinal)
+    $configurationSecondBarrier = $configurationCloseBody.IndexOf(
+        $configurationBarrier,
+        $configurationStore + 1,
+        [System.StringComparison]::Ordinal)
+    if (($configurationFirstBarrier -lt 0) -or
+            ($configurationRequire -le $configurationFirstBarrier) -or
+            ($configurationStore -le $configurationRequire) -or
+            ($configurationSecondBarrier -le $configurationStore)) {
+        throw "Context configuration must close as barrier -> require -> store -> barrier"
+    }
+
+    $configurationOpenBody = Get-CFunctionBody -Source $sources[$runtimePath] `
+        -Signature "uint32_t fiber_internal_runtime_context_configuration_is_open(void)" `
+        -Path $runtimePath
+    foreach ($requiredState in @(
+            "fiber_internal_runtime_context_configuration_closed == 0u",
+            "fiber_internal_runtime_current_context_slot == 0",
+            "fiber_internal_runtime_scheduler_first_selection_started == 0u")) {
+        if ($configurationOpenBody.IndexOf($requiredState,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Context configuration guard lost required lifecycle state: $requiredState"
+        }
+    }
+    if ([regex]::Matches($sources[$runtimePath],
+            'fiber_internal_runtime_context_configuration_closed\s*=\s*0').Count -ne 1) {
+        throw "Context configuration lifecycle must never reopen after fiber_start begins"
     }
 
     $publishBody = Get-CFunctionBody -Source $sources[$runtimePath] `
@@ -1226,6 +1270,7 @@ function Test-CommonRuntimeWithoutCmsis {
     $sources = @(
         "fiber\fiber_core.c",
         "fiber\fiber_runtime_state.c",
+        "fiber\fiber_runtime_context_configuration.c",
         "fiber\fiber_panic.c"
     )
     foreach ($source in $sources) {
@@ -1265,6 +1310,217 @@ function Test-CommonRuntimeWithoutCmsis {
     if ($runtimeStateSections -notmatch
             '\.bss\.fiber_runtime_current_context_slot\s+00000004\s+') {
         throw "Common current slot must remain one 32-bit object in its isolated .bss subsection"
+    }
+}
+
+function Test-OptionalContextConfigurationAbi {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$BuildRoot,
+        [string[]]$MandatoryCommonSources
+    )
+
+    $headerPath = Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_context_configuration_abi.h"
+    $sourcePath = Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_context_configuration.c"
+    $statePath = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
+    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
+    $publicPath = Join-Path $RepositoryRoot "fiber\fiber_core.h"
+    $fixturePath = Join-Path $RepositoryRoot `
+        "tools\fixtures\runtime_context_configuration_abi_probe.c"
+    foreach ($path in @($headerPath, $sourcePath, $statePath, $corePath,
+            $publicPath, $fixturePath)) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Optional context-configuration ABI is missing: $path"
+        }
+    }
+    if ($MandatoryCommonSources -contains
+            "fiber\fiber_runtime_context_configuration.c") {
+        throw "Optional context-configuration source must not enter the mandatory common source group"
+    }
+
+    $header = Get-Content -LiteralPath $headerPath -Raw
+    $source = Get-Content -LiteralPath $sourcePath -Raw
+    $state = Get-Content -LiteralPath $statePath -Raw
+    $core = Get-Content -LiteralPath $corePath -Raw
+    $publicHeader = Get-Content -LiteralPath $publicPath -Raw
+    $expectedFunctions = @(
+        "fiber_internal_runtime_require_context_configuration_open"
+    )
+    $actualFunctions = @([regex]::Matches($header,
+        '\b(fiber_internal_[A-Za-z0-9_]+)\s*\(') | ForEach-Object {
+            $_.Groups[1].Value
+        } | Sort-Object -Unique)
+    if (($actualFunctions.Count -ne $expectedFunctions.Count) -or
+            (Compare-Object -ReferenceObject $expectedFunctions `
+                -DifferenceObject $actualFunctions)) {
+        throw "Optional context-configuration ABI must expose one callable service only"
+    }
+    foreach ($required in @(
+            "#define FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_VERSION 1u",
+            "fiber_internal_runtime_context_configuration_abi_v1_anchor",
+            "FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_RETAIN_V1()",
+            "FIBER_GENERAL_REGS_ONLY")) {
+        if ($header.IndexOf($required,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Optional context-configuration ABI lost required contract text: $required"
+        }
+    }
+    foreach ($forbidden in @("fiber_port_", "FIBER_PORT_", "CMSIS", "__get_")) {
+        if ($source.IndexOf($forbidden,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Optional context-configuration common source must remain CPU-neutral: $forbidden"
+        }
+    }
+    foreach ($required in @(
+            "FIBER_REQUIRE(ctx != 0, 'n');",
+            "fiber_internal_runtime_context_configuration_is_open() != 0u",
+            "'k'")) {
+        if ($source.IndexOf($required,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Optional context-configuration guard lost required lifecycle check: $required"
+        }
+    }
+    if ($publicHeader.IndexOf("configuration",
+            [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        throw "Optional context-configuration ABI must not enter fiber_core.h"
+    }
+    if ($core.IndexOf("fiber_internal_runtime_close_context_configuration();",
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "fiber_start must close context configuration before selected-port start work"
+    }
+    if ([regex]::Matches($state,
+            'fiber_internal_runtime_context_configuration_closed\s*=\s*0').Count -ne 1) {
+        throw "Context-configuration lifecycle marker must not be reset"
+    }
+
+    $probeDir = Join-Path $BuildRoot "optional-context-configuration-abi"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $stubPath = Join-Path $probeDir "stubs.c"
+    $linkerPath = Join-Path $probeDir "optional-context-configuration.ld"
+    $v2Path = Join-Path $probeDir "probe-v2.c"
+    $stubSource = @"
+#include "fiber/fiber_panic.h"
+#include "fiber/port/fiber_port_runtime_abi.h"
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_runtime_memory_barrier(void)
+{
+    __asm volatile ("" ::: "memory");
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_panic(char code)
+{
+    (void)code;
+    for (;;) {
+        __asm volatile ("wfe");
+    }
+}
+"@
+    $linkerSource = @"
+ENTRY(fiber_runtime_context_configuration_abi_probe_entry)
+SECTIONS
+{
+    . = 0x08000000;
+    .text : { *(.text*) *(.rodata*) }
+    .data : { *(.data*) }
+    .bss (NOLOAD) : { *(.bss*) *(COMMON) }
+}
+"@
+    $v2Source = @"
+extern const unsigned char fiber_internal_runtime_context_configuration_abi_v2_anchor;
+
+void fiber_runtime_context_configuration_abi_probe_entry(void)
+{
+    (void)*(volatile const unsigned char *)
+        &fiber_internal_runtime_context_configuration_abi_v2_anchor;
+}
+"@
+    Set-Content -LiteralPath $stubPath -Value $stubSource -Encoding ASCII
+    Set-Content -LiteralPath $linkerPath -Value $linkerSource -Encoding ASCII
+    Set-Content -LiteralPath $v2Path -Value $v2Source -Encoding ASCII
+
+    foreach ($useLto in @($false, $true)) {
+        $mode = if ($useLto) { "lto" } else { "normal" }
+        $modeDir = Join-Path $probeDir $mode
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $ltoArgs = if ($useLto) { @("-flto") } else { @() }
+        $baseArgs = @(
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-O2",
+            "-std=gnu11",
+            "-ffreestanding",
+            "-fno-common",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables",
+            "-Wall",
+            "-Wextra",
+            "-Wundef",
+            "-Werror=undef",
+            "-Werror=implicit-function-declaration",
+            "-I$RepositoryRoot",
+            "-I$(Join-Path $RepositoryRoot 'fiber')"
+        ) + $ltoArgs
+        $stateObject = Join-Path $modeDir "runtime-state.o"
+        $configurationObject = Join-Path $modeDir "configuration.o"
+        $probeObject = Join-Path $modeDir "probe.o"
+        $stubObject = Join-Path $modeDir "stubs.o"
+        $v2Object = Join-Path $modeDir "probe-v2.o"
+        foreach ($compile in @(
+                [pscustomobject]@{ Source = $statePath; Object = $stateObject },
+                [pscustomobject]@{ Source = $sourcePath; Object = $configurationObject },
+                [pscustomobject]@{ Source = $fixturePath; Object = $probeObject },
+                [pscustomobject]@{ Source = $stubPath; Object = $stubObject },
+                [pscustomobject]@{ Source = $v2Path; Object = $v2Object })) {
+            & $Compiler @($baseArgs + @("-c", $compile.Source,
+                "-o", $compile.Object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "Optional context-configuration ABI fixture compile failed ($mode): $($compile.Source)"
+            }
+        }
+
+        $linkBase = @(
+            "-mcpu=cortex-m3",
+            "-mthumb"
+        ) + $ltoArgs + @(
+            "-nostdlib",
+            "-Wl,--gc-sections",
+            "-Wl,-T,$linkerPath"
+        )
+        & $Compiler @($linkBase + @(
+            $stateObject, $configurationObject, $probeObject, $stubObject,
+            "-o", (Join-Path $modeDir "matching.elf")))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Matching optional context-configuration ABI failed link ($mode)"
+        }
+
+        foreach ($negative in @(
+                [pscustomobject]@{
+                    Name = "missing-common";
+                    Objects = @($stateObject, $probeObject, $stubObject);
+                    Missing = "fiber_internal_runtime_context_configuration_abi_v1_anchor"
+                },
+                [pscustomobject]@{
+                    Name = "version-mismatch";
+                    Objects = @($stateObject, $configurationObject, $v2Object, $stubObject);
+                    Missing = "fiber_internal_runtime_context_configuration_abi_v2_anchor"
+                })) {
+            $logPath = Join-Path $modeDir ($negative.Name + ".log")
+            $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+                ($linkBase + $negative.Objects + @(
+                    "-o", (Join-Path $modeDir ($negative.Name + ".elf")))) `
+                -LogPath $logPath
+            if (($result.ExitCode -eq 0) -or
+                    ($result.Output -notmatch [regex]::Escape($negative.Missing))) {
+                throw "Optional context-configuration ABI $($negative.Name) must fail on $($negative.Missing) ($mode).`n$($result.Output)"
+            }
+        }
     }
 }
 
@@ -1782,7 +2038,12 @@ function Test-AdversarialSensitiveGeneratedCode {
             "fiber_internal_scheduler_is_configured",
             "fiber_internal_runtime_select_scheduler_candidate",
             "fiber_internal_runtime_publish_current_context",
-            "fiber_internal_runtime_require_current_context"
+            "fiber_internal_runtime_require_current_context",
+            "fiber_internal_runtime_close_context_configuration",
+            "fiber_internal_runtime_context_configuration_is_open"
+        )
+        "fiber\fiber_runtime_context_configuration.c" = @(
+            "fiber_internal_runtime_require_context_configuration_open"
         )
         "fiber\fiber_panic.c" = @("fiber_panic")
     }
@@ -12081,6 +12342,10 @@ try {
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
         -Objdump $objdump -BuildRoot $buildRoot
+    Write-Host "== optional context-configuration ABI =="
+    Test-OptionalContextConfigurationAbi -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -BuildRoot $buildRoot `
+        -MandatoryCommonSources $commonSources
     Write-Host "== reverse ABI current-slot C isolation =="
     Test-ReverseAbiSlotCIsolation -RepositoryRoot $RepoRoot -Compiler $gcc `
         -BuildRoot $buildRoot

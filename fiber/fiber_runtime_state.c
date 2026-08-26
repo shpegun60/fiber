@@ -23,6 +23,8 @@ fiber_internal_runtime_scheduler_pick_next = 0;
 static void *volatile fiber_internal_runtime_scheduler_user = 0;
 static volatile uint32_t
 fiber_internal_runtime_scheduler_first_selection_started = 0;
+static volatile uint32_t
+fiber_internal_runtime_context_configuration_closed = 0;
 
 void fiber_internal_scheduler_store_pick_next(FiberSchedulerPickNextFn pick_next,
 		void *user)
@@ -99,4 +101,27 @@ uint32_t fiber_internal_scheduler_is_configured(void)
 {
 	fiber_port_runtime_memory_barrier();
 	return (fiber_internal_runtime_scheduler_pick_next != 0) ? 1u : 0u;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_close_context_configuration(void)
+{
+	fiber_port_runtime_memory_barrier();
+	FIBER_REQUIRE(fiber_internal_runtime_context_configuration_closed == 0u,
+			'k');
+	fiber_internal_runtime_context_configuration_closed = 1u;
+	fiber_port_runtime_memory_barrier();
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_internal_runtime_context_configuration_is_open(void)
+{
+	fiber_port_runtime_memory_barrier();
+	const uint32_t open =
+			(fiber_internal_runtime_context_configuration_closed == 0u) &&
+			(fiber_internal_runtime_current_context_slot == 0) &&
+			(fiber_internal_runtime_scheduler_first_selection_started == 0u);
+	fiber_port_runtime_memory_barrier();
+
+	return open ? 1u : 0u;
 }

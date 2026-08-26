@@ -66,8 +66,10 @@ deliberate non-portable profile integration only.
 `TRUSTZONE_SECURE_CONTEXT_CONTRACT.md` defines the TrustZone SecureContext
 lifecycle: a selected TrustZone port attaches Secure state to a specific fiber
 before `fiber_start()`, then owns all Secure save/load work at switch time.
-`ARM_CM33/non_secure` currently freezes only the companion-aware layout; no
-current runtime exports the attach API or implements Secure save/load.
+The common pre-start lifecycle guard is implemented as a separately versioned
+optional ABI, but `ARM_CM33/non_secure` currently freezes only the
+companion-aware layout; no current runtime exports the attach API or implements
+Secure save/load.
 
 This portability guarantee covers the fiber lifecycle and context-switch
 mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another

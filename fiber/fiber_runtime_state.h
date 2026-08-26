@@ -32,6 +32,14 @@ FiberContext *fiber_internal_runtime_load_current_context(void);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_internal_scheduler_is_configured(void);
 
+/* Common-private lifecycle state used only by the optional context-feature
+ * guard. Selected ports must keep using the separate optional ABI header. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_close_context_configuration(void);
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_internal_runtime_context_configuration_is_open(void);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

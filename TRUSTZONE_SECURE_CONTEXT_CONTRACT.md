@@ -4,11 +4,12 @@
 
 No current fiber runtime implements this contract. `ARM_CM23_NTZ`,
 `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not export a
-SecureContext API. `ARM_CM33/non_secure` slice 1 freezes only the
-companion-aware public storage and 11-word saved-frame layout; it has no
-runtime source, gateway, or user-facing attach API. A working SecureContext
-profile requires that selected runtime plus a separately versioned Secure
-companion artifact.
+SecureContext API. The reusable optional common pre-publication lifecycle ABI
+is implemented and link-versioned, but no selected port currently retains it.
+`ARM_CM33/non_secure` still freezes only companion-aware public storage and
+the 11-word saved-frame layout; it has no runtime source, gateway, or
+user-facing attach API. A working SecureContext profile requires that selected
+runtime plus a separately versioned Secure companion artifact.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in
@@ -85,7 +86,9 @@ The operation is valid only after `fiber_init(fiber, ...)` and before the first
 `fiber_start()`. It binds one SecureContext requirement to that fiber. It must
 fail closed if the fiber is already published, already attached, belongs to a
 different selected-port cohort, or the requested Secure stack size is invalid.
-The resulting context metadata is sealed before execution begins.
+The selected port must also reject Handler-mode use before consulting the
+common pre-publication lifecycle guard. The resulting context metadata is
+sealed before execution begins.
 
 The static-lifetime v2 runtime has no detach or destroy operation. A fiber that
 does not need Secure services simply has no attachment. Dynamic SecureContext
