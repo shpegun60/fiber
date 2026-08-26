@@ -5656,6 +5656,357 @@ int fiber_arm_cm33_secure_context_selected_facade_probe(void)
     }
 }
 
+function Test-ArmCm33SecureGatewayAbi {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $nonSecureDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM33\non_secure"
+    $secureDir = Join-Path $RepositoryRoot "fiber\port\ARM_CM33\secure"
+    $secureSource = Join-Path $secureDir "fiber_secure_gateway.c"
+    $secureHeader = Join-Path $secureDir "fiber_secure_gateway_abi.h"
+    $contractHeader = Join-Path $secureDir "fiber_secure_gateway_contract.h"
+    $nonSecureHeader = Join-Path $nonSecureDir `
+        "fiber_port_secure_gateway_abi.h"
+    $secureParity = Join-Path $secureDir "FREERTOS_PARITY.md"
+    $secureProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_gateway_secure_probe.c"
+    $nonSecureProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_gateway_non_secure_probe.c"
+    $secureLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_gateway_secure.ld"
+    $nonSecureLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_gateway_non_secure.ld"
+    foreach ($required in @($secureSource, $secureHeader, $contractHeader,
+            $nonSecureHeader, $secureParity, $secureProbe, $nonSecureProbe,
+            $secureLinker, $nonSecureLinker)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "ARM_CM33 Secure gateway ABI is missing: $required"
+        }
+    }
+
+    foreach ($forbidden in @(
+            (Join-Path $nonSecureDir "fiber_port_secure_context_abi.h"),
+            (Join-Path $nonSecureDir "fiber_port_secure_context_abi.c"),
+            (Join-Path $nonSecureDir "fiber_port.c"),
+            (Join-Path $secureDir "fiber_secure_context.c"),
+            (Join-Path $secureDir "fiber_secure_context_port.c"))) {
+        if (Test-Path -LiteralPath $forbidden) {
+            throw "Gateway-only ARM_CM33 slice exposed premature runtime artifact: $forbidden"
+        }
+    }
+
+    $expectedGatewayFunctions = @(
+        "fiber_secure_gateway_v1_abi_version",
+        "fiber_secure_gateway_v1_context_port_id",
+        "fiber_secure_gateway_v1_context_layout_version",
+        "fiber_secure_gateway_v1_context_feature_mask"
+    ) | Sort-Object
+    foreach ($headerPath in @($secureHeader, $nonSecureHeader)) {
+        $header = Get-Content -LiteralPath $headerPath -Raw
+        $actual = @([regex]::Matches($header,
+            '\b(fiber_secure_gateway_v1_[A-Za-z0-9_]+)\s*\(') |
+            ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+        if (($actual.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $actual)) {
+            throw "ARM_CM33 Secure gateway function surface changed: $headerPath"
+        }
+    }
+
+    $secureHeaderText = Get-Content -LiteralPath $secureHeader -Raw
+    foreach ($requiredText in @(
+            "cmse_nonsecure_entry",
+            "FIBER_ARM_CM33_SECURE_GATEWAY_ABI_VERSION 1u",
+            "Secure CMSE level 3 build",
+            "no-FPU companion ABI")) {
+        if (($secureHeaderText + (Get-Content -LiteralPath $contractHeader -Raw)).IndexOf(
+                $requiredText, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 Secure gateway header lost required contract: $requiredText"
+        }
+    }
+    $nonSecureHeaderText = Get-Content -LiteralPath $nonSecureHeader -Raw
+    foreach ($requiredText in @(
+            "fiber_portmacro.h",
+            "fiber_secure_gateway_contract.h",
+            "FIBER_PORT_CONTEXT_ABI_PORT_ID",
+            "FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION",
+            "FIBER_PORT_CONTEXT_ABI_FEATURE_MASK")) {
+        if ($nonSecureHeaderText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 Non-secure gateway header lost cohort check: $requiredText"
+        }
+    }
+    if ($nonSecureHeaderText.IndexOf("cmse_nonsecure_entry",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "Non-secure gateway import header must not declare Secure entry attributes"
+    }
+
+    $parity = Get-Content -LiteralPath $secureParity -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "GCC/ARM_CM33/secure",
+            "8209F4BAF60741E8ED5516AF9706FC4B5B2EE3CF16452EDB0C034B7DDDE443B4",
+            "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72",
+            "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E",
+            "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149",
+            "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
+            "companion-version handshake")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 Secure gateway parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm33-secure-gateway-abi"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SecureFault_IRQn = -9,
+    SVCall_IRQn = -5, DebugMonitor_IRQn = -4,
+    PendSV_IRQn = -2, SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm33.h"
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-common",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fno-unwind-tables",
+        "-fno-asynchronous-unwind-tables",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $secureIncludes = @(
+        "-I$probeDir",
+        "-I$secureDir",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $nonSecureIncludes = @(
+        "-I$probeDir",
+        "-I$nonSecureDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $selectedDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV8M_MAINLINE=1"
+    )
+
+    foreach ($modeSpec in @(
+            [pscustomobject]@{ Name = "o2"; Optimization = "-O2"; Lto = 0 },
+            [pscustomobject]@{ Name = "os"; Optimization = "-Os"; Lto = 0 },
+            [pscustomobject]@{ Name = "o2-lto"; Optimization = "-O2"; Lto = 1 })) {
+        $mode = $modeSpec.Name
+        $ltoArgs = if ($modeSpec.Lto -ne 0) { @("-flto") } else { @() }
+        $modeDir = Join-Path $probeDir $mode
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $secureArgs = @(
+            "-mcpu=cortex-m33", "-mthumb", "-mcmse", "-mfloat-abi=soft",
+            "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
+            $secureIncludes
+        $nonSecureArgs = @(
+            "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft",
+            "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
+            $selectedDefines +
+            $nonSecureIncludes
+        $secureObject = Join-Path $modeDir "secure-gateway.o"
+        $secureProbeObject = Join-Path $modeDir "secure-probe.o"
+        $nonSecureProbeObject = Join-Path $modeDir "non-secure-probe.o"
+        & $Compiler @($secureArgs + @("-c", $secureSource, "-o", $secureObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure gateway source failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $secureProbe, "-o", $secureProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure gateway fixture failed compile ($mode)"
+        }
+        & $Compiler @($nonSecureArgs + @("-c", $nonSecureProbe,
+            "-o", $nonSecureProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Non-secure gateway fixture failed compile ($mode)"
+        }
+
+        $objectNm = if ($modeSpec.Lto -ne 0) { $GccNm } else { $Nm }
+        $nonSecureUndefined = @(& $objectNm -u $nonSecureProbeObject | ForEach-Object {
+            if ($_ -match '\bU\s+(\S+)$') { $Matches[1] }
+        } | Sort-Object -Unique)
+        if (($nonSecureUndefined.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $nonSecureUndefined)) {
+            throw "ARM_CM33 Non-secure probe dependency surface changed ($mode)"
+        }
+
+        $importLibrary = Join-Path $modeDir "secure-gateway-import.o"
+        $secureElf = Join-Path $modeDir "secure.elf"
+        & $Compiler @($secureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
+            "-Wl,--out-implib,$importLibrary", "-Wl,-T,$secureLinker",
+            $secureObject, $secureProbeObject, "-o", $secureElf))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure CMSE gateway image failed link ($mode)"
+        }
+        if (-not (Test-Path -LiteralPath $importLibrary)) {
+            throw "ARM_CM33 Secure CMSE link did not create an import library ($mode)"
+        }
+        $importDefinitions = @(& $Nm -g --defined-only $importLibrary)
+        $nscStart = [uint64]0x0C010000
+        $nscEnd = [uint64]0x0C011000
+        foreach ($symbol in $expectedGatewayFunctions) {
+            $definition = @($importDefinitions | Where-Object {
+                $_ -match ("\b" + [regex]::Escape($symbol) + "$")
+            })
+            if ($definition.Count -ne 1) {
+                throw "ARM_CM33 Secure CMSE import library lost $symbol ($mode)"
+            }
+            $definitionMatch = [regex]::Match($definition[0],
+                ("^\s*([0-9A-Fa-f]+)\s+[A-Za-z]\s+" +
+                 [regex]::Escape($symbol) + "$"))
+            if (-not $definitionMatch.Success) {
+                throw "ARM_CM33 Secure CMSE import library malformed $symbol ($mode)"
+            }
+            $veneerAddress = [Convert]::ToUInt64(
+                $definitionMatch.Groups[1].Value, 16)
+            if (($veneerAddress -lt $nscStart) -or
+                    ($veneerAddress -ge $nscEnd)) {
+                throw "ARM_CM33 Secure CMSE import $symbol is outside the NSC veneer region ($mode)"
+            }
+        }
+        $secureSections = @(& $Objdump -h $secureElf)
+        $secureNscSection = @($secureSections | Where-Object {
+            $_ -match "\.gnu\.sgstubs"
+        })
+        if (($secureNscSection.Count -ne 1) -or
+                ($secureNscSection[0] -notmatch "\s0c010000\s") -or
+                ($secureNscSection[0] -notmatch "2\*\*5$")) {
+            throw "ARM_CM33 Secure CMSE image lost the aligned NSC veneer section ($mode)"
+        }
+
+        $nonSecureElf = Join-Path $modeDir "non-secure.elf"
+        & $Compiler @($nonSecureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+            $nonSecureProbeObject, $importLibrary, "-o", $nonSecureElf))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 matching Non-secure/CMSE gateway link failed ($mode)"
+        }
+
+        $missingLog = Join-Path $modeDir "missing-import.log"
+        $missing = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+                $nonSecureProbeObject, "-o",
+                (Join-Path $modeDir "missing-import.elf"))) `
+            -LogPath $missingLog
+        if (($missing.ExitCode -eq 0) -or
+                ($missing.Output -notmatch
+                    [regex]::Escape("fiber_secure_gateway_v1_abi_version"))) {
+            throw "ARM_CM33 Non-secure image without a CMSE import library must fail on v1 gateway symbol ($mode).`n$($missing.Output)"
+        }
+
+        $v2Source = Join-Path $modeDir "secure-gateway-v2.c"
+        $v2Probe = Join-Path $modeDir "secure-probe-v2.c"
+        Set-Content -LiteralPath $v2Source -Encoding ASCII -Value @'
+#include <stdint.h>
+
+__attribute__((cmse_nonsecure_entry, used, noinline))
+uint32_t fiber_secure_gateway_v2_abi_version(void)
+{
+    return 2u;
+}
+'@
+        Set-Content -LiteralPath $v2Probe -Encoding ASCII -Value @'
+#include <stdint.h>
+
+extern uint32_t fiber_secure_gateway_v2_abi_version(void);
+
+void Reset_Handler(void)
+{
+    volatile uint32_t value = fiber_secure_gateway_v2_abi_version();
+    (void)value;
+    for (;;) {
+        __asm volatile ("wfe");
+    }
+}
+'@
+        $v2Object = Join-Path $modeDir "secure-gateway-v2.o"
+        $v2ProbeObject = Join-Path $modeDir "secure-probe-v2.o"
+        & $Compiler @($secureArgs + @("-c", $v2Source, "-o", $v2Object))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure v2 gateway fixture failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $v2Probe, "-o", $v2ProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure v2 gateway startup fixture failed compile ($mode)"
+        }
+        $v2ImportLibrary = Join-Path $modeDir "secure-gateway-v2-import.o"
+        & $Compiler @($secureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
+            "-Wl,--out-implib,$v2ImportLibrary", "-Wl,-T,$secureLinker",
+            $v2Object, $v2ProbeObject, "-o",
+            (Join-Path $modeDir "secure-v2.elf")))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 Secure v2 CMSE fixture failed link ($mode)"
+        }
+        $mismatchLog = Join-Path $modeDir "version-mismatch.log"
+        $mismatch = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+                $nonSecureProbeObject, $v2ImportLibrary, "-o",
+                (Join-Path $modeDir "version-mismatch.elf"))) `
+            -LogPath $mismatchLog
+        if (($mismatch.ExitCode -eq 0) -or
+                ($mismatch.Output -notmatch
+                    [regex]::Escape("fiber_secure_gateway_v1_abi_version"))) {
+            throw "ARM_CM33 v1 Non-secure image must reject a v2-only CMSE import library ($mode).`n$($mismatch.Output)"
+        }
+    }
+
+    $secureWithoutCmseArguments = @(
+        "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-std=gnu11") +
+        $warningArgs + $secureIncludes + @("-c", $secureSource, "-o",
+            (Join-Path $probeDir "invalid-no-cmse.o"))
+    $secureWithoutCmse = Invoke-CompilerProbe -Compiler $Compiler `
+        -Arguments $secureWithoutCmseArguments `
+        -LogPath (Join-Path $probeDir "invalid-no-cmse.log")
+    if (($secureWithoutCmse.ExitCode -eq 0) -or
+            ($secureWithoutCmse.Output.IndexOf("Secure CMSE level 3 build",
+                [System.StringComparison]::Ordinal) -lt 0)) {
+        throw "ARM_CM33 Secure gateway must reject a non-CMSE build.`n$($secureWithoutCmse.Output)"
+    }
+}
+
 function Test-ArmCm33NtzRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -12396,6 +12747,10 @@ try {
     Write-Host "== ARM_CM33 SecureContext layout/trait contract =="
     Test-ArmCm33SecureContextLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
+    Write-Host "== ARM_CM33 Secure gateway two-image ABI contract =="
+    Test-ArmCm33SecureGatewayAbi -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -CmsisPath $cmsis `
         -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `

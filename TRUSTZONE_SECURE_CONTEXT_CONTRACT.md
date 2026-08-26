@@ -6,10 +6,11 @@ No current fiber runtime implements this contract. `ARM_CM23_NTZ`,
 `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not export a
 SecureContext API. The reusable optional common pre-publication lifecycle ABI
 is implemented and link-versioned, but no selected port currently retains it.
-`ARM_CM33/non_secure` still freezes only companion-aware public storage and
-the 11-word saved-frame layout; it has no runtime source, gateway, or
-user-facing attach API. A working SecureContext profile requires that selected
-runtime plus a separately versioned Secure companion artifact.
+`ARM_CM33/non_secure` and `ARM_CM33/secure` now provide only a gateway-only
+v1 companion identity artifact; they do not provide a selected runtime,
+user-facing attach API, Secure allocation, or SecureContext save/load. A
+working SecureContext profile requires those later runtime slices in addition
+to the separately versioned Secure companion artifact.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in
@@ -61,6 +62,40 @@ fiber runtime into the Secure image.
 TF-M is an alternative Secure provider. A TF-M profile uses its matching
 NTZ-style CPU port plus TF-M integration; it does not also use a fiber-owned
 SecureContext companion for the same profile.
+
+## Implemented Gateway-Only V1
+
+The first concrete paired CM33 artifact is deliberately limited to identity:
+
+```text
+Non-secure import header
+  fiber/port/ARM_CM33/non_secure/fiber_port_secure_gateway_abi.h
+
+Secure provider
+  fiber/port/ARM_CM33/secure/fiber_secure_gateway_abi.h
+  fiber/port/ARM_CM33/secure/fiber_secure_gateway.c
+```
+
+The Secure image exports four `cmse_nonsecure_entry` v1 NSC veneers:
+
+```text
+fiber_secure_gateway_v1_abi_version
+fiber_secure_gateway_v1_context_port_id
+fiber_secure_gateway_v1_context_layout_version
+fiber_secure_gateway_v1_context_feature_mask
+```
+
+The version is part of every symbol name. The compile matrix builds a real
+Secure `-mcmse` image, emits a GNU CMSE import library with
+`--cmse-implib --out-implib`, and links a matching Non-secure image through it.
+It also proves that a missing import library and a v2-only import library fail
+on the required v1 symbol at `-O2`, `-Os`, and `-O2 -flto`.
+
+The returned identity values are reserved for the later first-start runtime
+cohort check. This slice allocates no Secure state, stores no per-fiber handle,
+offers no public attachment header, and does not run SecureContext code from
+SVC or PendSV. It is build/link evidence only, not a SecureContext or hardware
+support claim.
 
 ## Future User-Facing Selected-Port API
 

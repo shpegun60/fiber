@@ -14,7 +14,7 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          ARM_CM33_MPU slice-5 working checkpoint
+audited tree:          ARM_CM33 Secure gateway slice-2 working checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
@@ -51,8 +51,9 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Eleven complete parity profiles currently have selected-port source groups and
-pinned FreeRTOS parity ledgers:
+Eleven complete runtime parity profiles plus one staged TrustZone companion
+profile currently have selected-port source groups and pinned FreeRTOS parity
+ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
 | --- | --- | --- |
@@ -65,13 +66,14 @@ pinned FreeRTOS parity ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
-| `ARM_CM33/non_secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request | compile/cohort validated only; no runtime, gateway, API, or assembly claim |
+| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request plus four versioned NSC identity veneers | compile/cohort/CMSE-link validated only; no runtime, SecureContext API, assembly, or hardware claim |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
-The current matrix pairs all eleven source groups against the pinned FreeRTOS
-reference where applicable and passes the existing directional ABI, exact
-cohort, vector, archive, section-GC, LTO, and negative-link proofs.
+The current matrix pairs every complete runtime source group against the pinned
+FreeRTOS reference where applicable and separately tests the staged CM33
+companion layout/gateway. It passes the existing directional ABI, exact cohort,
+vector, archive, section-GC, LTO, CMSE import-library, and negative-link proofs.
 
 `ARM_CM0_MPU` is complete only as an explicit build-selected profile. It is not
 inferred from `__MPU_PRESENT` and remains outside global auto/profile routing;
@@ -148,16 +150,18 @@ hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
 
-`ARM_CM33/non_secure` slice 1 now freezes the separate companion-aware
+`ARM_CM33/non_secure` slices 1-2 now freeze the separate companion-aware
 Non-secure public layout from `GCC/ARM_CM33/non_secure`: the 11-word
 `[xSecureContext, PSPLIM, EXC_RETURN, r4-r11]` software frame and sealed
-pre-start `secure_stack_bytes` request. It is type/layout evidence only, not a
-runtime or SecureContext support claim. The common optional pre-publication
-lifecycle guard and its versioned link proof now exist, but this profile does
-not retain the guard or expose a feature API yet. The TrustZone-capable
-scheduler remains distinct from the current NTZ profile and still needs security-domain
-EXC_RETURN/banked-register policy, vector source, NSACR/CPACR policy, a
-versioned SecureContext companion, and all SVC/PendSV mechanics defined in
+pre-start `secure_stack_bytes` request. The paired Secure artifact exports four
+versioned immutable NSC identity queries and passes real GNU CMSE Secure image,
+import-library, matching-image, missing-import, and v1/v2 mismatch proofs at
+`-O2`, `-Os`, and `-O2 -flto`. It is not a runtime or SecureContext support claim. The common
+optional pre-publication lifecycle guard and its versioned link proof now exist,
+but this profile does not retain the guard or expose a feature API yet. The
+TrustZone-capable scheduler remains distinct from the current NTZ profile and
+still needs security-domain EXC_RETURN/banked-register policy, vector source,
+NSACR/CPACR policy, attachment/allocation, and all SVC/PendSV mechanics defined in
 `TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.
 
 A fiber without an attached SecureContext must retain the ordinary Non-secure

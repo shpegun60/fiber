@@ -1,5 +1,25 @@
 # Fiber Decision Log
 
+## 2026-08-26: Add ARM_CM33 Secure Gateway ABI V1
+
+`ARM_CM33/non_secure` slice 2 adds the smallest separately versioned Secure
+companion artifact before any stateful SecureContext work. The paired
+`ARM_CM33/secure` image exports four immutable `cmse_nonsecure_entry` NSC
+identity functions: ABI version, context port ID, layout version, and feature
+mask. Each symbol includes `v1`, so a missing or v2-only import library fails
+the Non-secure link rather than silently entering an unrelated Secure image.
+
+The matrix builds a real GCC Secure `-mcmse` image, emits its import library via
+`--cmse-implib --out-implib`, links the matching Non-secure image, and proves
+missing-import and v1/v2 mismatch failures at `-O2`, `-Os`, and `-O2 -flto`. The Secure
+linker fixture gives `.gnu.sgstubs` a separate aligned NSC flash region, matching
+the CubeIDE TrustZone linker model.
+
+This is intentionally gateway-only. It adds no public attach header, Secure
+allocation, Secure stack, SVC/PendSV operation, selected runtime, or hardware
+claim. The next TrustZone slice is sealed pre-start attachment and first-start
+allocation/load; FreeRTOS-shaped SecureContext save/load follows separately.
+
 ## 2026-08-26: Stage ARM_CM33 TrustZone SecureContext Layout
 
 `ARM_CM33/non_secure` slice 1 is an explicit build-selected, non-MPU, no-FPU

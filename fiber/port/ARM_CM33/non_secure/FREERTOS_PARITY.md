@@ -2,11 +2,12 @@
 
 ## Status
 
-Slice 1 freezes only the build-selected public storage and physical saved-frame
-dictionary for the no-MPU, no-FPU Cortex-M33 TrustZone Non-secure profile. It
-does not provide `fiber_port_context_init()`, SVC, PendSV, a Secure companion,
-or `fiber_port_secure_context_abi.h`; consequently it is not a runtime port or
-a SecureContext support claim.
+Slices 1-2 freeze the build-selected public storage and physical saved-frame
+dictionary for the no-MPU, no-FPU Cortex-M33 TrustZone Non-secure profile, plus
+the paired gateway-only Secure companion identity ABI. They do not provide
+`fiber_port_context_init()`, SVC, PendSV, Secure allocation/save/load, or
+`fiber_port_secure_context_abi.h`; consequently this is not a runtime port or a
+SecureContext support claim.
 
 The profile is intentionally absent from global port selection. It may be
 included only through an explicit `FIBER_PORT_BUILD_SELECTED=1` manifest with
@@ -91,14 +92,15 @@ saved task frame.
 This slice provides neither a selected-port SecureContext header nor a stub.
 It cannot allocate, save, load, free, or otherwise touch Secure state. The
 common pre-publication lifecycle guard is now implemented separately and has a
-versioned optional link anchor, but this layout-only profile does not retain or
-call it. The next slices must introduce, in order:
+versioned optional link anchor, but this profile does not retain or call it.
+The paired `ARM_CM33/secure` gateway exports only four immutable v1 identity
+queries. Its real GNU CMSE Secure image, generated import library, matching
+Non-secure link, missing-import negative link, and v1/v2 mismatch negative link
+are compile-matrix-covered at `-O2`, `-Os`, and `-O2 -flto`. The next slices must introduce,
+in order:
 
-1. a versioned Non-secure-to-Secure companion gateway ABI;
-2. a matching `ARM_CM33/secure` companion artifact and two-image compatibility
-   proofs;
-3. sealed pre-start attachment plus first-start allocation/load;
-4. FreeRTOS-shaped PendSV save/load ordering with generated-assembly evidence
+1. sealed pre-start attachment plus first-start allocation/load;
+2. FreeRTOS-shaped PendSV save/load ordering with generated-assembly evidence
    at `-O2` and `-Os`.
 
 TF-M remains an alternative profile using the NTZ CPU mechanics and TF-M
@@ -112,5 +114,6 @@ exact build-selected CM33 manifest, one retained context cohort with distinct
 fail-closed rejection of selector mode, Secure CMSE, wrong core/architecture,
 VTOR-less, FPU, MVE, and a runtime-selectable override. A separate optional
 common ABI probe proves matching and mismatched lifecycle-anchor links under
-normal and LTO builds. It also proves that no selected runtime or SecureContext
-API artifact has been introduced yet.
+normal and LTO builds. The paired gateway proof additionally covers GNU CMSE
+Secure/Non-secure image compatibility at `-O2`, `-Os`, and `-O2 -flto`, while proving that no
+selected runtime or SecureContext API artifact has been introduced yet.

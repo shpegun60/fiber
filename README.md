@@ -67,9 +67,9 @@ deliberate non-portable profile integration only.
 lifecycle: a selected TrustZone port attaches Secure state to a specific fiber
 before `fiber_start()`, then owns all Secure save/load work at switch time.
 The common pre-start lifecycle guard is implemented as a separately versioned
-optional ABI, but `ARM_CM33/non_secure` currently freezes only the
-companion-aware layout; no current runtime exports the attach API or implements
-Secure save/load.
+optional ABI. `ARM_CM33/non_secure` and `ARM_CM33/secure` currently add only a
+versioned gateway-only CMSE identity cohort; no current runtime exports the
+attach API or implements Secure allocation/save/load.
 
 This portability guarantee covers the fiber lifecycle and context-switch
 mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another
@@ -193,11 +193,15 @@ M33 NTZ full build-selected runtime source group:
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
 
-M33 TrustZone companion-aware staged layout source group:
+M33 TrustZone companion-aware gateway-only staged source group:
                fiber/port/ARM_CM33/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_secure_gateway_abi.h
                fiber/port/ARM_CM33/non_secure/FREERTOS_PARITY.md
+               fiber/port/ARM_CM33/secure/fiber_secure_gateway_abi.h
+               fiber/port/ARM_CM33/secure/fiber_secure_gateway.c
+               fiber/port/ARM_CM33/secure/FREERTOS_PARITY.md
 
 M33F NTZ full build-selected FPU runtime source group:
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_types.h

@@ -536,6 +536,14 @@ The three extension classes have different boundaries:
    its own selected-port integration header; otherwise it remains private to
    `fiber_port_runtime_prepare_start()`.
 
+The staged `ARM_CM33/non_secure` and `ARM_CM33/secure` gateway is the first
+concrete cross-image example. It exports only four versioned immutable identity
+queries, not a SecureContext operation. Its proof builds a Secure `-mcmse`
+image, produces a GNU CMSE import library with `--cmse-implib --out-implib`,
+links the matched Non-secure image through that import object, and rejects both
+a missing import object and a v2-only companion. The later stateful companion
+must retain this proof while adding allocation and save/load ordering evidence.
+
 Static-lifetime fibers do not require a mandatory destroy operation. A
 fiber-owned SecureContext profile allocates or binds its Secure stack/context
 once during privileged pre-start configuration and stores only the resulting
@@ -1171,7 +1179,9 @@ The common runtime boundary is frozen only when:
   dispatch, a return-SVC veneer, and MPU/linker proof that writable stacks cannot
   modify context or common runtime state;
 - Secure companions and TF-M artifacts pass their separately versioned
-  cross-image gateway/build-manifest compatibility proof;
+  cross-image gateway/build-manifest compatibility proof; the staged CM33
+  gateway uses a real GNU CMSE import-library matching/mismatch cohort rather
+  than a same-image symbol fixture;
 - synthetic archive/link/vector/LTO proofs pass for every compiled port;
 - H7 board validation passes after the final handler migration;
 - existing panic ordering is preserved except for the documented
