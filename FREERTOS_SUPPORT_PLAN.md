@@ -653,11 +653,21 @@ The library can claim FreeRTOS-style STM32 Cortex-M CPU-port support only when:
 - common runtime files contain no architecture-specific PendSV, SVC, direct
   trampoline, or synthetic-frame fallback for claimed ports;
 - the claimed core families compile with representative GCC target flags;
-- the STM32H7/M7 path remains hardware validated;
+- every claimed exact CPU/ABI/FPU/MVE/MPU/security/errata cohort in the final
+  port inventory passes paired FreeRTOS/Fiber generated-code checks at `-O0`,
+  `-Og`, `-O2`, `-Os`, and `-O3`, plus final linked-ELF disassembly checks at
+  `-O2 -flto` and `-Os -flto`;
 - M23, M33 Non-secure, and M55/MVE are either implemented and validated or
   explicitly excluded;
 - announced M85/STM32V8 is either implemented with its exact profile evidence
   or explicitly deferred as preannouncement scope;
+- every profile without a current board run is explicitly labeled
+  `hardware validation deferred`; the software-port claim does not imply a
+  hardware support claim;
+- the pinned release-blocking CI job passes against the exact freeze commit and
+  retains its compiler/reference manifest, generated disassembly, ELF/map,
+  symbol/section, and negative-test evidence as defined in
+  `CI_VALIDATION_PLAN.md`;
 - docs and source comments use the same support claims;
 - context-switch safety checks reject delayed-switch cases caused by interrupt
   masks.

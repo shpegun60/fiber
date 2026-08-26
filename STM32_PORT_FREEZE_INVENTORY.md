@@ -223,20 +223,24 @@ Official references:
 - <https://www.st.com/content/st_com/en/arm-32-bit-microcontrollers/arm-cortex-m85.html>
 - <https://www.st.com/resource/en/product_presentation/stm32v8-presentation.pdf>
 
-### 7. Final Cleanup And Hardware Checkpoints
+### 7. Final Cleanup And Software Freeze
 
 After concrete v8-M/v8.1-M ports replace its remaining test roles:
 
 ```text
 delete transitional_v8m
+expand every paired port proof to -O0/-Og/-O2/-Os/-O3
+compare final linked-ELF disassembly at -O2 -flto and -Os -flto
 rerun the complete compile and assembly matrix
-rerun current H7 normal/FPU/trap/vector validation
-record every unavailable board proof explicitly
+run the pinned release-blocking CI job against the exact freeze commit
+retain the version manifest, ELF, disassembly, map, and negative-test artifacts
+record current hardware validation as passed, failed, or explicitly deferred
 freeze a branch with no known software gap
 ```
 
 Hardware evidence is independent of compile, assembly, host, emulator, and ELF
-evidence. A profile without a matching board may be frozen as
+evidence. It is not a prerequisite for the software freeze in this roadmap. A
+profile without a matching board run may be frozen as
 `compile/assembly/ELF validated`, but never as `hardware validated`.
 
 ## Planning Estimate
@@ -269,7 +273,8 @@ ARM_CM33 TrustZone/SecureContext
   -> ARM_CM55/STM32N6
   -> optional ARM_CM85/STM32V8
   -> delete transitional_v8m
-  -> final software and available hardware freeze
+  -> full -O0/-Og/-O2/-Os/-O3 and final-LTO disassembly cohort
+  -> final software freeze
 ```
 
 Each arrow is a checkpoint. A port family is not followed by Context extraction
@@ -284,10 +289,17 @@ Context extraction may start only when:
 2. Every included profile has no known software gap in frame layout,
    save/restore, SVC/PendSV, feature state, ABI/cohort, or generated code.
 3. `tools/compile_matrix.ps1` passes from a clean tree.
-4. Hardware-unavailable profiles are labeled without a hardware claim.
-5. The stable pre-extraction commit is recorded.
+4. Every claimed exact CPU/ABI/FPU/MVE/MPU/security/errata cohort passes the
+   final optimization grid at `-O0`, `-Og`, `-O2`, `-Os`, and `-O3`, and its
+   final linked-ELF disassembly passes at `-O2 -flto` and `-Os -flto`.
+5. Every profile without current board evidence is explicitly labeled
+   `hardware validation deferred` and has no hardware support claim.
+6. The pinned release-blocking CI job passes against the exact pre-extraction
+   commit and retains the evidence defined in `CI_VALIDATION_PLAN.md`.
+7. The stable pre-extraction commit is recorded.
 
 After extraction, the same generated-assembly, ELF/vector, ABI/cohort,
-negative-link, and available hardware suites are repeated against that stable
-checkpoint. The extracted baseline is accepted only when no unintended runtime
-behavior change is found.
+negative-link, and full optimization/LTO suites are repeated against that
+stable checkpoint. Available hardware suites remain a separate evidence layer.
+The extracted baseline is accepted only when no unintended software behavior
+change is found.

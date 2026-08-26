@@ -1,5 +1,38 @@
 # Fiber Decision Log
 
+## 2026-08-26: Defer The Full Optimization Cohort Until Port Completion
+
+Each port continues to enter the inventory only after paired pinned-FreeRTOS
+generated-code parity at `-O2` and `-Os` plus its applicable normal/LTO ELF,
+archive, ABI, cohort, and negative-link proofs. This remains the executable
+per-port gate while new architecture profiles are still being implemented.
+
+After every required STM32 profile is implemented or explicitly excluded, one
+separate final hardening slice must run the complete port inventory at `-O0`,
+`-Og`, `-O2`, `-Os`, and `-O3`. It must also compare the final linked-ELF
+disassembly at `-O2 -flto` and `-Os -flto`; intermediate LTO assembly is not a
+valid proof. The comparison requires equivalent ordered architecture
+operations and documented Fiber adaptations, not byte-identical code.
+
+The grid applies to every claimed exact build cohort, including applicable CPU
+revision, hard/softfp ABI, FP/MVE state, MPU region count, security role, and
+errata policy. Running one representative configuration per source directory
+is insufficient when another supported configuration changes generated context
+mechanics or cohort identity.
+
+Hardware validation is tracked independently and is explicitly deferred for
+the current port-completion phase. Missing board evidence does not block the
+software freeze or later Context-interface extraction, but no affected profile
+may be labeled hardware validated or hardware supported.
+
+The proof will move into CI only through the two-level contract in
+`CI_VALIDATION_PLAN.md`: the existing `-O2/-Os` per-port matrix is the
+pull-request gate, while the complete optimization/final-LTO cohort is a
+nightly, manually dispatchable, and release-blocking freeze gate. CI must pin
+and record the compiler, CMSIS, FreeRTOS reference, workflow, runner, and Fiber
+commit, then retain generated disassembly, ELF/map, symbol/section, and
+negative-test artifacts. No CI workflow exists at this checkpoint.
+
 ## 2026-08-26: Add ARM_CM33 Secure Gateway ABI V1
 
 `ARM_CM33/non_secure` slice 2 adds the smallest separately versioned Secure

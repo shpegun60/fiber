@@ -775,9 +775,20 @@ the same compiler/CPU/FPU flags, then compares their generated SVC, PendSV,
 masking, frame-transfer, FP, and MPU instruction order. The exact scope and all
 accepted differences are normative in `FREERTOS_ASM_PARITY.md`. Set
 `FREERTOS_KERNEL_REFERENCE` when the pinned checkout is not in the workspace
-default `_reference/FreeRTOS-Kernel` location. Compile/disassembly coverage does
-not replace hardware tests or promote a transitional profile to a
-runtime-supported port.
+default `_reference/FreeRTOS-Kernel` location. The active per-port parity gate
+is `-O2` plus `-Os`. After the required port inventory is complete, the final
+software-freeze cohort expands every port to `-O0`, `-Og`, `-O2`, `-Os`, and
+`-O3`, then checks final linked-ELF disassembly at `-O2 -flto` and
+`-Os -flto`. Compile/disassembly coverage does not replace hardware tests or
+promote a transitional profile to a runtime-supported port; hardware evidence
+may be explicitly deferred without blocking the software freeze.
+
+`CI_VALIDATION_PLAN.md` freezes the planned CI split: the current `-O2/-Os`
+per-port matrix runs on every pull request, while the complete optimization and
+final-LTO cohort becomes nightly, manually dispatchable, and release-blocking
+after the port inventory is complete. The plan also defines pinned inputs and
+the ELF/disassembly/map artifacts required from a freeze run. No CI workflow is
+currently committed.
 
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,

@@ -23,6 +23,49 @@ The mandatory matrix repeats every pair at `-O2` and `-Os`, then reads both
 objects with the same `objdump`. This covers the normal optimized validation
 shape and the size-optimized Release shape; it is not a claim of byte identity.
 
+## Two-Stage Optimization Coverage
+
+The per-port acceptance gate remains the currently executable `-O2` and `-Os`
+paired comparison plus that port's normal/LTO ELF, archive, ABI, cohort, and
+negative-link proofs. Every new port must pass this gate before its
+compile/assembly/ELF status is recorded.
+
+After every required STM32 profile is implemented or explicitly excluded, one
+separate final hardening cohort must expand the complete port set to:
+
+```text
+-O0
+-Og
+-O2
+-Os
+-O3
+-O2 -flto final linked-ELF disassembly
+-Os -flto final linked-ELF disassembly
+```
+
+"Complete port set" means every claimed exact build cohort, not one convenient
+configuration per directory. Applicable CPU revision, hard/softfp ABI, FP/MVE
+state, MPU 8/16-region layout, Secure/Non-secure/NTZ role, and architecture
+errata policy variants must each enter the optimization grid when they change
+generated context mechanics or cohort identity. Unsupported combinations stay
+negative compile/link tests rather than being silently omitted.
+
+The non-LTO modes compile the pinned FreeRTOS and Fiber mechanisms with the
+same compiler, target, ABI, and optimization flags. The LTO modes inspect the
+final linked ELF, not an intermediate LTO object or compiler-generated `.s`
+file. Each mode must preserve the same ordered architecture operations and all
+documented Fiber adaptations; byte identity remains neither required nor
+expected.
+
+This expanded cohort is intentionally a final cross-port freeze gate rather
+than a requirement repeatedly added while the port inventory is incomplete.
+Until it exists and passes, the repository may claim the current `-O2`/`-Os`
+parity only, not all-optimization parity.
+
+`CI_VALIDATION_PLAN.md` defines how the current per-port gate and this final
+cohort become reproducible pull-request and release-blocking CI jobs, including
+pinned inputs and retained proof artifacts.
+
 ## Comparison Rule
 
 Binary equality is neither required nor useful. Fiber has different symbols,
@@ -309,4 +352,6 @@ trust boundary.
 Generated assembly parity proves compiler output shape for the tested flags. It
 does not prove board vector routing, silicon errata behavior, memory-map linker
 truth, interrupt priority readback, or long-run FP preservation. Those remain
-separate ELF and hardware validation requirements.
+separate ELF and hardware validation requirements. Hardware validation is an
+independent evidence layer and may be explicitly deferred; a software freeze
+does not create a hardware support claim.
