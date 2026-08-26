@@ -4,8 +4,8 @@
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
 
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM33_MPU layout slice must not expose runtime operations");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM33_MPU must expose the frozen runtime ABI");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 21u,
 		"[fiber]: ARM_CM33_MPU protected context word count changed");
 FIBER_STATIC_ASSERT(sizeof(FiberPortProtectedContext) == 84u,
@@ -32,6 +32,11 @@ FIBER_STATIC_ASSERT(FIBER_PORT_RUNS_NONSECURE == 1,
 		"[fiber]: ARM_CM33_MPU must remain a Non-secure profile");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C86u,
 		"[fiber]: ARM_CM33_MPU context feature identity changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER == 5u &&
+		fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER == 6u &&
+		fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX == 1u &&
+		fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX == 2u,
+		"[fiber]: ARM_CM33_MPU current-slot MPU policy changed");
 
 #if FIBER_PORT_CM33_MPU_TOTAL_REGIONS == 8
 FIBER_STATIC_ASSERT(FIBER_PORT_CM33_MPU_CONTEXT_REGION_COUNT == 4u,

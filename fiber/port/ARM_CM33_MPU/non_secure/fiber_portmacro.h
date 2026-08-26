@@ -1,11 +1,11 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 4.
+ * Exact Cortex-M33 MPU Non-secure dictionary, implementation slice 5.
  * This is the FreeRTOS ARM_CM33_NTZ no-FPU/no-TrustZone/no-SecureContext
  * profile with an explicit 8- or 16-region manifest. It owns protected
- * construction plus private SVC/PendSV MPU mechanics. The public forward
- * runtime ABI remains a separate later slice.
+ * construction, protected SVC/PendSV MPU mechanics, and the frozen forward
+ * runtime ABI. Public heterogeneous MPU policy remains a separate extension.
  */
 #ifndef FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_MPU_NON_SECURE_FIBER_PORTMACRO_H_
@@ -97,7 +97,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM33_MPU runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 #include "fiber_port_types.h"
 
@@ -187,7 +187,16 @@
 #define fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER 2u
 #define fiber_portMPU_PRIVILEGED_DATA_REGION_NUMBER 3u
 #define fiber_portMPU_STACK_REGION_NUMBER 4u
-#define fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER 5u
+/*
+ * ARMv8-M has no MPU access encoding for privileged-RW plus
+ * unprivileged-RO.  The current-context aperture therefore uses an exact
+ * read-only/XN overlay while a protected switch updates the common slot only
+ * while MPU_CTRL is disabled.  It is stored in every per-context image so it
+ * overrides global privileged SRAM by region-number priority without consuming
+ * a fifth immutable global region.
+ */
+#define fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER 5u
+#define fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER 6u
 #define fiber_portMPU_LAST_CONFIGURABLE_REGION_NUMBER \
 	(fiber_portMPU_TOTAL_REGIONS - 1u)
 #define fiber_portMPU_CONFIGURABLE_REGION_COUNT \
@@ -196,7 +205,8 @@
 #define fiber_portMPU_CONTEXT_REGION_COUNT \
 	FIBER_PORT_CM33_MPU_CONTEXT_REGION_COUNT
 #define fiber_portMPU_CONTEXT_STACK_INDEX 0u
-#define fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX 1u
+#define fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX 1u
+#define fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX 2u
 #define fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX \
 	(fiber_portMPU_CONTEXT_REGION_COUNT - 1u)
 #define fiber_portMPU_GLOBAL_REGION_COUNT 4u
@@ -229,6 +239,7 @@
 #define fiber_portMPU_MAIR0_DEFAULT \
 	(fiber_portMPU_MAIR_NORMAL_MEMORY_BUFFERABLE_CACHEABLE | \
 	 (fiber_portMPU_MAIR_DEVICE_MEMORY_NGNRE << 8u))
+#define fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES 32u
 
 /* Exact linker sections consumed by the protected MPU construction and later
  * SVC/PendSV slices.  The application linker script owns their addresses. */
@@ -492,8 +503,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM33_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33_MPU requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM33_MPU must remain non-selectable until full runtime parity");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM33_MPU must expose the frozen forward runtime ABI");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
 		"[fiber]: ARM_CM33_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
@@ -522,18 +533,22 @@ FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER == 0u &&
 		fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER == 2u &&
 		fiber_portMPU_PRIVILEGED_DATA_REGION_NUMBER == 3u &&
 		fiber_portMPU_STACK_REGION_NUMBER == 4u &&
-		fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER == 5u,
+		fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER == 5u &&
+		fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER == 6u,
 		"[fiber]: ARM_CM33_MPU hardware MPU region numbering changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_STACK_INDEX == 0u &&
-		fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX == 1u &&
+		fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX == 1u &&
+		fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX == 2u &&
 		fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX ==
 			(fiber_portMPU_CONTEXT_REGION_COUNT - 1u),
 		"[fiber]: ARM_CM33_MPU context-image indexes changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
-		(1u + fiber_portMPU_CONFIGURABLE_REGION_COUNT) &&
+		(2u + fiber_portMPU_CONFIGURABLE_REGION_COUNT) &&
 		fiber_portMPU_LAST_CONFIGURABLE_REGION_NUMBER ==
 			(fiber_portMPU_TOTAL_REGIONS - 1u),
 		"[fiber]: ARM_CM33_MPU context/hardware region mapping changed");
+FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES == 32u,
+		"[fiber]: ARM_CM33_MPU current-slot aperture must be one MPU granule");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 21u,
 		"[fiber]: ARM_CM33_MPU protected context must contain 21 words");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_RESTORE_WORDS == 20u,

@@ -14,7 +14,7 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          2743fc6401f551195f1d8896130715f05ecc4500
+audited tree:          ARM_CM33_MPU slice-5 working checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
@@ -51,7 +51,7 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Ten complete parity profiles currently have selected-port source groups and
+Eleven complete parity profiles currently have selected-port source groups and
 pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
@@ -65,9 +65,10 @@ pinned FreeRTOS parity ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
+| `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
-The current matrix pairs all ten source groups against the pinned FreeRTOS
+The current matrix pairs all eleven source groups against the pinned FreeRTOS
 reference where applicable and passes the existing directional ABI, exact
 cohort, vector, archive, section-GC, LTO, and negative-link proofs.
 
@@ -123,25 +124,25 @@ unprivileged yield and return services
 MPU linker isolation and stale-cohort rejection
 ```
 
-`ARM_CM33_MPU/non_secure` slices 1-4 now freeze the first of those cohorts as
+`ARM_CM33_MPU/non_secure` slice 5 completes the first protected M33 cohort as
 an explicit build-selected GCC profile. It is pinned to FreeRTOS
 `GCC/ARM_CM33_NTZ/non_secure` with MPU enabled and TrustZone, FPU, MVE, PAC,
 and BTI disabled. The profile owns the exact 8- or 16-region MPU storage
-layout, 20 active protected words plus a final one-past cursor target, and an
-exact cohort identity. Slice 2 adds sealed construction, strict 32-byte
-RBAR/RLAR encoding, default stack pair plus disabled configurable pairs, MAIR0,
-and linker-derived global images. Slice 3 adds protected SVC first start. Slice
-4 adds strong slot-14 PendSV, preflight-before-cursor access, complete basic
-hardware-frame copying into protected storage, reverse-ABI scheduler selection
-under BASEPRI, and PRIMASK-protected MAIR0/context-pair replacement followed by
-inverse protected restore. SVC 71 is an exact private unprivileged-yield veneer
-that only pends this owned PendSV. The common current slot is exactly one
-pointer inside privileged SRAM, not an extra global MPU region. The profile has
-no forward ABI, global selector route, optional MPU API, or hardware claim, and
-is not counted among the complete runtime profiles above.
+layout, 20 active protected words plus a final one-past cursor target, exact
+cohort identity, all eight forward ABI operations, and reverse ABI v1.
+Construction uses strict 32-byte RBAR/RLAR encoding, the default stack pair,
+a fixed current-slot pair, disabled future configurable pairs, MAIR0, and
+linker-derived global images. Strong SVC first start and PendSV preflight/save/
+select/replace/restore are complete. SVC 71 is the public unprivileged
+`fiber_schedule()` veneer and only pends the selected PendSV.
 
-The next M33 MPU slice can activate the already-proven private engine through
-the frozen forward ABI and add archive/ELF/cohort proof. Public MPU policy and
+The common current slot is a 32-byte aperture inside privileged SRAM. Every
+selected context maps it as RNR5 read-only/XN for both privilege levels, because
+ARMv8-M cannot encode privileged-RW plus unprivileged-RO. The port publishes
+the next pointer only in the existing PRIMASK-protected MPU-disabled replacement
+interval. This intentionally reserves RNR5: 8-region builds keep two, and
+16-region builds keep ten, future configurable pairs. The profile has no global
+selector route, optional MPU API, or hardware claim. Public MPU policy and
 hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
@@ -249,8 +250,7 @@ STM32 hardware claim.
 ## Recommended Execution Order
 
 ```text
-ARM_CM33_MPU
-  -> ARM_CM33 TrustZone/SecureContext
+ARM_CM33 TrustZone/SecureContext
   -> ARM_CM33 TF-M integration
   -> ARM_CM55/STM32N6
   -> optional ARM_CM85/STM32V8

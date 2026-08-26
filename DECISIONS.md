@@ -1,5 +1,39 @@
 # Fiber Decision Log
 
+## 2026-08-26: Activate ARM_CM33_MPU As An Explicit Runtime Port
+
+`ARM_CM33_MPU/non_secure` slice 5 activates the frozen eight-operation forward
+ABI without adding a second switching path. It remains selectable only through
+an explicit `FIBER_PORT_BUILD_SELECTED=1` manifest with the concrete
+`ARM_CM33_MPU/non_secure` include/source group; generic ARMv8-M selection does
+not infer MPU or privilege policy.
+
+`fiber_start()` uses the existing common lifecycle sequence: the port prepares
+the privileged Thread/MSP and MPU-disabled start environment, selects the first
+context under the protected scheduler envelope, common publishes it, and the
+existing SVC 70 path performs first MPU activation and restore. Public
+`fiber_schedule()` now reaches the existing SVC 71 syscall veneer, which only
+pends the selected strong PendSV handler. PendSV keeps the pinned FreeRTOS
+save/select/MAIR0/context-pair/restore order; no protected frame word or naked
+SVC/PendSV mechanism was redesigned during activation.
+
+The public `fiber_current()` call is required to work in unprivileged Thread
+mode. ARMv8-M offers no permission encoding for privileged-RW plus
+unprivileged-RO, so Fiber deliberately reserves RNR5 as an exact 32-byte
+read-only/XN current-slot aperture in every per-context MPU image. It overlays
+global privileged SRAM by region priority. The next current pointer is written
+only while `MPU_CTRL` is disabled under the already PRIMASK-protected context
+replacement interval. This leaves two configurable pairs for 8-region builds
+and ten for 16-region builds. It is a documented API-driven difference from
+FreeRTOS, not an accidental loss of a task-configurable region.
+
+The matrix proves paired FreeRTOS generated assembly at `-O2`/`-Os`, exact
+8/16 cohorts, normal and LTO static-archive extraction, application-owned
+cohort expectation, cross-region stale archive rejection, direct vector slots
+11/14, section placement, exact current-slot aperture, and duplicate strong
+handler failures. This is software evidence only. Cortex-M33 MPU runtime and
+isolation hardware validation remain required before a support claim.
+
 ## 2026-08-26: Add ARM_CM33_MPU Protected PendSV
 
 `ARM_CM33_MPU/non_secure` slice 4 adds the private protected PendSV engine to

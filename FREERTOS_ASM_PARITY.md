@@ -57,7 +57,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
-| `ARM_CM33_MPU/non_secure` (staged) | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | protected SVC 70/71/72 provenance, first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
+| `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
 | `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
@@ -71,12 +71,14 @@ if a staged profile becomes selectable, is also listed as complete parity, or a
 new port source is neither paired nor explicitly staged. Adding a port source
 therefore cannot silently reduce coverage.
 
-The staged `ARM_CM33_MPU/non_secure` profile is compiled against the pinned
-8- and 16-region MPU reference configurations at both optimization levels. Its
-executable proof covers the protected first SVC transition and the private
-PendSV save/select/MAIR0-plus-MPU-replace/restore engine. It remains staged and
-is intentionally not counted as a complete runtime profile until the frozen
-forward ABI/archive cohort is activated in a later isolated slice.
+`ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
+pinned 8- and 16-region MPU reference configurations. Its public
+`fiber_schedule()` path is the exact unprivileged SVC-yield veneer; strong
+SVC/PendSV handlers, the protected scheduler bridge, and MPU replacement remain
+selected-port-owned. The matrix additionally proves normal/LTO archive
+extraction, exact cohort expectation, vector slots 11/14, and stale-cohort
+rejection. It has no global auto-selector route, public heterogeneous-MPU API,
+or hardware isolation claim.
 
 `transitional_v8m` is intentionally excluded. It remains compile scaffolding
 and is not a production FreeRTOS-parity port.
@@ -239,13 +241,13 @@ the selected-port MPU activation helper and only then enters
 cross-function order as well as the register restore performed by the helper;
 splitting the functions may not omit or postpone MPU activation.
 
-### FAP-CM33-MPU-STAGED-SVC
+### FAP-CM33-MPU-RUNTIME
 
-The staged M33 MPU profile owns strong SVC and PendSV handlers but deliberately
-does not export the forward runtime ABI. Its SVC dispatcher proves vector and
-frame provenance, installs and reads back the four linker-derived global
-regions while the MPU is disabled, then passes and revalidates the original
-SVC `EXC_RETURN` in naked restore.
+The M33 MPU profile owns strong SVC and PendSV handlers and exports the frozen
+eight-function forward runtime ABI only through its explicit build-selected
+manifest. Its SVC dispatcher proves vector and frame provenance, installs and
+reads back the four linker-derived global regions while the MPU is disabled,
+then passes and revalidates the original SVC `EXC_RETURN` in naked restore.
 The restore writes MAIR0 and the selected context's RNR `4..N-1` pairs, enables
 the exact `MPU_CTRL=ENABLE|PRIVDEFENA` image, validates the active image, and
 only then restores PSP, PSPLIM, CONTROL, core registers, protected hardware
@@ -253,10 +255,22 @@ frame, and the selected context's final `EXC_RETURN`. FreeRTOS performs
 equivalent first-task machinery across
 `prvSetupMPU()` and `vRestoreContextOfFirstTask()`; Fiber keeps the split
 explicit so the selected context and SVC origin remain independently checked.
-SVC 71 is accepted only from the exact private syscall-flash yield veneer and
-only requests PendSV; it does not run scheduler policy. This difference does
-not claim public MPU API, selected-port runtime activation, or hardware
-runtime support.
+SVC 71 is accepted only from the exact public ABI syscall-flash yield veneer
+and only requests PendSV; it does not run scheduler policy. This difference
+does not claim a heterogeneous public MPU API or hardware runtime support.
+
+### FAP-CM33-MPU-CURRENT-SLOT-APERTURE
+
+FreeRTOS reserves RNR 5 and later regions for task-configurable MPU pairs.
+Fiber reserves RNR 5, the second per-context pair, for an exact 32-byte
+current-context aperture. It overlays global privileged SRAM with read-only/XN
+access for both privilege levels so the portable `fiber_current()` call graph
+can read the common current identity from unprivileged Thread mode. ARMv8-M has
+no privileged-RW plus unprivileged-RO access encoding, so the selected port
+updates that one common slot only while `MPU_CTRL` is disabled under the already
+protected context-image replacement interval. The frame, MAIR0 order, and
+RNR 4/8/12 programming sequence remain unchanged; 8-region images retain two,
+and 16-region images retain ten, future configurable pairs.
 
 ### FAP-CM33-MPU-PENDSV-PREFLIGHT
 

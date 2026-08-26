@@ -15,9 +15,10 @@ enum {
 	FIBER_PORT_BOOT_RECORD_GUARD_HI = 0x5A5A5A5Au
 };
 
-/* Every boundary is linker-owned.  The current-context slot is deliberately
- * contained by privileged SRAM; ARMv8-M uses only global hardware regions
- * 0..3, so it must not consume a fifth global MPU entry. */
+/* Every boundary is linker-owned. The common current slot has a dedicated
+ * 32-byte aperture contained in privileged SRAM. RNR 5 in every active
+ * context image overlays that aperture as read-only/XN, so unprivileged
+ * fiber_current() can read it without adding a fifth immutable global region. */
 typedef struct FiberPortMpuMemoryLayout {
 	uintptr_t privileged_flash_start;
 	uintptr_t privileged_flash_end;
@@ -33,8 +34,8 @@ typedef struct FiberPortMpuMemoryLayout {
 	uintptr_t unprivileged_ram_end;
 } FiberPortMpuMemoryLayout;
 
-/* `regions[index]` is programmed through RNR `index`; it is intentionally
- * separate from the per-context pairs stored in FiberContext. */
+/* `regions[index]` is programmed through global RNR `index`; it is
+ * intentionally separate from the per-context pairs stored in FiberContext. */
 typedef struct FiberPortMpuGlobalRegionImage {
 	FiberPortMpuRegionRegisters regions[fiber_portMPU_GLOBAL_REGION_COUNT];
 } FiberPortMpuGlobalRegionImage;

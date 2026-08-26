@@ -9,7 +9,7 @@ __fiber_mpu_unprivileged_syscalls_end__ = 0x08021000;
 __fiber_mpu_privileged_sram_start__ = 0x30000000;
 __fiber_mpu_privileged_sram_end__ = 0x30010000;
 __fiber_mpu_current_context_slot_start__ = 0x30000000;
-__fiber_mpu_current_context_slot_end__ = 0x30000004;
+__fiber_mpu_current_context_slot_end__ = 0x30000020;
 __fiber_mpu_unprivileged_ram_start__ = 0x24000000;
 __fiber_mpu_unprivileged_ram_end__ = 0x24010000;
 
@@ -52,7 +52,10 @@ SECTIONS
 	.fiber_current_context_slot 0x30000000 (NOLOAD) :
 	{
 		KEEP(*(.bss.fiber_runtime_current_context_slot))
+		. = 0x20;
 	}
+	ASSERT(SIZEOF(.fiber_current_context_slot) == 0x20,
+		"ARM_CM33_MPU current slot aperture must be exactly 32 bytes")
 
 	.fiber_port_privileged_data 0x30000020 (NOLOAD) :
 	{

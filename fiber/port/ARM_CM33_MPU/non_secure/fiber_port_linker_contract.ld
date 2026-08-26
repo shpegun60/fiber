@@ -57,18 +57,21 @@ ASSERT((__fiber_mpu_unprivileged_ram_end__ >
 	((__fiber_mpu_unprivileged_ram_end__ & 0x1F) == 0),
 	"[fiber]: ARM_CM33_MPU unprivileged RAM must be non-empty and 32-byte aligned")
 
-/* The common current slot is a normal privileged-SRAM object, not an MPU
- * aperture. A 32-bit selected Cortex-M build must retain exactly one pointer. */
+/* The common current slot is one pointer inside an exact 32-byte MPU aperture.
+ * Each active context maps this range through RNR 5 as read-only/XN so an
+ * unprivileged fiber can call fiber_current(). The normal privileged-SRAM
+ * mapping contains the aperture; the higher-numbered context region overrides
+ * it while the MPU is active. The startup BSS path must still zero all 32 bytes. */
 ASSERT((__fiber_mpu_current_context_slot_end__ -
-	__fiber_mpu_current_context_slot_start__) == 4,
-	"[fiber]: ARM_CM33_MPU current slot must be exactly one 32-bit pointer")
-ASSERT((__fiber_mpu_current_context_slot_start__ & 0x3) == 0,
-	"[fiber]: ARM_CM33_MPU current slot must be word aligned")
+	__fiber_mpu_current_context_slot_start__) == 32,
+	"[fiber]: ARM_CM33_MPU current-slot aperture must be exactly 32 bytes")
+ASSERT((__fiber_mpu_current_context_slot_start__ & 0x1F) == 0,
+	"[fiber]: ARM_CM33_MPU current-slot aperture must be 32-byte aligned")
 ASSERT(ADDR(.fiber_current_context_slot) ==
 	__fiber_mpu_current_context_slot_start__,
 	"[fiber]: ARM_CM33_MPU current-slot output section starts incorrectly")
-ASSERT(SIZEOF(.fiber_current_context_slot) == 4,
-	"[fiber]: ARM_CM33_MPU current-slot output section must be one pointer")
+ASSERT(SIZEOF(.fiber_current_context_slot) == 32,
+	"[fiber]: ARM_CM33_MPU current-slot output section must be one 32-byte aperture")
 ASSERT((__fiber_mpu_current_context_slot_start__ >=
 	__fiber_mpu_privileged_sram_start__) &&
 	(__fiber_mpu_current_context_slot_end__ <=
@@ -85,6 +88,12 @@ ASSERT((ADDR(.fiber_port_privileged_code) >=
 	  SIZEOF(.fiber_port_privileged_code)) <=
 	 __fiber_mpu_privileged_flash_end__),
 	"[fiber]: ARM_CM33_MPU protected port code escaped privileged flash")
+ASSERT((ADDR(.fiber_port_unprivileged_code) >=
+	__fiber_mpu_unprivileged_flash_start__) &&
+	((ADDR(.fiber_port_unprivileged_code) +
+	  SIZEOF(.fiber_port_unprivileged_code)) <=
+	 __fiber_mpu_unprivileged_flash_end__),
+	"[fiber]: ARM_CM33_MPU unprivileged port code escaped unprivileged flash")
 ASSERT((ADDR(.fiber_port_syscalls) >=
 	__fiber_mpu_unprivileged_syscalls_start__) &&
 	((ADDR(.fiber_port_syscalls) + SIZEOF(.fiber_port_syscalls)) <=
@@ -98,7 +107,8 @@ ASSERT((ADDR(.fiber_port_privileged_data) >=
 	"[fiber]: ARM_CM33_MPU protected data escaped privileged SRAM")
 
 /* The four global ARMv8-M MPU regions have fixed roles and no overlap. The
- * current slot is intentionally the only contained subrange. */
+ * current-slot aperture is intentionally the only contained subrange and is
+ * overlaid by every active per-context RNR 5 image. */
 ASSERT((__fiber_mpu_privileged_flash_end__ <=
 	__fiber_mpu_unprivileged_flash_start__) ||
 	(__fiber_mpu_unprivileged_flash_end__ <=

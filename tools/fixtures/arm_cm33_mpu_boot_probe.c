@@ -6,6 +6,9 @@ FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_STACK_INDEX == 0u,
 		"ARM_CM33_MPU stack pair must remain context index zero");
 FIBER_STATIC_ASSERT(fiber_portMPU_STACK_REGION_NUMBER == 4u,
 		"ARM_CM33_MPU stack must program hardware region four");
+FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER == 5u &&
+		fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX == 1u,
+		"ARM_CM33_MPU current-slot aperture must occupy the second context pair");
 
 fiber_portPRIVILEGED_DATA
 static FiberContext fiber_arm_cm33_mpu_probe_context;
@@ -38,8 +41,8 @@ void fiber_panic(char code)
 	}
 }
 
-/* Mirror the common runtime object's dedicated input section. This slice does
- * not read it, but the linker proof ensures it is physically privileged. */
+/* Mirror the common runtime object's dedicated input section. The linker proof
+ * reserves its complete 32-byte aperture inside privileged SRAM. */
 __attribute__((section(".bss.fiber_runtime_current_context_slot")))
 FiberContext *volatile fiber_internal_runtime_current_context_slot;
 

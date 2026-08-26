@@ -442,7 +442,7 @@ $ports = @(
         ReferenceDefines = @()
     },
     [pscustomobject]@{
-        Name = "ARM_CM33_MPU_STAGE_8"; CpuArgs = @("-mcpu=cortex-m33")
+        Name = "ARM_CM33_MPU_8"; CpuArgs = @("-mcpu=cortex-m33")
         CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
         ProfileDir = "fiber\port\ARM_CM33_MPU\non_secure"; FiberSource = "fiber_port.c"
         FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=8")
@@ -450,7 +450,7 @@ $ports = @(
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
     },
     [pscustomobject]@{
-        Name = "ARM_CM33_MPU_STAGE_16"; CpuArgs = @("-mcpu=cortex-m33")
+        Name = "ARM_CM33_MPU_16"; CpuArgs = @("-mcpu=cortex-m33")
         CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
         ProfileDir = "fiber\port\ARM_CM33_MPU\non_secure"; FiberSource = "fiber_port.c"
         FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1", "-DFIBER_PORT_CM33_MPU_TOTAL_REGIONS=16")
@@ -502,17 +502,7 @@ $ports = @(
     }
 )
 
-$stagedRuntimeProfiles = @(
-    "fiber\port\ARM_CM33_MPU\non_secure"
-)
-
-# The staged profile compiles against the same pinned FreeRTOS source, but it
-# is intentionally excluded from the complete-runtime inventory until PendSV
-# and the forward ABI arrive.
-$stagedAssemblyPorts = @(
-    $ports | Where-Object { $_.Name -like "ARM_CM33_MPU_STAGE_*" }
-)
-$ports = @($ports | Where-Object { $_.Name -notlike "ARM_CM33_MPU_STAGE_*" })
+$stagedRuntimeProfiles = @()
 
 Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
     -PortDefinitions $ports -StagedRuntimeProfiles $stagedRuntimeProfiles
@@ -546,7 +536,7 @@ try {
     Write-Host "Parity optimization: $Optimization"
 
     $compiled = @{}
-    foreach ($port in @($ports + $stagedAssemblyPorts)) {
+    foreach ($port in $ports) {
         $portBuild = Join-Path $BuildRoot $port.Name
         New-Item -ItemType Directory -Path $portBuild -Force | Out-Null
         Write-CmsisMainHeader -Directory $portBuild `
@@ -846,14 +836,13 @@ try {
             "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
         -Ledger $ledger
 
-    # ARM_CM33_MPU remains staged because the forward ABI is not activated, but
-    # its protected SVC/PendSV engine now has the complete reference save,
-    # MPU-replace, and restore mechanics for both supported MPU geometries.
-    foreach ($armCm33MpuStageName in @(
-            "ARM_CM33_MPU_STAGE_8",
-            "ARM_CM33_MPU_STAGE_16")) {
-    $pair = $compiled[$armCm33MpuStageName]
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-start" `
+    # ARM_CM33_MPU now exposes the frozen forward ABI. Its protected SVC/PendSV
+    # sequence remains pinned against the same 8- and 16-region references.
+    foreach ($armCm33MpuName in @(
+            "ARM_CM33_MPU_8",
+            "ARM_CM33_MPU_16")) {
+    $pair = $compiled[$armCm33MpuName]
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "first-start" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vStartFirstTask" `
         -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f',
             '\bdsb\b', '\bisb\b', '\bsvc\s+\d+\b') `
@@ -864,9 +853,9 @@ try {
             '\bisb\b', '\bsvc\s+70\b') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE",
-            "FAP-CM33-MPU-STAGED-SVC") `
+            "FAP-CM33-MPU-RUNTIME") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "MPU-activation" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "MPU-activation" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vRestoreContextOfFirstTask" `
         -ReferencePatterns @('\bbic(?:\.w)?\s+r2,\s*r2,\s*#1',
             '\bstr\s+r2,\s*\[r1,\s*#0\]', '\badds\s+r0,\s*#4',
@@ -886,9 +875,9 @@ try {
             'fiber_port_mpu_validate_active_initial_context', '\bdsb\b') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
-            "FAP-MPU-FIRST-ACTIVATION-SPLIT", "FAP-CM33-MPU-STAGED-SVC") `
+            "FAP-MPU-FIRST-ACTIVATION-SPLIT", "FAP-CM33-MPU-RUNTIME") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-special" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "first-restore-special" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs_first_task" `
         -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
             '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
@@ -898,9 +887,9 @@ try {
             '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
-            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-RUNTIME") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-general" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "first-restore-general" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs_first_task" `
         -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
             '\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
@@ -912,9 +901,9 @@ try {
             '\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
-            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-RUNTIME") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "first-restore-complete" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "first-restore-complete" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done_first_task" `
         -ReferencePatterns @('\bstr\s+r1,\s*\[r0,\s*#0\]',
             '\bmsr\s+BASEPRI', '\bbx\s+lr\b') `
@@ -924,9 +913,9 @@ try {
             '\bmsr\s+BASEPRI', '\bcpsie\s+i', '\bbx\s+lr\b') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
-            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-STAGED-SVC") `
+            "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-RUNTIME") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-save" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-save" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_general_regs" `
         -ReferencePatterns @('(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
             '(?i)\bldmia(?:\.w)?\s+r2,\s*\{r4[^\r\n]*(r11|fp)\}') `
@@ -940,7 +929,7 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-save-special" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-save-special" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_special_regs" `
         -ReferencePatterns @('(?i)\bmrs\s+r3,\s*psplim', '(?i)\bmrs\s+r4,\s*control',
             '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r2[^\r\n]*lr\}',
@@ -954,7 +943,7 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-MPU-replace" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-MPU-replace" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "program_mpu" `
         -ReferencePatterns @('(?i)\bdmb\b', '(?i)\bbic(?:\.w)?\s+r2',
             '(?i)\badds\s+r0,\s*#4', '(?i)\bmovs\s+r3,\s*#4',
@@ -967,9 +956,10 @@ try {
             'fiber_port_mpu_validate_active_context') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-MPU-ATOMIC-SWITCH",
-            "FAP-CM33-MPU-PENDSV-C-SWITCH") `
+            "FAP-CM33-MPU-PENDSV-C-SWITCH",
+            "FAP-CM33-MPU-CURRENT-SLOT-APERTURE") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-restore" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs" `
         -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
             '(?i)\bmsr\s+psp', '(?i)\bmsr\s+psplim', '(?i)\bmsr\s+control') `
@@ -981,7 +971,7 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore-general" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-restore-general" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs" `
         -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
             '(?i)\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
@@ -995,7 +985,7 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-CM33-MPU-PENDSV-PREFLIGHT") `
         -Ledger $ledger
-    Assert-MechanismParity -PortName $armCm33MpuStageName -Mechanism "PendSV-restore-complete" `
+    Assert-MechanismParity -PortName $armCm33MpuName -Mechanism "PendSV-restore-complete" `
         -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done" `
         -ReferencePatterns @('(?i)\bstr\s+r1,\s*\[r0', '(?i)\bbx\s+lr\b') `
         -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `

@@ -1,4 +1,4 @@
-ENTRY(fiber_arm_cm33_mpu_first_start_probe)
+ENTRY(Reset_Handler)
 
 __fiber_mpu_privileged_flash_start__ = 0x08000000;
 __fiber_mpu_privileged_flash_end__ = 0x08010000;
@@ -15,47 +15,40 @@ __fiber_mpu_unprivileged_ram_end__ = 0x24010000;
 
 SECTIONS
 {
-	.fiber_test_vectors 0x08000000 :
+	.isr_vector 0x08000000 :
 	{
-		KEEP(*(.fiber_test_vectors))
+		KEEP(*(.isr_vector))
 	}
 
+	/* This is the complete direct unprivileged Thread-mode call chain. The
+	 * selected port reaches protected PendSV only through the SVC 71 veneer. */
 	.fiber_port_unprivileged_code 0x08010000 :
 	{
 		KEEP(*(.fiber_port_unprivileged_functions))
 		KEEP(*(.text.fiber_runtime_thread_functions))
+		KEEP(*(.text.portable_fixture_entry*))
 	}
 	ASSERT((ADDR(.fiber_port_unprivileged_code) +
 		SIZEOF(.fiber_port_unprivileged_code)) <= 0x08020000,
-		"ARM_CM33_MPU first-start unprivileged code exceeds its linker range")
+		"ARM_CM33_MPU unprivileged code exceeds its exact MPU range")
 
-	/* Collect the direct Thread-mode section before the privileged catch-all.
-	 * The isolated fixture defines fiber_current/fiber_schedule to exercise the
-	 * same ordering required by the complete application linker script. */
 	.fiber_port_privileged_code 0x08000080 :
 	{
 		KEEP(*(.fiber_port_privileged_functions))
+		KEEP(*(.fiber_port_context_cohort_expectation))
 		*(.text*)
 		*(.rodata*)
 	}
 	ASSERT((ADDR(.fiber_port_privileged_code) +
 		SIZEOF(.fiber_port_privileged_code)) <= 0x08010000,
-		"ARM_CM33_MPU first-start privileged code exceeds its linker range")
-
-	.ARM.extab : { *(.ARM.extab*) }
-	.ARM.exidx :
-	{
-		__exidx_start = .;
-		*(.ARM.exidx*)
-		__exidx_end = .;
-	}
+		"ARM_CM33_MPU privileged code exceeds its exact MPU range")
 
 	.fiber_port_syscalls 0x08020000 :
 	{
 		KEEP(*(.fiber_port_syscalls))
 	}
 	ASSERT((ADDR(.fiber_port_syscalls) + SIZEOF(.fiber_port_syscalls)) <=
-		0x08021000, "ARM_CM33_MPU first-start syscall code exceeds its linker range")
+		0x08021000, "ARM_CM33_MPU syscall code exceeds its exact MPU range")
 
 	.fiber_current_context_slot 0x30000000 (NOLOAD) :
 	{
@@ -63,7 +56,18 @@ SECTIONS
 		. = 0x20;
 	}
 	ASSERT(SIZEOF(.fiber_current_context_slot) == 0x20,
-		"ARM_CM33_MPU first-start current slot aperture must be exactly 32 bytes")
+		"ARM_CM33_MPU current slot aperture must be exactly 32 bytes")
+
+	.fiber_port_unprivileged_ram 0x24000000 (NOLOAD) :
+	{
+		. = ALIGN(32);
+		KEEP(*(.bss.portable_fixture_stack_1*))
+		. = ALIGN(32);
+		KEEP(*(.bss.portable_fixture_stack_2*))
+	}
+	ASSERT((ADDR(.fiber_port_unprivileged_ram) +
+		SIZEOF(.fiber_port_unprivileged_ram)) <= 0x24010000,
+		"ARM_CM33_MPU unprivileged RAM exceeds its integration range")
 
 	.fiber_port_privileged_data 0x30000020 (NOLOAD) :
 	{
@@ -74,16 +78,15 @@ SECTIONS
 	}
 	ASSERT((ADDR(.fiber_port_privileged_data) +
 		SIZEOF(.fiber_port_privileged_data)) <= 0x30010000,
-		"ARM_CM33_MPU first-start privileged data exceeds its linker range")
+		"ARM_CM33_MPU privileged data exceeds its exact MPU range")
 
-	.fiber_port_unprivileged_ram 0x24000000 (NOLOAD) :
+	.ARM.extab : { *(.ARM.extab*) }
+	.ARM.exidx :
 	{
-		. = ALIGN(32);
-		KEEP(*(.fiber_test_unprivileged_ram))
+		__exidx_start = .;
+		*(.ARM.exidx*)
+		__exidx_end = .;
 	}
-	ASSERT((ADDR(.fiber_port_unprivileged_ram) +
-		SIZEOF(.fiber_port_unprivileged_ram)) <= 0x24010000,
-		"ARM_CM33_MPU first-start unprivileged RAM exceeds its linker range")
 
 	/DISCARD/ : { *(.comment*) *(.note*) }
 }

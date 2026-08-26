@@ -234,16 +234,26 @@ void fiber_port_mpu_linker_layout_check(
 			fiber_portMPU_REGION_EXECUTE_NEVER,
 			fiber_portMPU_RLAR_ATTR_INDEX0, &encoded);
 
-	FIBER_REQUIRE(layout->current_context_slot_end >
-			layout->current_context_slot_start, 'L');
+	fiber_port_require_32_byte_range(layout->current_context_slot_start,
+			layout->current_context_slot_end, 'L');
 	FIBER_REQUIRE((layout->current_context_slot_end -
-			layout->current_context_slot_start) == sizeof(void *), 'L');
-	FIBER_REQUIRE((layout->current_context_slot_start &
-			((uintptr_t)sizeof(void *) - 1u)) == 0u, 'L');
+			layout->current_context_slot_start) ==
+			fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES, 'L');
 	FIBER_REQUIRE(fiber_port_range_contains(layout->privileged_sram_start,
 				layout->privileged_sram_end,
 				layout->current_context_slot_start,
 				layout->current_context_slot_end), 'L');
+	/* RNR 5 overlays the global privileged-SRAM mapping. It is read-only for
+	 * both privilege levels because ARMv8-M has no privileged-RW plus
+	 * unprivileged-RO AP encoding; the protected switch updates this slot only
+	 * while MPU_CTRL is disabled. */
+	fiber_port_mpu_encode_exact_region(layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER,
+			fiber_portMPU_REGION_NON_SHAREABLE |
+			fiber_portMPU_REGION_READ_ONLY |
+			fiber_portMPU_REGION_EXECUTE_NEVER,
+			fiber_portMPU_RLAR_ATTR_INDEX0, &encoded);
 
 	/* ARMv8-M region priority makes overlapping global mappings ambiguous for
 	 * this fixed policy. Unlike the FreeRTOS generic task API, this base Fiber
@@ -456,6 +466,7 @@ void fiber_port_context_fast_check(const FiberContext *ctx,
 
 	FIBER_REQUIRE(ctx->mair0 == fiber_portMPU_MAIR0_DEFAULT, 'M');
 	FiberPortMpuRegionRegisters expected_stack_region;
+	FiberPortMpuRegionRegisters expected_current_context_region;
 	fiber_port_mpu_encode_exact_region(raw_stack_start, raw_stack_end,
 			fiber_portMPU_STACK_REGION_NUMBER,
 			fiber_portMPU_REGION_NON_SHAREABLE |
@@ -466,6 +477,19 @@ void fiber_port_context_fast_check(const FiberContext *ctx,
 			expected_stack_region.rbar, 'M');
 	FIBER_REQUIRE(ctx->mpu_regions[fiber_portMPU_CONTEXT_STACK_INDEX].rlar ==
 			expected_stack_region.rlar, 'M');
+	fiber_port_mpu_encode_exact_region(layout->current_context_slot_start,
+			layout->current_context_slot_end,
+			fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER,
+			fiber_portMPU_REGION_NON_SHAREABLE |
+			fiber_portMPU_REGION_READ_ONLY |
+			fiber_portMPU_REGION_EXECUTE_NEVER,
+			fiber_portMPU_RLAR_ATTR_INDEX0, &expected_current_context_region);
+	FIBER_REQUIRE(ctx->mpu_regions[
+			fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX].rbar ==
+			expected_current_context_region.rbar, 'M');
+	FIBER_REQUIRE(ctx->mpu_regions[
+			fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX].rlar ==
+			expected_current_context_region.rlar, 'M');
 	for (uint32_t index = fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX;
 			index <= fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX; ++index) {
 		FIBER_REQUIRE(ctx->mpu_regions[index].rbar == 0u, 'M');
@@ -587,6 +611,7 @@ void fiber_port_context_init(FiberContext *ctx,
 {
 	FiberPortMpuMemoryLayout layout;
 	FiberPortMpuRegionRegisters stack_region;
+	FiberPortMpuRegionRegisters current_context_region;
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(stack_begin != NULL, 'B');
@@ -632,6 +657,13 @@ void fiber_port_context_init(FiberContext *ctx,
 			fiber_portMPU_REGION_READ_WRITE |
 			fiber_portMPU_REGION_EXECUTE_NEVER,
 			fiber_portMPU_RLAR_ATTR_INDEX0, &stack_region);
+	fiber_port_mpu_encode_exact_region(layout.current_context_slot_start,
+			layout.current_context_slot_end,
+			fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER,
+			fiber_portMPU_REGION_NON_SHAREABLE |
+			fiber_portMPU_REGION_READ_ONLY |
+			fiber_portMPU_REGION_EXECUTE_NEVER,
+			fiber_portMPU_RLAR_ATTR_INDEX0, &current_context_region);
 
 	FIBER_REQUIRE(raw_stack_start <= UINTPTR_MAX -
 			(uintptr_t)FIBER_STACK_REDZONE_BYTES, 'O');
@@ -654,6 +686,8 @@ void fiber_port_context_init(FiberContext *ctx,
 		fiber_port_mpu_disable_context_region(&ctx->mpu_regions[index]);
 	}
 	ctx->mpu_regions[fiber_portMPU_CONTEXT_STACK_INDEX] = stack_region;
+	ctx->mpu_regions[fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX] =
+			current_context_region;
 
 	/* FreeRTOS-compatible no-TrustZone protected-image layout. The hardware
 	 * frame is stored in privileged FiberContext memory, never prewritten on
