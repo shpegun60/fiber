@@ -382,6 +382,13 @@ $expectedReferenceFiles = @{
     "portable\GCC\ARM_CM33_NTZ\non_secure\portasm.h" = "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C"
     "portable\GCC\ARM_CM33_NTZ\non_secure\portmacro.h" = "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B"
     "portable\GCC\ARM_CM33_NTZ\non_secure\portmacrocommon.h" = "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2"
+    "portable\GCC\ARM_CM55_NTZ\non_secure\port.c" = "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A"
+    "portable\GCC\ARM_CM55_NTZ\non_secure\portasm.c" = "DFC14BD0E4CB5E504A9118292A4B0605ACEE1CFDD274BA33A55096914BAA45D5"
+    "portable\GCC\ARM_CM55_NTZ\non_secure\portasm.h" = "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C"
+    "portable\GCC\ARM_CM55_NTZ\non_secure\portmacro.h" = "B7F94C8C21A4B583837C10F00ED93A1EA8C5801DEA8A3AD6C6DB13A49F947420"
+    "portable\GCC\ARM_CM55_NTZ\non_secure\portmacrocommon.h" = "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2"
+    "portable\ThirdParty\GCC\ARM_TFM\README.md" = "43EAC6335CBC2B3B90FA53817B844774B5DCCDC8D477308C2E83128F83B4EE0A"
+    "portable\ThirdParty\GCC\ARM_TFM\os_wrapper_freertos.c" = "9A6242DB2128A3220495C6739078959CF56D56649F1FFB2634C6430603938901"
     "portable\GCC\ARM_CM33\non_secure\port.c" = "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A"
     "portable\GCC\ARM_CM33\non_secure\portasm.c" = "6F39F5CB7A24766DF3FA025E41E0E502301550136151B5E2EABDFA9AC4E42D60"
     "portable\GCC\ARM_CM33\secure\secure_context.c" = "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72"
@@ -455,6 +462,22 @@ $ports = @(
         Name = "ARM_CM33_NTZ"; CpuArgs = @("-mcpu=cortex-m33")
         CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
         ProfileDir = "fiber\port\ARM_CM33_NTZ\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM55_NTZ"; CpuArgs = @("-mcpu=cortex-m55", "-mfloat-abi=soft")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_NTZ\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_TFM"; CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33_TFM\non_secure"; FiberSource = "fiber_port.c"
         FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
         ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
         ReferenceDefines = @()
@@ -1283,6 +1306,69 @@ try {
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
         -Ledger $ledger
+
+    # TF-M does not supply a different context-switch port. Its pinned
+    # ThirdParty profile copies the corresponding NTZ CPU port and adds only
+    # the TF-M Non-secure interface mutex adapter. Prove the C3TF CPU mechanics
+    # against the same reference independently so the profiles cannot drift.
+    $pair = $compiled["ARM_CM33_TFM"]
+    Assert-MechanismParity -PortName "ARM_CM33_TFM" `
+        -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33_TFM" `
+        -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r1,\s*r2\}', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\bbx\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r2,\s*r3[^\r\n]*fp\}', '\bmsr\s+PSPLIM', '\bmrs\s+[^,]+,\s*PSPLIM', '\bmsr\s+CONTROL', '\bmsr\s+PSP', '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-FULL-FIRST-RESTORE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33_TFM" `
+        -Mechanism "PendSV" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            '\bmrs\s+r2,\s*PSPLIM',
+            '\bmov\s+r3,\s*lr',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'vTaskSwitchContext',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmsr\s+PSP,\s*r0',
+            '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            'fiber_port_context_validate_save_current',
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmrs\s+r1,\s*PSPLIM',
+            '\bmsr\s+PSP,\s*r0',
+            '\bmrs\s+r1,\s*PSP',
+            '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-PSPLIM-READBACK") `
+        -Ledger $ledger
+    $pair = $compiled["ARM_CM33_NTZ"]
     Assert-MechanismParity -PortName "ARM_CM33_NTZ" `
         -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
         -ReferenceSymbol "vRestoreContextOfFirstTask" `
@@ -1328,6 +1414,67 @@ try {
             '\bbx\s+r3') `
         -FiberPath $pair.FiberPath `
         -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M33-PSPLIM-READBACK") `
+        -Ledger $ledger
+
+    # The Cortex-M55 NTZ baseline is deliberately compiled with FPU and MVE
+    # disabled. Its scalar frame remains ten words, while its profile identity
+    # prevents it from being confused with the later M55F/MVE cohorts.
+    $pair = $compiled["ARM_CM55_NTZ"]
+    Assert-MechanismParity -PortName "ARM_CM55_NTZ" `
+        -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM55_NTZ" `
+        -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r1,\s*r2\}', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\bbx\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r2,\s*r3[^\r\n]*fp\}', '\bmsr\s+PSPLIM', '\bmrs\s+[^,]+,\s*PSPLIM', '\bmsr\s+CONTROL', '\bmsr\s+PSP', '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M55-FULL-FIRST-RESTORE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM55_NTZ" `
+        -Mechanism "PendSV" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            '\bmrs\s+r2,\s*PSPLIM',
+            '\bmov\s+r3,\s*lr',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'vTaskSwitchContext',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmsr\s+PSP,\s*r0',
+            '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            'fiber_port_context_validate_save_current',
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmrs\s+r1,\s*PSPLIM',
+            '\bmsr\s+PSP,\s*r0',
+            '\bmrs\s+r1,\s*PSP',
+            '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M55-PSPLIM-READBACK") `
         -Ledger $ledger
 
     # FPU enablement does not change the initial FreeRTOS stack image. This

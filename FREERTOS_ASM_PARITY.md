@@ -100,6 +100,8 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
+| `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
+| `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
 | `ARM_CM33/non_secure` plus Secure companion | `GCC/ARM_CM33/non_secure` and `secure` | 19-word construction, PRIS/Secure init, SVC first start, Secure save/unload, lazy bounded allocation, Secure load, and segmented eleven-word PendSV save/restore |
 | `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
 | `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
@@ -220,6 +222,23 @@ the software frame. Fiber preserves the same ten-word geometry and additionally
 requires live PSPLIM to match the current stack base before save, reads PSPLIM
 back after restore, and validates PSP after its write. These checks add no
 context word and do not change the reference register-transfer order.
+
+### FAP-M55-FULL-FIRST-RESTORE
+
+The no-FPU/no-MVE CM55 NTZ profile uses the same scalar
+`[PSPLIM, EXC_RETURN, r4-r11]` software frame as the matching FreeRTOS branch.
+Fiber restores the full PendSV-shaped frame during first SVC, then reads back
+PSPLIM, CONTROL, PSP, BASEPRI, and FAULTMASK. This makes the initial frame the
+same exact shape consumed by later PendSV without introducing an MVE, FP, MPU,
+SecureContext, or PAC state slot.
+
+### FAP-M55-PSPLIM-READBACK
+
+The pinned no-feature CM55 FreeRTOS PendSV preserves PSPLIM as the first
+software word. Fiber retains that ten-word scalar geometry, additionally
+requires live PSPLIM to match the declared stack base before save, then reads
+back PSPLIM and PSP after restore. The checks neither introduce vector/FPU
+instructions nor alter the ordered scalar save/restore transfer.
 
 ### FAP-CM33F-CONSTRUCTION
 

@@ -14,17 +14,17 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          ARM_CM33 SecureContext full-runtime slice-6 working checkpoint
+audited tree:          ARM_CM55 NTZ scalar software-runtime checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
 assembly parity:       PASS at -O2 and -Os
 ```
 
-This inventory snapshot accompanies the complete build-selected CM33
-SecureContext software runtime. It adds all eight forward operations, strong
-SVC/PendSV, and switch-time Secure save/select/lazy-allocation/load. Hardware
-support remains unclaimed.
+This inventory snapshot accompanies the exact build-selected CM55 scalar NTZ
+software runtime. It adds a concrete ARMv8.1-M no-FPU/no-MVE baseline without
+claiming the FPU, MVE, MPU, TrustZone, or PAC/BTI roles required by a full
+STM32N6 image. Hardware operation remains unclaimed.
 
 ## Scope Rule
 
@@ -53,7 +53,7 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Twelve complete runtime parity profiles currently have selected-port source
+Fourteen complete runtime parity profiles currently have selected-port source
 groups and pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
@@ -68,8 +68,10 @@ groups and pinned FreeRTOS parity ledgers:
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 | `ARM_CM33/non_secure` plus `ARM_CM33/secure` | no-MPU/no-FPU TrustZone companion frame, exact construction, sealed attach, twelve versioned identity/init/allocation/save/load veneers, static Secure pool, all eight forward operations, and strong SVC/PendSV | compile/assembly/cohort/CMSE/vector/LTO validated only; no hardware claim |
+| `ARM_CM33_TFM/non_secure` | exact no-MPU/no-FPU NTZ CPU frame plus TF-M v2.0.0 initialization and cooperative mutex adapter; no fiber SecureContext | compile/assembly/archive/ELF validated only; TF-M/PSA/hardware integration pending |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
+| `ARM_CM55_NTZ/non_secure` | exact ARMv8.1-M scalar Non-secure ten-word PSPLIM frame; FPU/MVE/MPU/CMSE/PAC/BTI rejected | compile/assembly/ELF validated; M55 hardware and feature cohorts pending |
 
 The current matrix pairs every complete runtime source group against the pinned
 FreeRTOS reference where applicable and separately tests the paired CM33
@@ -178,17 +180,40 @@ state without inheriting another fiber's state.
 
 ### 4. Cortex-M33 TF-M Integration
 
-TF-M is an alternative Secure provider, not another copy of the scheduler port.
-It uses the matching NTZ-style CPU mechanics plus an explicit TF-M integration
-artifact. It must not be linked with the fiber-owned SecureContext companion for
-the same profile.
+`ARM_CM33_TFM/non_secure` now completes the software profile for the pinned
+TF-M v2.0.0 contract. TF-M remains an alternative Secure provider, not another
+copy of the scheduler port: C3TF uses the matching NTZ-style ten-word CPU frame
+and strong SVC/PendSV mechanics, then binds an explicit initialization/mutex
+artifact. It must not be linked with the fiber-owned SecureContext companion.
+
+The optional `fiber_port_tfm_initialize()` call is idempotent and may run early;
+`fiber_start()` also requires it automatically before CPU preparation. The
+external `tfm_ns_interface_init()` and generated PSA/NSC veneer artifacts remain
+TF-M-owned and deliberately unresolved by the library. One static cooperative
+mutex implements the exact v2.0 OS-wrapper symbol surface; only wait-forever
+retries through the user scheduler. The matrix proves pinned provenance,
+`-O2`/`-Os` CPU assembly parity, exact external dependencies, normal/LTO archive
+extraction, direct vectors, missing-TF-M failure, and SecureContext exclusion.
+
+Remaining evidence is integration/runtime only: build a matching TF-M v2.0
+Secure image, generated Non-secure interface and `s_veneers.o`, exercise PSA
+calls concurrently from multiple fibers, and validate the security/vector/
+PSPLIM behavior on matching hardware. No such claim is active now.
 
 ### 5. Cortex-M55 / STM32N6
 
-`transitional_v8m` currently provides compile-only bring-up coverage. It is not
-a Cortex-M55 production port.
+`ARM_CM55_NTZ/non_secure` now provides the exact scalar M55 baseline: one
+privileged Non-secure, no-MPU, no-FPU, no-MVE, no-SecureContext, no-TF-M,
+no-PAC, no-BTI frame and runtime. Its `C55N` cohort and explicit M55 CMSIS
+identity prevent an M33 archive or feature-enabled M55 build from satisfying
+this profile. `-O2`/`-Os` generated assembly parity, normal/LTO archive,
+vector, ABI, cohort, and negative-manifest proofs pass. It is software evidence
+only and remains outside global selection.
 
-The concrete STM32N6 profile must own and prove:
+`transitional_v8m` now provides compile-only bring-up coverage only for the
+unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.
+
+The remaining concrete STM32N6 feature profiles must own and prove:
 
 ```text
 ARMv8.1-M Mainline first start and PendSV
@@ -274,9 +299,7 @@ STM32 hardware claim.
 ## Recommended Execution Order
 
 ```text
-ARM_CM33 TrustZone/SecureContext
-  -> ARM_CM33 TF-M integration
-  -> ARM_CM55/STM32N6
+ARM_CM55 feature cohorts/STM32N6
   -> optional ARM_CM85/STM32V8
   -> delete transitional_v8m
   -> full -O0/-Og/-O2/-Os/-O3 and final-LTO disassembly cohort

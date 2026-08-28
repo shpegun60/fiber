@@ -130,6 +130,18 @@ behind a permissive generic v8-M path. The exact generated-assembly mapping is
 recorded in
 `fiber/port/ARM_CM33_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM55_NTZ/non_secure` is the corresponding concrete ARMv8.1-M scalar
+baseline, not a generic M55 switch. Its `C55N` cohort owns the same ten-word
+`[PSPLIM][EXC_RETURN][r4-r11]` Non-secure software frame as the pinned
+FreeRTOS scalar M55 configuration, plus strict SVC first start and
+PSPLIM-aware PendSV. It accepts only `-mcpu=cortex-m55 -mfloat-abi=soft` with
+CMSIS `__CORTEX_M == 55` and rejects MVE, FP, MPU, Secure CMSE, PAC, and BTI.
+This is deliberate: M55F, MVE-FP, MPU, TrustZone/SecureContext or TF-M, and
+PAC/BTI need distinct frame/cohort definitions. `-O2/-Os` generated assembly,
+normal/LTO archives, vectors, ABI, cohort, and negative manifests are covered;
+M55 hardware remains unvalidated. See
+`fiber/port/ARM_CM55_NTZ/non_secure/FREERTOS_PARITY.md`.
+
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete
 FP-aware PendSV runtime. FreeRTOS keeps a new FPU task on the same 72-byte
@@ -142,6 +154,19 @@ source at `-O2/-Os`. The profile is build-selected only and has
 unvalidated and intentionally excludes MPU, SecureContext, TF-M, MVE, PAC,
 and BTI APIs. See
 `fiber/port/ARM_CM33F_NTZ/non_secure/FREERTOS_PARITY.md`.
+
+`ARM_CM33_TFM/non_secure` is the separate no-FPU/no-MPU TF-M v2.0.0 profile.
+Its `C3TF` cohort independently proves the same ten-word PSPLIM-aware CPU
+mechanics as the pinned FreeRTOS CM33 NTZ port, while the selected integration
+objects provide idempotent early/automatic `tfm_ns_interface_init()` dispatch
+and the exact four-function TF-M OS mutex ABI. The mutex is one static,
+owner-checked cooperative object: an immediately free mutex can be acquired
+with any timeout, while only `OS_WRAPPER_WAIT_FOREVER` retries a busy mutex by
+scheduling. The profile intentionally has no fiber SecureContext symbols.
+Normal/LTO archives, strong vectors, exact external dependencies, missing-TF-M
+failure, and `-O2/-Os` generated assembly are covered; real TF-M Secure-image,
+PSA veneer, and board operation are not. See
+`fiber/port/ARM_CM33_TFM/non_secure/FREERTOS_PARITY.md`.
 
 ## Project Setup
 
@@ -203,6 +228,28 @@ M33 NTZ full build-selected runtime source group:
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
 
+M55 scalar NTZ full build-selected runtime source group:
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
+               fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
+
+M33 TF-M v2.0.0 full build-selected Non-secure source group:
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port.c
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_boot.c
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm_abi.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm.c
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm_os_wrapper.h
+               fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm_os_wrapper.c
+
 M33 TrustZone companion-aware full build-selected runtime and Secure companion:
                fiber/port/ARM_CM33/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
@@ -235,6 +282,25 @@ M33F NTZ full build-selected FPU runtime source group:
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot.c
 ```
+
+The CM33 TF-M target defines `FIBER_PORT_BUILD_SELECTED=1` and
+`FIBER_PORT_ARMV8M_MAINLINE=1`, places its `non_secure` directory first on the
+selected-port include path, and compiles all four `.c` files in that group.
+It must also compile/link the matching TF-M v2.0.0 generated Non-secure
+interface sources and `s_veneers.o`; they provide `tfm_ns_interface_init()` and
+the PSA gateway calls. With Fiber, board code should call
+`fiber_port_tfm_initialize()` for optional early initialization rather than
+calling the TF-M function directly. Omitting that call is valid because
+`fiber_start()` invokes the same idempotent initialization automatically.
+The TF-M optional header is profile integration API and is not included by
+`fiber_core.h`.
+
+The scalar CM55 target defines `FIBER_PORT_BUILD_SELECTED=1` and
+`FIBER_PORT_ARMV81M_MAINLINE=1`, places its `non_secure` directory first on the
+selected-port include path, and compiles its two `.c` files with
+`-mcpu=cortex-m55 -mthumb -mfloat-abi=soft` and CMSIS `core_cm55.h`. It is not
+selected by the global auto selector. A full STM32N6 build must select a later
+M55 feature profile instead of weakening this scalar cohort.
 
 Every build-selected target must also compile this source separately from any
 precompiled selected-port archive, using the same selected private include

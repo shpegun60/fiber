@@ -1,5 +1,73 @@
 # Fiber Decision Log
 
+## 2026-08-28: Add Exact ARM_CM55_NTZ Scalar Non-Secure Profile
+
+`ARM_CM55_NTZ/non_secure` is now a separate exact build-selected Cortex-M55
+profile. It freezes the privileged, Non-secure, no-MPU, no-FPU, no-MVE,
+no-SecureContext, no-TF-M, no-PAC, and no-BTI cohort under the distinct `C55N`
+identity. It is not an alias for `ARM_CM33_NTZ`, despite the scalar frame
+mechanics being the same.
+
+The pinned FreeRTOS `ARM_CM55_NTZ/non_secure` `port.c`, `portasm.c`,
+`portasm.h`, and `portmacrocommon.h` are byte-identical to the corresponding
+CM33 NTZ artifacts. M55-specific selection lives in FreeRTOS `portmacro.h`:
+it declares ARMv8.1-M minor version one and requires an explicit
+`configENABLE_MVE` setting. Fiber deliberately represents that choice as a
+concrete profile instead. This scalar profile rejects compiler MVE, FP,
+PAC/BTI, Secure CMSE, and MPU configurations rather than accepting a runtime
+feature toggle with a different context ABI.
+
+The port owns the same ten-word `[PSPLIM][EXC_RETURN][r4-r11]` software frame,
+the `0xFFFFFFB8` first-SVC provenance and `0xFFFFFFBC` PSP restore return, and
+PSPLIM-aware PendSV save/select/restore sequence. Its M55 compiler contract is
+`-mcpu=cortex-m55 -mthumb -mfloat-abi=soft` plus CMSIS `__CORTEX_M == 55`.
+GCC may report `__ARM_ARCH_8M_MAIN__` for this soft-float target, so the
+portmacro pairs the architecture result with the CMSIS core identity before
+accepting it as ARMv8.1-M.
+
+The matrix proves pinned provenance, `-O2`/`-Os` generated first-start,
+first-restore, and PendSV parity, type-only C/C++ storage, exact cohort,
+forward/reverse ABI, normal/LTO archive extraction, strong vector slots 11/14,
+and wrong-core, FPU, MVE, PAC, BTI, CMSE, and MPU negative manifests. The
+profile remains outside global selection and has no hardware claim. It does not
+claim full STM32N6 support: M55F, MVE-FP, MPU, TrustZone/SecureContext or TF-M,
+and PAC/BTI each require a separate exact selected profile and evidence.
+
+## 2026-08-28: Add Exact ARM_CM33 TF-M Non-Secure Profile
+
+`ARM_CM33_TFM/non_secure` is now a separate exact build-selected profile, not
+an alias for plain `ARM_CM33_NTZ` and not the fiber-owned SecureContext port.
+Its CPU frame, first-start SVC, and PSPLIM-aware PendSV mechanics intentionally
+match the pinned FreeRTOS `GCC/ARM_CM33_NTZ/non_secure` port, while exact port
+ID `C3TF` prevents a complete plain-NTZ archive from satisfying the TF-M build.
+The unchanged ten-word frame keeps feature mask `0x82`; TF-M changes selected
+integration identity, not saved context geometry.
+
+The profile follows the pinned FreeRTOS `ThirdParty/GCC/ARM_TFM` split. The
+external TF-M v2.0.0 Non-secure interface owns `tfm_ns_interface_init()` and
+the PSA veneers. Fiber provides an idempotent `fiber_port_tfm_initialize()`
+optional early entry and automatically requires the same initialization from
+`fiber_port_runtime_prepare_start()` before CPU first-start setup. A retained
+integration-bundle anchor forces the adapter object out of an ordinary static
+archive. Missing TF-M interface code is an intentional link failure.
+
+The exact TF-M v2.0.0 mutex surface is implemented without importing FreeRTOS
+queues, semaphores, heap, ticks, or scheduler policy. One static owner-checked
+mutex supports immediate acquisition for every timeout and cooperative retry
+through `fiber_port_runtime_schedule()` only for `OS_WRAPPER_WAIT_FOREVER`.
+A busy zero or finite timeout returns `OS_WRAPPER_ERROR`; the user scheduler
+must eventually select the owner. Initialization and mutex operations validate
+their Thread/mask role, and the external init call must preserve IPSR,
+PRIMASK, BASEPRI, FAULTMASK, CONTROL, and PSPLIM.
+
+Executable evidence pins both `ARM_TFM` artifacts by SHA-256, independently
+compares C3TF first start/restore/PendSV with FreeRTOS at `-O2` and `-Os`, and
+proves the exact external symbol surface, normal/LTO archive extraction,
+strong vector slots 11/14, missing-interface and duplicate-handler failures,
+exact cohort identity, and absence of fiber SecureContext symbols. This is
+compile/assembly/archive/ELF evidence only. It does not claim a working TF-M
+Secure image, PSA service, generated veneer set, or STM32 hardware runtime.
+
 ## 2026-08-28: Complete CM33 SecureContext Selected Runtime
 
 `ARM_CM33/non_secure` now implements the complete build-selected no-MPU,

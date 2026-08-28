@@ -79,9 +79,10 @@ FIBER_STATIC_ASSERT((FIBER_PORT_BUILD_SELECTED == 0) || (FIBER_PORT_PROFILE_IS_E
  *
  * These macros are normalized to 0/1 before any selection logic uses them.
  * ARMv8.1-M handling is deliberately conservative: some GCC configurations for
- * Cortex-M55 report __ARM_ARCH_8M_MAIN__ while enabling MVE through
- * __ARM_FEATURE_MVE. MVE is treated as ARMv8.1-M selection input, because MVE
- * changes the context-policy question even if the architecture macro is weak.
+ * Cortex-M55 may report __ARM_ARCH_8M_MAIN__ with soft-float/MVE disabled.
+ * Its CMSIS core identity is therefore also an ARMv8.1-M selection input.
+ * MVE remains an independent ARMv8.1-M input because it changes the
+ * context-policy question even if the architecture macro is weak.
  */
 #ifndef FIBER_PORT_DETECTED_ARMV6M
 # if defined(__ARM_ARCH_6M__)
@@ -119,7 +120,8 @@ FIBER_STATIC_ASSERT((FIBER_PORT_BUILD_SELECTED == 0) || (FIBER_PORT_PROFILE_IS_E
 /* ARMv8.1-M is a mainline superset. If MVE is enabled, detect v8.1-M. */
 # if defined(__ARM_ARCH_8M_MAIN__) && \
      !defined(__ARM_ARCH_8_1M_MAIN__) && \
-     !(defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0))
+     !(defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0)) && \
+     !(defined(__CORTEX_M) && (((__CORTEX_M) == 55) || ((__CORTEX_M) == 85)))
 #  define FIBER_PORT_DETECTED_ARMV8M_MAINLINE 1
 # else
 #  define FIBER_PORT_DETECTED_ARMV8M_MAINLINE 0
@@ -128,7 +130,8 @@ FIBER_STATIC_ASSERT((FIBER_PORT_BUILD_SELECTED == 0) || (FIBER_PORT_PROFILE_IS_E
 
 #ifndef FIBER_PORT_DETECTED_ARMV81M_MAINLINE
 # if defined(__ARM_ARCH_8_1M_MAIN__) || \
-     (defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0))
+     (defined(__ARM_FEATURE_MVE) && (__ARM_FEATURE_MVE > 0)) || \
+     (defined(__CORTEX_M) && (((__CORTEX_M) == 55) || ((__CORTEX_M) == 85)))
 #  define FIBER_PORT_DETECTED_ARMV81M_MAINLINE 1
 # else
 #  define FIBER_PORT_DETECTED_ARMV81M_MAINLINE 0
@@ -477,6 +480,10 @@ FIBER_STATIC_ASSERT((FIBER_PORT_ARMV81M_MAINLINE == 0) || (FIBER_PORT_ARMV81M_MA
 FIBER_STATIC_ASSERT(FIBER_PORT_COUNT == 1,
                  "[fiber]: exactly one Cortex-M port must be selected");
 
+/* A soft-float Cortex-M55 build can expose only __ARM_ARCH_8M_MAIN__ before
+ * its selected portmacro includes CMSIS. Build-selected ARMv8.1-M therefore
+ * accepts that weaker result; the concrete portmacro must still prove the
+ * exact CMSIS core identity and reject every incompatible feature ABI. */
 #define FIBER_PORT_BUILD_SELECTED_MATCHES_DETECTED \
     ((FIBER_PORT_BUILD_SELECTED == 0) || \
      (FIBER_PORT_DETECTED_COUNT == 0) || \
@@ -485,7 +492,9 @@ FIBER_STATIC_ASSERT(FIBER_PORT_COUNT == 1,
      (FIBER_PORT_ARMV7EM && FIBER_PORT_DETECTED_ARMV7EM) || \
      (FIBER_PORT_ARMV8M_BASELINE && FIBER_PORT_DETECTED_ARMV8M_BASELINE) || \
      (FIBER_PORT_ARMV8M_MAINLINE && FIBER_PORT_DETECTED_ARMV8M_MAINLINE) || \
-     (FIBER_PORT_ARMV81M_MAINLINE && FIBER_PORT_DETECTED_ARMV81M_MAINLINE))
+     (FIBER_PORT_ARMV81M_MAINLINE && \
+      (FIBER_PORT_DETECTED_ARMV81M_MAINLINE || \
+       FIBER_PORT_DETECTED_ARMV8M_MAINLINE)))
 
 FIBER_STATIC_ASSERT((FIBER_PORT_SELECTION_ALLOW_MISMATCH != 0) ||
                  FIBER_PORT_BUILD_SELECTED_MATCHES_DETECTED,
