@@ -14,15 +14,17 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          ARM_CM33 Secure companion pool slice-3 working checkpoint
+audited tree:          ARM_CM33 SecureContext full-runtime slice-6 working checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
 assembly parity:       PASS at -O2 and -Os
 ```
 
-The inventory commit is documentation-only. It does not change the runtime,
-frame layout, SVC/PendSV handlers, selected-port ABI, or generated code.
+This inventory snapshot accompanies the complete build-selected CM33
+SecureContext software runtime. It adds all eight forward operations, strong
+SVC/PendSV, and switch-time Secure save/select/lazy-allocation/load. Hardware
+support remains unclaimed.
 
 ## Scope Rule
 
@@ -51,9 +53,8 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Eleven complete runtime parity profiles plus one staged TrustZone companion
-profile currently have selected-port source groups and pinned FreeRTOS parity
-ledgers:
+Twelve complete runtime parity profiles currently have selected-port source
+groups and pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
 | --- | --- | --- |
@@ -66,12 +67,12 @@ ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
-| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | staged no-MPU/no-FPU TrustZone companion-aware frame with sealed `secure_stack_bytes` request, four versioned NSC identity veneers, and a Secure-private fixed stack pool | compile/cohort/CMSE-link/pool-placement validated only; no runtime, SecureContext API, assembly, or hardware claim |
+| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | no-MPU/no-FPU TrustZone companion frame, exact construction, sealed attach, twelve versioned identity/init/allocation/save/load veneers, static Secure pool, all eight forward operations, and strong SVC/PendSV | compile/assembly/cohort/CMSE/vector/LTO validated only; no hardware claim |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
 
 The current matrix pairs every complete runtime source group against the pinned
-FreeRTOS reference where applicable and separately tests the staged CM33
+FreeRTOS reference where applicable and separately tests the paired CM33
 companion layout/gateway. It passes the existing directional ABI, exact cohort,
 vector, archive, section-GC, LTO, CMSE import-library, and negative-link proofs.
 
@@ -150,21 +151,26 @@ hardware MPU-isolation validation remain later work.
 
 ### 3. Cortex-M33 TrustZone And SecureContext
 
-`ARM_CM33/non_secure` slices 1-2 plus Secure slice 3 now freeze the separate companion-aware
+`ARM_CM33/non_secure` slices 1-6 plus the paired Secure companion complete the separate companion-aware
 Non-secure public layout from `GCC/ARM_CM33/non_secure`: the 11-word
 `[xSecureContext, PSPLIM, EXC_RETURN, r4-r11]` software frame and sealed
-pre-start `secure_stack_bytes` request. The paired Secure artifact exports four
-versioned immutable NSC identity queries and owns a manifest-budgeted, static
-Secure-only pool with exact FreeRTOS two-word stack seals. It passes real GNU
-CMSE Secure image, import-library, matching-image, missing-import, v1/v2
-mismatch, exact NSC surface, Secure-RAM section, and invalid-manifest proofs at
-`-O2`, `-Os`, and `-O2 -flto`. It is not a runtime or SecureContext support claim. The common
-optional pre-publication lifecycle guard and its versioned link proof now exist,
-but this profile does not retain the guard or expose a feature API yet. The
-TrustZone-capable scheduler remains distinct from the current NTZ profile and
-still needs security-domain EXC_RETURN/banked-register policy, vector source,
-NSACR/CPACR policy, attachment/allocation, and all SVC/PendSV mechanics defined in
-`TRUSTZONE_SECURE_CONTEXT_CONTRACT.md`.
+pre-start `secure_stack_bytes` request. It now constructs the exact 19-word
+initial frame and exports the sealed profile-specific attach API. The paired
+Secure artifact exports four immutable identity queries plus four capacity
+queries and initialization/allocation/save/load operations,
+backed by a manifest-budgeted Secure-only pool with exact FreeRTOS two-word
+stack seals. Strong SVC 70 initializes PRIS/Secure Thread state, allocates and
+loads an attached first context, validates the mutated frame, and restores all
+eleven software words. Strong PendSV saves/unloads current Secure state,
+selects under BASEPRI, lazily allocates an attached never-run context, loads
+owned Secure state, and restores the selected Non-secure frame. It passes
+`-O2`/`-Os` construction/init/allocation/save/load/SVC/PendSV parity, real GNU
+CMSE image/import-library links, missing import/lifecycle ABI, v1/v2 mismatch,
+duplicate-handler rejection, exact twelve-veneer surface, slots 11/14,
+Secure-RAM placement, and normal/LTO manifests. Independent handler and
+attachment bundle anchors prove ordinary one-pass archive extraction despite
+naked-asm helper calls, and lazy handles are capacity-checked before frame
+publication. This is complete software evidence, not a hardware support claim.
 
 A fiber without an attached SecureContext must retain the ordinary Non-secure
 switch path. A fiber with an attachment must save and load the matching Secure

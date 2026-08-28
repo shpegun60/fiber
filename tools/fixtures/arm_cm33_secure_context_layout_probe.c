@@ -2,10 +2,8 @@
 
 #include "fiber_portmacro.h"
 
-FIBER_PORT_CONTEXT_COHORT_DEFINE();
-
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM33 layout slice must not expose runtime symbols");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM33 selected runtime must remain complete");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_SECURITY_EXT == 1,
 		"[fiber]: ARM_CM33 requires the Security Extension");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNS_NONSECURE == 1,

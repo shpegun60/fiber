@@ -15,9 +15,10 @@ typedef struct FiberPortBoot {
 	size_t avail;
 	entry_t entry;
 	void *arg;
-	/* Zero means no companion attachment. A future selected-port attach API
-	 * writes this sealed pre-start request; the live opaque handle remains in
-	 * the saved SecureContext software-frame slot. */
+	/* Zero means no companion attachment. The selected-port attach API writes
+	 * this sealed pre-start request. The durable opaque handle remains in the
+	 * saved software-frame slot; one port-private live mirror identifies the
+	 * currently loaded SecureContext between exception switches. */
 	uint32_t secure_stack_bytes;
 	uint32_t abi_port_id;
 	uint32_t abi_layout_version;

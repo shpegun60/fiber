@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M33 TrustZone Non-secure dictionary, implementation slice 1.
- * The selected profile freezes one privileged, non-MPU, no-FPU context layout
- * with a SecureContext software-frame slot. It is deliberately type/layout
- * only until a matched Secure companion gateway and runtime slices exist.
+ * Exact Cortex-M33 TrustZone Non-secure selected-port dictionary.
+ * The profile freezes one privileged, non-MPU, no-FPU context layout with a
+ * SecureContext software-frame slot, construction, pre-start attachment,
+ * strong SVC first start, and PendSV save/select/lazy-allocate/load runtime.
  */
 #ifndef FIBER_PORT_ARM_CM33_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM33_NON_SECURE_FIBER_PORTMACRO_H_
@@ -96,7 +96,7 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM33 runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Pinned FreeRTOS ARM_CM33/non_secure non-MPU, no-FPU TrustZone frame
  * dictionary. xSecureContext occupies the low word so PendSV can save and
@@ -337,8 +337,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM33 requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM33 requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM33 layout slice must not expose a runtime");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM33 selected profile must expose its complete runtime");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 11u,
 		"[fiber]: ARM_CM33 software frame must contain eleven words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 2u,

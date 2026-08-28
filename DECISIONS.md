@@ -1,5 +1,46 @@
 # Fiber Decision Log
 
+## 2026-08-28: Complete CM33 SecureContext Selected Runtime
+
+`ARM_CM33/non_secure` now implements the complete build-selected no-MPU,
+no-FPU TrustZone runtime around the exact pinned-FreeRTOS 19-word
+companion-aware frame. The profile exposes one pre-start attach operation,
+all eight mandatory forward runtime operations, and strong SVC/PendSV handler
+ownership. It remains outside global auto/profile selection and makes no
+hardware claim.
+
+The paired Secure image provides four immutable identity veneers plus a
+separate eight-function stateful v1 gateway. Initialization accepts only exact
+SVCall and preserves the pinned FreeRTOS `AIRCR.PRIS`, zero Secure PSP/PSPLIM,
+privileged Secure Thread/PSP, and pool-reset order. Save accepts only exact
+PendSV, records live Secure PSP, proves owner/seal/alignment/bounds, then clears
+and reads back Secure PSPLIM/PSP. Allocation/load accept only exact SVCall or
+PendSV; load preserves PSPLIM-before-PSP and reads both back. Initialization
+enters an irreversible intermediate state before destructive writes. Handle
+zero remains an explicit no-context state only while no Secure stack is live.
+
+SVC validates exact provenance/opcode/immediate, initializes the companion,
+allocates and loads the first attached context, publishes the port-private live
+handle, and restores `[handle, PSPLIM, EXC_RETURN, r4-r11]`. PendSV validates
+current before metadata reads, saves/unloads Secure state before the scheduler,
+saves the same eleven-word Non-secure frame, selects under BASEPRI, lazily
+allocates an attached never-run context, restores PSPLIM, loads owned Secure
+state, restores r4-r11/PSP, and returns through exact EXC_RETURN. The durable
+handle remains frame word zero; one selected-port-private live handle mirrors
+FreeRTOS `xSecureContext` and is never exposed to common runtime.
+
+Matrix evidence covers `-O2`/`-Os` generated constructor,
+initialization/allocation/save/load, segmented SVC/PendSV parity, exact
+twelve-veneer CMSE import surface, all eight forward operations, strong vector
+slots 11/14, assembly-load-only current slot, matching/missing companion and
+optional lifecycle links, v1/v2 mismatch, duplicate handlers, Secure pool
+placement, normal/LTO one-pass archive retention, and invalid manifests. The
+always-linked mandatory object retains independent handler and attachment
+bundle anchors because naked-asm helper references are opaque to the LTO
+archive scanner. Lazy allocation validates the returned handle against the
+Secure companion's nonzero capacity before publishing it in the software
+frame. No board claim is inferred from this software evidence.
+
 ## 2026-08-26: Defer The Full Optimization Cohort Until Port Completion
 
 Each port continues to enter the inventory only after paired pinned-FreeRTOS
@@ -48,10 +89,11 @@ missing-import and v1/v2 mismatch failures at `-O2`, `-Os`, and `-O2 -flto`. The
 linker fixture gives `.gnu.sgstubs` a separate aligned NSC flash region, matching
 the CubeIDE TrustZone linker model.
 
-This is intentionally gateway-only. It adds no public attach header, Secure
-allocation, Secure stack, SVC/PendSV operation, selected runtime, or hardware
-claim. The next TrustZone slice is sealed pre-start attachment and first-start
-allocation/load; FreeRTOS-shaped SecureContext save/load follows separately.
+This historical checkpoint was intentionally gateway-only. It added no public
+attach header, Secure allocation, Secure stack, SVC/PendSV operation, selected
+runtime, or hardware claim. The 2026-08-28 construction/attachment/first-start
+decision above supersedes that staged status and completes the separate
+FreeRTOS-shaped PendSV save/load slice.
 
 ## 2026-08-26: Stage ARM_CM33 TrustZone SecureContext Layout
 

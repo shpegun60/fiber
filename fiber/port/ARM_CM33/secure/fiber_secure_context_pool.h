@@ -3,16 +3,15 @@
  *
  * Secure-image-private storage foundation for the no-MPU, no-FPU ARM_CM33
  * SecureContext companion. It is not an NSC ABI and must never be included by
- * the Non-secure image. The later selected port owns every NSC bridge and all
- * SVC/PendSV save-load mechanics.
+ * the Non-secure image. The stateful NSC gateway delegates initialization,
+ * allocation, and load lookup here; the later selected runtime owns PendSV
+ * save/select/load mechanics.
  */
 
 #ifndef FIBER_PORT_ARM_CM33_SECURE_FIBER_SECURE_CONTEXT_POOL_H_
 #define FIBER_PORT_ARM_CM33_SECURE_FIBER_SECURE_CONTEXT_POOL_H_
 
 #include <stdint.h>
-
-#include "fiber_secure_gateway_abi.h"
 
 /* These are Secure-image integration settings, not fiber_core.h settings.
  * There is deliberately no hidden default: a Secure manifest must budget the
@@ -69,9 +68,9 @@ typedef struct FiberSecureContextRecord {
 	uint32_t allocation_state;
 } FiberSecureContextRecord;
 
-/* Destructive Secure-boot initialization. It erases every record and stack
- * slot, then opens the pool for the future selected-port allocation bridge.
- * It must run exactly once per Secure boot, before any context is allocated. */
+/* Destructive initialization owned by the versioned NSC initialize gateway.
+ * It erases every record and stack slot, then opens the pool. It must run
+ * exactly once per Secure boot, before any context is allocated. */
 void fiber_secure_context_pool_boot_initialize(void);
 
 /* Returns zero for an invalid request, duplicate owner, or exhausted pool.

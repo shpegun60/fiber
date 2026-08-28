@@ -100,6 +100,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM7/r0p1` | `GCC/ARM_CM7/r0p1` | first SVC request, first restore, FP PendSV and errata-safe BASEPRI |
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
+| `ARM_CM33/non_secure` plus Secure companion | `GCC/ARM_CM33/non_secure` and `secure` | 19-word construction, PRIS/Secure init, SVC first start, Secure save/unload, lazy bounded allocation, Secure load, and segmented eleven-word PendSV save/restore |
 | `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
 | `ARM_CM33F_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, `configENABLE_FPU=1` | paired basic `pxPortInitialiseStack()` geometry, SVC first start, and FP-aware PSPLIM PendSV |
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
@@ -231,6 +232,83 @@ validates the completed frame. Neither generated constructor may touch FP
 registers before runtime FPU setup. SVC and PendSV parity are separate proofs
 under `FAP-CM33F-SVC-START` and `FAP-CM33F-FP-PENDSV`; neither is implied by
 this construction difference ID.
+
+### FAP-CM33-SECURE-CONTEXT-CONSTRUCTION
+
+The pinned FreeRTOS `ARM_CM33/non_secure` TrustZone profile seeds nineteen
+words: a zero SecureContext handle, PSPLIM, EXC_RETURN, r4-r11, and the basic
+hardware frame. Fiber preserves that exact 76-byte geometry and field order.
+It additionally zeroes unspecified synthetic registers, preserves r9, seals
+the immutable boot record, and validates the completed frame. Construction,
+Secure allocation/save/load, SVC, and PendSV are separate generated-code
+proofs; hardware parity remains unclaimed without a suitable TrustZone board.
+
+### FAP-CM33-SECURE-CONTEXT-ALLOCATOR
+
+FreeRTOS accepts SecureContext allocation from any Handler mode while Secure
+PSPLIM is zero, then obtains a dynamic stack from `secure_heap`. Fiber preserves
+the generated IPSR-then-PSPLIM gate, narrows IPSR to exact exception 11
+(`SVCall`) for first start or 14 (`PendSV`) for lazy first activation, and
+delegates to a bounded manifest-sized static pool. Fiber rejects
+zero/unaligned/oversized requests, duplicate owners, and pool exhaustion with
+handle zero, retains the reference index-plus-one handle and two-word stack
+seal, and intentionally has no free operation because Fiber contexts have
+static lifetime.
+
+### FAP-CM33-SECURE-CONTEXT-INITIALIZE
+
+FreeRTOS splits one-shot TrustZone startup between
+`SecureInit_DePrioritizeNSExceptions()` and `SecureContext_Init()`. Fiber
+combines those operations in one versioned NSC gateway called only by the
+controlled first-start SVC. It preserves the PRIS write, zero Secure
+PSP/PSPLIM state, privileged Secure Thread/PSP policy, and pool reset. Fiber
+narrows Handler mode to exact exception 11, rejects a second initialization,
+reads back AIRCR/PSP/PSPLIM/CONTROL, and uses a bounded static pool instead of
+the FreeRTOS global context array plus heap.
+
+### FAP-CM33-SECURE-CONTEXT-LOAD
+
+FreeRTOS validates a nonzero handle and owner before loading Secure PSPLIM and
+PSP from the context record. Fiber preserves the same PSPLIM-before-PSP order,
+but additionally requires exact SVCall or PendSV provenance, completed one-shot
+initialization, zero pre-load PSP as well as PSPLIM, an exact opaque owner,
+stack-seal-valid static metadata, barriers, and register readback. Handle zero
+is an explicit successful no-context load only while both Secure stack
+registers remain zero.
+
+### FAP-CM33-SECURE-CONTEXT-SAVE
+
+FreeRTOS records the live Secure PSP in the owned SecureContext, then clears
+Secure PSPLIM and Secure PSP before another task can be selected. Fiber retains
+that exact save-then-unload order, but accepts only exception 14 (`PendSV`),
+requires the sealed record to belong to the exact `FiberContext`, proves stack
+alignment and bounds, and reads back both cleared registers. Handle zero is
+accepted only when no Secure stack state is live.
+
+### FAP-CM33-SECURE-CONTEXT-FIRST-START
+
+FreeRTOS initializes Secure state in its generic SVC dispatcher and restores
+an initially zero SecureContext word through `vRestoreContextOfFirstTask()`;
+tasks allocate SecureContext later through SVC 100. Fiber records attachment
+before start, so its only accepted SVC 70 validates and initializes Secure
+state, allocates the first attached context, stores the handle in frame word
+zero, loads the owned Secure stack, and only then restores the exact eleven
+software words. Fiber adds exact SVC opcode/provenance checks, special-register
+readback, immutable-frame validation, and direct strong-handler ownership.
+
+### FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE
+
+FreeRTOS allocates a task SecureContext through its user SVC before that task
+needs Secure services. Fiber has a sealed static-lifetime attachment contract:
+the first selected context is allocated from first-start SVC, while any other
+attached never-run context is allocated once from PendSV after the current
+Secure state has been saved and unloaded. The durable handle remains frame word
+zero and one port-private live handle mirrors FreeRTOS `xSecureContext`.
+PendSV preserves the reference order: Secure save, Non-secure register save,
+scheduler selection under BASEPRI, special-word restore, next Secure load,
+general-register restore, PSP publication, and exception return. Fiber adds
+exact provenance, owner/seal checks, dynamic bounds, special-register readback,
+and scheduler/CMSE CPU-state preservation checks.
 
 ### FAP-CM33F-SVC-START
 

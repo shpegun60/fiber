@@ -9,6 +9,10 @@ MEMORY
 
 SECTIONS
 {
+	.isr_vector :
+	{
+		KEEP(*(.isr_vector))
+	} > FLASH
 	.text :
 	{
 		*(.text*)

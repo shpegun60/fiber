@@ -256,8 +256,16 @@ function Assert-ProductionPortCoverage {
             $_.DirectoryName.Substring($RepositoryRoot.Length + 1)
         } |
         Sort-Object -Unique)
-    $coveredProfiles = @($PortDefinitions |
-        ForEach-Object { $_.ProfileDir } |
+    $coveredProfiles = @($PortDefinitions | Where-Object {
+            ($null -eq $_.PSObject.Properties["Auxiliary"]) -and
+            (($null -eq $_.PSObject.Properties["Staged"]) -or
+             ($_.Staged -eq 0))
+        } | ForEach-Object { $_.ProfileDir } |
+        Sort-Object -Unique)
+    $stagedDefinitionProfiles = @($PortDefinitions | Where-Object {
+            ($null -ne $_.PSObject.Properties["Staged"]) -and
+            ($_.Staged -ne 0)
+        } | ForEach-Object { $_.ProfileDir } |
         Sort-Object -Unique)
     $stagedProfiles = @($StagedRuntimeProfiles | Sort-Object -Unique)
     $stagedCoveredOverlap = @($stagedProfiles | Where-Object {
@@ -265,6 +273,10 @@ function Assert-ProductionPortCoverage {
     })
     if ($stagedCoveredOverlap.Count -ne 0) {
         throw "A staged runtime profile must not also claim complete generated parity: $($stagedCoveredOverlap -join ', ')"
+    }
+    if (Compare-Object -ReferenceObject $stagedProfiles `
+            -DifferenceObject $stagedDefinitionProfiles) {
+        throw "Staged generated-assembly definitions and inventory must match exactly"
     }
 
     foreach ($profile in $stagedProfiles) {
@@ -370,6 +382,12 @@ $expectedReferenceFiles = @{
     "portable\GCC\ARM_CM33_NTZ\non_secure\portasm.h" = "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C"
     "portable\GCC\ARM_CM33_NTZ\non_secure\portmacro.h" = "F0D3FE9D1ADAA0894EE3A03F14152ADD4B115DF8AF144B5912FEA3EDD23FBE0B"
     "portable\GCC\ARM_CM33_NTZ\non_secure\portmacrocommon.h" = "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2"
+    "portable\GCC\ARM_CM33\non_secure\port.c" = "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A"
+    "portable\GCC\ARM_CM33\non_secure\portasm.c" = "6F39F5CB7A24766DF3FA025E41E0E502301550136151B5E2EABDFA9AC4E42D60"
+    "portable\GCC\ARM_CM33\secure\secure_context.c" = "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72"
+    "portable\GCC\ARM_CM33\secure\secure_context_port.c" = "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E"
+    "portable\GCC\ARM_CM33\secure\secure_init.c" = "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55"
+    "portable\GCC\ARM_CM33\secure\secure_init.h" = "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149"
     "portable\GCC\ARM_CM3_MPU\port.c" = "B94311759D4B807017F56669BDE818215215076A20C301A10D3C9DAE3D736676"
     "portable\GCC\ARM_CM3_MPU\portmacro.h" = "FF720AEDBE44344752224173B3BBA316D675AD47C44103BBC8CAB984B0A98A68"
     "portable\GCC\ARM_CM4_MPU\port.c" = "CC9B731BC23E52A91D7D37B5DDA16D7B501CFB4D3B3A3C8229C355C66662BF59"
@@ -440,6 +458,112 @@ $ports = @(
         FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
         ReferenceDir = "portable\GCC\ARM_CM33_NTZ\non_secure"; ReferenceSource = "portasm.c"
         ReferenceDefines = @()
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_CONSTRUCTION"
+        CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM33\non_secure"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        ReferenceExtraIncludes = @("portable\GCC\ARM_CM33\secure")
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_ALLOCATOR"
+        CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\secure"
+        FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM33\secure"
+        ReferenceSource = "secure_context.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_DEPRIORITIZE"
+        CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\secure"
+        FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM33\secure"
+        ReferenceSource = "secure_init.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_INITIALIZE"
+        CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\secure"
+        FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM33\secure"
+        ReferenceSource = "secure_context.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_LOAD"
+        CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\secure"
+        FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM33\secure"
+        ReferenceSource = "secure_context_port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_SAVE"
+        CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\secure"
+        FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM33\secure"
+        ReferenceSource = "secure_context_port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_SVC"
+        CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\non_secure"
+        FiberSource = "fiber_port_svc.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM33\non_secure"
+        ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        ReferenceExtraIncludes = @("portable\GCC\ARM_CM33\secure")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM33_SECURE_CONTEXT_PENDSV"
+        CpuArgs = @("-mcpu=cortex-m33")
+        CoreHeader = "core_cm33.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM33\non_secure"
+        FiberSource = "fiber_port_svc.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM33\non_secure"
+        ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
+        ReferenceExtraIncludes = @("portable\GCC\ARM_CM33\secure")
+        Auxiliary = 1
     },
     [pscustomobject]@{
         Name = "ARM_CM33_MPU_8"; CpuArgs = @("-mcpu=cortex-m33")
@@ -566,11 +690,16 @@ try {
         $referenceDir = Join-Path $kernel $port.ReferenceDir
         $referencePath = Join-Path $referenceDir $port.ReferenceSource
         $referenceObject = Join-Path $portBuild "freertos-port.o"
+        $referenceExtraIncludes = @()
+        if ($null -ne $port.PSObject.Properties["ReferenceExtraIncludes"]) {
+            $referenceExtraIncludes = @($port.ReferenceExtraIncludes |
+                ForEach-Object { "-I$(Join-Path $kernel $_)" })
+        }
         $referenceArgs = @($port.CpuArgs) + @(
             "-mthumb", "-std=gnu11", $Optimization, "-g0",
             "-ffreestanding", "-fno-builtin", "-fno-common",
             "-ffunction-sections", "-fdata-sections"
-        ) + @($port.ReferenceDefines) + @(
+        ) + @($port.ReferenceDefines) + $referenceExtraIncludes + @(
             "-I$configDir", "-I$(Join-Path $kernel 'include')",
             "-I$referenceDir", "-c", $referencePath,
             "-o", $referenceObject
@@ -1202,7 +1331,7 @@ try {
         -Ledger $ledger
 
     # FPU enablement does not change the initial FreeRTOS stack image. This
-    # staged Fiber profile intentionally contains construction only.
+    # mechanism proves construction only; SVC and PendSV have separate proofs.
     $pair = $compiled["ARM_CM33F_NTZ_CONSTRUCTION"]
     Assert-MechanismParity -PortName "ARM_CM33F_NTZ" `
         -Mechanism "initial-construction" `
@@ -1227,6 +1356,322 @@ try {
     Assert-AbsentPatterns -Body $cm33fFiberConstruction `
         -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
         -Label "ARM_CM33F_NTZ Fiber initial construction"
+
+    # The selected TrustZone profile retains the exact FreeRTOS
+    # non-MPU/no-FPU 19-word initial image. Separate mechanisms prove Secure
+    # save/load, first start, and the complete PendSV switch choreography.
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_CONSTRUCTION"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "initial-construction" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "pxPortInitialiseStack" `
+        -ReferencePatterns @('#-?(?:76|0x4c)\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_init_context_frame" `
+        -FiberPatterns @('#-?(?:76|0x4c)\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-CONSTRUCTION") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_ALLOCATOR"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "allocation-gate" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "SecureContext_AllocateContext" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\b(?:bl|b\.w)\s+[^\r\n]*pvPortMalloc') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_gateway_v1_allocate" `
+        -FiberPatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bcmp\s+[^,]+,\s*#11\b',
+            '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\b(?:bl|b\.w)\s+[^\r\n]*fiber_secure_context_pool_allocate') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-ALLOCATOR") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_DEPRIORITIZE"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "secure-exception-priority" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "SecureInit_DePrioritizeNSExceptions" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\b(?:cbz|cmp)\b',
+            '\bldr(?:\.w)?\b',
+            '\bstr(?:\.w)?\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_gateway_v1_initialize" `
+        -FiberPatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bcmp\s+[^,]+,\s*#11\b',
+            '\bldr(?:\.w)?\b',
+            '\bstr(?:\.w)?\b',
+            '\bdsb\b',
+            '\bisb\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-INITIALIZE") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_INITIALIZE"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "secure-context-init" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "SecureContext_Init" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+PSP',
+            '\bmsr\s+CONTROL') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_gateway_v1_initialize" `
+        -FiberPatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+PSP',
+            'fiber_secure_context_pool_boot_initialize',
+            '\bmsr\s+CONTROL') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-INITIALIZE") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_LOAD"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "secure-context-load" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "SecureContext_LoadContextAsm" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bldmia(?:\.w)?\b',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+PSP') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_gateway_v1_load" `
+        -FiberPatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#11\b',
+            'fiber_secure_context_pool_lookup_owned',
+            '\bmsr\s+PSPLIM',
+            '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\bmsr\s+PSP',
+            '\bmrs\s+[^,]+,\s*PSP') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-LOAD") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_SAVE"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "secure-context-save" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "SecureContext_SaveContextAsm" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bmrs\s+[^,]+,\s*PSP',
+            '\bstr(?:\.w)?\s+[^,]+,\s*\[[^\]]+\]',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+PSP') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_gateway_v1_save" `
+        -FiberPatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#14\b',
+            'fiber_secure_context_pool_lookup_owned',
+            '\bmrs\s+[^,]+,\s*PSP',
+            '\bstr(?:\.w)?\s+[^,]+,\s*\[[^\]]+\]',
+            '\bmsr\s+PSPLIM',
+            '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\bmsr\s+PSP',
+            '\bmrs\s+[^,]+,\s*PSP') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-SAVE") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_SVC"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "first-start-trigger" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @(
+            '\bmsr\s+MSP',
+            '\bcpsie\s+i',
+            '\bcpsie\s+f',
+            '\bsvc\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @(
+            '\bcpsid\s+i',
+            '\bmsr\s+CONTROL',
+            '\bmsr\s+MSP',
+            '\bmsr\s+BASEPRI',
+            '\bcpsie\s+f',
+            '\bcpsie\s+i',
+            '\bsvc\s+70\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-FIRST-START") `
+        -Ledger $ledger
+
+    $pair = $compiled["ARM_CM33_SECURE_CONTEXT_PENDSV"]
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-entry" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @(
+            '\bldr\s+r0',
+            '\bldr\s+r1',
+            '\bmrs\s+r2,\s*PSP') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r3,\s*IPSR',
+            '\bcmp\s+r3,\s*#14',
+            '\bmrs\s+r0,\s*PSP',
+            '\bldr\s+r1,\s*\[pc',
+            '\bldr\s+r1,\s*\[r1',
+            'fiber_port_context_validate_save_current') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-secure-save" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "save_s_context" `
+        -ReferencePatterns @('SecureContext_SaveContext') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('fiber_port_secure_context_save_current_from_pendsv') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-SAVE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-save-general" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "save_general_regs" `
+        -ReferencePatterns @('\bstmdb\s+r2!,\s*\{r4[^\r\n]*fp\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bstmdb\s+r0!,\s*\{r4[^\r\n]*fp\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-save-special" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "save_special_regs" `
+        -ReferencePatterns @(
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r2!,\s*\{r0[^\r\n]*lr\}',
+            '\bstr\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*lr\}',
+            '\bstr\s+r0') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-scheduler" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "select_next_task" `
+        -ReferencePatterns @(
+            '\bmsr\s+BASEPRI',
+            'vTaskSwitchContext',
+            '\bmov(?:\.w)?\s+r0,\s*#0',
+            '\bmsr\s+BASEPRI') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmsr\s+BASEPRI',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bmsr\s+BASEPRI') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @(
+            "FAP-COMMON-SCHEDULER",
+            "FAP-COMMON-MASK-RESTORE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-restore-special" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "restore_special_regs" `
+        -ReferencePatterns @(
+            '\bldmia(?:\.w)?\s+r2!,\s*\{r0[^\r\n]*lr\}',
+            '\bmsr\s+PSPLIM') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            'fiber_port_secure_context_prepare_next_from_pendsv',
+            '\bldmia(?:\.w)?\s+r2!,\s*\{r0[^\r\n]*lr\}',
+            '\bmsr\s+PSPLIM',
+            '\bmrs\s+(?:r12|ip),\s*PSPLIM') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @(
+            "FAP-M33-PSPLIM-READBACK",
+            "FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-secure-load" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "restore_s_context" `
+        -ReferencePatterns @('SecureContext_LoadContext') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('fiber_port_secure_context_load_next_from_pendsv') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-restore-general" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "restore_general_regs" `
+        -ReferencePatterns @('\bldmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*fp\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bldmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*fp\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-LAZY-ALLOCATE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "PendSV-complete" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "restore_context_done" `
+        -ReferencePatterns @('\bmsr\s+PSP,\s*r2', '\bbx\s+lr') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmsr\s+PSP,\s*r2',
+            '\bmrs\s+r1,\s*PSP',
+            '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
+        -Mechanism "first-context-restore" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @(
+            '\bldmia?(?:\.w)?\s+r0!,\s*\{r1[^\r\n]*r3\}',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+CONTROL',
+            '\bmsr\s+PSP',
+            '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r3,\s*IPSR',
+            '\bcmp\s+r3,\s*#11\b',
+            'fiber_port_secure_context_prepare_first_start',
+            '\bldmia(?:\.w)?\s+r0!,\s*\{r1[^\r\n]*fp\}',
+            '\bmsr\s+PSPLIM',
+            '\bmsr\s+CONTROL',
+            '\bmsr\s+PSP',
+            '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-CM33-SECURE-CONTEXT-FIRST-START") `
+        -Ledger $ledger
 
     $pair = $compiled["ARM_CM33F_NTZ_SVC"]
     Assert-MechanismParity -PortName "ARM_CM33F_NTZ" `

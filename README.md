@@ -67,11 +67,19 @@ deliberate non-portable profile integration only.
 lifecycle: a selected TrustZone port attaches Secure state to a specific fiber
 before `fiber_start()`, then owns all Secure save/load work at switch time.
 The common pre-start lifecycle guard is implemented as a separately versioned
-optional ABI. `ARM_CM33/non_secure` and `ARM_CM33/secure` currently add a
-versioned CMSE identity cohort plus a Secure-private, manifest-budgeted static
-stack pool. The pool is not an NSC or public API. No current runtime exports the
-attach API or implements selected-port allocation bridging, save/load, or
-SecureContext handlers.
+optional ABI. `ARM_CM33/non_secure` and `ARM_CM33/secure` currently add exact
+context construction, a sealed profile-specific attach API, a twelve-function
+versioned CMSE identity/capacity/init/allocation/save/load surface, a
+Secure-private manifest-budgeted static stack pool, all eight selected forward
+runtime operations, and strong SVC/PendSV handlers. SVC initializes, allocates,
+loads, and restores the first context; PendSV saves/unloads Secure state,
+selects, lazily allocates an attached never-run context, loads owned state, and
+restores the selected Non-secure context. Separate retained handler and
+attachment bundle anchors make an ordinary static-archive link extract every
+inline-asm dependency in normal and LTO builds without `--whole-archive` or a
+linker group. Lazy allocation bounds-checks the returned handle before storing
+it in the frame. This build-selected port is software-validated only and
+remains outside global auto/profile selection.
 
 This portability guarantee covers the fiber lifecycle and context-switch
 mechanics. Code that directly calls PSA, TF-M, Secure gateway, or another
@@ -195,14 +203,25 @@ M33 NTZ full build-selected runtime source group:
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33_NTZ/non_secure/fiber_port_boot.c
 
-M33 TrustZone companion-aware staged source group with Secure-private storage:
+M33 TrustZone companion-aware full build-selected runtime and Secure companion:
                fiber/port/ARM_CM33/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM33/non_secure/fiber_port.c
+               fiber/port/ARM_CM33/non_secure/fiber_port_boot.c
+               fiber/port/ARM_CM33/non_secure/fiber_port_svc.c
                fiber/port/ARM_CM33/non_secure/fiber_port_secure_gateway_abi.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_secure_context_gateway_abi.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_secure_context_abi.h
+               fiber/port/ARM_CM33/non_secure/fiber_port_secure_context.c
                fiber/port/ARM_CM33/non_secure/FREERTOS_PARITY.md
                fiber/port/ARM_CM33/secure/fiber_secure_gateway_abi.h
                fiber/port/ARM_CM33/secure/fiber_secure_gateway.c
+               fiber/port/ARM_CM33/secure/fiber_secure_context_gateway_contract.h
+               fiber/port/ARM_CM33/secure/fiber_secure_context_gateway_abi.h
+               fiber/port/ARM_CM33/secure/fiber_secure_context_gateway.c
                fiber/port/ARM_CM33/secure/fiber_secure_context_pool.h
                fiber/port/ARM_CM33/secure/fiber_secure_context_pool.c
                fiber/port/ARM_CM33/secure/FREERTOS_PARITY.md

@@ -2,16 +2,17 @@
 
 ## Status
 
-No current fiber runtime implements this contract. `ARM_CM23_NTZ`,
-`ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not export a
-SecureContext API. The reusable optional common pre-publication lifecycle ABI
-is implemented and link-versioned, but no selected port currently retains it.
-`ARM_CM33/non_secure` and `ARM_CM33/secure` now provide a versioned companion
-identity artifact plus a Secure-private static storage foundation; they do not
-provide a selected runtime, user-facing attach API, selected-port allocation
-bridge, or SecureContext save/load. A working SecureContext profile requires
-those later runtime slices in addition to the separately versioned Secure
-companion artifact.
+`ARM_CM23_NTZ`, `ARM_CM33_NTZ`, `ARM_CM33F_NTZ`, and `ARM_CM7/r0p1` do not
+export a SecureContext API. The build-selected `ARM_CM33/non_secure` profile
+and paired `ARM_CM33/secure` companion implement the first complete no-MPU,
+no-FPU SecureContext runtime. They provide exact initial context construction,
+a sealed pre-start attachment API, versioned companion identity, an
+eight-function stateful gateway, Secure-private static storage, all eight
+mandatory forward runtime operations, and strong SVC/PendSV handlers. First
+SVC performs one-shot Secure initialization and first-context allocation/load;
+PendSV performs Secure save/unload, scheduler selection, lazy allocation, and
+owned Secure load. This is compile/assembly/CMSE/ELF/LTO evidence only, not a
+hardware support claim.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in
@@ -64,10 +65,10 @@ TF-M is an alternative Secure provider. A TF-M profile uses its matching
 NTZ-style CPU port plus TF-M integration; it does not also use a fiber-owned
 SecureContext companion for the same profile.
 
-## Implemented Gateway And Secure Storage Foundation
+## Implemented Construction, Gateway, And Storage Foundation
 
-The public NSC surface of the first concrete paired CM33 artifact is deliberately
-limited to identity:
+The first concrete paired CM33 artifact has two deliberately separate
+versioned NSC surfaces:
 
 ```text
 Non-secure import header
@@ -76,9 +77,15 @@ Non-secure import header
 Secure provider
   fiber/port/ARM_CM33/secure/fiber_secure_gateway_abi.h
   fiber/port/ARM_CM33/secure/fiber_secure_gateway.c
+
+Stateful SecureContext gateway
+  fiber/port/ARM_CM33/non_secure/fiber_port_secure_context_gateway_abi.h
+  fiber/port/ARM_CM33/secure/fiber_secure_context_gateway_contract.h
+  fiber/port/ARM_CM33/secure/fiber_secure_context_gateway_abi.h
+  fiber/port/ARM_CM33/secure/fiber_secure_context_gateway.c
 ```
 
-The Secure image exports four `cmse_nonsecure_entry` v1 NSC veneers:
+The Secure image exports four immutable identity veneers:
 
 ```text
 fiber_secure_gateway_v1_abi_version
@@ -87,14 +94,53 @@ fiber_secure_gateway_v1_context_layout_version
 fiber_secure_gateway_v1_context_feature_mask
 ```
 
+The stateful v1 surface adds four immutable capacity queries and four stateful
+operations:
+
+```text
+fiber_secure_context_gateway_v1_abi_version
+fiber_secure_context_gateway_v1_stack_alignment
+fiber_secure_context_gateway_v1_max_stack_bytes
+fiber_secure_context_gateway_v1_max_contexts
+fiber_secure_context_gateway_v1_initialize
+fiber_secure_context_gateway_v1_allocate
+fiber_secure_context_gateway_v1_load
+fiber_secure_context_gateway_v1_save
+```
+
+Initialization combines the pinned FreeRTOS
+`SecureInit_DePrioritizeNSExceptions()` and `SecureContext_Init()` mechanics:
+it sets and reads back Secure `AIRCR.PRIS`, zeros Secure PSP/PSPLIM, clears the
+fixed pool, and selects privileged Secure Thread/PSP. It accepts only exact
+exception 11. Before the first destructive write it enters an irreversible
+initializing state; success advances that state to ready, while any partial
+failure permanently rejects a retry for that boot.
+
+Allocation preserves the pinned FreeRTOS IPSR/PSPLIM trust gate but accepts
+only exact exception 11 (`SVCall`) for first start or 14 (`PendSV`) for lazy
+activation. Initialization must be complete and both Secure PSP and PSPLIM
+must be zero. Save accepts only PendSV, records live Secure PSP, proves the
+owned stack bounds, then clears and reads back Secure PSPLIM/PSP before
+selection. Load accepts only SVC or PendSV, verifies the opaque owner and
+sealed pool record, writes PSPLIM before PSP, and reads both back. Handle zero
+is the explicit no-context case and succeeds only while no Secure stack is
+active. The opaque Non-secure owner token is compared only and is never
+dereferenced in Secure state.
+
 The version is part of every symbol name. The compile matrix builds a real
 Secure `-mcmse` image, emits a GNU CMSE import library with
 `--cmse-implib --out-implib`, and links a matching Non-secure image through it.
 It also proves that a missing import library and a v2-only import library fail
 on the required v1 symbol at `-O2`, `-Os`, and `-O2 -flto`.
 
-The returned identity values are reserved for the later first-start runtime
-cohort check. Gateway v1 still exposes only those four immutable NSC functions.
+The returned identity and capacity values are validated by the selected-port attach
+operation without mutating CPU mask, CONTROL, or PSPLIM state. Every individual
+cross-image query and stateful call is followed by CPU-state validation before
+its result is consumed. Attach never calls a stateful operation from Thread
+mode. The first-start SVC repeats the version/capacity proof under that
+guarded envelope, initializes the Secure domain, allocates only when the
+selected first fiber requested a Secure stack, and always calls load, including
+handle zero to reject stale inheritance.
 
 The paired Secure image now also has the private foundation:
 
@@ -107,37 +153,80 @@ It is deliberately not an NSC API and is never included by the Non-secure
 image. The Secure manifest must explicitly define both
 `FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT` and
 `FIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES`; there is no hidden RAM-cost
-default. One attached fiber reserves one fixed-capacity Secure stack slot plus
-two ARM stack-seal words (`0xFEF5EDA5`). The requested size must be nonzero,
-eight-byte aligned, and no larger than the manifest capacity. The pool preserves
-the FreeRTOS record prefix `[saved PSP, PSPLIM, stack top, owner]`, checks that
-an owner receives at most one handle, and treats handle zero as invalid.
+default. One successful allocation reserves one fixed-capacity
+Secure stack slot plus two ARM stack-seal words (`0xFEF5EDA5`); the current
+attach slice records only the sealed request. The requested size must be
+nonzero, eight-byte aligned, and no larger than the manifest capacity. The pool
+preserves the FreeRTOS record prefix `[saved PSP, PSPLIM, stack top, owner]`,
+checks that an owner receives at most one handle, and treats handle zero as
+invalid.
 
 This is a static-lifetime Fiber replacement for the FreeRTOS heap-backed
 allocator: it intentionally has no `secure_heap`, `pvPortMalloc`, `vPortFree`,
 detach, or `SecureContext_FreeContext` equivalent. Its storage is emitted only
 into `.fiber_secure_context_pool`; a real Secure linker manifest must place that
 section in Secure RAM and never in NSC or Non-secure RAM. The Secure pool
-boot initialization explicitly clears every record and stack slot, so its
+initialization explicitly clears every record and stack slot, so its
 correctness does not depend on a generic startup `.bss` loop covering this
-custom `NOLOAD` section. It is destructive by contract and must run exactly
-once before any allocation, never as a runtime reinitialization. The matrix
-proves the section, alignment, exact four-function NSC import surface, and invalid Secure
-configuration failures under `-O2`, `-Os`, and `-O2 -flto`.
+custom `NOLOAD` section. The versioned initialize veneer owns this destructive
+operation exactly once before any allocation. The matrix proves the section,
+alignment, exact twelve-function combined NSC import surface,
+and invalid Secure configuration failures under `-O2`, `-Os`, and
+`-O2 -flto`.
 
-The selected runtime still stores no per-fiber handle, offers no public
-attachment header, and does not run SecureContext code from SVC or PendSV. This
-remains build/link evidence only, not a SecureContext or hardware support claim.
+The selected Non-secure runtime constructs the exact 19-word FreeRTOS-shaped
+initial image and keeps its live handle word zero. Its profile-specific attach
+API validates lifecycle, context/cohort, gateway identity, capacity, and CPU
+state, then reseals only `secure_stack_bytes`. It does not allocate, load, or
+write a handle. Strong SVC 70 accepts only exact Non-secure Thread/MSP origin,
+initializes the companion, allocates an attached first context, writes its
+validated handle to frame word zero, loads owned Secure PSP/PSPLIM, and restores
+the exact eleven-word Non-secure software frame. Strong PendSV saves and
+unloads current Secure state before selection, lazily allocates an attached
+never-run context after selection, restores Non-secure PSPLIM, loads owned
+Secure state, and completes the exact r4-r11/PSP restore. This remains
+compile/assembly/CMSE/ELF/LTO evidence only, not a hardware support claim.
 
-## Future User-Facing Selected-Port API
+The strong handlers call four Non-secure attachment helpers from naked inline
+assembly. Those edges are not early C relocations visible to the LTO archive
+scanner. The always-linked mandatory port object therefore retains two
+independent symbols: a handler-bundle anchor and an attachment-bundle anchor.
+The matrix links the multi-member selected port with an ordinary one-pass
+static-archive link, section GC, and normal/LTO modes; neither
+`--whole-archive` nor a linker rescan group is used. Both anchors, all four
+helpers, and strong vector slots 11/14 must survive in the final ELF.
 
-Only a concrete TrustZone selected port will provide this header:
+Every lazy allocation repeats the companion capacity query inside the guarded
+CPU-state envelope. A returned handle must be nonzero and no greater than
+`max_contexts` before frame word zero is updated.
+
+Frame handle zero has two meanings distinguished by sealed boot metadata:
+
+```text
+secure_stack_bytes == 0 and handle == 0
+  unattached fiber; load the explicit no-context state
+
+secure_stack_bytes != 0 and handle == 0
+  attached but not allocated yet
+```
+
+The first-start SVC allocates the selected first fiber when required. PendSV
+allocates any other attached fiber lazily, after saving and unloading current
+Secure state and before loading the selected one. Fiber does
+not enumerate contexts in common code. Because contexts have static lifetime,
+each successful allocation remains reserved; the Secure manifest must budget
+`FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT` for every attached fiber that can
+become runnable.
+
+## Implemented User-Facing Selected-Port API
+
+The concrete TrustZone profile provides this header:
 
 ```text
 fiber/port/ARM_CM33/non_secure/fiber_port_secure_context_abi.h
 ```
 
-The intended profile-specific operation is:
+The profile-specific operation is:
 
 ```c
 void fiber_port_secure_context_attach(
@@ -161,7 +250,7 @@ The static-lifetime v2 runtime has no detach or destroy operation. A fiber that
 does not need Secure services simply has no attachment. Dynamic SecureContext
 deletion, if ever needed, is a separate optional lifecycle extension.
 
-Example for a future M33 TrustZone build:
+Example for the completed build-selected M33 TrustZone runtime:
 
 ```c
 fiber_init(&signer, signer_stack, signer_stack_end, signer_entry, NULL);
@@ -192,7 +281,10 @@ current fiber with SecureContext
 
 normal Non-secure context save/select/restore
 
-next fiber with SecureContext
+next attached fiber with a zero handle
+  -> allocate its SecureContext once
+
+next fiber with a nonzero SecureContext handle
   -> Secure companion restores its Secure stack/state
 ```
 

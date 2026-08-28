@@ -2,8 +2,8 @@
  * fiber_port_secure_gateway_abi.h
  *
  * Non-secure import surface for the matched ARM_CM33 Secure companion. This
- * is port-private runtime integration, not the future user-facing attachment
- * API and not part of fiber_core.h.
+ * is port-private integration, separate from the user-facing attachment API
+ * and not part of fiber_core.h.
  */
 
 #ifndef FIBER_PORT_ARM_CM33_NON_SECURE_FIBER_PORT_SECURE_GATEWAY_ABI_H_

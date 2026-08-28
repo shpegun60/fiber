@@ -479,7 +479,8 @@ function Test-ContextPortBoundary {
         "fiber\port\ARM_CM3_MPU\fiber_port.c",
 		"fiber\port\ARM_CM4_MPU\fiber_port.c",
 		"fiber\port\ARM_CM0_MPU\fiber_port.c",
-		"fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c"
+		"fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c",
+		"fiber\port\ARM_CM33\non_secure\fiber_port_svc.c"
     )
     $expectedSlotOwners = @($slotOwnerSources | ForEach-Object {
         (Join-Path $RepositoryRoot $_).ToLowerInvariant()
@@ -502,11 +503,11 @@ function Test-ContextPortBoundary {
         throw "The assembly-only current slot must appear only in selected-port runtime sources.`nExpected: $($expectedSlotOwners -join ', ')`nActual: $($actualSlotOwners -join ', ')"
     }
 
-    # This staged protected port owns SVC/PendSV before it exposes the full
-    # forward ABI. It therefore cannot join $portSources below, but its two
-    # naked handlers must still observe the same assembly-load-only slot rule.
+    # Build-selected ports do not join the auto-selected $portSources list,
+    # but their naked handlers retain the same assembly-load-only slot rule.
     foreach ($relativePath in @(
-            "fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c")) {
+            "fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c",
+            "fiber\port\ARM_CM33\non_secure\fiber_port_svc.c")) {
         $path = Join-Path $RepositoryRoot $relativePath
         $source = Get-Content -LiteralPath $path -Raw
         $slotOccurrences = [regex]::Matches($source,
@@ -515,7 +516,7 @@ function Test-ContextPortBoundary {
             '"\s*ldr\s+r(?:1[0-2]|[0-9]),\s*=fiber_internal_runtime_current_context_slot\s*\\n"')
         if (($slotOccurrences.Count -eq 0) -or
                 ($slotOccurrences.Count -ne $slotLoads.Count)) {
-            throw "Staged selected-port C may only load the current slot through naked assembly: $path"
+            throw "Build-selected port C may only load the current slot through naked assembly: $path"
         }
     }
 
@@ -5346,6 +5347,13 @@ function Test-ArmCm33SecureContextLayoutContract {
             "fiber_port_boot_types.h",
             "fiber_port_types.h",
             "fiber_portmacro.h",
+            "fiber_port_boot.h",
+            "fiber_port_boot.c",
+            "fiber_port_private.h",
+            "fiber_port.c",
+            "fiber_port_svc.c",
+            "fiber_port_secure_context_abi.h",
+            "fiber_port_secure_context.c",
             "FREERTOS_PARITY.md")) {
         $path = Join-Path $profileDir $required
         if (-not (Test-Path -LiteralPath $path)) {
@@ -5357,13 +5365,8 @@ function Test-ArmCm33SecureContextLayoutContract {
     }
 
     foreach ($forbiddenArtifact in @(
-            "fiber_port_boot.h",
-            "fiber_port_boot.c",
-            "fiber_port_private.h",
-            "fiber_port.c",
-            "fiber_port_secure_context_abi.h",
-            "fiber_port_secure_context_abi.c",
-            "fiber_port_secure_context.c")) {
+            "fiber_port_exception.c",
+            "fiber_port_secure_context_abi.c")) {
         if (Test-Path -LiteralPath (Join-Path $profileDir $forbiddenArtifact)) {
             throw "ARM_CM33 SecureContext layout exposed premature artifact: $forbiddenArtifact"
         }
@@ -5407,7 +5410,9 @@ function Test-ArmCm33SecureContextLayoutContract {
             "xSecureContext = 0 initially",
             "eleven software words / 44 bytes",
             "secure_stack_bytes",
-            "not a runtime port")) {
+            "FAP-CM33-SECURE-CONTEXT-CONSTRUCTION",
+            "strong SVC and PendSV",
+            "complete selected runtime")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM33 SecureContext parity ledger lost reference evidence: $requiredParity"
@@ -5474,23 +5479,29 @@ typedef enum IRQn {
     Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
 #include <stddef.h>
 #include "fiber_port_types.h"
+#include "fiber_port_secure_context_abi.h"
 
 _Static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
 _Static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
 _Static_assert(sizeof(FiberContext) == 80u, "context size");
 _Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
 FiberContext fiber_arm_cm33_secure_context_type_only_object;
+void (*fiber_arm_cm33_secure_context_attach_c_signature)(FiberContext *, size_t) =
+    fiber_port_secure_context_attach;
 '@
     $cppProbe = Join-Path $probeDir "type-only.cpp"
     Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
 #include <cstddef>
 #include "fiber_port_types.h"
+#include "fiber_port_secure_context_abi.h"
 
 static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
 static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
 static_assert(sizeof(FiberContext) == 80u, "context size");
 static_assert(alignof(FiberContext) == 4u, "context alignment");
 FiberContext fiber_arm_cm33_secure_context_cpp_type_only_object;
+void (*fiber_arm_cm33_secure_context_attach_cpp_signature)(FiberContext *, std::size_t) =
+    fiber_port_secure_context_attach;
 '@
     $facadeProbe = Join-Path $probeDir "selected-facade.c"
     Set-Content -LiteralPath $facadeProbe -Encoding ASCII -Value @'
@@ -5534,6 +5545,8 @@ int fiber_arm_cm33_secure_context_selected_facade_probe(void)
     foreach ($optimization in @("-O2", "-Os")) {
         $mode = $optimization.Substring(1).ToLowerInvariant()
         $layoutObject = Join-Path $probeDir "layout-$mode.o"
+        $portObject = Join-Path $probeDir "port-$mode.o"
+        $bootObject = Join-Path $probeDir "boot-$mode.o"
         $manifestArgs = @(
             "-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=soft", "-std=c11",
             $optimization) + $warningArgs + $selectedDefines + $manifestIncludeArgs
@@ -5541,9 +5554,19 @@ int fiber_arm_cm33_secure_context_selected_facade_probe(void)
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 SecureContext exact layout manifest failed compile ($mode)"
         }
-        $defined = @(& $Nm -g --defined-only $layoutObject)
+        & $Compiler @manifestArgs -c (Join-Path $profileDir "fiber_port.c") `
+            -o $portObject
         if ($LASTEXITCODE -ne 0) {
-            throw "nm failed for ARM_CM33 SecureContext layout probe ($mode)"
+            throw "ARM_CM33 SecureContext frame constructor failed compile ($mode)"
+        }
+        & $Compiler @manifestArgs -c (Join-Path $profileDir "fiber_port_boot.c") `
+            -o $bootObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 SecureContext context construction failed compile ($mode)"
+        }
+        $defined = @(& $Nm -g --defined-only $portObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM33 SecureContext constructor ($mode)"
         }
         $cohorts = @($defined | ForEach-Object {
             if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
@@ -5565,11 +5588,40 @@ int fiber_arm_cm33_secure_context_selected_facade_probe(void)
                 throw "ARM_CM33 SecureContext exact cohort lost token ${token} ($mode): $($cohorts[0])"
             }
         }
-        $runtimeDefinitions = @($defined | Where-Object {
-            $_ -match '\b(?:fiber_port_runtime_|fiber_port_context_init$|SVC_Handler$|PendSV_Handler$)'
-        })
-        if ($runtimeDefinitions.Count -ne 0) {
-            throw "ARM_CM33 SecureContext layout probe emitted runtime symbols ($mode): $($runtimeDefinitions -join ', ')"
+        $bootDefined = @(& $Nm -g --defined-only $bootObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM33 SecureContext construction ($mode)"
+        }
+        foreach ($requiredSymbol in @(
+                "fiber_port_init_context_frame",
+                "fiber_port_context_init")) {
+            $definitions = @($defined + $bootDefined | Where-Object {
+                $_ -match ("\b" + [regex]::Escape($requiredSymbol) + "$")
+            })
+            if ($definitions.Count -ne 1) {
+                throw "ARM_CM33 SecureContext construction must define $requiredSymbol once ($mode)"
+            }
+        }
+        foreach ($forwardSymbol in @(
+                "fiber_port_context_init",
+                "fiber_port_runtime_memory_barrier",
+                "fiber_port_panic_wait",
+                "fiber_port_require_scheduler_configuration_environment",
+                "fiber_port_runtime_prepare_start",
+                "fiber_port_runtime_select_first",
+                "fiber_port_runtime_start_first",
+                "fiber_port_runtime_schedule")) {
+            $forwardDefinitions = @($defined + $bootDefined | Where-Object {
+                $_ -match ("\bT\s+" + [regex]::Escape($forwardSymbol) + "$")
+            })
+            if ($forwardDefinitions.Count -ne 1) {
+                throw "ARM_CM33 SecureContext runtime must define $forwardSymbol once ($mode)"
+            }
+        }
+        $prematureHandlerDefinitions = @($defined + $bootDefined |
+            Where-Object { $_ -match '\bT\s+(?:SVC_Handler|PendSV_Handler)$' })
+        if ($prematureHandlerDefinitions.Count -ne 0) {
+            throw "ARM_CM33 SecureContext handler bundle leaked into construction objects ($mode): $($prematureHandlerDefinitions -join ', ')"
         }
     }
 
@@ -5662,7 +5714,9 @@ function Test-ArmCm33SecureGatewayAbi {
         [string]$Compiler,
         [string]$Nm,
         [string]$GccNm,
+        [string]$Ar,
         [string]$Objdump,
+        [string]$Objcopy,
         [string]$CmsisPath,
         [string]$BuildRoot
     )
@@ -5675,8 +5729,23 @@ function Test-ArmCm33SecureGatewayAbi {
     $contractHeader = Join-Path $secureDir "fiber_secure_gateway_contract.h"
     $securePoolSource = Join-Path $secureDir "fiber_secure_context_pool.c"
     $securePoolHeader = Join-Path $secureDir "fiber_secure_context_pool.h"
+    $secureContextGatewaySource = Join-Path $secureDir `
+        "fiber_secure_context_gateway.c"
+    $secureContextGatewayHeader = Join-Path $secureDir `
+        "fiber_secure_context_gateway_abi.h"
+    $secureContextGatewayContract = Join-Path $secureDir `
+        "fiber_secure_context_gateway_contract.h"
     $nonSecureHeader = Join-Path $nonSecureDir `
         "fiber_port_secure_gateway_abi.h"
+    $nonSecureContextGatewayHeader = Join-Path $nonSecureDir `
+        "fiber_port_secure_context_gateway_abi.h"
+    $nonSecureAttachHeader = Join-Path $nonSecureDir `
+        "fiber_port_secure_context_abi.h"
+    $nonSecureAttachSource = Join-Path $nonSecureDir `
+        "fiber_port_secure_context.c"
+    $nonSecurePortSource = Join-Path $nonSecureDir "fiber_port.c"
+    $nonSecureBootSource = Join-Path $nonSecureDir "fiber_port_boot.c"
+    $nonSecureSvcSource = Join-Path $nonSecureDir "fiber_port_svc.c"
     $secureParity = Join-Path $secureDir "FREERTOS_PARITY.md"
     $secureProbe = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_secure_probe.c"
@@ -5684,13 +5753,28 @@ function Test-ArmCm33SecureGatewayAbi {
         "tools\fixtures\arm_cm33_secure_context_pool_probe.c"
     $nonSecureProbe = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_non_secure_probe.c"
+    $nonSecureAttachProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_context_attach_probe.c"
+    $nonSecureAttachStubs = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm33_secure_context_attach_stubs.c"
+    $configurationSource = Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_context_configuration.c"
+    $runtimeStateSource = Join-Path $RepositoryRoot `
+        "fiber\fiber_runtime_state.c"
     $secureLinker = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_secure.ld"
     $nonSecureLinker = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_non_secure.ld"
     foreach ($required in @($secureSource, $secureHeader, $contractHeader,
-            $securePoolSource, $securePoolHeader, $nonSecureHeader, $secureParity,
-            $secureProbe, $securePoolProbe, $nonSecureProbe, $secureLinker,
+            $securePoolSource, $securePoolHeader, $secureContextGatewaySource,
+            $secureContextGatewayHeader, $secureContextGatewayContract,
+            $nonSecureHeader, $nonSecureContextGatewayHeader,
+            $nonSecureAttachHeader, $nonSecureAttachSource,
+            $nonSecurePortSource, $nonSecureBootSource, $nonSecureSvcSource,
+            $secureParity,
+            $secureProbe, $securePoolProbe, $nonSecureProbe,
+            $nonSecureAttachProbe, $nonSecureAttachStubs,
+            $configurationSource, $runtimeStateSource, $secureLinker,
             $nonSecureLinker)) {
         if (-not (Test-Path -LiteralPath $required)) {
             throw "ARM_CM33 Secure gateway ABI is missing: $required"
@@ -5698,13 +5782,12 @@ function Test-ArmCm33SecureGatewayAbi {
     }
 
     foreach ($forbidden in @(
-            (Join-Path $nonSecureDir "fiber_port_secure_context_abi.h"),
             (Join-Path $nonSecureDir "fiber_port_secure_context_abi.c"),
-            (Join-Path $nonSecureDir "fiber_port.c"),
+            (Join-Path $nonSecureDir "fiber_port_exception.c"),
             (Join-Path $secureDir "fiber_secure_context.c"),
             (Join-Path $secureDir "fiber_secure_context_port.c"))) {
         if (Test-Path -LiteralPath $forbidden) {
-            throw "Gateway-only ARM_CM33 slice exposed premature runtime artifact: $forbidden"
+            throw "ARM_CM33 SecureContext port exposed an obsolete runtime artifact: $forbidden"
         }
     }
 
@@ -5714,6 +5797,19 @@ function Test-ArmCm33SecureGatewayAbi {
         "fiber_secure_gateway_v1_context_layout_version",
         "fiber_secure_gateway_v1_context_feature_mask"
     ) | Sort-Object
+    $expectedContextGatewayFunctions = @(
+        "fiber_secure_context_gateway_v1_abi_version",
+        "fiber_secure_context_gateway_v1_stack_alignment",
+        "fiber_secure_context_gateway_v1_max_stack_bytes",
+        "fiber_secure_context_gateway_v1_max_contexts",
+        "fiber_secure_context_gateway_v1_initialize",
+        "fiber_secure_context_gateway_v1_allocate",
+        "fiber_secure_context_gateway_v1_load",
+        "fiber_secure_context_gateway_v1_save"
+    ) | Sort-Object
+    $expectedAllGatewayFunctions = @(
+        $expectedGatewayFunctions + $expectedContextGatewayFunctions |
+        Sort-Object -Unique)
     foreach ($headerPath in @($secureHeader, $nonSecureHeader)) {
         $header = Get-Content -LiteralPath $headerPath -Raw
         $actual = @([regex]::Matches($header,
@@ -5723,6 +5819,20 @@ function Test-ArmCm33SecureGatewayAbi {
                 (Compare-Object -ReferenceObject $expectedGatewayFunctions `
                     -DifferenceObject $actual)) {
             throw "ARM_CM33 Secure gateway function surface changed: $headerPath"
+        }
+    }
+
+    foreach ($headerPath in @($secureContextGatewayHeader,
+            $nonSecureContextGatewayHeader)) {
+        $header = Get-Content -LiteralPath $headerPath -Raw
+        $actual = @([regex]::Matches($header,
+            '\b(fiber_secure_context_gateway_v1_[A-Za-z0-9_]+)\s*\(') |
+            ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+        if (($actual.Count -ne $expectedContextGatewayFunctions.Count) -or
+                (Compare-Object `
+                    -ReferenceObject $expectedContextGatewayFunctions `
+                    -DifferenceObject $actual)) {
+            throw "ARM_CM33 stateful SecureContext gateway surface changed: $headerPath"
         }
     }
 
@@ -5752,6 +5862,341 @@ function Test-ArmCm33SecureGatewayAbi {
     if ($nonSecureHeaderText.IndexOf("cmse_nonsecure_entry",
             [System.StringComparison]::Ordinal) -ge 0) {
         throw "Non-secure gateway import header must not declare Secure entry attributes"
+    }
+    $secureContextGatewayText = Get-Content -LiteralPath `
+        $secureContextGatewaySource -Raw
+    foreach ($requiredText in @(
+            "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER",
+            "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER",
+            "fiber_secure_context_gateway_is_runtime_exception",
+            "fiber_secure_contextSCB_AIRCR",
+            "fiber_secure_contextAIRCR_PRIS_MASK",
+            "fiber_secure_context_pool_boot_initialize",
+            "__set_CONTROL(2u)",
+            "fiber_secure_context_gateway_state",
+            "fiber_secure_contextGATEWAY_INITIALIZING",
+            "fiber_secure_contextGATEWAY_READY",
+            "__get_PSPLIM() != 0u",
+            "__get_PSP() != 0u",
+            "fiber_secure_context_pool_allocate",
+            "fiber_secure_context_pool_lookup_owned",
+            "FIBER_SECURE_CONTEXT_HANDLE_INVALID")) {
+        if ($secureContextGatewayText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 stateful SecureContext gateway lost required guard: $requiredText"
+        }
+    }
+    $runtimeExceptionBody = Get-CFunctionBody `
+        -Source $secureContextGatewayText `
+        -Signature "static uint32_t fiber_secure_context_gateway_is_runtime_exception(" `
+        -Path $secureContextGatewaySource
+    foreach ($requiredException in @(
+            "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER",
+            "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER")) {
+        if ($runtimeExceptionBody.IndexOf($requiredException,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext runtime exception gate lost $requiredException"
+        }
+    }
+    $allocationBody = Get-CFunctionBody -Source $secureContextGatewayText `
+        -Signature "uint32_t fiber_secure_context_gateway_v1_allocate(" `
+        -Path $secureContextGatewaySource
+    $ipsrGate = $allocationBody.IndexOf(
+        "fiber_secure_context_gateway_is_runtime_exception() == 0u",
+        [System.StringComparison]::Ordinal)
+    $psplimGate = $allocationBody.IndexOf("__get_PSPLIM() != 0u",
+        [System.StringComparison]::Ordinal)
+    $pspGate = $allocationBody.IndexOf("__get_PSP() != 0u",
+        [System.StringComparison]::Ordinal)
+    $poolCall = $allocationBody.IndexOf("fiber_secure_context_pool_allocate(",
+        [System.StringComparison]::Ordinal)
+    if (($ipsrGate -lt 0) -or ($psplimGate -le $ipsrGate) -or
+            ($pspGate -le $psplimGate) -or ($poolCall -le $pspGate)) {
+        throw "ARM_CM33 stateful SecureContext allocation ordering changed"
+    }
+    $initializeBody = Get-CFunctionBody -Source $secureContextGatewayText `
+        -Signature "uint32_t fiber_secure_context_gateway_v1_initialize(" `
+        -Path $secureContextGatewaySource
+    $initializeCursor = -1
+    foreach ($token in @(
+            "__get_IPSR() !=",
+            "fiber_secure_contextGATEWAY_INITIALIZING;",
+            "fiber_secure_contextSCB_AIRCR = aircr_expected;",
+            "__set_PSPLIM(0u);",
+            "__set_PSP(0u);",
+            "fiber_secure_context_pool_boot_initialize();",
+            "__set_CONTROL(2u);",
+            "fiber_secure_contextGATEWAY_READY;")) {
+        $next = $initializeBody.IndexOf($token, $initializeCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $initializeCursor) {
+            throw "ARM_CM33 SecureContext initialization ordering changed at: $token"
+        }
+        $initializeCursor = $next
+    }
+    $loadBody = Get-CFunctionBody -Source $secureContextGatewayText `
+        -Signature "uint32_t fiber_secure_context_gateway_v1_load(" `
+        -Path $secureContextGatewaySource
+    $loadCursor = -1
+    foreach ($token in @(
+            "fiber_secure_context_gateway_is_runtime_exception() == 0u",
+            "__get_PSPLIM() != 0u",
+            "__get_PSP() != 0u",
+            "fiber_secure_context_pool_lookup_owned(",
+            "__set_PSPLIM((uint32_t)stack_limit);",
+            "__set_PSP((uint32_t)stack_pointer);")) {
+        $next = $loadBody.IndexOf($token, $loadCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $loadCursor) {
+            throw "ARM_CM33 SecureContext load ordering changed at: $token"
+        }
+        $loadCursor = $next
+    }
+    $saveBody = Get-CFunctionBody -Source $secureContextGatewayText `
+        -Signature "uint32_t fiber_secure_context_gateway_v1_save(" `
+        -Path $secureContextGatewaySource
+    $saveCursor = -1
+    foreach ($token in @(
+            "__get_IPSR() !=",
+            "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER",
+            "fiber_secure_context_pool_lookup_owned(",
+            "stack_pointer = (uintptr_t)__get_PSP();",
+            "record->current_stack_pointer = stack_pointer;",
+            "__set_PSPLIM(0u);",
+            "__set_PSP(0u);")) {
+        $next = $saveBody.IndexOf($token, $saveCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $saveCursor) {
+            throw "ARM_CM33 SecureContext save ordering changed at: $token"
+        }
+        $saveCursor = $next
+    }
+    $secureContextGatewayHeaderText = Get-Content -LiteralPath `
+        $secureContextGatewayHeader -Raw
+    if ($secureContextGatewayHeaderText.IndexOf("fiber_secure_context_pool.h",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM33 stateful NSC ABI header must not expose its private pool"
+    }
+    $nonSecureContextGatewayHeaderText = Get-Content -LiteralPath `
+        $nonSecureContextGatewayHeader -Raw
+    if ($nonSecureContextGatewayHeaderText.IndexOf("cmse_nonsecure_entry",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM33 stateful Non-secure import must not declare Secure entry attributes"
+    }
+    $attachText = Get-Content -LiteralPath $nonSecureAttachSource -Raw
+    $attachBody = Get-CFunctionBody -Source $attachText `
+        -Signature "void fiber_port_secure_context_attach(" `
+        -Path $nonSecureAttachSource
+    $handlerGuard = $attachBody.IndexOf("FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+        [System.StringComparison]::Ordinal)
+    $lifecycleGuard = $attachBody.IndexOf(
+        "fiber_internal_runtime_require_context_configuration_open(ctx);",
+        [System.StringComparison]::Ordinal)
+    $attachCpuCapture = $attachBody.IndexOf(
+        "fiber_port_capture_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    $attachAddressHook = $attachBody.IndexOf("fiber_addr_plausible_ram(",
+        [System.StringComparison]::Ordinal)
+    $attachCpuCheck = $attachBody.IndexOf(
+        "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    $mutation = $attachBody.IndexOf(
+        "fiber_port_boot_attach_secure_stack(&ctx->boot, requested);",
+        [System.StringComparison]::Ordinal)
+    if (($handlerGuard -lt 0) -or ($lifecycleGuard -le $handlerGuard) -or
+            ($attachCpuCapture -le $lifecycleGuard) -or
+            ($attachAddressHook -le $attachCpuCapture) -or
+            ($attachCpuCheck -le $attachAddressHook) -or
+            ($mutation -le $attachCpuCheck)) {
+        throw "ARM_CM33 SecureContext attach ordering changed"
+    }
+    $attachFinalFrameCheck = $attachBody.LastIndexOf(
+        "fiber_port_context_initial_frame_check(ctx);",
+        [System.StringComparison]::Ordinal)
+    $attachFinalCpuCheck = $attachBody.LastIndexOf(
+        "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    if (($attachFinalFrameCheck -le $mutation) -or
+            ($attachFinalCpuCheck -le $attachFinalFrameCheck)) {
+        throw "ARM_CM33 SecureContext attach mutation escaped CPU-state guard"
+    }
+    foreach ($requiredText in @(
+            "FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_RETAIN_V1();",
+            "fiber_port_context_initial_frame_check(ctx);",
+            "ctx->boot.secure_stack_bytes == 0u",
+            "fiber_port_capture_attachment_cpu_state",
+            "fiber_port_validate_attachment_cpu_state")) {
+        if ($attachText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext attach lost required contract: $requiredText"
+        }
+    }
+    if ($attachBody.IndexOf("fiber_secure_context_gateway_v1_allocate",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM33 Thread-mode attach must not allocate a SecureContext"
+    }
+    foreach ($forbiddenCall in @(
+            "fiber_secure_context_gateway_v1_initialize",
+            "fiber_secure_context_gateway_v1_load",
+            "fiber_secure_context_gateway_v1_save")) {
+        if ($attachBody.IndexOf($forbiddenCall,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM33 Thread-mode attach must not call $forbiddenCall"
+        }
+    }
+    $firstStartBody = Get-CFunctionBody -Source $attachText `
+        -Signature "void fiber_port_secure_context_prepare_first_start(" `
+        -Path $nonSecureAttachSource
+    $firstStartCapture = $firstStartBody.IndexOf(
+        "fiber_port_capture_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    $firstStartAddressHook = $firstStartBody.IndexOf(
+        "fiber_addr_plausible_ram(", [System.StringComparison]::Ordinal)
+    $firstStartInitialFrame = $firstStartBody.IndexOf(
+        "fiber_port_context_initial_frame_check(ctx);",
+        [System.StringComparison]::Ordinal)
+    $firstStartFirstCpuCheck = $firstStartBody.IndexOf(
+        "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    if (($firstStartCapture -lt 0) -or
+            ($firstStartAddressHook -le $firstStartCapture) -or
+            ($firstStartInitialFrame -le $firstStartAddressHook) -or
+            ($firstStartFirstCpuCheck -le $firstStartInitialFrame)) {
+        throw "ARM_CM33 first-start hooks escaped the CPU-state envelope"
+    }
+    $firstStartCursor = -1
+    foreach ($token in @(
+            "fiber_port_context_initial_frame_check(ctx);",
+            "fiber_port_validate_secure_gateway(&cpu_state, &max_contexts);",
+            "fiber_secure_context_gateway_v1_initialize()",
+            "fiber_secure_context_gateway_v1_allocate(",
+            "ctx->sp[0] = handle;",
+            "fiber_secure_context_gateway_v1_load(",
+            "fiber_port_context_first_start_frame_check(ctx);")) {
+        $next = $firstStartBody.IndexOf($token, $firstStartCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $firstStartCursor) {
+            throw "ARM_CM33 first-start SecureContext ordering changed at: $token"
+        }
+        $firstStartCursor = $next
+    }
+    $gatewayValidationBody = Get-CFunctionBody -Source $attachText `
+        -Signature "uint32_t fiber_port_validate_secure_gateway(" `
+        -Path $nonSecureAttachSource
+    $gatewayValidationCursor = -1
+    foreach ($token in @(
+            "fiber_secure_gateway_v1_abi_version();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_gateway_v1_context_port_id();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_gateway_v1_context_layout_version();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_gateway_v1_context_feature_mask();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_context_gateway_v1_abi_version();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_context_gateway_v1_stack_alignment();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(value ==",
+            "fiber_secure_context_gateway_v1_max_contexts();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);",
+            "FIBER_REQUIRE(*max_contexts != 0u",
+            "fiber_secure_context_gateway_v1_max_stack_bytes();",
+            "fiber_port_validate_attachment_cpu_state(cpu_state);")) {
+        $next = $gatewayValidationBody.IndexOf($token,
+            $gatewayValidationCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $gatewayValidationCursor) {
+            throw "ARM_CM33 gateway CPU-state ordering changed at: $token"
+        }
+        $gatewayValidationCursor = $next
+    }
+    $finalFrameCheck = $firstStartBody.LastIndexOf(
+        "fiber_port_context_first_start_frame_check(ctx);",
+        [System.StringComparison]::Ordinal)
+    $finalCpuCheck = $firstStartBody.LastIndexOf(
+        "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+        [System.StringComparison]::Ordinal)
+    if (($finalFrameCheck -lt 0) -or ($finalCpuCheck -le $finalFrameCheck)) {
+        throw "ARM_CM33 first-start post-allocation frame check escaped CPU guard"
+    }
+    $saveCurrentBody = Get-CFunctionBody -Source $attachText `
+        -Signature "uint32_t fiber_port_secure_context_save_current_from_pendsv(" `
+        -Path $nonSecureAttachSource
+    $saveCurrentCursor = -1
+    foreach ($token in @(
+            "fiber_port_current_secure_context_handle;",
+            "fiber_secure_context_gateway_v1_save(",
+            "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+            "fiber_port_current_secure_context_handle = fiber_portNO_SECURE_CONTEXT;",
+            "FIBER_REQUIRE(fiber_port_current_secure_context_handle ==")) {
+        $next = $saveCurrentBody.IndexOf($token, $saveCurrentCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $saveCurrentCursor) {
+            throw "ARM_CM33 PendSV Secure save ordering changed at: $token"
+        }
+        $saveCurrentCursor = $next
+    }
+    $prepareNextBody = Get-CFunctionBody -Source $attachText `
+        -Signature "uint32_t fiber_port_secure_context_prepare_next_from_pendsv(" `
+        -Path $nonSecureAttachSource
+    $prepareNextCursor = -1
+    foreach ($token in @(
+            "fiber_port_current_secure_context_handle ==",
+            "uint32_t handle = next->sp[0];",
+            "fiber_secure_context_gateway_v1_allocate(",
+            "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+            "fiber_secure_context_gateway_v1_max_contexts();",
+            "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+            "handle <= max_contexts",
+            "next->sp[0] = handle;",
+            "fiber_port_context_validate_loaded_secure_handle(next);")) {
+        $next = $prepareNextBody.IndexOf($token, $prepareNextCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $prepareNextCursor) {
+            throw "ARM_CM33 PendSV lazy allocation ordering changed at: $token"
+        }
+        $prepareNextCursor = $next
+    }
+    $loadNextBody = Get-CFunctionBody -Source $attachText `
+        -Signature "void fiber_port_secure_context_load_next_from_pendsv(" `
+        -Path $nonSecureAttachSource
+    $loadNextCursor = -1
+    foreach ($token in @(
+            "__get_PSPLIM() == (uint32_t)next->boot.stack_base",
+            "next->sp[0] == handle",
+            "fiber_port_current_secure_context_handle ==",
+            "fiber_port_context_validate_loaded_secure_handle(next);",
+            "fiber_secure_context_gateway_v1_load(",
+            "fiber_port_validate_attachment_cpu_state(&cpu_state);",
+            "fiber_port_current_secure_context_handle = handle;",
+            "FIBER_REQUIRE(fiber_port_current_secure_context_handle == handle")) {
+        $next = $loadNextBody.IndexOf($token, $loadNextCursor + 1,
+            [System.StringComparison]::Ordinal)
+        if ($next -le $loadNextCursor) {
+            throw "ARM_CM33 PendSV Secure load ordering changed at: $token"
+        }
+        $loadNextCursor = $next
+    }
+    $bootText = Get-Content -LiteralPath $nonSecureBootSource -Raw
+    foreach ($requiredText in @(
+            "hash = fiber_port_hash32_accum(hash, boot->secure_stack_bytes);",
+            "boot->sealed = 0u;",
+            "boot->secure_stack_bytes = secure_stack_bytes;",
+            "boot->hash = fiber_port_boot_record_compute_hash(boot);",
+            "boot->sealed = 1u;",
+            "frame[0] == fiber_portNO_SECURE_CONTEXT",
+            "frame[0] != fiber_portNO_SECURE_CONTEXT",
+            "fiber_port_context_first_start_frame_check")) {
+        if ($bootText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM33 SecureContext reseal/initial-handle contract changed: $requiredText"
+        }
     }
     $securePoolHeaderText = Get-Content -LiteralPath $securePoolHeader -Raw
     foreach ($requiredText in @(
@@ -5801,7 +6246,12 @@ function Test-ArmCm33SecureGatewayAbi {
             "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149",
             "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
             "companion-version handshake", "secure_heap", "fixed Secure pool",
-            "0xFEF5EDA5")) {
+            "0xFEF5EDA5", "FAP-CM33-SECURE-CONTEXT-ALLOCATOR",
+            "FAP-CM33-SECURE-CONTEXT-INITIALIZE",
+            "FAP-CM33-SECURE-CONTEXT-LOAD",
+            "FAP-CM33-SECURE-CONTEXT-SAVE",
+            "IPSR-then-PSPLIM gate", "exact exception 11",
+            "exact exception 14")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM33 Secure gateway parity ledger lost reference evidence: $requiredParity"
@@ -5896,9 +6346,22 @@ typedef enum IRQn {
             $nonSecureIncludes
         $secureObject = Join-Path $modeDir "secure-gateway.o"
         $securePoolObject = Join-Path $modeDir "secure-context-pool.o"
+        $secureContextGatewayObject = Join-Path $modeDir `
+            "secure-context-gateway.o"
         $secureProbeObject = Join-Path $modeDir "secure-probe.o"
         $securePoolProbeObject = Join-Path $modeDir "secure-context-pool-probe.o"
         $nonSecureProbeObject = Join-Path $modeDir "non-secure-probe.o"
+        $nonSecureAttachProbeObject = Join-Path $modeDir `
+            "non-secure-attach-probe.o"
+        $nonSecureAttachStubsObject = Join-Path $modeDir `
+            "non-secure-attach-stubs.o"
+        $nonSecurePortObject = Join-Path $modeDir "non-secure-port.o"
+        $nonSecureBootObject = Join-Path $modeDir "non-secure-boot.o"
+        $nonSecureSvcObject = Join-Path $modeDir "non-secure-svc.o"
+        $nonSecureAttachObject = Join-Path $modeDir "non-secure-attach.o"
+        $configurationObject = Join-Path $modeDir `
+            "runtime-context-configuration.o"
+        $runtimeStateObject = Join-Path $modeDir "runtime-state.o"
         & $Compiler @($secureArgs + @("-c", $secureSource, "-o", $secureObject))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Secure gateway source failed compile ($mode)"
@@ -5906,6 +6369,11 @@ typedef enum IRQn {
         & $Compiler @($secureArgs + @("-c", $securePoolSource, "-o", $securePoolObject))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 SecureContext pool source failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $secureContextGatewaySource,
+            "-o", $secureContextGatewayObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 stateful SecureContext gateway failed compile ($mode)"
         }
         & $Compiler @($secureArgs + @("-c", $secureProbe, "-o", $secureProbeObject))
         if ($LASTEXITCODE -ne 0) {
@@ -5921,15 +6389,48 @@ typedef enum IRQn {
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Non-secure gateway fixture failed compile ($mode)"
         }
+        foreach ($compile in @(
+                [pscustomobject]@{ Source = $nonSecurePortSource; Object = $nonSecurePortObject; Label = "selected runtime" },
+                [pscustomobject]@{ Source = $nonSecureBootSource; Object = $nonSecureBootObject; Label = "context construction" },
+                [pscustomobject]@{ Source = $nonSecureSvcSource; Object = $nonSecureSvcObject; Label = "SVC/PendSV handler bundle" },
+                [pscustomobject]@{ Source = $nonSecureAttachSource; Object = $nonSecureAttachObject; Label = "attachment" },
+                [pscustomobject]@{ Source = $nonSecureAttachProbe; Object = $nonSecureAttachProbeObject; Label = "attachment fixture" },
+                [pscustomobject]@{ Source = $nonSecureAttachStubs; Object = $nonSecureAttachStubsObject; Label = "attachment stubs"; DisableLto = 1 },
+                [pscustomobject]@{ Source = $configurationSource; Object = $configurationObject; Label = "configuration lifecycle" },
+                [pscustomobject]@{ Source = $runtimeStateSource; Object = $runtimeStateObject; Label = "runtime lifecycle state" })) {
+            $compileArgs = $nonSecureArgs
+            if (($null -ne $compile.PSObject.Properties["DisableLto"]) -and
+                    ($compile.DisableLto -ne 0)) {
+                $compileArgs = $compileArgs + @("-fno-lto")
+            }
+            & $Compiler @($compileArgs + @("-c", $compile.Source,
+                "-o", $compile.Object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM33 Non-secure $($compile.Label) failed compile ($mode)"
+            }
+        }
 
         $objectNm = if ($modeSpec.Lto -ne 0) { $GccNm } else { $Nm }
         $nonSecureUndefined = @(& $objectNm -u $nonSecureProbeObject | ForEach-Object {
             if ($_ -match '\bU\s+(\S+)$') { $Matches[1] }
         } | Sort-Object -Unique)
-        if (($nonSecureUndefined.Count -ne $expectedGatewayFunctions.Count) -or
-                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+        $expectedProbeUndefined = @($expectedAllGatewayFunctions + @(
+            "fiber_arm_cm33_secure_context_attach_probe",
+            "fiber_port_context_init",
+            "fiber_port_runtime_memory_barrier",
+            "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule",
+            "fiber_port_start_first_context",
+            "SVC_Handler",
+            "PendSV_Handler") | Sort-Object -Unique)
+        if (($nonSecureUndefined.Count -ne $expectedProbeUndefined.Count) -or
+                (Compare-Object -ReferenceObject $expectedProbeUndefined `
                     -DifferenceObject $nonSecureUndefined)) {
-            throw "ARM_CM33 Non-secure probe dependency surface changed ($mode)"
+            throw "ARM_CM33 Non-secure probe dependency surface changed ($mode). Expected: $($expectedProbeUndefined -join ', '); actual: $($nonSecureUndefined -join ', ')"
         }
 
         $importLibrary = Join-Path $modeDir "secure-gateway-import.o"
@@ -5937,7 +6438,8 @@ typedef enum IRQn {
         & $Compiler @($secureArgs + @(
             "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
             "-Wl,--out-implib,$importLibrary", "-Wl,-T,$secureLinker",
-            $secureObject, $securePoolObject, $secureProbeObject,
+            $secureObject, $securePoolObject, $secureContextGatewayObject,
+            $secureProbeObject,
             $securePoolProbeObject, "-o", $secureElf))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM33 Secure CMSE gateway image failed link ($mode)"
@@ -5947,12 +6449,12 @@ typedef enum IRQn {
         }
         $importDefinitions = @(& $Nm -g --defined-only $importLibrary)
         $actualGatewayImports = @($importDefinitions | ForEach-Object {
-            if ($_ -match '\b(fiber_secure_gateway_v[0-9]+_[A-Za-z0-9_]+)$') {
+            if ($_ -match '\b(fiber_secure_(?:context_)?gateway_v[0-9]+_[A-Za-z0-9_]+)$') {
                 $Matches[1]
             }
         } | Sort-Object -Unique)
-        if (($actualGatewayImports.Count -ne $expectedGatewayFunctions.Count) -or
-                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+        if (($actualGatewayImports.Count -ne $expectedAllGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedAllGatewayFunctions `
                     -DifferenceObject $actualGatewayImports)) {
             throw "ARM_CM33 Secure CMSE import surface changed ($mode)"
         }
@@ -5963,7 +6465,7 @@ typedef enum IRQn {
         }
         $nscStart = [uint64]0x0C010000
         $nscEnd = [uint64]0x0C011000
-        foreach ($symbol in $expectedGatewayFunctions) {
+        foreach ($symbol in $expectedAllGatewayFunctions) {
             $definition = @($importDefinitions | Where-Object {
                 $_ -match ("\b" + [regex]::Escape($symbol) + "$")
             })
@@ -6038,24 +6540,312 @@ typedef enum IRQn {
         }
 
         $nonSecureElf = Join-Path $modeDir "non-secure.elf"
+        $nonSecureObjects = @(
+            $nonSecureProbeObject,
+            $nonSecureAttachProbeObject,
+            $nonSecureAttachStubsObject,
+            $nonSecurePortObject,
+            $nonSecureBootObject,
+            $nonSecureSvcObject,
+            $nonSecureAttachObject,
+            $configurationObject,
+            $runtimeStateObject
+        )
+        & $Compiler @($nonSecureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+            $nonSecureObjects + @($importLibrary, "-o", $nonSecureElf))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 matching Non-secure attach/CMSE gateway link failed ($mode)"
+        }
+        $nonSecureDefinitions = @(& $objectNm -g --defined-only $nonSecureElf)
+        foreach ($requiredSymbol in @(
+                "fiber_port_context_init",
+                "fiber_port_runtime_memory_barrier",
+                "fiber_port_panic_wait",
+                "fiber_port_require_scheduler_configuration_environment",
+                "fiber_port_runtime_prepare_start",
+                "fiber_port_runtime_select_first",
+                "fiber_port_runtime_start_first",
+                "fiber_port_runtime_schedule",
+                "fiber_port_secure_context_attach",
+                "fiber_port_secure_context_prepare_first_start",
+                "fiber_port_secure_context_save_current_from_pendsv",
+                "fiber_port_secure_context_prepare_next_from_pendsv",
+                "fiber_port_secure_context_load_next_from_pendsv",
+                "fiber_port_start_first_context",
+                "fiber_port_scheduler_pick_first_from_start",
+                "fiber_port_scheduler_pick_next_from_pendsv",
+                "fiber_port_arm_cm33_secure_context_handler_bundle_v1_anchor",
+                "fiber_port_arm_cm33_secure_context_attachment_bundle_v1_anchor",
+                "SVC_Handler",
+                "PendSV_Handler")) {
+            if (@($nonSecureDefinitions | Where-Object {
+                    $_ -match ("\b" + [regex]::Escape($requiredSymbol) + "$")
+                }).Count -ne 1) {
+                throw "ARM_CM33 matching Non-secure image lost $requiredSymbol ($mode)"
+            }
+        }
+
+        $svcAddress = Get-StrongTextSymbolAddress `
+            -NmOutput $nonSecureDefinitions -Symbol "SVC_Handler" `
+            -Path $nonSecureElf
+        $pendSvAddress = Get-StrongTextSymbolAddress `
+            -NmOutput $nonSecureDefinitions -Symbol "PendSV_Handler" `
+            -Path $nonSecureElf
+        $vectorBinary = Join-Path $modeDir "non-secure-vectors.bin"
+        & $Objcopy -O binary --only-section=.isr_vector `
+            $nonSecureElf $vectorBinary
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 runtime vector extraction failed ($mode)"
+        }
+        $vectorBytes = [IO.File]::ReadAllBytes($vectorBinary)
+        if ($vectorBytes.Length -ne 64) {
+            throw "ARM_CM33 runtime vector table size changed ($mode)"
+        }
+        $slot11 = [BitConverter]::ToUInt32($vectorBytes, 11 * 4)
+        if ($slot11 -ne ([uint32]$svcAddress -bor [uint32]1)) {
+            throw "ARM_CM33 vector slot 11 lost strong SVC_Handler ($mode)"
+        }
+        $slot14 = [BitConverter]::ToUInt32($vectorBytes, 14 * 4)
+        if ($slot14 -ne ([uint32]$pendSvAddress -bor [uint32]1)) {
+            throw "ARM_CM33 vector slot 14 lost strong PendSV_Handler ($mode)"
+        }
+
+        $archiveProbeSource = Join-Path $modeDir "archive-extraction.c"
+        $archiveProbeObject = Join-Path $modeDir "archive-extraction.o"
+        Set-Content -LiteralPath $archiveProbeSource -Encoding ASCII -Value @'
+#include <stdint.h>
+
+extern void fiber_port_runtime_prepare_start(void);
+
+void Default_Handler(void) { }
+void SVC_Handler(void) __attribute__((weak, alias("Default_Handler")));
+void PendSV_Handler(void) __attribute__((weak, alias("Default_Handler")));
+void Reset_Handler(void);
+
+__attribute__((used, section(".isr_vector")))
+const uintptr_t fiber_arm_cm33_secure_context_archive_vectors[16] = {
+    [1] = (uintptr_t)Reset_Handler,
+    [11] = (uintptr_t)SVC_Handler,
+    [14] = (uintptr_t)PendSV_Handler
+};
+
+void Reset_Handler(void)
+{
+    fiber_port_runtime_prepare_start();
+    for (;;) {
+        __asm volatile ("wfe");
+    }
+}
+'@
+        & $Compiler @($nonSecureArgs + @("-c", $archiveProbeSource,
+            "-o", $archiveProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 archive-extraction fixture failed compile ($mode)"
+        }
+        $portArchive = Join-Path $modeDir "libfiber-arm-cm33-secure-context.a"
+        & $Ar rcs $portArchive $nonSecurePortObject $nonSecureBootObject `
+            $nonSecureSvcObject $nonSecureAttachObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 selected-port archive creation failed ($mode)"
+        }
+        $archiveElf = Join-Path $modeDir "archive-extraction.elf"
         & $Compiler @($nonSecureArgs + @(
             "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
-            $nonSecureProbeObject, $importLibrary, "-o", $nonSecureElf))
+            $archiveProbeObject, $nonSecureAttachStubsObject,
+            $configurationObject, $runtimeStateObject, $portArchive,
+            $importLibrary, "-o", $archiveElf))
         if ($LASTEXITCODE -ne 0) {
-            throw "ARM_CM33 matching Non-secure/CMSE gateway link failed ($mode)"
+            throw "ARM_CM33 selected-port archive extraction failed ($mode)"
+        }
+        $archiveDefinitions = @(& $objectNm -g --defined-only $archiveElf)
+        foreach ($requiredArchiveSymbol in @(
+                "fiber_port_arm_cm33_secure_context_handler_bundle_v1_anchor",
+                "fiber_port_arm_cm33_secure_context_attachment_bundle_v1_anchor",
+                "fiber_port_secure_context_prepare_first_start",
+                "fiber_port_secure_context_save_current_from_pendsv",
+                "fiber_port_secure_context_prepare_next_from_pendsv",
+                "fiber_port_secure_context_load_next_from_pendsv")) {
+            if (@($archiveDefinitions | Where-Object {
+                    $_ -match ("\b" +
+                        [regex]::Escape($requiredArchiveSymbol) + "$")
+                }).Count -ne 1) {
+                throw "ARM_CM33 selected-port archive lost $requiredArchiveSymbol ($mode)"
+            }
+        }
+        $archiveSvcAddress = Get-StrongTextSymbolAddress `
+            -NmOutput $archiveDefinitions -Symbol "SVC_Handler" `
+            -Path $archiveElf
+        $archivePendSvAddress = Get-StrongTextSymbolAddress `
+            -NmOutput $archiveDefinitions -Symbol "PendSV_Handler" `
+            -Path $archiveElf
+        $archiveVectorBinary = Join-Path $modeDir "archive-vectors.bin"
+        & $Objcopy -O binary --only-section=.isr_vector `
+            $archiveElf $archiveVectorBinary
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 archive vector extraction failed ($mode)"
+        }
+        $archiveVectorBytes = [IO.File]::ReadAllBytes($archiveVectorBinary)
+        if ($archiveVectorBytes.Length -ne 64) {
+            throw "ARM_CM33 archive vector table size changed ($mode)"
+        }
+        if ([BitConverter]::ToUInt32($archiveVectorBytes, 11 * 4) -ne
+                ([uint32]$archiveSvcAddress -bor [uint32]1)) {
+            throw "ARM_CM33 bundle anchor did not replace weak SVC in archive link ($mode)"
+        }
+        if ([BitConverter]::ToUInt32($archiveVectorBytes, 14 * 4) -ne
+                ([uint32]$archivePendSvAddress -bor [uint32]1)) {
+            throw "ARM_CM33 bundle anchor did not replace weak PendSV in archive link ($mode)"
+        }
+
+        $svcDisassemblyPath = if ($modeSpec.Lto -ne 0) {
+            $nonSecureElf
+        } else {
+            $nonSecureSvcObject
+        }
+        $svcDisassembly = (& $Objdump -dr $svcDisassemblyPath) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 SVC/PendSV disassembly failed ($mode)"
+        }
+        $svcBody = Get-DisassemblyFunctionBody -Disassembly $svcDisassembly `
+            -Symbol "SVC_Handler" -Path $svcDisassemblyPath
+        $svcCursor = 0
+        foreach ($pattern in @(
+                '\bmrs\s+r3,\s*IPSR',
+                '\bcmp\s+r3,\s*#11',
+                '\bmrs\s+r0,\s*MSP',
+                '\bcmp\s+r3,\s*#70',
+                '\bcpsid\s+i',
+                '\bldr\s+r0,\s*\[pc',
+                '\bldr\s+r0,\s*\[r0',
+                'fiber_port_secure_context_prepare_first_start',
+                '\bldmia(?:\.w)?\s+r0!,\s*\{r1[^\r\n]*fp\}',
+                '\bmsr\s+PSPLIM,\s*r2',
+                '\bmsr\s+CONTROL,\s*r2',
+                '\bmsr\s+PSP,\s*r0',
+                '\bbx\s+r3')) {
+            $match = [regex]::Match($svcBody.Substring($svcCursor), $pattern,
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $match.Success) {
+                throw "ARM_CM33 first-start SVC lost ordered generated instruction $pattern ($mode)`n$svcBody"
+            }
+            $svcCursor += $match.Index + $match.Length
+        }
+        if (($modeSpec.Lto -eq 0) -and ([regex]::Matches($svcBody,
+                'fiber_internal_runtime_current_context_slot').Count -ne 1)) {
+            throw "ARM_CM33 SVC current-slot access count changed ($mode)"
+        }
+
+        $pendSvBody = Get-DisassemblyFunctionBody `
+            -Disassembly $svcDisassembly -Symbol "PendSV_Handler" `
+            -Path $svcDisassemblyPath
+        $pendSvCursor = 0
+        foreach ($pattern in @(
+                '\bmrs\s+r3,\s*IPSR',
+                '\bcmp\s+r3,\s*#14',
+                '\bmvn(?:\.w)?\s+r3,\s*#67',
+                '\bmrs\s+r0,\s*PSP',
+                '\bldr\s+r1,\s*\[pc',
+                '\bldr\s+r1,\s*\[r1',
+                'fiber_port_context_validate_save_current',
+                'fiber_port_secure_context_save_current_from_pendsv',
+                '\bstmdb\s+r0!,\s*\{r4[^\r\n]*fp\}',
+                '\bstmdb\s+r0!,\s*\{r2[^\r\n]*lr\}',
+                '\bstr\s+r0,\s*\[r1',
+                '\bmsr\s+BASEPRI',
+                'fiber_port_scheduler_pick_next_from_pendsv',
+                '\bmsr\s+BASEPRI',
+                'fiber_port_secure_context_prepare_next_from_pendsv',
+                '\bldmia(?:\.w)?\s+r2!,\s*\{r0[^\r\n]*lr\}',
+                '\bmsr\s+PSPLIM,\s*r3',
+                'fiber_port_secure_context_load_next_from_pendsv',
+                '\bldmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*fp\}',
+                '\bmsr\s+PSP,\s*r2',
+                '\bbx\s+lr')) {
+            $match = [regex]::Match($pendSvBody.Substring($pendSvCursor),
+                $pattern,
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $match.Success) {
+                throw "ARM_CM33 PendSV lost ordered generated instruction $pattern ($mode)`n$pendSvBody"
+            }
+            $pendSvCursor += $match.Index + $match.Length
+        }
+        if (($modeSpec.Lto -eq 0) -and ([regex]::Matches($pendSvBody,
+                'fiber_internal_runtime_current_context_slot').Count -ne 1)) {
+            throw "ARM_CM33 PendSV current-slot access count changed ($mode)"
+        }
+
+        $competingSvcSource = Join-Path $modeDir "competing-svc.c"
+        $competingSvcObject = Join-Path $modeDir "competing-svc.o"
+        Set-Content -LiteralPath $competingSvcSource -Encoding ASCII `
+            -Value "void SVC_Handler(void) { }`n"
+        & $Compiler @($nonSecureArgs + @("-c", $competingSvcSource,
+            "-o", $competingSvcObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 competing SVC fixture failed compile ($mode)"
+        }
+        $duplicateSvcLog = Join-Path $modeDir "duplicate-svc.log"
+        $duplicateSvc = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+                $nonSecureObjects + @($competingSvcObject, $importLibrary,
+                "-o", (Join-Path $modeDir "duplicate-svc.elf"))) `
+            -LogPath $duplicateSvcLog
+        if (($duplicateSvc.ExitCode -eq 0) -or
+                ($duplicateSvc.Output -notmatch
+                    'multiple definition.*SVC_Handler')) {
+            throw "ARM_CM33 strong SVC ownership did not reject a competing handler ($mode).`n$($duplicateSvc.Output)"
+        }
+
+        $competingPendSvSource = Join-Path $modeDir "competing-pendsv.c"
+        $competingPendSvObject = Join-Path $modeDir "competing-pendsv.o"
+        Set-Content -LiteralPath $competingPendSvSource -Encoding ASCII `
+            -Value "void PendSV_Handler(void) { }`n"
+        & $Compiler @($nonSecureArgs + @("-c", $competingPendSvSource,
+            "-o", $competingPendSvObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM33 competing PendSV fixture failed compile ($mode)"
+        }
+        $duplicatePendSvLog = Join-Path $modeDir "duplicate-pendsv.log"
+        $duplicatePendSv = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+                $nonSecureObjects + @($competingPendSvObject, $importLibrary,
+                "-o", (Join-Path $modeDir "duplicate-pendsv.elf"))) `
+            -LogPath $duplicatePendSvLog
+        if (($duplicatePendSv.ExitCode -eq 0) -or
+                ($duplicatePendSv.Output -notmatch
+                    'multiple definition.*PendSV_Handler')) {
+            throw "ARM_CM33 strong PendSV ownership did not reject a competing handler ($mode).`n$($duplicatePendSv.Output)"
         }
 
         $missingLog = Join-Path $modeDir "missing-import.log"
         $missing = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
             @($nonSecureArgs + @(
-                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
-                $nonSecureProbeObject, "-o",
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+                $nonSecureObjects + @("-o",
                 (Join-Path $modeDir "missing-import.elf"))) `
             -LogPath $missingLog
         if (($missing.ExitCode -eq 0) -or
                 ($missing.Output -notmatch
                     [regex]::Escape("fiber_secure_gateway_v1_abi_version"))) {
             throw "ARM_CM33 Non-secure image without a CMSE import library must fail on v1 gateway symbol ($mode).`n$($missing.Output)"
+        }
+
+        $withoutConfiguration = @($nonSecureObjects | Where-Object {
+            $_ -ne $configurationObject
+        })
+        $missingLifecycleLog = Join-Path $modeDir "missing-lifecycle.log"
+        $missingLifecycle = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+                $withoutConfiguration + @($importLibrary, "-o",
+                (Join-Path $modeDir "missing-lifecycle.elf"))) `
+            -LogPath $missingLifecycleLog
+        if (($missingLifecycle.ExitCode -eq 0) -or
+                ($missingLifecycle.Output -notmatch [regex]::Escape(
+                    "fiber_internal_runtime_context_configuration_abi_v1_anchor"))) {
+            throw "ARM_CM33 attach without optional lifecycle ABI must fail on its v1 anchor ($mode).`n$($missingLifecycle.Output)"
         }
 
         $v2Source = Join-Path $modeDir "secure-gateway-v2.c"
@@ -6105,8 +6895,8 @@ void Reset_Handler(void)
         $mismatchLog = Join-Path $modeDir "version-mismatch.log"
         $mismatch = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
             @($nonSecureArgs + @(
-                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
-                $nonSecureProbeObject, $v2ImportLibrary, "-o",
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker") +
+                $nonSecureObjects + @($v2ImportLibrary, "-o",
                 (Join-Path $modeDir "version-mismatch.elf"))) `
             -LogPath $mismatchLog
         if (($mismatch.ExitCode -eq 0) -or
@@ -12918,7 +13708,8 @@ try {
         -BuildRoot $buildRoot
     Write-Host "== ARM_CM33 Secure gateway two-image ABI contract =="
     Test-ArmCm33SecureGatewayAbi -RepositoryRoot $RepoRoot `
-        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -CmsisPath $cmsis `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
         -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `
