@@ -482,7 +482,9 @@ function Test-ContextPortBoundary {
 		"fiber\port\ARM_CM4_MPU\fiber_port.c",
 		"fiber\port\ARM_CM0_MPU\fiber_port.c",
 		"fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c",
-		"fiber\port\ARM_CM33\non_secure\fiber_port_svc.c"
+		"fiber\port\ARM_CM33\non_secure\fiber_port_svc.c",
+		"fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_svc.c",
+		"fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c"
     )
     $expectedSlotOwners = @($slotOwnerSources | ForEach-Object {
         (Join-Path $RepositoryRoot $_).ToLowerInvariant()
@@ -509,7 +511,9 @@ function Test-ContextPortBoundary {
     # but their naked handlers retain the same assembly-load-only slot rule.
     foreach ($relativePath in @(
             "fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c",
-            "fiber\port\ARM_CM33\non_secure\fiber_port_svc.c")) {
+            "fiber\port\ARM_CM33\non_secure\fiber_port_svc.c",
+            "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_svc.c",
+            "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c")) {
         $path = Join-Path $RepositoryRoot $relativePath
         $source = Get-Content -LiteralPath $path -Raw
         $slotOccurrences = [regex]::Matches($source,
@@ -8779,6 +8783,1146 @@ SECTIONS
 }
 
 
+function Test-ArmCm55FNtzRuntimeContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$Objcopy,
+        [string]$Ar,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM55F_NTZ\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55f_ntz_layout_probe.c"
+    $referenceFixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55f_ntz_freertos_frame_reference.c"
+    $svcReferenceFixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55f_ntz_freertos_svc_reference.c"
+    $pendsvReferenceFixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55f_ntz_freertos_pendsv_reference.c"
+    $expectedFiles = @(
+        "FREERTOS_PARITY.md",
+        "fiber_port.c",
+        "fiber_port_boot.c",
+        "fiber_port_boot.h",
+        "fiber_port_boot_types.h",
+        "fiber_port_private.h",
+        "fiber_port_svc.c",
+        "fiber_port_types.h",
+        "fiber_portmacro.h"
+    )
+    foreach ($file in $expectedFiles) {
+        $path = Join-Path $profileDir $file
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "ARM_CM55F_NTZ slice-4 file is missing: $path"
+        }
+    }
+    foreach ($requiredFixture in @($fixture, $referenceFixture,
+            $svcReferenceFixture, $pendsvReferenceFixture)) {
+        if (-not (Test-Path -LiteralPath $requiredFixture)) {
+            throw "ARM_CM55F_NTZ slice-4 fixture is missing: $requiredFixture"
+        }
+    }
+
+    $actualFiles = @(Get-ChildItem -LiteralPath $profileDir -File |
+            Select-Object -ExpandProperty Name | Sort-Object)
+    $unexpectedFiles = @(Compare-Object -ReferenceObject $expectedFiles `
+            -DifferenceObject $actualFiles | Where-Object {
+                $_.SideIndicator -eq "=>"
+            } | Select-Object -ExpandProperty InputObject)
+    $missingFiles = @(Compare-Object -ReferenceObject $expectedFiles `
+            -DifferenceObject $actualFiles | Where-Object {
+                $_.SideIndicator -eq "<="
+            } | Select-Object -ExpandProperty InputObject)
+    if (($unexpectedFiles.Count -ne 0) -or ($missingFiles.Count -ne 0)) {
+        throw "ARM_CM55F_NTZ slice-4 file surface changed; expected complete scalar-FP runtime artifacts"
+    }
+
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM55F_NTZ", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Staged ARM_CM55F_NTZ profile entered global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM55F_NTZ public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $macro = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_portmacro.h") -Raw
+    foreach ($requiredMacroToken in @(
+            "FIBER_PORT_ARMV81M_MAINLINE",
+            "__CORTEX_M != 55",
+            "FIBER_PORT_HAS_FPU 1",
+            "FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1",
+            "FIBER_PORT_HAS_MVE 0",
+            "FIBER_PORT_CONTEXT_ABI_PORT_ID 0x43353546u",
+            "FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x83u",
+            "FIBER_PORT_INITIAL_CONTEXT_BYTES == 72u",
+            "FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 212u",
+            "fiber_portSVC_ORIGIN_EXC_RETURN 0xFFFFFFB8u",
+            "does not permit MVE",
+            "does not permit PAC",
+            "does not permit BTI",
+            "is non-MPU")) {
+        if ($macro.IndexOf($requiredMacroToken,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55F_NTZ portmacro lost frozen trait: $requiredMacroToken"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "B7F94C8C21A4B583837C10F00ED93A1EA8C5801DEA8A3AD6C6DB13A49F947420",
+            "configENABLE_FPU = 1",
+            "configENABLE_MVE = 0",
+            "-march=armv8.1-m.main+fp",
+            "__ARM_FEATURE_MVE",
+            "maximum bounded context: 212 bytes",
+            "0xFFFFFFBC",
+            "0xFFFFFFAC",
+            "C55F",
+            "Slice 2 adds sealed construction",
+            "CPACR/FPCCR setup/readback",
+            "## Slice 3 Strict SVC First Start",
+            "## Slice 4 FP-Aware PendSV Runtime",
+            "vstmdb r0!, {s16-s31}",
+            "vldmia r0!, {s16-s31}")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55F_NTZ parity ledger lost staged evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm55f-ntz-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#ifndef FIBER_TEST_FPU_PRESENT
+#define FIBER_TEST_FPU_PRESENT 1U
+#endif
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT FIBER_TEST_FPU_PRESENT
+#define __FPU_USED 1U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm55.h"
+#ifdef FIBER_TEST_FPU_USED
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#ifdef FIBER_TEST_CORTEX_M
+#undef __CORTEX_M
+#define __CORTEX_M FIBER_TEST_CORTEX_M
+#endif
+#ifdef FIBER_TEST_SECURE_CMSE
+#define __ARM_FEATURE_CMSE FIBER_TEST_SECURE_CMSE
+#endif
+#ifdef FIBER_TEST_MVE
+#define __ARM_FEATURE_MVE FIBER_TEST_MVE
+#endif
+#ifdef FIBER_TEST_PAC
+#define __ARM_FEATURE_PAUTH FIBER_TEST_PAC
+#endif
+#ifdef FIBER_TEST_BTI
+#define __ARM_FEATURE_BTI FIBER_TEST_BTI
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+_Static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+_Static_assert(sizeof(FiberContext) == 76u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm55f_ntz_type_only_object;
+'@
+    $typeObject = Join-Path $probeDir "type-only.o"
+    & $Compiler -x c "-march=armv8.1-m.main+fp" -mthumb -mfloat-abi=hard `
+        -std=c11 -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $typeProbe -o $typeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55F_NTZ type-only C header failed without CMSIS"
+    }
+
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+static_assert(sizeof(FiberContext) == 76u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm55f_ntz_cpp_type_only_object;
+'@
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    & $Compiler -x c++ "-march=armv8.1-m.main+fp" -mthumb -mfloat-abi=hard `
+        -std=c++17 -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $cppProbe -o $cppObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55F_NTZ type-only C++ header failed without CMSIS"
+    }
+
+    $manifestDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV81M_MAINLINE=1"
+    )
+    $includeArgs = @(
+        "-I$probeDir", "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot", "-I$CmsisPath"
+    )
+    $baseArgs = @(
+        "-mthumb", "-std=c11", "-ffreestanding", "-fno-builtin",
+        "-fno-common", "-Wall", "-Wextra", "-Wundef", "-Werror=undef"
+    ) + $manifestDefines + $includeArgs
+    $modes = @(
+        [pscustomobject]@{
+            Name = "hard-o2"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Optimization = "-O2"
+        },
+        [pscustomobject]@{
+            Name = "hard-os"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Optimization = "-Os"
+        },
+        [pscustomobject]@{
+            Name = "softfp-o2"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=softfp")
+            Optimization = "-O2"
+        },
+        [pscustomobject]@{
+            Name = "softfp-os"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=softfp")
+            Optimization = "-Os"
+        }
+    )
+    foreach ($mode in $modes) {
+        $object = Join-Path $probeDir ($mode.Name + ".o")
+        & $Compiler @($mode.CpuArgs + $baseArgs + @(
+            $mode.Optimization, "-c", $fixture, "-o", $object))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ layout compile failed: $($mode.Name)"
+        }
+        $defined = @(& $Nm -g --defined-only $object)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55F_NTZ layout: $($mode.Name)"
+        }
+        $cohorts = @($defined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if ($cohorts.Count -ne 1) {
+            throw "ARM_CM55F_NTZ layout must define one exact cohort: $($mode.Name)"
+        }
+        foreach ($token in @(
+                "armv81m_mainline",
+                "p0x43353546u",
+                "l0x00010001u",
+                "_f1_e1_h1_j1_v1_d1_r1_",
+                "_z8u_y1_w2_g3_",
+                "_i0_o0xFFFFFFBCu_c0_s1_x0_m0_a0_b0_t1_n1_k0_q0")) {
+            if ($cohorts[0].IndexOf($token,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "ARM_CM55F_NTZ exact cohort lost token ${token}: $($cohorts[0])"
+            }
+        }
+    }
+
+    $expectedCohort = $cohorts[0]
+
+    $invalidCases = @(
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_CORTEX_M=33")
+            Diagnostic = "CMSIS __CORTEX_M == 55"
+        },
+        [pscustomobject]@{
+            Name = "fpu-not-used"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_FPU_USED=0")
+            Diagnostic = "requires CMSIS __FPU_USED == 1"
+        },
+        [pscustomobject]@{
+            Name = "no-fp-compiler-abi"
+            CpuArgs = @("-march=armv8.1-m.main", "-mfloat-abi=soft")
+            Defines = @()
+            Diagnostic = "requires compiler FP code generation"
+        },
+        [pscustomobject]@{
+            Name = "mve-fp"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @()
+            Diagnostic = "does not permit MVE"
+        },
+        [pscustomobject]@{
+            Name = "m55-cpu-hard-fp"
+            CpuArgs = @("-mcpu=cortex-m55", "-mfpu=fpv5-sp-d16", "-mfloat-abi=hard")
+            Defines = @()
+            Diagnostic = "does not permit MVE"
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard", "-mcmse")
+            Defines = @("-DFIBER_TEST_SECURE_CMSE=3")
+            Diagnostic = "does not accept a Secure CMSE build"
+        },
+        [pscustomobject]@{
+            Name = "pac"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_PAC=1")
+            Diagnostic = "does not permit PAC"
+        },
+        [pscustomobject]@{
+            Name = "bti"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_BTI=1")
+            Diagnostic = "does not permit BTI"
+        },
+        [pscustomobject]@{
+            Name = "mpu"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "is non-MPU"
+        }
+    )
+    foreach ($case in $invalidCases) {
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($case.CpuArgs + $baseArgs + @(
+                "-O2", "-Werror") + $case.Defines + @(
+                "-c", $fixture, "-o",
+                (Join-Path $probeDir ("invalid-" + $case.Name + ".o")))) `
+            -LogPath (Join-Path $probeDir ("invalid-" + $case.Name + ".log"))
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM55F_NTZ manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+
+    $frameSourcePath = Join-Path $profileDir "fiber_port_boot.c"
+    $bootSourcePath = $frameSourcePath
+    $svcSourcePath = Join-Path $profileDir "fiber_port_svc.c"
+    $runtimeSourcePath = Join-Path $profileDir "fiber_port.c"
+    $privateHeaderPath = Join-Path $profileDir "fiber_port_private.h"
+    $frameSource = Get-Content -LiteralPath $frameSourcePath -Raw
+    $bootSource = Get-Content -LiteralPath $bootSourcePath -Raw
+    $svcSource = Get-Content -LiteralPath $svcSourcePath -Raw
+    $runtimeSource = Get-Content -LiteralPath $runtimeSourcePath -Raw
+    $privateHeader = Get-Content -LiteralPath $privateHeaderPath -Raw
+    $frameBody = Get-CFunctionBody -Source $frameSource `
+        -Signature "void fiber_port_init_context_frame(FiberContext *const ctx)" `
+        -Path $frameSourcePath
+
+    $lastAssignment = -1
+    foreach ($assignment in @(
+            "fiber_portFRAME_PSPLIM] =",
+            "fiber_portFRAME_EXC_RETURN] =",
+            "fiber_portFRAME_R4] =",
+            "fiber_portFRAME_R5] =",
+            "fiber_portFRAME_R6] =",
+            "fiber_portFRAME_R7] =",
+            "fiber_portFRAME_R8] =",
+            "fiber_portFRAME_R9] =",
+            "fiber_portFRAME_R10] =",
+            "fiber_portFRAME_R11] =",
+            "fiber_portFRAME_R0] =",
+            "fiber_portFRAME_R1] =",
+            "fiber_portFRAME_R2] =",
+            "fiber_portFRAME_R3] =",
+            "fiber_portFRAME_R12] =",
+            "fiber_portFRAME_LR] =",
+            "fiber_portFRAME_PC] =",
+            "fiber_portFRAME_XPSR] =")) {
+        $assignmentIndex = $frameBody.IndexOf($assignment,
+            [System.StringComparison]::Ordinal)
+        if ($assignmentIndex -le $lastAssignment) {
+            throw "ARM_CM55F_NTZ initial frame lost exact FreeRTOS assignment order: $assignment"
+        }
+        $lastAssignment = $assignmentIndex
+    }
+    if (([regex]::Matches($frameBody,
+            'frame\[fiber_portFRAME_[A-Z0-9_]+\]\s*=')).Count -ne 18) {
+        throw "ARM_CM55F_NTZ constructor must assign exactly eighteen basic-frame words"
+    }
+
+    foreach ($requiredConstructionToken in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "fiber_port_boot_record_check(&ctx->boot);",
+            "ctx->sp = frame;",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            "fiber_port_boot_create(&ctx->boot, stack_begin, stack_end, entry, arg);",
+            "fiber_port_init_context_frame(ctx);",
+            "fiber_port_validate_initial_frame(ctx);",
+            "void fiber_port_fpu_prepare(void)",
+            "void fiber_port_fpu_require_configured(void)",
+            "void fiber_port_fpu_require_ready(void)",
+            "fiber_portCPACR_REG",
+            "fiber_portFPCCR_REG",
+            "FIBER_FPU_LAZY",
+            "FIBER_GENERAL_REGS_ONLY")) {
+        if (($frameSource.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($bootSource.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($privateHeader.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM55F_NTZ construction source lost contract: $requiredConstructionToken"
+        }
+    }
+
+    foreach ($forbiddenBootToken in @(
+            "fiber_port_runtime_memory_barrier",
+            "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule",
+            "SVC_Handler",
+            "PendSV_Handler")) {
+        if (($frameSource.IndexOf($forbiddenBootToken,
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($bootSource.IndexOf($forbiddenBootToken,
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+            throw "ARM_CM55F_NTZ boot object must not own SVC/runtime wrappers: $forbiddenBootToken"
+        }
+    }
+
+    foreach ($requiredSvcToken in @(
+            "FIBER_RUNTIME_PORT_ABI_RETAIN_V1();",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            "void fiber_port_runtime_memory_barrier(void)",
+            "void fiber_port_panic_wait(void)",
+            "void fiber_port_require_scheduler_configuration_environment(void)",
+            "void fiber_port_runtime_prepare_start(void)",
+            "FiberContext *fiber_port_runtime_select_first(void)",
+            "void fiber_port_runtime_start_first(FiberContext *const first)",
+            "void fiber_port_start_first_context(",
+            "void SVC_Handler(void)",
+            "fiber_port_context_validate_restore",
+            "fiber_internal_runtime_current_context_slot",
+            "fiber_portASM_WRITE_BASEPRI_R0_SYNC")) {
+        if (($svcSource.IndexOf($requiredSvcToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($bootSource.IndexOf($requiredSvcToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($privateHeader.IndexOf($requiredSvcToken,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM55F_NTZ strict SVC source lost contract: $requiredSvcToken"
+        }
+    }
+
+    foreach ($forbiddenSvcDefinition in @(
+            '\bvoid\s+fiber_port_runtime_schedule\s*\(',
+            '\bvoid\s+PendSV_Handler\s*\(')) {
+        if ($svcSource -match $forbiddenSvcDefinition) {
+            throw "ARM_CM55F_NTZ SVC object must not define PendSV runtime: $forbiddenSvcDefinition"
+        }
+    }
+
+    foreach ($requiredRuntimeToken in @(
+            "void fiber_port_runtime_schedule(void)",
+            "void fiber_port_context_validate_save_current(",
+            "FiberContext *fiber_port_scheduler_pick_first_from_start(void)",
+            "FiberContext *fiber_port_scheduler_pick_next_from_pendsv(",
+            "void PendSV_Handler(void)",
+            "fiber_internal_runtime_require_current_context();",
+            "fiber_internal_runtime_select_scheduler_candidate(NULL)",
+            "fiber_internal_runtime_select_scheduler_candidate(current)",
+            "fiber_internal_runtime_publish_current_context(next);",
+            "fiber_port_context_validate_restore(first);",
+            "fiber_port_context_validate_restore(next);",
+            "fiber_port_context_validate_save_current",
+            "fiber_internal_runtime_current_context_slot",
+            "vstmdb r0!, {s16-s31}",
+            "vldmia r0!, {s16-s31}",
+            "stmdb r0!, {r2-r11}",
+            "ldmia r0!, {r2-r11}",
+            "msr   psplim, r2",
+            "msr   psp, r0")) {
+        if (($runtimeSource.IndexOf($requiredRuntimeToken,
+                [System.StringComparison]::Ordinal) -lt 0) -and
+                ($privateHeader.IndexOf($requiredRuntimeToken,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM55F_NTZ scalar-FP runtime source lost contract: $requiredRuntimeToken"
+        }
+    }
+    if ([regex]::Matches($runtimeSource,
+            'FIBER_PORT_CONTEXT_COHORT_RETAIN\(\);').Count -ne 1) {
+        throw "ARM_CM55F_NTZ must retain the exact cohort once from the one-shot first-selection bridge"
+    }
+    $pendSvBodySource = Get-CFunctionBody -Source $runtimeSource `
+        -Signature "void PendSV_Handler(void)" -Path $runtimeSourcePath
+    if ($pendSvBodySource.IndexOf("FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM55F_NTZ PendSV must not add an exact-cohort read to the hot path"
+    }
+
+    $requiredRuntimeDefinitions = @(
+        "fiber_port_context_init",
+        "fiber_port_init_context_frame",
+        "fiber_port_fpu_prepare",
+        "fiber_port_fpu_require_configured",
+        "fiber_port_fpu_require_ready",
+        "fiber_port_boot_create",
+        "fiber_port_boot_check",
+        "fiber_port_boot_record_compute_hash",
+        "fiber_port_boot_record_check",
+        "fiber_port_boot_record_fast_check",
+        "fiber_port_context_validate_save_current",
+        "fiber_port_context_validate_restore",
+        "fiber_port_context_prepare_first_start",
+        "fiber_port_runtime_prepare",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_scheduler_pick_first_from_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_start_first_context",
+        "fiber_port_runtime_schedule",
+        "fiber_port_scheduler_pick_next_from_pendsv",
+        "SVC_Handler",
+        "PendSV_Handler"
+    )
+
+    foreach ($mode in $modes) {
+        $modeDir = Join-Path $probeDir ("construction-" + $mode.Name)
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $lazy = if ($mode.Name -match 'os$') { 1 } else { 0 }
+        $compileArgs = @($mode.CpuArgs + $baseArgs + @(
+            $mode.Optimization,
+            "-Werror",
+            "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+            "-DFIBER_FPU_LAZY=$lazy",
+            "-save-temps=obj"))
+        $frameObject = Join-Path $modeDir "construction.o"
+        $svcObject = Join-Path $modeDir "svc.o"
+        $runtimeObject = Join-Path $modeDir "runtime.o"
+        $groupObject = Join-Path $modeDir "runtime-group.o"
+        $referenceObject = Join-Path $modeDir "freertos-frame.o"
+        $svcReferenceObject = Join-Path $modeDir "freertos-svc.o"
+        $pendsvReferenceObject = Join-Path $modeDir "freertos-pendsv.o"
+        & $Compiler @compileArgs -c $frameSourcePath -o $frameObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ frame construction failed compile: $($mode.Name)"
+        }
+        & $Compiler @compileArgs -c $svcSourcePath -o $svcObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ strict SVC path failed compile: $($mode.Name)"
+        }
+        & $Compiler @compileArgs -c $runtimeSourcePath -o $runtimeObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ scalar-FP PendSV runtime failed compile: $($mode.Name)"
+        }
+        & $Compiler @($mode.CpuArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-Wall",
+            "-Wextra", "-Werror", $mode.Optimization,
+            "-c", $referenceFixture, "-o", $referenceObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pinned FreeRTOS M55F frame fixture failed compile: $($mode.Name)"
+        }
+        & $Compiler @($mode.CpuArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-Wall",
+            "-Wextra", "-Werror", $mode.Optimization,
+            "-c", $svcReferenceFixture, "-o", $svcReferenceObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pinned FreeRTOS M55F SVC fixture failed compile: $($mode.Name)"
+        }
+        & $Compiler @($mode.CpuArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-Wall",
+            "-Wextra", "-Werror", $mode.Optimization,
+            "-c", $pendsvReferenceFixture, "-o", $pendsvReferenceObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pinned FreeRTOS M55F PendSV fixture failed compile: $($mode.Name)"
+        }
+
+        & $Compiler -r $frameObject $svcObject $runtimeObject -o $groupObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ complete runtime group failed link: $($mode.Name)"
+        }
+
+        $defined = @(& $Nm -g --defined-only $groupObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55F_NTZ complete runtime group: $($mode.Name)"
+        }
+        foreach ($requiredDefinition in $requiredRuntimeDefinitions) {
+            if ((@($defined | Where-Object {
+                    $_ -match ("\bT\s+" +
+                        [regex]::Escape($requiredDefinition) + "$")
+                })).Count -ne 1) {
+                throw "ARM_CM55F_NTZ complete runtime group must define one $requiredDefinition"
+            }
+        }
+        $groupCohorts = @($defined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if (($groupCohorts.Count -ne 1) -or
+                ($groupCohorts[0] -ne $expectedCohort)) {
+            throw "ARM_CM55F_NTZ complete runtime group disagrees with exact cohort"
+        }
+
+        $undefined = @(& $Nm -u $groupObject | ForEach-Object {
+            if ($_ -match '^\s*U\s+(\S+)$') { $Matches[1] }
+        } | Sort-Object -Unique)
+        Assert-ExactSymbolSet -Expected @(
+            "fiber_internal_runtime_current_context_slot",
+            "fiber_internal_runtime_port_abi_v1_anchor",
+            "fiber_internal_runtime_publish_current_context",
+            "fiber_internal_runtime_require_current_context",
+            "fiber_internal_runtime_select_scheduler_candidate",
+            "fiber_internal_task_return",
+            "fiber_panic"
+        ) -Actual $undefined -Description `
+            "ARM_CM55F_NTZ complete runtime reverse/integration surface ($($mode.Name))"
+
+        $frameDisassembly = (& $Objdump -d $frameObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM55F_NTZ frame: $($mode.Name)"
+        }
+        $referenceDisassembly = (& $Objdump -d $referenceObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for FreeRTOS M55F frame fixture: $($mode.Name)"
+        }
+        $generatedFrameBody = Get-DisassemblyFunctionBody `
+            -Disassembly $frameDisassembly `
+            -Symbol "fiber_port_init_context_frame" -Path $frameObject
+        $generatedReferenceBody = Get-DisassemblyFunctionBody `
+            -Disassembly $referenceDisassembly `
+            -Symbol "fiber_test_freertos_cm55f_initialise_stack" `
+            -Path $referenceObject
+        $fpuBody = Get-DisassemblyFunctionBody -Disassembly $frameDisassembly `
+            -Symbol "fiber_port_fpu_prepare" -Path $frameObject
+        foreach ($generatedBody in @($generatedFrameBody,
+                $generatedReferenceBody, $fpuBody)) {
+            if ($generatedBody -match
+                    '(?im)^\s*[0-9a-f]+:\s+[0-9a-f ]+\s+v[a-z0-9.]+' ) {
+                throw "ARM_CM55F_NTZ construction/FPU policy emitted FP or MVE instruction: $($mode.Name)"
+            }
+        }
+        foreach ($generatedBody in @($generatedFrameBody,
+                $generatedReferenceBody)) {
+            if ($generatedBody -notmatch '#-?(?:72|0x48)\b') {
+                throw "ARM_CM55F_NTZ initial construction lost the 72-byte basic frame: $($mode.Name)"
+            }
+        }
+
+        $svcAssembly = [IO.Path]::ChangeExtension($svcObject, ".s")
+        Test-GeneratedCurrentSlotLoadOnly -AssemblyPath $svcAssembly
+        $runtimeAssembly = [IO.Path]::ChangeExtension($runtimeObject, ".s")
+        Test-GeneratedCurrentSlotLoadOnly -AssemblyPath $runtimeAssembly
+        $svcDisassembly = (& $Objdump -dr $svcObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM55F_NTZ SVC path: $($mode.Name)"
+        }
+        $svcReferenceDisassembly = (& $Objdump -d $svcReferenceObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for FreeRTOS M55F SVC fixture: $($mode.Name)"
+        }
+        $runtimeDisassembly = (& $Objdump -dr $runtimeObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM55F_NTZ PendSV runtime: $($mode.Name)"
+        }
+        $pendsvReferenceDisassembly = (& $Objdump -d $pendsvReferenceObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for FreeRTOS M55F PendSV fixture: $($mode.Name)"
+        }
+        $startBody = Get-DisassemblyFunctionBody -Disassembly $svcDisassembly `
+            -Symbol "fiber_port_start_first_context" -Path $svcObject
+        $svcBody = Get-DisassemblyFunctionBody -Disassembly $svcDisassembly `
+            -Symbol "SVC_Handler" -Path $svcObject
+        $referenceStartBody = Get-DisassemblyFunctionBody `
+            -Disassembly $svcReferenceDisassembly `
+            -Symbol "fiber_test_freertos_cm55f_vstart_first" `
+            -Path $svcReferenceObject
+        $referenceRestoreBody = Get-DisassemblyFunctionBody `
+            -Disassembly $svcReferenceDisassembly `
+            -Symbol "fiber_test_freertos_cm55f_restore_first" `
+            -Path $svcReferenceObject
+        $pendSvBody = Get-DisassemblyFunctionBody `
+            -Disassembly $runtimeDisassembly -Symbol "PendSV_Handler" `
+            -Path $runtimeObject
+        $referencePendSvBody = Get-DisassemblyFunctionBody `
+            -Disassembly $pendsvReferenceDisassembly `
+            -Symbol "fiber_test_freertos_cm55f_pendsv" `
+            -Path $pendsvReferenceObject
+
+        foreach ($generatedBody in @($startBody, $svcBody,
+                $referenceStartBody, $referenceRestoreBody)) {
+            if ($generatedBody -match
+                    '(?im)^\s*[0-9a-f]+:\s+[0-9a-f ]+\s+v[a-z0-9.]+' ) {
+                throw "ARM_CM55F_NTZ SVC first-start emitted FP or MVE instruction: $($mode.Name)"
+            }
+        }
+
+        foreach ($requiredStartInstruction in @(
+                'msr\s+msp',
+                'cpsie\s+i',
+                'cpsie\s+f',
+                'svc\s+(?:70|0x46)')) {
+            if ($referenceStartBody -notmatch $requiredStartInstruction) {
+                throw "Pinned FreeRTOS M55F SVC fixture lost transfer instruction: $requiredStartInstruction"
+            }
+            if ($startBody -notmatch $requiredStartInstruction) {
+                throw "ARM_CM55F_NTZ first-start lost FreeRTOS transfer instruction: $requiredStartInstruction ($($mode.Name))"
+            }
+        }
+        foreach ($fiberOnlyStartInstruction in @(
+                'msr\s+control',
+                'msr\s+basepri',
+                'faultmask')) {
+            if ($startBody -notmatch $fiberOnlyStartInstruction) {
+                throw "ARM_CM55F_NTZ strict first-start hardening disappeared: $fiberOnlyStartInstruction ($($mode.Name))"
+            }
+        }
+        foreach ($requiredRestoreInstruction in @(
+                'msr\s+psplim',
+                'msr\s+control',
+                'msr\s+psp',
+                'msr\s+basepri',
+                'bx\s+r[23]')) {
+            if ($referenceRestoreBody -notmatch $requiredRestoreInstruction) {
+                throw "Pinned FreeRTOS M55F restore fixture lost instruction: $requiredRestoreInstruction"
+            }
+            if ($svcBody -notmatch $requiredRestoreInstruction) {
+                throw "ARM_CM55F_NTZ SVC restore lost FreeRTOS instruction: $requiredRestoreInstruction ($($mode.Name))"
+            }
+        }
+        foreach ($requiredSvcInstruction in @(
+                'mrs\s+r3,\s*ipsr',
+                'mrs\s+r0,\s*msp',
+                'ldmia(?:\.w)?\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*(?:r9|sb),\s*sl,\s*fp\}',
+                'fiber_port_context_validate_restore')) {
+            if ($svcBody -notmatch $requiredSvcInstruction) {
+                throw "ARM_CM55F_NTZ strict SVC provenance/restore instruction disappeared: $requiredSvcInstruction ($($mode.Name))"
+            }
+        }
+
+        foreach ($requiredReferencePendSvInstruction in @(
+                'mrs\s+r0,\s*PSP',
+                'tst(?:\.w)?\s+lr,\s*#16',
+                'vstmdb(?:eq)?\s+r0!,\s*\{s16-s31\}',
+                'mrs\s+r2,\s*PSPLIM',
+                'stmdb\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*(?:r9|sb),\s*sl,\s*fp\}',
+                'msr\s+BASEPRI,\s*r0',
+                'vldmia(?:eq)?\s+r0!,\s*\{s16-s31\}',
+                'msr\s+PSPLIM,\s*r2',
+                'msr\s+PSP,\s*r0',
+                'bx\s+r3')) {
+            if ($referencePendSvBody -notmatch $requiredReferencePendSvInstruction) {
+                throw "Pinned FreeRTOS M55F PendSV fixture lost instruction: $requiredReferencePendSvInstruction ($($mode.Name))"
+            }
+        }
+
+        $pendSvInstructionOrder = @(
+            'mrs\s+r3,\s*IPSR',
+            'cmp\s+r3,\s*#14',
+            'mvn(?:\.w)?\s+r3,\s*#67',
+            'cmp\s+lr,\s*r3',
+            'bic(?:\.w)?\s+r3,\s*r3,\s*#16',
+            'mrs\s+r0,\s*PSP',
+            'fiber_port_context_validate_save_current',
+            'ldr\s+r2,\s*\[r1,\s*#12\]',
+            'tst(?:\.w)?\s+lr,\s*#16',
+            'subs\s+r3,\s*#64',
+            'subs\s+r3,\s*#40',
+            'ldr\s+r2,\s*\[r1,\s*#16\]',
+            'subs\s+r2,\s*#32',
+            'tst(?:\.w)?\s+lr,\s*#16',
+            'subs\s+r2,\s*#72',
+            'tst(?:\.w)?\s+lr,\s*#16',
+            'ldr\s+r3,\s*\[r0,\s*#100\]',
+            'ldr\s+r3,\s*\[r0,\s*#28\]',
+            'tst(?:\.w)?\s+r3,\s*#512',
+            'subs\s+r2,\s*#4',
+            'tst(?:\.w)?\s+lr,\s*#16',
+            'vstmdb\s+r0!,\s*\{s16-s31\}',
+            'mrs\s+r3,\s*PSPLIM',
+            'stmdb\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*(?:r9|sb),\s*sl,\s*fp\}',
+            'str\s+r0,\s*\[r1(?:,\s*#0)?\]',
+            'mrs\s+r3,\s*BASEPRI',
+            'msr\s+BASEPRI,\s*r2',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            'msr\s+BASEPRI,\s*r3',
+            'mrs\s+r1,\s*BASEPRI',
+            'ldmia(?:\.w)?\s+r0!,\s*\{r2,\s*r3,\s*r4,\s*r5,\s*r6,\s*r7,\s*r8,\s*(?:r9|sb),\s*sl,\s*fp\}',
+            'tst(?:\.w)?\s+r3,\s*#16',
+            'vldmia\s+r0!,\s*\{s16-s31\}',
+            'msr\s+PSPLIM,\s*r2',
+            'mrs\s+r1,\s*PSPLIM',
+            'msr\s+PSP,\s*r0',
+            'mrs\s+r1,\s*PSP',
+            'mrs\s+r1,\s*CONTROL',
+            'mrs\s+r1,\s*PRIMASK',
+            'mrs\s+r1,\s*FAULTMASK',
+            'bx\s+r3'
+        )
+        $remainingPendSvBody = $pendSvBody
+        foreach ($instructionPattern in $pendSvInstructionOrder) {
+            $instructionMatch = [regex]::Match($remainingPendSvBody,
+                $instructionPattern,
+                [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $instructionMatch.Success) {
+                throw "ARM_CM55F_NTZ generated FP-aware PendSV lost FreeRTOS-parity instruction order: $instructionPattern`n$pendSvBody"
+            }
+            $remainingPendSvBody = $remainingPendSvBody.Substring(
+                $instructionMatch.Index + $instructionMatch.Length)
+        }
+        Assert-SensitiveFunctionClean -Disassembly $runtimeDisassembly `
+            -Symbol "PendSV_Handler" -Path $runtimeObject
+    }
+
+    # The scalar-FP frame geometry must remain valid with the production hot
+    # path, the fully paranoid address/hash mode, and without MSP rewind.
+    $hardCpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+    $sourceVariants = @(
+        [pscustomobject]@{
+            Name = "production"
+            Defines = @(
+                "-DFIBER_FPU_LAZY=0",
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0")
+        },
+        [pscustomobject]@{
+            Name = "validation-lazy"
+            Defines = @(
+                "-DFIBER_FPU_LAZY=1",
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1")
+        },
+        [pscustomobject]@{
+            Name = "no-rewind"
+            Defines = @(
+                "-DFIBER_FPU_LAZY=0",
+                "-DFIBER_REWIND_MSP=0",
+                "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=0",
+                "-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=0")
+        }
+    )
+    foreach ($variant in $sourceVariants) {
+        $variantBoot = Join-Path $probeDir "$($variant.Name)-boot.o"
+        $variantSvc = Join-Path $probeDir "$($variant.Name)-svc.o"
+        $variantRuntime = Join-Path $probeDir "$($variant.Name)-runtime.o"
+        $variantGroup = Join-Path $probeDir "$($variant.Name)-group.o"
+        $variantArgs = @($hardCpuArgs + $baseArgs + @(
+            "-O2", "-Werror", "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1") +
+            $variant.Defines)
+        & $Compiler @variantArgs -c $frameSourcePath -o $variantBoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ $($variant.Name) boot variant failed compile"
+        }
+        & $Compiler @variantArgs -c $svcSourcePath -o $variantSvc
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ $($variant.Name) SVC variant failed compile"
+        }
+        & $Compiler @variantArgs -c $runtimeSourcePath -o $variantRuntime
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ $($variant.Name) PendSV variant failed compile"
+        }
+        & $Compiler -r $variantBoot $variantSvc $variantRuntime -o $variantGroup
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ $($variant.Name) runtime group failed link"
+        }
+    }
+
+    # Sensitive attributes must keep both naked exception handlers free from
+    # compiler-added instrumentation even under hostile integration flags.
+    $adversarialSvcObject = Join-Path $probeDir "adversarial-svc.o"
+    $adversarialRuntimeObject = Join-Path $probeDir "adversarial-runtime.o"
+    $adversarialArgs = @($hardCpuArgs + $baseArgs + @(
+        "-O2", "-Werror", "-DFIBER_FPU_LAZY=0",
+        "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+        "-finstrument-functions", "-fstack-protector-all", "-fprofile-arcs",
+        "-ftest-coverage"))
+    & $Compiler @adversarialArgs -c $svcSourcePath -o $adversarialSvcObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55F_NTZ adversarial SVC source failed compile"
+    }
+    & $Compiler @adversarialArgs -c $runtimeSourcePath -o $adversarialRuntimeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55F_NTZ adversarial PendSV source failed compile"
+    }
+    $adversarialSvcDisassembly = (& $Objdump -dr $adversarialSvcObject) -join "`n"
+    $adversarialRuntimeDisassembly = (& $Objdump -dr $adversarialRuntimeObject) -join "`n"
+    foreach ($handler in @("SVC_Handler", "fiber_port_start_first_context")) {
+        Assert-SensitiveFunctionClean -Disassembly $adversarialSvcDisassembly `
+            -Symbol $handler -Path $adversarialSvcObject
+    }
+    Assert-SensitiveFunctionClean -Disassembly $adversarialRuntimeDisassembly `
+        -Symbol "PendSV_Handler" -Path $adversarialRuntimeObject
+
+    # A complete selected runtime has to survive normal and LTO archive links,
+    # retain both strong vector handlers, and retain an application-owned exact
+    # context-cohort expectation outside the archive.
+    $expectationSource = Join-Path $RepositoryRoot `
+        "fiber\port\fiber_port_context_cohort_expectation.c"
+    $elfFixturePath = Join-Path $probeDir "runtime-elf-fixture.c"
+    $competingPath = Join-Path $probeDir "competing-handlers.c"
+    $linkerPath = Join-Path $probeDir "runtime.ld"
+    Set-Content -LiteralPath $elfFixturePath -Encoding ASCII -Value @'
+#include <stddef.h>
+#include <stdint.h>
+
+#include "fiber_port_types.h"
+#include "fiber_runtime_port_abi.h"
+
+extern void fiber_port_runtime_prepare_start(void);
+extern void SVC_Handler(void);
+extern void PendSV_Handler(void);
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_panic(char code);
+
+const unsigned char fiber_internal_runtime_port_abi_v1_anchor = 1u;
+FiberContext *volatile fiber_internal_runtime_current_context_slot;
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberContext *fiber_internal_runtime_select_scheduler_candidate(
+        FiberContext *current)
+{
+    return current;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_require_current_context(void)
+{
+    if (fiber_internal_runtime_current_context_slot == NULL) {
+        fiber_panic('C');
+    }
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_runtime_publish_current_context(FiberContext *next)
+{
+    if (next == NULL) {
+        fiber_panic('N');
+    }
+    fiber_internal_runtime_current_context_slot = next;
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_internal_task_return(void)
+{
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_panic(char code)
+{
+    (void)code;
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+void Reset_Handler(void)
+{
+    fiber_port_runtime_prepare_start();
+    for (;;) {
+        __asm volatile("wfe");
+    }
+}
+
+typedef void (*FiberVector)(void);
+__attribute__((used, section(".isr_vector")))
+const FiberVector fiber_vectors[16] = {
+    [1] = Reset_Handler,
+    [11] = SVC_Handler,
+    [14] = PendSV_Handler
+};
+'@
+    Set-Content -LiteralPath $competingPath -Encoding ASCII -Value @'
+void SVC_Handler(void)
+{
+    for (;;) {
+    }
+}
+
+void PendSV_Handler(void)
+{
+    for (;;) {
+    }
+}
+'@
+    Set-Content -LiteralPath $linkerPath -Encoding ASCII -Value @'
+ENTRY(Reset_Handler)
+MEMORY
+{
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 64K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 64K
+}
+SECTIONS
+{
+    .isr_vector : { KEEP(*(.isr_vector)) } > FLASH
+    .fiber_port_context_cohort_expectation :
+    {
+        . = ALIGN(4);
+        KEEP(*(.fiber_port_context_cohort_expectation))
+        . = ALIGN(4);
+    } > FLASH
+    .text : { *(.text*) *(.rodata*) } > FLASH
+    .data : { *(.data*) } > RAM AT> FLASH
+    .bss (NOLOAD) : { *(.bss*) *(COMMON) } > RAM
+}
+'@
+
+    foreach ($archiveMode in @(
+            [pscustomobject]@{ Name = "normal"; Flags = @() },
+            [pscustomobject]@{ Name = "lto"; Flags = @("-flto") })) {
+        $modeDir = Join-Path $probeDir "runtime-archive-$($archiveMode.Name)"
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $archiveBootObject = Join-Path $modeDir "boot.o"
+        $archiveSvcObject = Join-Path $modeDir "svc.o"
+        $archiveRuntimeObject = Join-Path $modeDir "runtime.o"
+        $archivePath = Join-Path $modeDir "libfiber_cm55f_ntz_runtime.a"
+        $fixtureObject = Join-Path $modeDir "fixture.o"
+        $expectationObject = Join-Path $modeDir "expectation.o"
+        $competingObject = Join-Path $modeDir "competing.o"
+        $elfPath = Join-Path $modeDir "runtime.elf"
+        $vectorBinary = Join-Path $modeDir "vectors.bin"
+        $archiveArgs = @($hardCpuArgs + $baseArgs + @(
+            "-O2", "-Werror", "-DFIBER_FPU_LAZY=0",
+            "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+            "-ffunction-sections", "-fdata-sections") + $archiveMode.Flags)
+
+        foreach ($compile in @(
+                [pscustomobject]@{ Source = $frameSourcePath; Object = $archiveBootObject; Name = "boot" },
+                [pscustomobject]@{ Source = $svcSourcePath; Object = $archiveSvcObject; Name = "SVC" },
+                [pscustomobject]@{ Source = $runtimeSourcePath; Object = $archiveRuntimeObject; Name = "PendSV" })) {
+            & $Compiler @archiveArgs -c $compile.Source -o $compile.Object
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55F_NTZ runtime archive $($compile.Name) source failed compile ($($archiveMode.Name))"
+            }
+        }
+        & $Ar rcs $archivePath $archiveBootObject $archiveSvcObject $archiveRuntimeObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ runtime archive creation failed ($($archiveMode.Name))"
+        }
+        & $Compiler @archiveArgs -c $elfFixturePath -o $fixtureObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ runtime ELF fixture failed compile ($($archiveMode.Name))"
+        }
+        & $Compiler @archiveArgs -c $expectationSource -o $expectationObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ external cohort expectation failed compile ($($archiveMode.Name))"
+        }
+        & $Compiler @archiveArgs -c $competingPath -o $competingObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ competing-handler fixture failed compile ($($archiveMode.Name))"
+        }
+
+        $linkArgs = @($hardCpuArgs + @("-mthumb", "-nostdlib") +
+            $archiveMode.Flags + @("-Wl,--gc-sections", "-T", $linkerPath,
+                $fixtureObject, $expectationObject, $archivePath, "-o", $elfPath))
+        & $Compiler @linkArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55F_NTZ runtime archive/ELF proof failed link ($($archiveMode.Name))"
+        }
+
+        $objectNm = if ($archiveMode.Name -eq "lto") { $GccNm } else { $Nm }
+        $elfDefined = @(& $objectNm -g --defined-only $elfPath)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55F_NTZ runtime ELF ($($archiveMode.Name))"
+        }
+        $svcSymbols = @($elfDefined | Where-Object {
+            $_ -match '^([0-9a-fA-F]+)\s+T\s+SVC_Handler$'
+        })
+        $pendSvSymbols = @($elfDefined | Where-Object {
+            $_ -match '^([0-9a-fA-F]+)\s+T\s+PendSV_Handler$'
+        })
+        if (($svcSymbols.Count -ne 1) -or ($pendSvSymbols.Count -ne 1)) {
+            throw "ARM_CM55F_NTZ runtime ELF must contain one strong SVC_Handler and PendSV_Handler ($($archiveMode.Name))"
+        }
+        $elfCohorts = @($elfDefined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if (($elfCohorts.Count -ne 1) -or ($elfCohorts[0] -ne $expectedCohort)) {
+            throw "ARM_CM55F_NTZ runtime ELF lost the exact selected cohort ($($archiveMode.Name))"
+        }
+        $sections = (& $Objdump -h $elfPath) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM55F_NTZ cohort expectation section ($($archiveMode.Name))"
+        }
+        if ($sections -notmatch '\.fiber_port_context_cohort_expectation\s+00000004\s+[0-9a-fA-F]+\s+') {
+            throw "ARM_CM55F_NTZ runtime ELF lost the retained four-byte external cohort expectation ($($archiveMode.Name))"
+        }
+        [void]($svcSymbols[0] -match '^([0-9a-fA-F]+)')
+        $svcAddress = [Convert]::ToUInt32($Matches[1], 16)
+        [void]($pendSvSymbols[0] -match '^([0-9a-fA-F]+)')
+        $pendSvAddress = [Convert]::ToUInt32($Matches[1], 16)
+        & $Objcopy -O binary --only-section=.isr_vector $elfPath $vectorBinary
+        if ($LASTEXITCODE -ne 0) {
+            throw "objcopy failed for ARM_CM55F_NTZ runtime vector proof ($($archiveMode.Name))"
+        }
+        $vectorBytes = [IO.File]::ReadAllBytes($vectorBinary)
+        if ($vectorBytes.Length -lt (16 * 4)) {
+            throw "ARM_CM55F_NTZ runtime synthetic vector table is truncated ($($archiveMode.Name))"
+        }
+        if ([BitConverter]::ToUInt32($vectorBytes, 11 * 4) -ne
+                ($svcAddress -bor [uint32]1)) {
+            throw "ARM_CM55F_NTZ runtime vector slot 11 lost strong SVC_Handler ($($archiveMode.Name))"
+        }
+        if ([BitConverter]::ToUInt32($vectorBytes, 14 * 4) -ne
+                ($pendSvAddress -bor [uint32]1)) {
+            throw "ARM_CM55F_NTZ runtime vector slot 14 lost strong PendSV_Handler ($($archiveMode.Name))"
+        }
+
+        $duplicate = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($hardCpuArgs + @("-mthumb", "-nostdlib") + $archiveMode.Flags +
+                @("-Wl,--gc-sections", "-T", $linkerPath, $fixtureObject,
+                    $expectationObject, $competingObject, $archivePath, "-o",
+                    (Join-Path $modeDir "duplicate-handlers.elf"))) `
+            -LogPath (Join-Path $modeDir "duplicate-handlers.log")
+        if (($duplicate.ExitCode -eq 0) -or
+                ($duplicate.Output -notmatch 'multiple definition.*(?:SVC_Handler|PendSV_Handler)')) {
+            throw "ARM_CM55F_NTZ competing strong handlers must fail link ($($archiveMode.Name)).`n$($duplicate.Output)"
+        }
+    }
+}
+
 function Test-ArmCm33TfmRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -14918,6 +16062,29 @@ $selectorPortSources = @(
     "fiber\port\ARM_CM4\fiber_port_exception.c"
 )
 
+# Generic Cortex-M55 selector coverage must compile only the selected v8-M
+# fallback group. Concrete ARM_CM7 sources include CMSIS before the selector;
+# that injects __CORTEX_M == 55 and deliberately upgrades detection to v8.1-M.
+# It is not the source group selected by a plain -mcpu=cortex-m55 build, whose
+# compiler-only predefines may still report ARMv8-M Mainline.
+$selectorPortSourcesByConfig = @{
+    "cortex-m55" = @(
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_exception.c"
+    )
+    "cortex-m55f" = @(
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_exception.c"
+    )
+    "cortex-m55-mve-fp" = @(
+        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
+        "fiber\port\transitional_v8m\fiber_port_boot.c",
+        "fiber\port\transitional_v8m\fiber_port_exception.c"
+    )
+}
+
 $mandatoryPortRuntimeSources = @(
     "fiber\port\ARM_CM0\fiber_port.c",
     "fiber\port\ARM_CM3\fiber_port.c",
@@ -14966,9 +16133,10 @@ $portProfiles = @{
     "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
     "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m33f"       = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
-    # GCC 14 reports plain -mcpu=cortex-m55 as ARMv8-M Mainline until an
-    # ARMv8.1-M feature is explicitly enabled. Its M55 FP configuration also
-    # defines __ARM_FEATURE_MVE, so that mode must select the v8.1-M profile.
+    # GCC may expose plain -mcpu=cortex-m55 as ARMv8-M Mainline before a
+    # selected port includes CMSIS. The generic selector test intentionally
+    # covers that compiler-only result; concrete M55 ports use build-selected
+    # ARMv8.1-M contracts instead.
     "cortex-m55"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m55f"       = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
     "cortex-m55-mve-fp" = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
@@ -15202,6 +16370,10 @@ try {
     Test-ArmCm55NtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `
         -Objcopy $objcopy -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55F_NTZ full scalar-FP runtime/archive/ELF contract =="
+    Test-ArmCm55FNtzRuntimeContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_TFM full runtime/TF-M/archive/ELF contract =="
     Test-ArmCm33TfmRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `
@@ -15268,9 +16440,14 @@ try {
         $buildSelectedDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-D$portMacro=1")
         $buildSelectedIncludeArgs = @("-I$(Join-Path $RepoRoot $portIncludeDir)")
 
+        $selectorSources = $selectorPortSources
+        if ($selectorPortSourcesByConfig.ContainsKey($cfg.Name)) {
+            $selectorSources = $selectorPortSourcesByConfig[$cfg.Name]
+        }
+
         $selectionModes = @(
-            [pscustomobject]@{ Name = "auto";           Defines = @(); ExtraArgs = @(); PortSources = $selectorPortSources },
-            [pscustomobject]@{ Name = "explicit";       Defines = @("-DFIBER_PORT_PROFILE=$profile"); ExtraArgs = @(); PortSources = $selectorPortSources },
+            [pscustomobject]@{ Name = "auto";           Defines = @(); ExtraArgs = @(); PortSources = $selectorSources },
+            [pscustomobject]@{ Name = "explicit";       Defines = @("-DFIBER_PORT_PROFILE=$profile"); ExtraArgs = @(); PortSources = $selectorSources },
             [pscustomobject]@{ Name = "build-selected"; Defines = $buildSelectedDefines; ExtraArgs = $buildSelectedIncludeArgs; PortSources = $buildSelectedPortSources }
         )
 
@@ -15286,7 +16463,7 @@ try {
                     "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1"
                 )
                 ExtraArgs = @()
-                PortSources = $selectorPortSources
+                PortSources = $selectorSources
             }
             $selectionModes += [pscustomobject]@{
                 Name = "explicit-secure-target-ns-bank"
@@ -15297,7 +16474,7 @@ try {
                     "-DFIBER_TZ_NS=1"
                 )
                 ExtraArgs = @("-mcmse")
-                PortSources = $selectorPortSources
+                PortSources = $selectorSources
             }
         }
 

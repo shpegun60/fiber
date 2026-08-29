@@ -101,6 +101,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM23_NTZ/non_secure` | `GCC/ARM_CM23_NTZ/non_secure` | first SVC request, first restore, ten-word NTZ PendSV |
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
 | `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
+| `ARM_CM55F_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | basic construction, strict first SVC/restore, and conditional scalar-FP `s16-s31` PSPLIM PendSV |
 | `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
 | `ARM_CM33/non_secure` plus Secure companion | `GCC/ARM_CM33/non_secure` and `secure` | 19-word construction, PRIS/Secure init, SVC first start, Secure save/unload, lazy bounded allocation, Secure load, and segmented eleven-word PendSV save/restore |
 | `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
@@ -116,6 +117,18 @@ in its own record; it never inherits a complete runtime claim. The script fails
 if a staged profile becomes selectable, is also listed as complete parity, or a
 new port source is neither paired nor explicitly staged. Adding a port source
 therefore cannot silently reduce coverage.
+
+`ARM_CM55F_NTZ/non_secure` slices 1-4 use `fiber_port_boot.c`,
+`fiber_port_svc.c`, and `fiber_port.c` as one complete scalar-FP runtime group.
+Its dedicated matrix checks hard/softfp `-O2`/`-Os` FreeRTOS-shaped initial
+construction, first-start/SVC, and scalar-FP PendSV instruction signatures.
+The latter requires the FreeRTOS ordering of `vstmdb r0!, {s16-s31}`, the
+ten-word PSPLIM/core image, scheduler BASEPRI bridge, and conditional
+`vldmia r0!, {s16-s31}` restore. It also proves all eight forward operations,
+strong SVC/PendSV ownership, exact reverse dependencies, normal/LTO archive
+extraction, vector slots 11/14, external cohort retention, and
+duplicate-handler failure. The profile remains build-selected only and
+hardware-unvalidated.
 
 `ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
 pinned 8- and 16-region MPU reference configurations. Its public
@@ -356,6 +369,40 @@ and reads PSPLIM/PSP back after restore. `LSPACT` is allowed in PendSV because
 the first VFP instruction may complete legitimate lazy preservation; it
 remains rejected during the one-shot first SVC start. These checks do not add
 or reorder any saved context slot.
+
+### FAP-M55F-CONSTRUCTION
+
+The pinned scalar-FP M55 non-MPU configuration retains the same 72-byte basic
+`pxPortInitialiseStack()` geometry as the no-FPU M55 profile. Fiber therefore
+uses the same eighteen-word initial image, then independently freezes the
+dynamic scalar-FP maximum at 212 bytes. It additionally zeroes unspecified
+synthetic registers, preserves r9, seals boot metadata, validates the frame,
+and prepares CP10/CP11 and FPCCR outside the constructor. Neither constructor
+may issue a VFP or MVE instruction before the FPU policy is established.
+
+### FAP-M55F-SVC-START
+
+The pinned M55 FPU start transfer still starts a basic context through SVC.
+Fiber preserves the MSP rewind, IRQ/fault enable, `svc #70`, PSPLIM, CONTROL,
+PSP, BASEPRI, and exception-return backbone while narrowing the handler to the
+one configured first-start immediate and exact Non-secure Thread/MSP/basic
+provenance. CPACR/FPCCR/LSPACT policy, vector/priority wiring, frame metadata,
+and register readback are Fiber checks around that transfer. No VFP/MVE register
+transfer is valid in this initial basic-frame SVC path.
+
+### FAP-M55F-FP-PENDSV
+
+The pinned M55 non-MPU scalar-FP PendSV path conditionally saves
+`s16-s31` before `[PSPLIM, EXC_RETURN, r4-r11]`, invokes the scheduler under
+BASEPRI, then conditionally restores `s16-s31` after the core frame. Fiber
+preserves that exact state order and basic/extended `EXC_RETURN` distinction.
+It adds selected Non-secure Thread/PSP provenance, preflight before current
+metadata access, dynamic software/hardware frame bounds, xPSR padding, live
+PSPLIM validation, scheduler CPU/FPU-state preservation, selected restore
+validation, common-owned current publication, and PSPLIM/PSP readback.
+`LSPACT` is valid in PendSV because its first VFP operation may complete a
+legitimate lazy preservation; first-start SVC still rejects it. These checks do
+not add, remove, or reorder a saved context slot.
 
 ### FAP-MPU-SVC-NAMESPACE
 

@@ -210,6 +210,18 @@ this profile. `-O2`/`-Os` generated assembly parity, normal/LTO archive,
 vector, ABI, cohort, and negative-manifest proofs pass. It is software evidence
 only and remains outside global selection.
 
+`ARM_CM55F_NTZ/non_secure` is a distinct complete build-selected `C55F`
+scalar-FP layout cohort. Slices 1-4 freeze the 72-byte basic and 212-byte
+bounded extended-FP geometry, FPU/PSPLIM/BASEPRI traits, and the no-MVE compiler
+contract (`-march=armv8.1-m.main+fp`); they reject MVE, MPU, Secure CMSE, PAC,
+and BTI. `fiber_port_boot.c` owns sealed boot/context construction and
+CPACR/FPCCR policy. `fiber_port_svc.c` owns strict first SVC start and strong
+slot-11 ownership. `fiber_port.c` owns the eighth forward operation, strong
+slot-14 ownership, and basic/extended scalar-FP PendSV save/select/restore.
+Hard/softfp `-O2`/`-Os` FreeRTOS-shaped construction/SVC/PendSV parity plus
+normal/LTO archive, vector, exact-cohort, and duplicate-handler proof apply.
+It remains outside global selector routing and has no hardware-support claim.
+
 `transitional_v8m` now provides compile-only bring-up coverage only for the
 unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.
 

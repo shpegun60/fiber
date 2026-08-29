@@ -142,6 +142,20 @@ normal/LTO archives, vectors, ABI, cohort, and negative manifests are covered;
 M55 hardware remains unvalidated. See
 `fiber/port/ARM_CM55_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM55F_NTZ/non_secure` is the complete build-selected scalar-FP M55
+cohort. Its `C55F` slices 1-4 freeze the 72-byte basic and 212-byte bounded
+extended-FP frame, PSPLIM/FPU/FPCA traits, and the scalar-FP-without-MVE target
+`-march=armv8.1-m.main+fp`. `fiber_port_boot.c` owns sealed construction and
+CPACR/FPCCR policy; `fiber_port_svc.c` owns strict first SVC start; and
+`fiber_port.c` owns `fiber_port_runtime_schedule()` plus the strong FP-aware
+`PendSV_Handler`. Hard-float and softfp `-O2`/`-Os` construction, SVC, and
+PendSV parity is checked against independent FreeRTOS-shaped fixtures, with
+normal/LTO archive, cohort, vector, and duplicate-handler proof. It remains
+outside global selector routing and has no hardware-support claim. It is not
+an alternative configuration of `ARM_CM55_NTZ`; MVE, MPU, TrustZone,
+SecureContext/TF-M, PAC, and BTI need distinct cohorts. See
+`fiber/port/ARM_CM55F_NTZ/non_secure/FREERTOS_PARITY.md`.
+
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete
 FP-aware PendSV runtime. FreeRTOS keeps a new FPU task on the same 72-byte

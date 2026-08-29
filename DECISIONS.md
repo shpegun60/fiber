@@ -1,5 +1,90 @@
 # Fiber Decision Log
 
+## 2026-08-29: Complete ARM_CM55F Scalar-FP PendSV Runtime
+
+`ARM_CM55F_NTZ/non_secure` slice 4 completes the exact build-selected `C55F`
+runtime without widening the common eight-operation ABI or adding an M55 global
+selector route. `fiber_port_svc.c` retains strict SVC first start, while the
+new selected-port `fiber_port.c` owns `fiber_port_runtime_schedule()`, the
+protected first-selection bridge, PendSV scheduler selection/publication, and
+the direct strong `PendSV_Handler`.
+
+The save/restore backbone is the pinned FreeRTOS non-MPU scalar-FP sequence:
+an extended hardware frame conditionally saves `s16-s31` before the ten-word
+`[PSPLIM][EXC_RETURN][r4-r11]` image and restores it in the inverse order.
+Fiber adds fail-closed Thread/PSP and exact `EXC_RETURN` provenance, context
+preflight before metadata loads, software/hardware frame bounds, xPSR padding,
+PSPLIM/PSP readback, FPU policy, scheduler CPU-state preservation, and
+common-owned current publication. Exact-cohort retention remains confined to
+one-shot construction/start/first-selection paths and never enters the PendSV
+hot path.
+
+The matrix now proves hard-float and softfp `-O2`/`-Os` independent
+FreeRTOS-shaped construction, first-start/SVC, and FP PendSV sequences; the
+complete eight-operation/reverse surface; production, paranoid, and no-rewind
+variants; adversarial naked-handler hygiene; and normal/LTO section-GC archive
+links with an external retained exact-cohort expectation, slots 11/14, and
+duplicate-handler failure. This is compile/assembly/archive/ELF evidence only.
+The profile remains outside global selection and has no M55F hardware claim.
+
+## 2026-08-28: Stage ARM_CM55F Scalar-FP Strict SVC First Start
+
+`ARM_CM55F_NTZ/non_secure` slice 3 adds only the first-start half of the
+scalar-FP runtime. The new `fiber_port_svc.c` deliberately does not use the
+complete-runtime filename `fiber_port.c`: it defines seven of the frozen eight
+forward ABI operations and one direct strong `SVC_Handler`, while
+`fiber_port_runtime_schedule()` and `PendSV_Handler` remain absent. The global
+selected-port facade still excludes this profile. That prevents an incomplete
+save/select/restore path from becoming callable simply because first start now
+exists.
+
+The source follows the pinned FreeRTOS M55 non-MPU transfer: MSP starts from
+the active vector source, SVC originates from privileged Thread/MSP with
+`0xFFFFFFB8`, and the first basic image restores the ten-word
+`[PSPLIM][EXC_RETURN][r4-r11]` software frame through `0xFFFFFFBC`. Fiber adds
+one-shot STKALIGN, vector/priority, BASEPRI/PRIGROUP, CPACR/FPCCR, LSPACT,
+metadata, stack, opcode/immediate, and register readback checks. The first
+scheduler callback is enclosed by the selected BASEPRI contract and its full
+CPU/FPU state is verified after return.
+
+The matrix proves the exact seven-operation surface, no PendSV/schedule symbol,
+the frozen reverse dependency set, strong SVC ownership, and hard/softfp
+`-O2`/`-Os` generated first-start/SVC instruction signatures against an
+independent FreeRTOS-shaped fixture. Archive/vector/LTO and hardware claims
+remain deferred to the FP-aware PendSV completion slice.
+
+## 2026-08-28: Freeze the staged ARM_CM55F scalar-FP layout cohort
+
+`ARM_CM55F_NTZ/non_secure` begins as a separate type/trait-only `C55F` cohort,
+not as a build-time option on `ARM_CM55_NTZ`. The pinned FreeRTOS
+`GCC/ARM_CM55_NTZ/non_secure` port exposes FPU and MVE through independent
+configuration branches; Fiber freezes the scalar-FP/no-MVE result as one exact
+context identity before implementing any runtime mechanics.
+
+The cohort requires CMSIS Cortex-M55 with FPU enabled and compiler scalar FP
+code generation. The GCC spelling is `-march=armv8.1-m.main+fp` with hard-float
+or softfp procedure-call ABI. The usual `-mcpu=cortex-m55` hard-FP spelling is
+rejected here because it defines `__ARM_FEATURE_MVE`; it belongs to a future
+M55 MVE-FP cohort. Secure CMSE, MPU, PAC, and BTI are also rejected instead of
+changing the saved-state ABI under one profile name.
+
+Slice 1 owns public type storage, immutable boot storage, port traits, and an
+exact cohort probe. Slice 2 adds the only currently defined forward operation,
+`fiber_port_context_init()`, in construction-only `fiber_port_boot.c`. It
+freezes the 72-byte basic initial frame, the 212-byte maximum dynamic scalar-FP
+frame, PSPLIM and FPCA policy, basic/extended `EXC_RETURN` values, and the C55F
+identity. It creates/checks a sealed boot record, retains the exact cohort,
+builds and validates the 18-word basic frame, and configures CP10/CP11 plus
+FPCCR ASPEN/LSPEN with DSB/ISB readback. Eager and lazy policy are explicit;
+the first start must reject active lazy preservation. Construction and FPU
+policy are general-registers-only and compile against an independent
+FreeRTOS-shaped frame fixture under hard/softfp `-O2`/`-Os`.
+
+There is deliberately no `fiber_port.c`, handler, selector route, archive or
+vector proof, or support claim. The next slices add strict SVC first start and
+then FP-aware PendSV with pinned FreeRTOS assembly and archive/vector/cohort
+evidence.
+
 ## 2026-08-28: Add Exact ARM_CM55_NTZ Scalar Non-Secure Profile
 
 `ARM_CM55_NTZ/non_secure` is now a separate exact build-selected Cortex-M55
