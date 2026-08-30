@@ -1,10 +1,11 @@
 # ARM_CM55_MVEF_NTZ Non-Secure Parity Ledger
 
-## Slice 1 Scope
+## Slices 1-3 Scope
 
 This directory is the exact build-selected Cortex-M55 MVE-FP, Non-secure,
 privileged, non-MPU, no-SecureContext, no-TF-M, no-PAC, and no-BTI context
-cohort. It is deliberately construction-only in slice 1:
+cohort. It is deliberately non-selectable while the first three slices establish
+the complete CPU/context runtime:
 
 ```text
 implemented:
@@ -12,17 +13,19 @@ implemented:
   exact MVE-FP frame traits and cohort identity
   sealed context construction and basic 18-word frame
   CPACR/FPCCR FPU policy and readback
+  strict SVC first start and one strong SVC_Handler
+  PSPLIM-aware MVE-FP PendSV and one strong PendSV_Handler
+  all eight forward ABI operations through normal scheduling
+  normal/LTO archive, vector, and exact-cohort proof
 
 not implemented:
-  the other seven forward runtime ABI operations
-  SVC_Handler / first-context transfer
-  PendSV_Handler / save-select-restore
   global profile selection
+  hardware validation
 ```
 
-`FIBER_PORT_RUNTIME_SELECTABLE` is therefore `0`. This profile has no runtime
-or hardware-support claim. It must not be selected by an application before
-the SVC and PendSV slices are implemented and independently proven.
+`FIBER_PORT_RUNTIME_SELECTABLE` remains `0`. The profile has no global
+auto-selection or hardware-support claim. It must be deliberately compiled
+with this selected profile until matching M55 MVE-FP hardware evidence exists.
 
 The selected construction manifest is:
 
@@ -71,8 +74,8 @@ configENABLE_BTI = 0
 ## Frozen Frame And Traits
 
 The pinned non-MPU FreeRTOS constructor uses the same basic frame when MVE is
-enabled as when scalar FP is enabled. A later PendSV implementation must follow
-the exact `configENABLE_FPU || configENABLE_MVE` branch in `portasm.c`:
+enabled as when scalar FP is enabled. PendSV follows the exact
+`configENABLE_FPU || configENABLE_MVE` branch in `portasm.c`:
 
 ```text
 basic initial context:
@@ -89,29 +92,28 @@ extended EXC_RETURN:      0xFFFFFFAC
 ```
 
 Pinned FreeRTOS saves/restores `s16-s31` when `EXC_RETURN.bit4 == 0`. It does
-not allocate an additional VPR word in its non-MPU software frame. Fiber slice
-1 preserves that geometry exactly and records MVE in the cohort identity; it
-does not yet claim that an MVE runtime path has been implemented.
+not allocate an additional VPR word in its non-MPU software frame. Fiber
+preserves that geometry exactly and records MVE in the cohort identity.
 
-The later Fiber PendSV implementation must specifically follow the pinned
-`#else /* configENABLE_MPU */` branch. That branch saves the conditional
+Fiber PendSV specifically follows the pinned `#else /* configENABLE_MPU */`
+branch. That branch saves the conditional
 high-FP state directly on PSP with `vstmdb` and restores it with `vldmia`.
 The preceding FreeRTOS MPU branch copies the hardware frame into privileged
 TCB-owned storage; it is a different context model and must not be reused by
 this non-MPU `C55V` cohort.
 
-| FreeRTOS fact | Fiber slice-1 representation |
+| FreeRTOS fact | Fiber representation |
 | --- | --- |
 | `portARCH_NAME = Cortex-M55` | `FIBER_PORT_NAME = ARM_CM55_MVEF_NTZ` |
 | `configENABLE_FPU = 1` | FPU/compiler/CMSIS facts and extended-frame traits are one |
 | `configENABLE_MVE = 1` | `FIBER_PORT_HAS_MVE = 1` and compiler MVE-FP bits are required |
 | `portUSE_PSPLIM_REGISTER = 1` | PSPLIM is software-frame word zero |
-| `portINITIAL_EXC_RETURN` | basic `0xFFFFFFBC`; future extended value `0xFFFFFFAC` |
-| conditional `s16-s31` block | future `FIBER_PORT_HIGH_FP_SOFTWARE_BYTES = 64` contract |
+| `portINITIAL_EXC_RETURN` | basic `0xFFFFFFBC`; extended value `0xFFFFFFAC` |
+| conditional `s16-s31` block | `FIBER_PORT_HIGH_FP_SOFTWARE_BYTES = 64` save/restore contract |
 | no VPR software slot | ten-word software frame remains exact |
 | exact identity | ASCII `C55V`, layout v1, feature mask `0x93` |
 
-## Construction Evidence
+## Slice 1 Construction Evidence
 
 `fiber_port_context_init()` constructs the same low-to-high basic image as
 FreeRTOS `pxPortInitialiseStack()`: PSPLIM, basic EXC_RETURN, r4-r11 with the
@@ -126,22 +128,78 @@ the extended state.
 
 The compile matrix and `tools/freertos_asm_parity.ps1` compare this constructor
 with the pinned FreeRTOS MVE-FP branch under hard-float and softfp, at `-O2` and
-`-Os`. They also prove the separate C55V cohort, MVE-FP manifest rejection,
-and the absence of forward runtime ABI symbols or strong exception handlers.
+`-Os`. They also prove the separate C55V cohort and MVE-FP manifest rejection.
+
+## Slice 2 Strict SVC First Start
+
+The pinned `vStartFirstTask()` and non-MPU `vRestoreContextOfFirstTask()` paths
+are identical for scalar FP and MVE-FP: they restore the basic ten-word
+`[PSPLIM][EXC_RETURN][r4-r11]` image and issue no MVE or VFP register transfer.
+Fiber therefore implements the same integer-only first-context backbone:
+
+```text
+Thread/MSP privileged start
+  -> configure lowest PendSV priority and clear a stale PendSV
+  -> clear BASEPRI, enable faults/IRQs
+  -> svc #70
+  -> strong SVC_Handler restores PSPLIM, CONTROL, PSP and EXC_RETURN
+```
+
+The port additionally validates CPU/start policy, CPACR/FPCCR/LSPACT state,
+active VTOR slot 11, SVCall priority, exact `0xFFFFFFB8` SVC provenance, the
+stacked Thumb frame and opcode/immediate, the scheduler hook CPU state, the
+sealed selected context, and PSPLIM/CONTROL/PSP readback. First selection runs
+under the selected BASEPRI threshold. PendSV ownership is established by slice
+3; SVC itself remains integer-only and never transfers MVE/VFP state.
+
+The matrix proves the independently auditable SVC component: its seven local
+forward operations, one strong `SVC_Handler`, exact reverse dependencies, and
+hard/softfp `-O2`/`-Os` generated SVC parity. The comparison rejects VFP and
+MVE instructions throughout the SVC-stage call graph: start preparation,
+first-context transfer, the naked handler, and boot-side FPU/restore helpers.
+
+## Slice 3 MVE-FP PendSV Runtime
+
+`fiber_port.c` owns normal scheduling, protected first selection, scheduler
+candidate selection/publication, save-side validation, and the strong
+`PendSV_Handler`. The naked handler preserves the pinned non-MPU M55 ordering:
+
+```text
+PSP hardware frame
+  -> conditional s16-s31 when EXC_RETURN.bit4 == 0
+  -> [PSPLIM][EXC_RETURN][r4-r11]
+  -> scheduler under BASEPRI
+  -> restore [PSPLIM][EXC_RETURN][r4-r11]
+  -> conditional s16-s31
+  -> PSPLIM/PSP readback and exception return
+```
+
+The conditional high-register instructions are exactly `vstmdb r0!, {s16-s31}`
+before the core frame and `vldmia r0!, {s16-s31}` after it. They
+are guarded by `EXC_RETURN.bit4`; they are not an MVE vector-register save.
+
+Fiber adds provenance, pre-save validation before metadata loads, structural
+frame and bounds checks, FPU/CPU-state preservation across the scheduler hook,
+common-owned current publication, and mask/register readback. None of those
+checks add or reorder a saved context word. Both the pinned FreeRTOS MVE-FP
+reference and Fiber are checked to contain no VPR software-frame transfer.
+
+The complete matrix proves all eight forward operations, strong slots 11/14
+owners, exact reverse dependencies, normal/LTO archive extraction, duplicate
+handler failure, external exact-cohort retention, hard/softfp `-O2`/`-Os`
+construction/SVC/PendSV parity, and production/lazy/no-rewind source variants.
+This is complete software evidence, not a hardware-validation claim.
 
 ## Required Later Slices
 
-1. Add strict SVC first start and prove its integer-only transfer against
-   FreeRTOS `vStartFirstTask()` and `vRestoreContextOfFirstTask()`.
-2. Add MVE-FP PendSV and prove the exact conditional `s16-s31` save/select/
-   restore backbone against FreeRTOS `PendSV_Handler()`.
-3. Add archive/ELF/vector/cohort tests only after both strong handlers exist.
-4. Run an M55 board suite before assigning a hardware-validation claim.
+1. Run an M55 MVE-FP board suite before assigning a hardware-validation claim.
+2. Add M55 MPU, TrustZone/SecureContext or TF-M, and PAC/BTI profiles as
+   separate exact cohorts rather than changing this non-MPU frame.
 
 ## Recorded Difference IDs
 
 | ID | Reason |
 | --- | --- |
 | `FAP-M55MVE-CONSTRUCTION` | Fiber uses sealed metadata, a C55V cohort anchor, and direct frame-slot checks around the same FreeRTOS basic-frame geometry. |
-| `FAP-M55MVE-SVC` | Reserved for the later strict SVC first-start slice. |
-| `FAP-M55MVE-PENDSV` | Reserved for the later conditional MVE-FP PendSV slice. |
+| `FAP-M55MVE-SVC` | Fiber retains the FreeRTOS M55 first-start/restore transfer but limits SVC to the configured first-start immediate, adds exact provenance, FPU policy, vector/priority, context, scheduler-state, and special-register readback checks, and forbids VFP/MVE transfer in the basic first image. |
+| `FAP-M55MVE-PENDSV` | Fiber preserves the pinned non-MPU conditional `s16-s31` before/after ten-word PSPLIM/core frame and explicitly rejects a VPR software slot; it adds provenance, frame/metadata, scheduler-state, mask, and special-register checks without changing saved-word ordering. |

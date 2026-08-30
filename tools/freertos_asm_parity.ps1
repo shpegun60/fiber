@@ -474,6 +474,28 @@ $ports = @(
         ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
         ReferenceDefines = @()
     },
+    # ARM_CM55_MPU is staged with protected SVC/PendSV mechanics. The forward
+    # runtime ABI and global selector route remain deliberately absent.
+    [pscustomobject]@{
+        Name = "ARM_CM55_MPU_STAGE_8"; CpuArgs = @("-mcpu=cortex-m55", "-mfloat-abi=soft")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_MPU\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1", "-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
+        Auxiliary = 1
+        Staged = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM55_MPU_STAGE_16"; CpuArgs = @("-mcpu=cortex-m55", "-mfloat-abi=soft")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 1; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_MPU\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1", "-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=16")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=16")
+        Auxiliary = 1
+        Staged = 1
+    },
     [pscustomobject]@{
         Name = "ARM_CM55F_NTZ_CONSTRUCTION"
         CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
@@ -483,8 +505,8 @@ $ports = @(
         ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1")
     },
-    # Construction-only MVE-FP cohort. Auxiliary excludes it from the
-    # fiber_port.c runtime inventory until the later SVC/PendSV slices exist.
+    # Construction and SVC remain independently audited auxiliary objects;
+    # the complete MVE-FP runtime below owns the selected PendSV mechanics.
     [pscustomobject]@{
         Name = "ARM_CM55_MVEF_NTZ_CONSTRUCTION"
         CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
@@ -494,6 +516,27 @@ $ports = @(
         ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_MVE=1")
         Auxiliary = 1
+    },
+    # The MVE-FP SVC object owns only first start; PendSV stays in its own
+    # source file so both exception transfer paths remain independently auditable.
+    [pscustomobject]@{
+        Name = "ARM_CM55_MVEF_NTZ_SVC"
+        CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_MVEF_NTZ\non_secure"; FiberSource = "fiber_port_svc.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_MVE=1")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM55_MVEF_NTZ_PENDSV"
+        CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_MVEF_NTZ\non_secure"; FiberSource = "fiber_port.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "portasm.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_MVE=1")
     },
     [pscustomobject]@{
         Name = "ARM_CM55F_NTZ_SVC"
@@ -688,7 +731,9 @@ $ports = @(
     }
 )
 
-$stagedRuntimeProfiles = @()
+$stagedRuntimeProfiles = @(
+    "fiber\port\ARM_CM55_MPU\non_secure"
+)
 
 Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
     -PortDefinitions $ports -StagedRuntimeProfiles $stagedRuntimeProfiles
@@ -1026,6 +1071,169 @@ try {
         -DifferenceIds @("FAP-COMMON-PROVENANCE",
             "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
         -Ledger $ledger
+
+
+    # ARM_CM55_MPU is staged with protected SVC/PendSV save/select/MAIR0-plus-
+    # MPU-replace/restore mechanics for both supported MPU geometries. The
+    # forward runtime ABI and global selector route remain deliberately absent.
+    foreach ($armCm55MpuStageName in @(
+            "ARM_CM55_MPU_STAGE_8",
+            "ARM_CM55_MPU_STAGE_16")) {
+    $pair = $compiled[$armCm55MpuStageName]
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "first-start" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f',
+            '\bdsb\b', '\bisb\b', '\bsvc\s+\d+\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('fiber_port_prepare_first_start', '\bcpsid\s+i',
+            '\bmsr\s+MSP', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b',
+            '\bisb\b', '\bsvc\s+70\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE",
+            "FAP-M55MPU-STAGED-PENDSV") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "MPU-activation" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bbic(?:\.w)?\s+r2,\s*r2,\s*#1',
+            '\bstr\s+r2,\s*\[r1,\s*#0\]', '\badds\s+r0,\s*#4',
+            '\bldr\s+r1,\s*\[r0,\s*#0\]', '\bstr\s+r1,\s*\[r2,\s*#0\]',
+            '\bmovs\s+r3,\s*#4', '\bstr\s+r3,\s*\[r1,\s*#0\]',
+            '\bldmia(?:\.w)?\s+r0!', '\bstmia(?:\.w)?\s+r2',
+            '\borr(?:\.w)?\s+r2,\s*r2,\s*#1', '\bdsb\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bmov\s+lr,\s*r1', '\bpush\s+\{r0,\s*lr\}',
+            '\bbic(?:\.w)?\s+r2,\s*r2,\s*#1',
+            '\bstr\s+r2,\s*\[r1,\s*#0\]', '\badds\s+r0,\s*#4',
+            '\bldr\s+r1,\s*\[r0,\s*#0\]', '\bstr\s+r1,\s*\[r2,\s*#0\]',
+            '\bmovs\s+r3,\s*#4', '\bstr\s+r3,\s*\[r1,\s*#0\]',
+            '\bldmia(?:\.w)?\s+r0!', '\bstmia(?:\.w)?\s+r2',
+            '\borr(?:\.w)?\s+r2,\s*r2,\s*#5',
+            'fiber_port_mpu_validate_active_initial_context', '\bdsb\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-FIRST-ACTIVATION-SPLIT", "FAP-M55MPU-STAGED-PENDSV") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "first-restore-special" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs_first_task" `
+        -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '\bmsr\s+PSP', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-STAGED-PENDSV") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "first-restore-general" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs_first_task" `
+        -ReferencePatterns @('\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-STAGED-PENDSV") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "first-restore-complete" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done_first_task" `
+        -ReferencePatterns @('\bstr\s+r1,\s*\[r0,\s*#0\]',
+            '\bmsr\s+BASEPRI', '\bbx\s+lr\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_restore_first_context_from_svc" `
+        -FiberPatterns @('\bstr\s+r1,\s*\[r0,\s*#0\]',
+            '\bmsr\s+BASEPRI', '\bcpsie\s+i', '\bbx\s+lr\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-STAGED-PENDSV") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-save" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_general_regs" `
+        -ReferencePatterns @('(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmia(?:\.w)?\s+r2,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bmrs\s+r0,\s*psp',
+            'fiber_port_pendsv_validate_save_current',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmia(?:\.w)?\s+r0,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-save-special" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "save_special_regs" `
+        -ReferencePatterns @('(?i)\bmrs\s+r3,\s*psplim', '(?i)\bmrs\s+r4,\s*control',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r2[^\r\n]*lr\}',
+            '(?i)\bstr\s+r1,\s*\[r0') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bmrs\s+r3,\s*psplim', '(?i)\bmrs\s+r4,\s*control',
+            '(?i)\bstmia(?:\.w)?\s+r1!,\s*\{r0[^\r\n]*lr\}',
+            '(?i)\bstr\s+r1,\s*\[r2') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-MPU-replace" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "program_mpu" `
+        -ReferencePatterns @('(?i)\bdmb\b', '(?i)\bbic(?:\.w)?\s+r2',
+            '(?i)\badds\s+r0,\s*#4', '(?i)\bmovs\s+r3,\s*#4',
+            '(?i)\bldmia(?:\.w)?\s+r0!', '(?i)\bstmia(?:\.w)?\s+r2',
+            '(?i)\borr(?:\.w)?\s+r2', '(?i)\bdsb\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_mpu_switch_to_context" `
+        -FiberPatterns @('fiber_port_context_validate_restore', '(?i)\bdsb\b',
+            '(?i)\bstr\b', '(?i)\bisb\b',
+            'fiber_port_mpu_validate_active_context') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-MPU-ATOMIC-SWITCH",
+            "FAP-M55MPU-PENDSV-C-SWITCH") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-restore" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_special_regs" `
+        -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r2,\s*r3,\s*r4,\s*lr\}',
+            '(?i)\bmsr\s+psp', '(?i)\bmsr\s+psplim', '(?i)\bmsr\s+control') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bldmdb\s+r1!,\s*\{r0,\s*r3,\s*r4,\s*lr\}',
+            '(?i)\bmsr\s+psp', '(?i)\bmsr\s+psplim', '(?i)\bmsr\s+control') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-restore-general" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_general_regs" `
+        -ReferencePatterns @('(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bstmia(?:\.w)?\s+r2!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bstmia(?:\.w)?\s+r0!,\s*\{r4[^\r\n]*(r11|fp)\}',
+            '(?i)\bldmdb\s+r1!,\s*\{r4[^\r\n]*(r11|fp)\}') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName $armCm55MpuStageName -Mechanism "PendSV-restore-complete" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "restore_context_done" `
+        -ReferencePatterns @('(?i)\bstr\s+r1,\s*\[r0', '(?i)\bbx\s+lr\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('(?i)\bstr\s+r1,\s*\[r2', '(?i)\bcpsie\s+i',
+            '(?i)\bbx\s+lr\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE",
+            "FAP-MPU-PROTECTED-FRAME", "FAP-M55MPU-PENDSV-PREFLIGHT") `
+        -Ledger $ledger
+    }
 
     # ARM_CM33_MPU now exposes the frozen forward ABI. Its protected SVC/PendSV
     # sequence remains pinned against the same 8- and 16-region references.
@@ -1571,6 +1779,89 @@ try {
     Assert-AbsentPatterns -Body $cm55MveFiberConstruction `
         -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
         -Label "ARM_CM55_MVEF_NTZ Fiber initial construction"
+
+    # MVE-FP keeps the same integer-only initial SVC transfer as scalar FP.
+    # MVE changes only the later conditional s16-s31 PendSV mechanism.
+    $pair = $compiled["ARM_CM55_MVEF_NTZ_SVC"]
+    Assert-MechanismParity -PortName "ARM_CM55_MVEF_NTZ" `
+        -Mechanism "first-start" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+\d+') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bmsr\s+BASEPRI', '\bcpsie\s+f', '\bcpsie\s+i', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE", "FAP-M55MVE-SVC") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM55_MVEF_NTZ" `
+        -Mechanism "first-restore" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "vRestoreContextOfFirstTask" `
+        -ReferencePatterns @('\bldmia\s+r0!,\s*\{r1,\s*r2\}', '\bmsr\s+PSPLIM', '\bmsr\s+CONTROL', '\badds\s+r0,\s*#32', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\bbx\s+r2') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r2,\s*r3[^\r\n]*fp\}', '\bmsr\s+PSPLIM', '\bmrs\s+[^,]+,\s*PSPLIM', '\bmsr\s+CONTROL', '\bmsr\s+PSP', '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M55MVE-SVC") `
+        -Ledger $ledger
+
+    # The pinned non-MPU MVE branch deliberately uses the same conditional
+    # s16-s31 backbone as scalar FP. Its MVE-specific invariant is negative:
+    # neither FreeRTOS nor Fiber owns a VPR software-frame slot here.
+    $pair = $compiled["ARM_CM55_MVEF_NTZ_PENDSV"]
+    Assert-MechanismParity -PortName "ARM_CM55_MVEF_NTZ" `
+        -Mechanism "MVE-FP PendSV" -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "PendSV_Handler" `
+        -ReferencePatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            '\btst(?:\.w)?\s+lr,\s*#16',
+            '\bvstmdb\w*\s+r0!,\s*\{s16-s31\}',
+            '\bmrs\s+r2,\s*PSPLIM',
+            '\bmov\s+r3,\s*lr',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'vTaskSwitchContext',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\btst(?:\.w)?\s+r3,\s*#16',
+            '\bvldmia\w*\s+r0!,\s*\{s16-s31\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmsr\s+PSP,\s*r0',
+            '\bbx\s+r3') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @(
+            '\bmrs\s+r0,\s*PSP',
+            'fiber_port_context_validate_save_current',
+            '\btst(?:\.w)?\s+lr,\s*#16',
+            '\bvstmdb\w*\s+r0!,\s*\{s16-s31\}',
+            '\bmrs\s+r3,\s*PSPLIM',
+            '\bstmdb\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\bstr\s+r0',
+            '\bmsr\s+BASEPRI',
+            'fiber_port_scheduler_pick_next_from_pendsv',
+            '\bmsr\s+BASEPRI',
+            '\bldmia(\.w)?\s+r0!,\s*\{r2[^\r\n]*fp\}',
+            '\btst(?:\.w)?\s+r3,\s*#16',
+            '\bvldmia\w*\s+r0!,\s*\{s16-s31\}',
+            '\bmsr\s+PSPLIM,\s*r2',
+            '\bmrs\s+r1,\s*PSPLIM',
+            '\bmsr\s+PSP,\s*r0',
+            '\bmrs\s+r1,\s*PSP',
+            '\bbx\s+r3') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-M55MVE-PENDSV") `
+        -Ledger $ledger
+    $cm55MveReferencePendSv = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Reference -Symbol "PendSV_Handler" `
+        -Path $pair.ReferencePath
+    $cm55MveFiberPendSv = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Fiber -Symbol "PendSV_Handler" `
+        -Path $pair.FiberPath
+    Assert-AbsentPatterns -Body $cm55MveReferencePendSv -Patterns @('\bvpr\b') `
+        -Label "ARM_CM55_MVEF_NTZ FreeRTOS non-MPU PendSV VPR slot"
+    Assert-AbsentPatterns -Body $cm55MveFiberPendSv -Patterns @('\bvpr\b') `
+        -Label "ARM_CM55_MVEF_NTZ Fiber non-MPU PendSV VPR slot"
 
     $pair = $compiled["ARM_CM55F_NTZ_SVC"]
     Assert-MechanismParity -PortName "ARM_CM55F_NTZ" `

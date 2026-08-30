@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M55 MVE-FP NTZ Non-secure dictionary, implementation slice 1.
+ * Exact Cortex-M55 MVE-FP NTZ Non-secure dictionary, implementation slices 1-2.
  * This header freezes the non-MPU MVE-FP context identity and frame bounds
- * from the pinned FreeRTOS ARM_CM55_NTZ port. Only sealed construction exists
- * in this slice; SVC first start and PendSV remain intentionally absent.
+ * from the pinned FreeRTOS ARM_CM55_NTZ port. Sealed construction and strict
+ * SVC first start exist; PendSV remains intentionally absent.
  */
 #ifndef FIBER_PORT_ARM_CM55_MVEF_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM55_MVEF_NTZ_FIBER_PORTMACRO_H_
@@ -365,7 +365,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM55_MVEF_NTZ requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55_MVEF_NTZ slice 1 must remain non-selectable");
+		"[fiber]: ARM_CM55_MVEF_NTZ staged profile must remain non-selectable");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM55_MVEF_NTZ core software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,

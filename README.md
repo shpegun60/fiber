@@ -157,15 +157,32 @@ SecureContext/TF-M, PAC, and BTI need distinct cohorts. See
 `fiber/port/ARM_CM55F_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55_MVEF_NTZ/non_secure` is a distinct, non-selectable M55 MVE-FP
-construction cohort, not an option on the scalar-FP port. Its `C55V` identity
+runtime cohort, not an option on the scalar-FP port. Its `C55V` identity
 requires `-march=armv8.1-m.main+mve.fp`, records the pinned FreeRTOS
-`configENABLE_FPU=1`, `configENABLE_MVE=1` frame geometry, and deliberately
-contains only sealed initial-context construction plus CPACR/FPCCR policy. The
-same 72-byte basic frame and future 212-byte extended bound are compile and
-assembly proven at hard/softfp `-O2`/`-Os`; MVE adds no VPR software slot in the
-pinned non-MPU reference. It has no SVC/PendSV handlers, no scheduler/runtime
-ABI, no global selector route, and no hardware-support claim until later
-slices. See `fiber/port/ARM_CM55_MVEF_NTZ/non_secure/FREERTOS_PARITY.md`.
+`configENABLE_FPU=1`, `configENABLE_MVE=1` frame geometry, and owns sealed
+initial-context construction, CPACR/FPCCR policy, strict first-start SVC, and
+PSPLIM-aware conditional `s16-s31` PendSV. The same 72-byte basic frame and
+212-byte bounded extended state are proven at hard/softfp `-O2`/`-Os`; MVE adds
+no VPR software slot in the pinned non-MPU reference. It exports all eight
+forward operations and strong SVC/PendSV handlers, but has no global selector
+route or hardware-support claim. See
+`fiber/port/ARM_CM55_MVEF_NTZ/non_secure/FREERTOS_PARITY.md`.
+
+`ARM_CM55_MPU/non_secure` is a separate non-selectable no-FPU/no-MVE `C55M`
+protected cohort. It freezes the FreeRTOS M55 MPU shape for
+8- and 16-region manifests: MAIR0, per-context RBAR/RLAR pairs, a privileged
+20-word active image plus one cursor word, and per-fiber `PSP`, `PSPLIM`,
+`CONTROL`, and `EXC_RETURN` state. It now owns sealed context construction,
+linker-boundary validation, the global four-region MPU image, strict first-start
+SVC, and private protected PendSV. Its strong SVC/PendSV engine follows the
+pinned disable/MAIR0/RNR 4-8-12/enable/PSPLIM-CONTROL-PSP/frame-copy FreeRTOS
+sequence, with Fiber provenance, scheduler CPU/MPU-state, and readback checks.
+PendSV saves the complete basic frame into privileged storage, selects under
+BASEPRI through reverse ABI v1, atomically replaces the selected MPU image
+under PRIMASK, and restores the inverse frame. The forward runtime ABI remains
+absent, so this is still staged rather than a selectable runtime. M55-only
+`RLAR.PXN` is retained for a later configurable-region API; scalar, scalar-FP,
+and MVE-FP ports remain independent non-MPU profiles.
 
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete
@@ -262,14 +279,16 @@ M55 scalar NTZ full build-selected runtime source group:
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
 
-M55 MVE-FP staged construction-only source group (not selectable or linkable
-as a runtime):
+M55 MVE-FP complete build-selected runtime source group (not globally
+selectable):
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_portmacro.h
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot.h
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot.c
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_svc.c
 
 M33 TF-M v2.0.0 full build-selected Non-secure source group:
                fiber/port/ARM_CM33_TFM/non_secure/fiber_port_types.h
