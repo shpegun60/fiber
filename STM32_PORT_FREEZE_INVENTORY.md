@@ -14,17 +14,17 @@ Inventory snapshot:
 
 ```text
 fiber branch:          v2
-audited tree:          ARM_CM55 NTZ scalar software-runtime checkpoint
+audited tree:          ARM_CM55 scalar runtimes plus MVE-FP construction checkpoint
 FreeRTOS reference:    a50edad08b29052631aa469d4df6e6ec7ff68878
 toolchain:             GNU Arm Embedded GCC from STM32CubeIDE 2.0.0
 matrix result:         PASS
 assembly parity:       PASS at -O2 and -Os
 ```
 
-This inventory snapshot accompanies the exact build-selected CM55 scalar NTZ
-software runtime. It adds a concrete ARMv8.1-M no-FPU/no-MVE baseline without
-claiming the FPU, MVE, MPU, TrustZone, or PAC/BTI roles required by a full
-STM32N6 image. Hardware operation remains unclaimed.
+This inventory snapshot accompanies the exact build-selected CM55 scalar and
+scalar-FP runtimes plus the separate MVE-FP construction checkpoint. It does
+not claim the complete MVE runtime, MPU, TrustZone, or PAC/BTI roles required
+by a full STM32N6 image. Hardware operation remains unclaimed.
 
 ## Scope Rule
 
@@ -84,6 +84,12 @@ hardware execution and MPU isolation remain unvalidated.
 
 This does not promote the profiles without current board evidence to
 `hardware validated`.
+
+One additional profile is deliberately not counted as a complete runtime:
+`ARM_CM55_MVEF_NTZ/non_secure` slice 1 is a non-selectable `C55V` MVE-FP
+construction cohort. It has sealed boot/frame/FPU-policy code and hard/softfp
+`-O2`/`-Os` FreeRTOS constructor parity only. It has no `fiber_port.c`, SVC,
+PendSV, forward runtime ABI, archive/vector, or hardware claim.
 
 ## Remaining Port-Freeze Work
 
@@ -221,6 +227,15 @@ slot-14 ownership, and basic/extended scalar-FP PendSV save/select/restore.
 Hard/softfp `-O2`/`-Os` FreeRTOS-shaped construction/SVC/PendSV parity plus
 normal/LTO archive, vector, exact-cohort, and duplicate-handler proof apply.
 It remains outside global selector routing and has no hardware-support claim.
+
+`ARM_CM55_MVEF_NTZ/non_secure` begins the matching FreeRTOS
+`configENABLE_FPU=1`, `configENABLE_MVE=1` role as an explicitly non-selectable
+`C55V` construction cohort. Its `fiber_port_boot.c` freezes the same 72-byte
+basic and future 212-byte extended geometry, CPACR/FPCCR policy, MVE-FP compiler
+manifest, and no-VPR-software-slot result used by the pinned non-MPU reference.
+The constructor is paired with FreeRTOS at `-O2`/`-Os` and hard/softfp, but SVC,
+PendSV, vectors, archive/ELF runtime proof, and hardware evidence are all
+intentionally pending separate slices.
 
 `transitional_v8m` now provides compile-only bring-up coverage only for the
 unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.

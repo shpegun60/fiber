@@ -1,5 +1,26 @@
 # Fiber Decision Log
 
+## 2026-08-30: Stage ARM_CM55 MVE-FP Construction Cohort
+
+`ARM_CM55_MVEF_NTZ/non_secure` begins as a separate exact `C55V` Cortex-M55
+Non-secure, non-MPU MVE-FP cohort rather than an option in `C55F`. The manifest
+requires GNU Arm `-march=armv8.1-m.main+mve.fp`, CMSIS M55/FPU facts, and both
+MVE bits; it rejects scalar-only targets, Secure CMSE, MPU, PAC, and BTI.
+
+Pinned FreeRTOS `GCC/ARM_CM55_NTZ/non_secure` with
+`configENABLE_FPU=1` and `configENABLE_MVE=1` uses the same basic 18-word,
+72-byte initial image as the scalar-FP branch. Its future non-MPU PendSV path
+conditionally transfers `s16-s31` but adds no VPR software slot. Slice 1
+therefore freezes the 212-byte maximum geometry and MVE cohort trait, while
+implementing only boot metadata, the sealed constructor, and CPACR/FPCCR
+policy. It deliberately has no `fiber_port.c`, SVC/PendSV handler, forward
+runtime ABI, global selector route, archive/vector proof, or hardware claim.
+
+The matrix proves hard/softfp `-O2`/`-Os` construction, exact C55V cohort,
+manifest failures, clean construction-only symbol surface, and paired
+FreeRTOS constructor assembly. Strict SVC and MVE-FP PendSV are separate
+behavior-changing slices.
+
 ## 2026-08-29: Complete ARM_CM55F Scalar-FP PendSV Runtime
 
 `ARM_CM55F_NTZ/non_secure` slice 4 completes the exact build-selected `C55F`

@@ -9923,6 +9923,555 @@ SECTIONS
     }
 }
 
+function Test-ArmCm55MvefNtzConstructionContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$Objdump,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM55_MVEF_NTZ\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_mvef_ntz_layout_probe.c"
+    $referenceFixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_mvef_ntz_freertos_frame_reference.c"
+    $expectedFiles = @(
+        "FREERTOS_PARITY.md",
+        "fiber_port_boot.c",
+        "fiber_port_boot.h",
+        "fiber_port_boot_types.h",
+        "fiber_port_private.h",
+        "fiber_port_types.h",
+        "fiber_portmacro.h"
+    )
+    foreach ($file in $expectedFiles) {
+        $path = Join-Path $profileDir $file
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "ARM_CM55_MVEF_NTZ slice-1 file is missing: $path"
+        }
+    }
+    foreach ($requiredFixture in @($fixture, $referenceFixture)) {
+        if (-not (Test-Path -LiteralPath $requiredFixture)) {
+            throw "ARM_CM55_MVEF_NTZ slice-1 fixture is missing: $requiredFixture"
+        }
+    }
+
+    $actualFiles = @(Get-ChildItem -LiteralPath $profileDir -File |
+            Select-Object -ExpandProperty Name | Sort-Object)
+    $difference = @(Compare-Object -ReferenceObject $expectedFiles `
+            -DifferenceObject $actualFiles)
+    if ($difference.Count -ne 0) {
+        throw "ARM_CM55_MVEF_NTZ slice-1 file surface changed; only construction artifacts are allowed"
+    }
+
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM55_MVEF_NTZ", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "Construction-only ARM_CM55_MVEF_NTZ entered global selection: $selector"
+        }
+    }
+
+    $typeText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_port_types.h") -Raw
+    foreach ($forbiddenTypeDependency in @(
+            "mcu_core.h",
+            "fiber_compiler.h",
+            "fiber_portmacro.h",
+            "fiber_port_select.h")) {
+        $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+            [regex]::Escape($forbiddenTypeDependency) + '[">]'
+        if ([regex]::IsMatch($typeText, $includePattern)) {
+            throw "ARM_CM55_MVEF_NTZ public storage acquired CPU dependency: $forbiddenTypeDependency"
+        }
+    }
+
+    $macroPath = Join-Path $profileDir "fiber_portmacro.h"
+    $macro = Get-Content -LiteralPath $macroPath -Raw
+    foreach ($requiredMacroToken in @(
+            "FIBER_PORT_ARMV81M_MAINLINE",
+            "__CORTEX_M != 55",
+            "requires MVE FP compiler support",
+            "FIBER_PORT_RUNTIME_SELECTABLE 0",
+            "FIBER_PORT_HAS_FPU 1",
+            "FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1",
+            "FIBER_PORT_HAS_MVE 1",
+            "FIBER_PORT_CONTEXT_ABI_PORT_ID 0x43353556u",
+            "FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x93u",
+            "FIBER_PORT_INITIAL_CONTEXT_BYTES == 72u",
+            "FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 212u",
+            "no VPR software slot",
+            "does not permit PAC",
+            "does not permit BTI",
+            "is non-MPU")) {
+        if ($macro.IndexOf($requiredMacroToken,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55_MVEF_NTZ portmacro lost frozen trait: $requiredMacroToken"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "configENABLE_FPU = 1",
+            "configENABLE_MVE = 1",
+            "-march=armv8.1-m.main+mve.fp",
+            "maximum bounded context: 212 bytes",
+            "0xFFFFFFBC",
+            "0xFFFFFFAC",
+            "C55V",
+            "no VPR software slot",
+            "construction-only",
+            "FAP-M55MVE-CONSTRUCTION")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55_MVEF_NTZ parity ledger lost staged evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm55-mvef-ntz-construction"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#ifndef FIBER_TEST_FPU_PRESENT
+#define FIBER_TEST_FPU_PRESENT 1U
+#endif
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT FIBER_TEST_FPU_PRESENT
+#define __FPU_USED 1U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm55.h"
+#ifdef FIBER_TEST_FPU_USED
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#ifdef FIBER_TEST_CORTEX_M
+#undef __CORTEX_M
+#define __CORTEX_M FIBER_TEST_CORTEX_M
+#endif
+#ifdef FIBER_TEST_SECURE_CMSE
+#define __ARM_FEATURE_CMSE FIBER_TEST_SECURE_CMSE
+#endif
+#ifdef FIBER_TEST_PAC
+#define __ARM_FEATURE_PAUTH FIBER_TEST_PAC
+#endif
+#ifdef FIBER_TEST_BTI
+#define __ARM_FEATURE_BTI FIBER_TEST_BTI
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+_Static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+_Static_assert(sizeof(FiberContext) == 76u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm55_mvef_ntz_type_only_object;
+'@
+    & $Compiler -x c "-march=armv8.1-m.main+mve.fp" -mthumb -mfloat-abi=hard `
+        -std=c11 -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $typeProbe -o (Join-Path $probeDir "type-only.o")
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55_MVEF_NTZ type-only C header failed without CMSIS"
+    }
+
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include "fiber_port_types.h"
+static_assert(sizeof(FiberPortBoot) == 72u, "boot size");
+static_assert(sizeof(FiberContext) == 76u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_cm55_mvef_ntz_cpp_type_only_object;
+'@
+    & $Compiler -x c++ "-march=armv8.1-m.main+mve.fp" -mthumb -mfloat-abi=hard `
+        -std=c++17 -ffreestanding -fno-builtin -Wall -Wextra -Werror `
+        "-I$profileDir" -c $cppProbe -o (Join-Path $probeDir "type-only-cpp.o")
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55_MVEF_NTZ type-only C++ header failed without CMSIS"
+    }
+
+    $manifestDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV81M_MAINLINE=1"
+    )
+    $includeArgs = @(
+        "-I$probeDir", "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot", "-I$CmsisPath"
+    )
+    $baseArgs = @(
+        "-mthumb", "-std=c11", "-ffreestanding", "-fno-builtin",
+        "-fno-common", "-Wall", "-Wextra", "-Wundef", "-Werror=undef"
+    ) + $manifestDefines + $includeArgs
+    $modes = @(
+        [pscustomobject]@{
+            Name = "hard-o2"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Optimization = "-O2"
+        },
+        [pscustomobject]@{
+            Name = "hard-os"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Optimization = "-Os"
+        },
+        [pscustomobject]@{
+            Name = "softfp-o2"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=softfp")
+            Optimization = "-O2"
+        },
+        [pscustomobject]@{
+            Name = "softfp-os"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=softfp")
+            Optimization = "-Os"
+        }
+    )
+
+    $cohortFromLayout = $null
+    foreach ($mode in $modes) {
+        $object = Join-Path $probeDir ("layout-" + $mode.Name + ".o")
+        & $Compiler @($mode.CpuArgs + $baseArgs + @(
+            $mode.Optimization, "-c", $fixture, "-o", $object))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55_MVEF_NTZ layout compile failed: $($mode.Name)"
+        }
+        $defined = @(& $Nm -g --defined-only $object)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55_MVEF_NTZ layout: $($mode.Name)"
+        }
+        $cohorts = @($defined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if ($cohorts.Count -ne 1) {
+            throw "ARM_CM55_MVEF_NTZ layout must define one exact cohort: $($mode.Name)"
+        }
+        foreach ($token in @(
+                "armv81m_mainline",
+                "p0x43353556u",
+                "l0x00010001u",
+                "_f1_e1_h1_j1_v1_d1_r1_",
+                "_z8u_y1_w2_g3_",
+                "_i0_o0xFFFFFFBCu_c0_s1_x0_m1_a0_b0_t1_n1_k0_q0")) {
+            if ($cohorts[0].IndexOf($token,
+                    [System.StringComparison]::Ordinal) -lt 0) {
+                throw "ARM_CM55_MVEF_NTZ exact cohort lost token ${token}: $($cohorts[0])"
+            }
+        }
+        if (($null -ne $cohortFromLayout) -and ($cohortFromLayout -ne $cohorts[0])) {
+            throw "ARM_CM55_MVEF_NTZ cohort changed between compiler ABI/optimization modes"
+        }
+        $cohortFromLayout = $cohorts[0]
+    }
+
+    $invalidCases = @(
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_CORTEX_M=33")
+            Diagnostic = "CMSIS __CORTEX_M == 55"
+        },
+        [pscustomobject]@{
+            Name = "fpu-not-used"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_FPU_USED=0")
+            Diagnostic = "requires CMSIS __FPU_USED == 1"
+        },
+        [pscustomobject]@{
+            Name = "no-mve-fp"
+            CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+            Defines = @()
+            Diagnostic = "requires MVE FP compiler support"
+        },
+        [pscustomobject]@{
+            Name = "mve-integer-only"
+            CpuArgs = @("-march=armv8.1-m.main+mve", "-mfloat-abi=soft")
+            Defines = @()
+            Diagnostic = "requires MVE FP compiler support"
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard", "-mcmse")
+            Defines = @("-DFIBER_TEST_SECURE_CMSE=3")
+            Diagnostic = "does not accept a Secure CMSE build"
+        },
+        [pscustomobject]@{
+            Name = "pac"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_PAC=1")
+            Diagnostic = "does not permit PAC"
+        },
+        [pscustomobject]@{
+            Name = "bti"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_TEST_BTI=1")
+            Diagnostic = "does not permit BTI"
+        },
+        [pscustomobject]@{
+            Name = "mpu"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "is non-MPU"
+        },
+        [pscustomobject]@{
+            Name = "runtime-selectable"
+            CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+            Defines = @("-DFIBER_PORT_RUNTIME_SELECTABLE=1")
+            Diagnostic = "runtime-selectable state must not be predefined"
+        }
+    )
+    foreach ($case in $invalidCases) {
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($case.CpuArgs + $baseArgs + @(
+                "-O2", "-Werror") + $case.Defines + @(
+                "-c", $fixture, "-o",
+                (Join-Path $probeDir ("invalid-" + $case.Name + ".o")))) `
+            -LogPath (Join-Path $probeDir ("invalid-" + $case.Name + ".log"))
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM55_MVEF_NTZ manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+
+    $bootSourcePath = Join-Path $profileDir "fiber_port_boot.c"
+    $privateHeaderPath = Join-Path $profileDir "fiber_port_private.h"
+    $bootSource = Get-Content -LiteralPath $bootSourcePath -Raw
+    $privateHeader = Get-Content -LiteralPath $privateHeaderPath -Raw
+    $frameBody = Get-CFunctionBody -Source $bootSource `
+        -Signature "void fiber_port_init_context_frame(FiberContext *const ctx)" `
+        -Path $bootSourcePath
+    $contextInitBody = Get-CFunctionBody -Source $bootSource `
+        -Signature "void fiber_port_context_init(FiberContext *const ctx," `
+        -Path $bootSourcePath
+    $lastAssignment = -1
+    foreach ($assignment in @(
+            "fiber_portFRAME_PSPLIM] =",
+            "fiber_portFRAME_EXC_RETURN] =",
+            "fiber_portFRAME_R4] =",
+            "fiber_portFRAME_R5] =",
+            "fiber_portFRAME_R6] =",
+            "fiber_portFRAME_R7] =",
+            "fiber_portFRAME_R8] =",
+            "fiber_portFRAME_R9] =",
+            "fiber_portFRAME_R10] =",
+            "fiber_portFRAME_R11] =",
+            "fiber_portFRAME_R0] =",
+            "fiber_portFRAME_R1] =",
+            "fiber_portFRAME_R2] =",
+            "fiber_portFRAME_R3] =",
+            "fiber_portFRAME_R12] =",
+            "fiber_portFRAME_LR] =",
+            "fiber_portFRAME_PC] =",
+            "fiber_portFRAME_XPSR] =")) {
+        $assignmentIndex = $frameBody.IndexOf($assignment,
+            [System.StringComparison]::Ordinal)
+        if ($assignmentIndex -le $lastAssignment) {
+            throw "ARM_CM55_MVEF_NTZ initial frame lost exact FreeRTOS assignment order: $assignment"
+        }
+        $lastAssignment = $assignmentIndex
+    }
+    if (([regex]::Matches($frameBody,
+            'frame\[fiber_portFRAME_[A-Z0-9_]+\]\s*=')).Count -ne 18) {
+        throw "ARM_CM55_MVEF_NTZ constructor must assign exactly eighteen basic-frame words"
+    }
+    if (([regex]::Matches($bootSource,
+            'FIBER_PORT_CONTEXT_COHORT_RETAIN\(\);').Count -ne 1) -or
+            ($contextInitBody.IndexOf("FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+                [System.StringComparison]::Ordinal) -lt 0)) {
+        throw "ARM_CM55_MVEF_NTZ must retain its exact cohort once from one-shot context construction"
+    }
+
+    foreach ($requiredConstructionToken in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
+            "fiber_port_boot_record_check(&ctx->boot);",
+            "ctx->sp = frame;",
+            "FIBER_PORT_CONTEXT_COHORT_RETAIN();",
+            "fiber_port_boot_create(&ctx->boot, stack_begin, stack_end, entry, arg);",
+            "fiber_port_init_context_frame(ctx);",
+            "fiber_port_validate_initial_frame(ctx);",
+            "void fiber_port_fpu_prepare(void)",
+            "void fiber_port_fpu_require_configured(void)",
+            "void fiber_port_fpu_require_ready(void)",
+            "fiber_portCPACR_REG",
+            "fiber_portFPCCR_REG",
+            "FIBER_FPU_LAZY",
+            "FIBER_GENERAL_REGS_ONLY")) {
+        if (($bootSource.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0) -and
+                ($privateHeader.IndexOf($requiredConstructionToken,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "ARM_CM55_MVEF_NTZ construction source lost contract: $requiredConstructionToken"
+        }
+    }
+
+    foreach ($forbiddenRuntimeToken in @(
+            "fiber_port_runtime_memory_barrier",
+            "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule",
+            "fiber_port_context_validate_save_current",
+            "fiber_port_context_validate_restore",
+            "fiber_port_scheduler_pick_first_from_start",
+            "fiber_port_scheduler_pick_next_from_pendsv",
+            "fiber_port_start_first_context",
+            "FIBER_RUNTIME_PORT_ABI_RETAIN_V1",
+            "SVC_Handler",
+            "PendSV_Handler")) {
+        if (($bootSource.IndexOf($forbiddenRuntimeToken,
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($privateHeader.IndexOf($forbiddenRuntimeToken,
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+            throw "ARM_CM55_MVEF_NTZ construction slice leaked runtime surface: $forbiddenRuntimeToken"
+        }
+    }
+
+    $requiredDefinitions = @(
+        "fiber_port_context_init",
+        "fiber_port_init_context_frame",
+        "fiber_port_fpu_prepare",
+        "fiber_port_fpu_require_configured",
+        "fiber_port_fpu_require_ready",
+        "fiber_port_boot_create",
+        "fiber_port_boot_check",
+        "fiber_port_boot_record_compute_hash",
+        "fiber_port_boot_record_check",
+        "fiber_port_boot_record_fast_check"
+    )
+    foreach ($mode in $modes) {
+        $modeDir = Join-Path $probeDir ("construction-" + $mode.Name)
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $lazy = if ($mode.Name -match 'os$') { 1 } else { 0 }
+        $compileArgs = @($mode.CpuArgs + $baseArgs + @(
+            $mode.Optimization,
+            "-Werror",
+            "-DFIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1",
+            "-DFIBER_FPU_LAZY=$lazy",
+            "-save-temps=obj"))
+        $bootObject = Join-Path $modeDir "construction.o"
+        $groupObject = Join-Path $modeDir "construction-group.o"
+        $referenceObject = Join-Path $modeDir "freertos-frame.o"
+        & $Compiler @compileArgs -c $bootSourcePath -o $bootObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55_MVEF_NTZ construction source failed compile: $($mode.Name)"
+        }
+        & $Compiler @($mode.CpuArgs + @(
+            "-std=c11", "-ffreestanding", "-fno-builtin", "-Wall",
+            "-Wextra", "-Werror", $mode.Optimization,
+            "-c", $referenceFixture, "-o", $referenceObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pinned FreeRTOS M55 MVE-FP frame fixture failed compile: $($mode.Name)"
+        }
+        & $Compiler -r $bootObject -o $groupObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55_MVEF_NTZ construction group failed link: $($mode.Name)"
+        }
+
+        $defined = @(& $Nm -g --defined-only $groupObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55_MVEF_NTZ construction group: $($mode.Name)"
+        }
+        foreach ($requiredDefinition in $requiredDefinitions) {
+            if ((@($defined | Where-Object {
+                    $_ -match ("\bT\s+" +
+                        [regex]::Escape($requiredDefinition) + "$")
+                })).Count -ne 1) {
+                throw "ARM_CM55_MVEF_NTZ construction group must define one $requiredDefinition"
+            }
+        }
+        foreach ($forbiddenDefinition in @(
+                "fiber_port_runtime_memory_barrier",
+                "fiber_port_panic_wait",
+                "fiber_port_require_scheduler_configuration_environment",
+                "fiber_port_runtime_prepare_start",
+                "fiber_port_runtime_select_first",
+                "fiber_port_runtime_start_first",
+                "fiber_port_runtime_schedule",
+                "SVC_Handler",
+                "PendSV_Handler")) {
+            if (@($defined | Where-Object {
+                    $_ -match ("\b[TW]\s+" +
+                        [regex]::Escape($forbiddenDefinition) + "$")
+                }).Count -ne 0) {
+                throw "ARM_CM55_MVEF_NTZ construction group unexpectedly defines $forbiddenDefinition"
+            }
+        }
+        $groupCohorts = @($defined | ForEach-Object {
+            if ($_ -match '\b(fiber_port_context_cohort_\S+)$') {
+                $Matches[1]
+            }
+        })
+        if (($groupCohorts.Count -ne 1) -or
+                ($groupCohorts[0] -ne $cohortFromLayout)) {
+            throw "ARM_CM55_MVEF_NTZ construction group disagrees with exact C55V cohort"
+        }
+        $undefined = @(& $Nm -u $groupObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55_MVEF_NTZ construction undefined surface: $($mode.Name)"
+        }
+        Assert-ExactSymbolSet -Expected @(
+            "fiber_internal_task_return",
+            "fiber_panic") -Actual (Get-NmUndefinedSymbolNames `
+            -NmOutput $undefined -Path $groupObject) `
+            -Description "ARM_CM55_MVEF_NTZ construction reverse/integration surface ($($mode.Name))"
+
+        $bootDisassembly = (& $Objdump -dr $bootObject) -join "`n"
+        $referenceDisassembly = (& $Objdump -dr $referenceObject) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw "objdump failed for ARM_CM55_MVEF_NTZ construction: $($mode.Name)"
+        }
+        $generatedFrameBody = Get-DisassemblyFunctionBody `
+            -Disassembly $bootDisassembly -Symbol "fiber_port_init_context_frame" `
+            -Path $bootObject
+        $generatedReferenceBody = Get-DisassemblyFunctionBody `
+            -Disassembly $referenceDisassembly `
+            -Symbol "fiber_test_freertos_cm55_mvef_initialise_stack" `
+            -Path $referenceObject
+        foreach ($body in @($generatedFrameBody, $generatedReferenceBody)) {
+            if ($body -match '\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') {
+                throw "ARM_CM55_MVEF_NTZ basic construction emitted an FP/MVE instruction: $($mode.Name)"
+            }
+        }
+        if (($generatedFrameBody -notmatch '#-?(?:72|0x48)\b') -or
+                ($generatedReferenceBody -notmatch '#-?(?:72|0x48)\b')) {
+            throw "ARM_CM55_MVEF_NTZ initial construction lost the 72-byte basic frame: $($mode.Name)"
+        }
+        foreach ($sensitiveFunction in @(
+                "fiber_port_context_init",
+                "fiber_port_init_context_frame",
+                "fiber_port_fpu_prepare",
+                "fiber_port_fpu_require_configured",
+                "fiber_port_fpu_require_ready")) {
+            Assert-SensitiveFunctionClean -Disassembly $bootDisassembly `
+                -Symbol $sensitiveFunction -Path $bootObject
+        }
+    }
+}
+
 function Test-ArmCm33TfmRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -16374,6 +16923,10 @@ try {
     Test-ArmCm55FNtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55_MVEF_NTZ staged MVE-FP construction contract =="
+    Test-ArmCm55MvefNtzConstructionContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -Objdump $objdump -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
     Write-Host "== ARM_CM33_TFM full runtime/TF-M/archive/ELF contract =="
     Test-ArmCm33TfmRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `

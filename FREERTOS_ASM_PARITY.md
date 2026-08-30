@@ -102,6 +102,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
 | `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
 | `ARM_CM55F_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | basic construction, strict first SVC/restore, and conditional scalar-FP `s16-s31` PSPLIM PendSV |
+| `ARM_CM55_MVEF_NTZ/non_secure` (construction-only) | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=1` | exact basic `pxPortInitialiseStack()` geometry only; SVC and PendSV are intentionally not claimed yet |
 | `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
 | `ARM_CM33/non_secure` plus Secure companion | `GCC/ARM_CM33/non_secure` and `secure` | 19-word construction, PRIS/Secure init, SVC first start, Secure save/unload, lazy bounded allocation, Secure load, and segmented eleven-word PendSV save/restore |
 | `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
@@ -129,6 +130,14 @@ strong SVC/PendSV ownership, exact reverse dependencies, normal/LTO archive
 extraction, vector slots 11/14, external cohort retention, and
 duplicate-handler failure. The profile remains build-selected only and
 hardware-unvalidated.
+
+`ARM_CM55_MVEF_NTZ/non_secure` is deliberately outside the complete runtime
+inventory while it contains only `fiber_port_boot.c`. Its auxiliary parity pair
+compiles the pinned `configENABLE_FPU=1`, `configENABLE_MVE=1` constructor and
+the Fiber construction object at `-O2` and `-Os`; both must retain the 72-byte
+basic frame and contain no VFP/MVE instruction in the constructor. The profile
+is non-selectable and has no SVC, PendSV, archive, ELF/vector, runtime, or
+hardware-validation claim until later slices add those mechanisms.
 
 `ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
 pinned 8- and 16-region MPU reference configurations. Its public
@@ -379,6 +388,18 @@ dynamic scalar-FP maximum at 212 bytes. It additionally zeroes unspecified
 synthetic registers, preserves r9, seals boot metadata, validates the frame,
 and prepares CP10/CP11 and FPCCR outside the constructor. Neither constructor
 may issue a VFP or MVE instruction before the FPU policy is established.
+
+### FAP-M55MVE-CONSTRUCTION
+
+The pinned M55 non-MPU MVE-FP branch keeps the same 72-byte basic
+`pxPortInitialiseStack()` geometry as scalar FP. MVE changes the later
+conditional `s16-s31` PendSV contract but does not add a VPR software-frame
+slot. Its future runtime reference is specifically the non-MPU PSP branch,
+not the MPU branch that copies frames into privileged TCB storage. Fiber uses a
+separate C55V cohort with the MVE trait set, preserves the same eighteen basic
+seed words, and adds boot sealing and initial-frame validation. Neither
+constructor may issue VFP or MVE instructions before the later runtime policy
+and transfer slices exist.
 
 ### FAP-M55F-SVC-START
 

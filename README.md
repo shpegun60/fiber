@@ -156,6 +156,17 @@ an alternative configuration of `ARM_CM55_NTZ`; MVE, MPU, TrustZone,
 SecureContext/TF-M, PAC, and BTI need distinct cohorts. See
 `fiber/port/ARM_CM55F_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM55_MVEF_NTZ/non_secure` is a distinct, non-selectable M55 MVE-FP
+construction cohort, not an option on the scalar-FP port. Its `C55V` identity
+requires `-march=armv8.1-m.main+mve.fp`, records the pinned FreeRTOS
+`configENABLE_FPU=1`, `configENABLE_MVE=1` frame geometry, and deliberately
+contains only sealed initial-context construction plus CPACR/FPCCR policy. The
+same 72-byte basic frame and future 212-byte extended bound are compile and
+assembly proven at hard/softfp `-O2`/`-Os`; MVE adds no VPR software slot in the
+pinned non-MPU reference. It has no SVC/PendSV handlers, no scheduler/runtime
+ABI, no global selector route, and no hardware-support claim until later
+slices. See `fiber/port/ARM_CM55_MVEF_NTZ/non_secure/FREERTOS_PARITY.md`.
+
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete
 FP-aware PendSV runtime. FreeRTOS keeps a new FPU task on the same 72-byte
@@ -250,6 +261,15 @@ M55 scalar NTZ full build-selected runtime source group:
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_private.h
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
+
+M55 MVE-FP staged construction-only source group (not selectable or linkable
+as a runtime):
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot.c
 
 M33 TF-M v2.0.0 full build-selected Non-secure source group:
                fiber/port/ARM_CM33_TFM/non_secure/fiber_port_types.h

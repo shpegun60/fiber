@@ -483,6 +483,18 @@ $ports = @(
         ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1")
     },
+    # Construction-only MVE-FP cohort. Auxiliary excludes it from the
+    # fiber_port.c runtime inventory until the later SVC/PendSV slices exist.
+    [pscustomobject]@{
+        Name = "ARM_CM55_MVEF_NTZ_CONSTRUCTION"
+        CpuArgs = @("-march=armv8.1-m.main+mve.fp", "-mfloat-abi=hard")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55_MVEF_NTZ\non_secure"; FiberSource = "fiber_port_boot.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_MVE=1")
+        Auxiliary = 1
+    },
     [pscustomobject]@{
         Name = "ARM_CM55F_NTZ_SVC"
         CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
@@ -1531,6 +1543,34 @@ try {
     Assert-AbsentPatterns -Body $cm55fFiberConstruction `
         -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
         -Label "ARM_CM55F_NTZ Fiber initial construction"
+
+    # MVE-FP uses the same pinned non-MPU basic initial frame as scalar FP.
+    # MVE changes the later conditional high-register save contract, not this
+    # general-registers-only constructor.
+    $pair = $compiled["ARM_CM55_MVEF_NTZ_CONSTRUCTION"]
+    Assert-MechanismParity -PortName "ARM_CM55_MVEF_NTZ" `
+        -Mechanism "initial-construction" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "pxPortInitialiseStack" `
+        -ReferencePatterns @('#-?(?:72|0x48)\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_init_context_frame" `
+        -FiberPatterns @('#-?(?:72|0x48)\b') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-M55MVE-CONSTRUCTION") `
+        -Ledger $ledger
+    $cm55MveReferenceConstruction = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Reference -Symbol "pxPortInitialiseStack" `
+        -Path $pair.ReferencePath
+    $cm55MveFiberConstruction = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Fiber -Symbol "fiber_port_init_context_frame" `
+        -Path $pair.FiberPath
+    Assert-AbsentPatterns -Body $cm55MveReferenceConstruction `
+        -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
+        -Label "ARM_CM55_MVEF_NTZ FreeRTOS initial construction"
+    Assert-AbsentPatterns -Body $cm55MveFiberConstruction `
+        -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
+        -Label "ARM_CM55_MVEF_NTZ Fiber initial construction"
 
     $pair = $compiled["ARM_CM55F_NTZ_SVC"]
     Assert-MechanismParity -PortName "ARM_CM55F_NTZ" `
