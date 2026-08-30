@@ -168,21 +168,25 @@ forward operations and strong SVC/PendSV handlers, but has no global selector
 route or hardware-support claim. See
 `fiber/port/ARM_CM55_MVEF_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55_MPU/non_secure` is a separate non-selectable no-FPU/no-MVE `C55M`
+`ARM_CM55_MPU/non_secure` is a separate explicit build-selected no-FPU/no-MVE `C55M`
 protected cohort. It freezes the FreeRTOS M55 MPU shape for
 8- and 16-region manifests: MAIR0, per-context RBAR/RLAR pairs, a privileged
 20-word active image plus one cursor word, and per-fiber `PSP`, `PSPLIM`,
 `CONTROL`, and `EXC_RETURN` state. It now owns sealed context construction,
 linker-boundary validation, the global four-region MPU image, strict first-start
-SVC, and private protected PendSV. Its strong SVC/PendSV engine follows the
+SVC, all eight forward runtime operations, and protected PendSV. Its strong
+SVC/PendSV engine follows the
 pinned disable/MAIR0/RNR 4-8-12/enable/PSPLIM-CONTROL-PSP/frame-copy FreeRTOS
 sequence, with Fiber provenance, scheduler CPU/MPU-state, and readback checks.
 PendSV saves the complete basic frame into privileged storage, selects under
 BASEPRI through reverse ABI v1, atomically replaces the selected MPU image
-under PRIMASK, and restores the inverse frame. The forward runtime ABI remains
-absent, so this is still staged rather than a selectable runtime. M55-only
-`RLAR.PXN` is retained for a later configurable-region API; scalar, scalar-FP,
-and MVE-FP ports remain independent non-MPU profiles.
+under PRIMASK, publishes the selected current context while MPU access is
+disabled, and restores the inverse frame. Normal/LTO archive extraction,
+external cohort expectation, stale 8/16-region archive rejection, and
+duplicate-handler failure are proven. It deliberately has no global
+auto-selector route, optional heterogeneous-MPU API, or hardware-support claim.
+M55-only `RLAR.PXN` is retained for a later configurable-region API; scalar,
+scalar-FP, and MVE-FP ports remain independent non-MPU profiles.
 
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete

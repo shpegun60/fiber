@@ -4,8 +4,8 @@
 
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
 
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55_MPU layout slice must not expose runtime operations");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM55_MPU selected layout must expose runtime operations");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 21u,
 		"[fiber]: ARM_CM55_MPU protected context word count changed");
 FIBER_STATIC_ASSERT(sizeof(FiberPortProtectedContext) == 84u,

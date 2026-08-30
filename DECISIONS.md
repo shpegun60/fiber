@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-08-30: Complete ARM_CM55 MPU Selected Runtime
+
+`ARM_CM55_MPU/non_secure` slice 5 completes the explicit build-selected
+no-FPU/no-MVE/no-TrustZone/no-PAC `C55M` 8- and 16-region protected runtime.
+The existing sealed construction and protected SVC/PendSV mechanics retain
+their pinned FreeRTOS `GCC/ARM_CM55_NTZ/non_secure` ordering. The activation
+adds the seven remaining forward operations in `fiber_port.c`; together with
+`fiber_port_context_init()` in `fiber_port_boot.c`, the profile now exports
+the frozen eight-function forward ABI.
+
+The CPU-neutral `fiber_schedule()` path reaches the exact public syscall-flash
+SVC 71 veneer. First selection runs only after start-environment preparation;
+the protected PendSV path validates and saves the running privileged frame,
+selects through reverse ABI v1 under BASEPRI, replaces MAIR0 and the context
+MPU region pairs while PRIMASK protects the disabled-MPU interval, publishes
+the selected current context during that interval, and restores the inverse
+frame. This preserves the reference protected-frame geometry rather than
+moving software state back onto an unprivileged PSP stack.
+
+The profile remains outside global auto/profile selection. It deliberately
+exposes no optional heterogeneous-MPU API: `RLAR.PXN` is only a port capability
+reserved for a future separately versioned feature ABI. The matrix proves
+`-O2`/`-Os` assembly parity plus normal/LTO archive extraction, external cohort
+expectation, stale 8/16-region archive rejection, protected placement, vector
+slots 11/14, and duplicate-handler failure. M55 MPU hardware execution and
+isolation remain unclaimed.
+
 ## 2026-08-30: Stage ARM_CM55 MPU Protected PendSV
 
 `ARM_CM55_MPU/non_secure` slice 4 completes the private protected exception

@@ -5360,13 +5360,13 @@ function Test-ArmCm55MpuProtectedRuntimeContract {
     $privateHeader = Join-Path $profileDir "fiber_port_private.h"
     $linkerContract = Join-Path $profileDir "fiber_port_linker_contract.ld"
     $fixture = Join-Path $RepositoryRoot `
-        "tools\fixtures\arm_cm55_mpu_first_start_probe.c"
+        "tools\fixtures\ARM_CM55_MPU_first_start_probe.c"
     $fixtureLinker = Join-Path $RepositoryRoot `
-        "tools\fixtures\arm_cm55_mpu_first_start.ld"
+        "tools\fixtures\ARM_CM55_MPU_first_start.ld"
     $competing = Join-Path $RepositoryRoot `
-            "tools\fixtures\arm_cm55_mpu_competing_svc.c"
+            "tools\fixtures\ARM_CM55_MPU_competing_svc.c"
     $competingPendSv = Join-Path $RepositoryRoot `
-            "tools\fixtures\arm_cm55_mpu_competing_pendsv.c"
+            "tools\fixtures\ARM_CM55_MPU_competing_pendsv.c"
 
     foreach ($required in @($runtimeSource, $bootSource, $privateHeader,
             $linkerContract, $fixture, $fixtureLinker, $competing,
@@ -5375,11 +5375,6 @@ function Test-ArmCm55MpuProtectedRuntimeContract {
             throw "ARM_CM55_MPU protected runtime slice is missing: $required"
         }
     }
-    $legacySvcSource = Join-Path $profileDir "fiber_port_svc.c"
-    if (Test-Path -LiteralPath $legacySvcSource) {
-        throw "ARM_CM55_MPU protected runtime must keep shared SVC/PendSV mechanics in fiber_port.c: $legacySvcSource"
-    }
-
     $runtimeText = Get-Content -LiteralPath $runtimeSource -Raw
     foreach ($requiredText in @(
             "FIBER_PORT_CONTEXT_COHORT_DEFINE();",
@@ -5394,7 +5389,13 @@ function Test-ArmCm55MpuProtectedRuntimeContract {
             "fiber_port_start_first_context",
             "fiber_port_restore_first_context_from_svc",
             "fiber_port_restore_first_context_from_svc(current, exc_return);",
-            "fiber_port_unprivileged_yield",
+            "fiber_port_runtime_memory_barrier",
+            "fiber_port_panic_wait",
+            "fiber_port_require_scheduler_configuration_environment",
+            "fiber_port_runtime_prepare_start",
+            "fiber_port_runtime_select_first",
+            "fiber_port_runtime_start_first",
+            "fiber_port_runtime_schedule",
             "fiber_port_unprivileged_task_return",
             "void SVC_Handler(void)",
             "void PendSV_Handler(void)",
@@ -5405,33 +5406,26 @@ function Test-ArmCm55MpuProtectedRuntimeContract {
             "fiber_portSVC_YIELD",
             "fiber_portSVC_RETURN",
             "fiber_portMPU_MAIR0_REG",
-            "fiber_portMPU_CTRL_REQUIRED")) {
+            "fiber_portMPU_CTRL_REQUIRED",
+            "fiber_current",
+            "fiber_schedule")) {
         if ($runtimeText.IndexOf($requiredText,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM55_MPU protected runtime source lost required mechanism: $requiredText"
         }
     }
-    foreach ($forbiddenText in @(
-            "fiber_port_runtime_schedule",
-            "fiber_port_runtime_select_first",
-            "fiber_port_runtime_start_first",
-            "fiber_port_runtime_prepare_start")) {
-        if ($runtimeText.IndexOf($forbiddenText,
-                [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM55_MPU protected runtime slice acquired forbidden forward ABI ownership: $forbiddenText"
-        }
-    }
-
     $privateText = Get-Content -LiteralPath $privateHeader -Raw
-    foreach ($forbiddenInclude in @("fiber_port_runtime_abi.h")) {
-        if ($privateText.IndexOf($forbiddenInclude,
-                [System.StringComparison]::Ordinal) -ge 0) {
-            throw "ARM_CM55_MPU private runtime boundary acquired forward ABI: $forbiddenInclude"
-        }
+    if ($privateText.IndexOf("fiber_port_runtime_abi.h",
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "ARM_CM55_MPU selected runtime must consume the frozen forward ABI"
     }
     if ($privateText.IndexOf("fiber_runtime_port_abi.h",
             [System.StringComparison]::Ordinal) -lt 0) {
         throw "ARM_CM55_MPU protected PendSV must consume frozen reverse ABI v1"
+    }
+    if ($privateText.IndexOf("fiber_api_decl.h",
+            [System.StringComparison]::Ordinal) -lt 0) {
+        throw "ARM_CM55_MPU runtime linker audit must consume public Thread API declarations"
     }
 
     foreach ($selector in @(
@@ -5439,29 +5433,18 @@ function Test-ArmCm55MpuProtectedRuntimeContract {
             (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
         if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
                 "ARM_CM55_MPU", [System.StringComparison]::Ordinal) -ge 0) {
-            throw "Staged ARM_CM55_MPU protected runtime entered global selection: $selector"
+            throw "ARM_CM55_MPU build-selected runtime entered global selection: $selector"
         }
     }
 
-    $fixtureLinkerText = Get-Content -LiteralPath $fixtureLinker -Raw
-    foreach ($requiredLinkerText in @(
-            "__fiber_mpu_current_context_slot_end__ = 0x30000020;",
-            ". = 0x20;",
-            "SIZEOF(.fiber_current_context_slot) == 0x20")) {
-        if ($fixtureLinkerText.IndexOf($requiredLinkerText,
-                [System.StringComparison]::Ordinal) -lt 0) {
-            throw "ARM_CM55_MPU protected runtime lost the 32-byte current-slot aperture: $requiredLinkerText"
-        }
-    }
-
-    $probeDir = Join-Path $BuildRoot "arm-cm55-mpu-protected-runtime"
+    $probeDir = Join-Path $BuildRoot "arm-cm55-mpu-first-start"
     New-Item -ItemType Directory -Path $probeDir | Out-Null
     $mainHeader = @"
 #ifndef MAIN_H_
 #define MAIN_H_
 #define __MPU_PRESENT 1U
 #define __VTOR_PRESENT 1U
-#define __NVIC_PRIO_BITS 3U
+#define __NVIC_PRIO_BITS 4U
 #define __Vendor_SysTickConfig 0U
 #define __FPU_PRESENT 0U
 #define __FPU_USED 0U
@@ -5483,6 +5466,13 @@ typedef enum IRQn {
         "-Werror", "-Wundef", "-Werror=undef",
         "-Werror=implicit-function-declaration", "-Werror=return-type")
     $requiredRuntimeSymbols = @(
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule",
         "fiber_port_prepare_first_start",
         "fiber_port_svc_dispatch",
         "fiber_port_context_validate_restore",
@@ -5491,7 +5481,6 @@ typedef enum IRQn {
         "fiber_port_mpu_switch_to_context",
         "fiber_port_start_first_context",
         "fiber_port_restore_first_context_from_svc",
-        "fiber_port_unprivileged_yield",
         "fiber_port_unprivileged_task_return",
         "SVC_Handler",
         "PendSV_Handler")
@@ -5546,15 +5535,16 @@ typedef enum IRQn {
                     throw "ARM_CM55_MPU protected runtime object lost strong symbol: $symbol / $regions/$mode"
                 }
             }
-            if ($runtimeDefined -match '\bfiber_port_runtime_') {
-                throw "ARM_CM55_MPU protected runtime object exposed forward ABI: $regions/$mode"
-            }
-
             if ($modeSpec.Lto -eq 0) {
                 Test-GeneratedCurrentSlotLoadOnly -AssemblyPath `
                     (Join-Path $variantDir "fiber_port-$mode.s")
                 $runtimeSymbols = (& $Objdump -t $runtimeObject) -join "`n"
                 foreach ($symbol in @(
+                        "fiber_port_panic_wait",
+                        "fiber_port_require_scheduler_configuration_environment",
+                        "fiber_port_runtime_prepare_start",
+                        "fiber_port_runtime_select_first",
+                        "fiber_port_runtime_start_first",
                         "fiber_port_prepare_first_start",
                         "fiber_port_svc_dispatch",
                         "fiber_port_context_validate_restore",
@@ -5569,8 +5559,14 @@ typedef enum IRQn {
                         throw "ARM_CM55_MPU protected runtime escaped privileged section: $symbol / $regions/$mode"
                     }
                 }
+                foreach ($symbol in @("fiber_port_runtime_memory_barrier")) {
+                    if ($runtimeSymbols -notmatch
+                            "(?m)\bF\s+\.fiber_port_unprivileged_functions\s+[0-9a-fA-F]+\s+$([regex]::Escape($symbol))$") {
+                        throw "ARM_CM55_MPU Thread-mode helper escaped unprivileged flash: $symbol / $regions/$mode"
+                    }
+                }
                 foreach ($symbol in @(
-                        "fiber_port_unprivileged_yield",
+                        "fiber_port_runtime_schedule",
                         "fiber_port_unprivileged_task_return")) {
                     if ($runtimeSymbols -notmatch
                             "(?m)\bF\s+\.fiber_port_syscalls\s+[0-9a-fA-F]+\s+$([regex]::Escape($symbol))$") {
@@ -5628,10 +5624,25 @@ typedef enum IRQn {
             }
             $elfDefined = @(& $objectNm -g --defined-only $elf)
             foreach ($symbol in @($requiredRuntimeSymbols + @(
-                    "fiber_arm_cm55_mpu_first_start_probe"))) {
+                    "fiber_ARM_CM55_MPU_first_start_probe"))) {
                 if (-not ($elfDefined -match
                         "\bT\s+$([regex]::Escape($symbol))$")) {
                     throw "ARM_CM55_MPU protected runtime ELF lost symbol: $symbol / $regions/$mode"
+                }
+            }
+            foreach ($symbol in @("fiber_current", "fiber_schedule")) {
+                $threadSymbols = @($elfDefined | Where-Object {
+                    $_ -match ("^([0-9a-fA-F]+)\s+T\s+" +
+                        [regex]::Escape($symbol) + "$")
+                })
+                if ($threadSymbols.Count -ne 1) {
+                    throw "ARM_CM55_MPU protected runtime ELF lost Thread API symbol: $symbol / $regions/$mode"
+                }
+                $null = $threadSymbols[0] -match '^([0-9a-fA-F]+)'
+                $threadAddress = [Convert]::ToUInt32($Matches[1], 16)
+                if (($threadAddress -lt 0x08010000) -or
+                        ($threadAddress -ge 0x08020000)) {
+                    throw "ARM_CM55_MPU protected runtime Thread API escaped unprivileged flash: $symbol / $regions/$mode"
                 }
             }
             $svcSymbols = @($elfDefined | Where-Object {
@@ -5702,6 +5713,482 @@ typedef enum IRQn {
             if (($duplicatePendSv.ExitCode -eq 0) -or
                     ($duplicatePendSv.Output -notmatch '(?s)multiple definition.*PendSV_Handler')) {
                 throw "ARM_CM55_MPU competing strong PendSV handlers must fail link ($regions/$mode)`n$($duplicatePendSv.Output)"
+            }
+        }
+    }
+}
+
+
+function Test-ArmCm55MpuRuntimeIntegration {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$Objcopy,
+        [string]$Ar,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM55_MPU\non_secure"
+    $startupSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\ARM_CM55_MPU_runtime_startup.c"
+    $portableSource = Join-Path $RepositoryRoot `
+        "tools\fixtures\portable_application.c"
+    $expectationSource = Join-Path $RepositoryRoot `
+        "fiber\port\fiber_port_context_cohort_expectation.c"
+    $linkerScript = Join-Path $RepositoryRoot `
+        "tools\fixtures\ARM_CM55_MPU_runtime.ld"
+    $linkerContract = Join-Path $profileDir "fiber_port_linker_contract.ld"
+    $competingSvc = Join-Path $RepositoryRoot `
+        "tools\fixtures\ARM_CM55_MPU_competing_svc.c"
+    $competingPendSv = Join-Path $RepositoryRoot `
+        "tools\fixtures\ARM_CM55_MPU_competing_pendsv.c"
+
+    foreach ($requiredPath in @(
+            $startupSource, $portableSource, $expectationSource,
+            $linkerScript, $linkerContract, $competingSvc,
+            $competingPendSv)) {
+        if (-not (Test-Path -LiteralPath $requiredPath)) {
+            throw "ARM_CM55_MPU runtime integration fixture is missing: $requiredPath"
+        }
+    }
+
+    $commonSources = @(
+        "fiber\fiber_core.c",
+        "fiber\fiber_runtime_state.c",
+        "fiber\fiber_panic.c"
+    )
+    $portSources = @(
+        "fiber\port\ARM_CM55_MPU\non_secure\fiber_port.c",
+        "fiber\port\ARM_CM55_MPU\non_secure\fiber_port_boot.c"
+    )
+    $forwardAbiSymbols = @(
+        "fiber_port_context_init",
+        "fiber_port_runtime_memory_barrier",
+        "fiber_port_panic_wait",
+        "fiber_port_require_scheduler_configuration_environment",
+        "fiber_port_runtime_prepare_start",
+        "fiber_port_runtime_select_first",
+        "fiber_port_runtime_start_first",
+        "fiber_port_runtime_schedule"
+    )
+    $counterFlags = @(
+        "-fno-instrument-functions",
+        "-fno-stack-protector",
+        "-fno-profile-arcs",
+        "-fno-test-coverage",
+        "-fno-sanitize=all",
+        "-mgeneral-regs-only"
+    )
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 4U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SVCall_IRQn = -5,
+    DebugMonitor_IRQn = -4, PendSV_IRQn = -2,
+    SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm55.h"
+#endif
+"@
+
+    foreach ($regions in @(8, 16)) {
+        $otherRegions = if ($regions -eq 8) { 16 } else { 8 }
+        foreach ($useLto in @($false, $true)) {
+            $mode = if ($useLto) { "lto" } else { "normal" }
+            $probeDir = Join-Path $BuildRoot `
+                "arm-cm55-mpu-runtime-r$regions-$mode"
+            New-Item -ItemType Directory -Path $probeDir | Out-Null
+            Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+                -Value $mainHeader -Encoding ASCII
+
+            $manifestDefines = @(
+                "-DFIBER_PORT_BUILD_SELECTED=1",
+                "-DFIBER_PORT_ARMV81M_MAINLINE=1",
+                "-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=$regions"
+            )
+            $ltoArgs = if ($useLto) { @("-flto") } else { @() }
+            $baseArgs = @(
+                "-mcpu=cortex-m55",
+                "-mthumb",
+                "-mfloat-abi=soft",
+                "-O2",
+                "-std=gnu11",
+                "-ffreestanding",
+                "-fno-common",
+                "-fno-builtin",
+                "-ffunction-sections",
+                "-fdata-sections",
+                "-fno-unwind-tables",
+                "-fno-asynchronous-unwind-tables",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-Wundef",
+                "-Werror=undef",
+                "-Werror=implicit-function-declaration",
+                "-Werror=return-type",
+                "-I$profileDir",
+                "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+                "-I$(Join-Path $RepositoryRoot 'fiber')",
+                "-I$RepositoryRoot",
+                "-I$CmsisPath",
+                "-I$probeDir"
+            ) + $manifestDefines + $ltoArgs
+
+            # The archive deliberately contains the complete common/runtime
+            # cohort. The application expectation remains outside it, exactly
+            # as a board build must do to reject a stale complete archive.
+            $archiveObjects = @()
+            foreach ($source in ($commonSources + $portSources)) {
+                $object = Join-Path $probeDir `
+                    (($source -replace '[\\/]', '_') + ".o")
+                $extraFlags = if ($portSources -contains $source) {
+                    $counterFlags
+                }
+                else {
+                    @()
+                }
+                & $Compiler @($baseArgs + $extraFlags + @(
+                    "-c", (Join-Path $RepositoryRoot $source), "-o", $object))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ARM_CM55_MPU runtime archive compile failed (r$regions/$mode): $source"
+                }
+                $archiveObjects += $object
+            }
+
+            $startupObject = Join-Path $probeDir "startup.o"
+            $portableObject = Join-Path $probeDir "portable.o"
+            $expectationObject = Join-Path $probeDir "expectation.o"
+            foreach ($compile in @(
+                    [pscustomobject]@{ Source = $startupSource; Object = $startupObject; Name = "startup" },
+                    [pscustomobject]@{ Source = $portableSource; Object = $portableObject; Name = "portable application" },
+                    [pscustomobject]@{ Source = $expectationSource; Object = $expectationObject; Name = "cohort expectation" })) {
+                $fixtureArgs = $baseArgs
+                if ($useLto -and ($compile.Name -eq "portable application")) {
+                    $fixtureArgs = @($baseArgs | Where-Object { $_ -ne "-flto" })
+                    $fixtureArgs += "-fno-lto"
+                }
+                & $Compiler @($fixtureArgs + $counterFlags + @(
+                    "-c", $compile.Source, "-o", $compile.Object))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ARM_CM55_MPU $($compile.Name) compile failed (r$regions/$mode)"
+                }
+            }
+
+            $objectNm = if ($useLto) { $GccNm } else { $Nm }
+            $expectationUndefined = @(& $objectNm --undefined-only $expectationObject)
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU expectation nm failed (r$regions/$mode)"
+            }
+            $expectedCohortLines = @($expectationUndefined | Where-Object {
+                $_ -match '\bU\s+(fiber_port_context_cohort_\S+)$'
+            })
+            if ($expectedCohortLines.Count -ne 1) {
+                throw "ARM_CM55_MPU expectation must retain one exact cohort relocation (r$regions/$mode)"
+            }
+            $null = $expectedCohortLines[0] -match
+                '\bU\s+(fiber_port_context_cohort_\S+)$'
+            $expectedCohort = $Matches[1]
+
+            $archivePath = Join-Path $probeDir "libfiber-arm-cm55-mpu-r$regions.a"
+            & $Ar rcs $archivePath @archiveObjects
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU runtime archive creation failed (r$regions/$mode)"
+            }
+
+            $elfPath = Join-Path $probeDir "fiber-arm-cm55-mpu-r$regions.elf"
+            $mapPath = Join-Path $probeDir "fiber-arm-cm55-mpu-r$regions.map"
+            $linkArgs = @(
+                "-mcpu=cortex-m55",
+                "-mthumb",
+                "-mfloat-abi=soft"
+            ) + $ltoArgs + @(
+                "-nostdlib",
+                "-Wl,--gc-sections",
+                "-Wl,-Map,$mapPath",
+                "-Wl,-T,$linkerScript",
+                "-Wl,-T,$linkerContract",
+                $startupObject,
+                $portableObject,
+                $expectationObject,
+                $archivePath,
+                "-o", $elfPath
+            )
+            & $Compiler @linkArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU portable archive/link integration failed (r$regions/$mode)"
+            }
+
+            $defined = @(& $Nm -a --defined-only $elfPath)
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU final ELF nm failed (r$regions/$mode)"
+            }
+            foreach ($symbol in $forwardAbiSymbols) {
+                $definitions = @($defined | Where-Object {
+                    $_ -match ("\bT\s+" + [regex]::Escape($symbol) + "$")
+                })
+                if ($definitions.Count -ne 1) {
+                    throw "ARM_CM55_MPU final ELF must define one strong forward ABI symbol (r$regions/$mode): $symbol"
+                }
+            }
+            $cohortDefinitions = @($defined | Where-Object {
+                $_ -match ('\b[RT]\s+' + [regex]::Escape($expectedCohort) + '$')
+            })
+            if ($cohortDefinitions.Count -ne 1) {
+                throw "ARM_CM55_MPU final ELF does not satisfy its exact cohort expectation (r$regions/$mode)"
+            }
+            $mapText = Get-Content -LiteralPath $mapPath -Raw
+            if (($mapText.IndexOf(".fiber_port_context_cohort_expectation",
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                    ($mapText.IndexOf($expectedCohort,
+                    [System.StringComparison]::Ordinal) -lt 0)) {
+                throw "ARM_CM55_MPU final link lost the external cohort expectation (r$regions/$mode)"
+            }
+
+            $svcAddress = Get-StrongTextSymbolAddress -NmOutput $defined `
+                -Symbol "SVC_Handler" -Path $elfPath
+            $pendsvAddress = Get-StrongTextSymbolAddress -NmOutput $defined `
+                -Symbol "PendSV_Handler" -Path $elfPath
+
+            $symbolRanges = @(
+                [pscustomobject]@{
+                    Start = [uint32]0x08010000
+                    End = [uint32]0x08020000
+                    Name = "unprivileged code"
+                    Symbols = @(
+                        "fiber_current",
+                        "fiber_schedule",
+                        "fiber_internal_runtime_load_current_context",
+                        "fiber_port_runtime_memory_barrier",
+                        "portable_fixture_entry"
+                    )
+                },
+                [pscustomobject]@{
+                    Start = [uint32]0x08020000
+                    End = [uint32]0x08021000
+                    Name = "syscall veneer"
+                    Symbols = @(
+                        "fiber_port_runtime_schedule",
+                        "fiber_port_unprivileged_task_return"
+                    )
+                },
+                [pscustomobject]@{
+                    Start = [uint32]0x08000000
+                    End = [uint32]0x08010000
+                    Name = "privileged code"
+                    Symbols = @(
+                        "fiber_init",
+                        "fiber_start",
+                        "fiber_scheduler_set_pick_next",
+                        "fiber_internal_runtime_select_scheduler_candidate",
+                        "fiber_internal_runtime_publish_current_context",
+                        "fiber_internal_runtime_require_current_context",
+                        "fiber_internal_task_return",
+                        "fiber_panic",
+                        "fiber_port_context_init",
+                        "fiber_port_panic_wait",
+                        "fiber_port_require_scheduler_configuration_environment",
+                        "fiber_port_runtime_prepare_start",
+                        "fiber_port_runtime_select_first",
+                        "fiber_port_runtime_start_first",
+                        "fiber_port_svc_dispatch",
+                        "fiber_port_pendsv_validate_save_current",
+                        "fiber_port_scheduler_pick_next_from_pendsv",
+                        "fiber_port_mpu_switch_to_context",
+                        "SVC_Handler",
+                        "PendSV_Handler",
+                        "portable_fixture_pick_next"
+                    )
+                }
+            )
+            foreach ($range in $symbolRanges) {
+                foreach ($symbol in $range.Symbols) {
+                    $lines = @($defined | Where-Object {
+                        $_ -match ("^\s*(?<address>[0-9a-fA-F]+)\s+[TtWw]\s+" +
+                            [regex]::Escape($symbol) + "$")
+                    })
+                    if ($lines.Count -ne 1) {
+                        throw "ARM_CM55_MPU ELF lost range-audited symbol (r$regions/$mode): $symbol"
+                    }
+                    $null = $lines[0] -match '^\s*(?<address>[0-9a-fA-F]+)'
+                    $address = [Convert]::ToUInt32($Matches['address'], 16)
+                    if (($address -lt $range.Start) -or ($address -ge $range.End)) {
+                        throw "ARM_CM55_MPU symbol escaped $($range.Name) (r$regions/$mode): $symbol at 0x$($address.ToString('X8'))"
+                    }
+                }
+            }
+
+            foreach ($stack in @("portable_fixture_stack_1", "portable_fixture_stack_2")) {
+                $stackLines = @($defined | Where-Object {
+                    $_ -match ("^\s*(?<address>[0-9a-fA-F]+)\s+[Bb]\s+" +
+                        [regex]::Escape($stack) + "$")
+                })
+                if ($stackLines.Count -ne 1) {
+                    throw "ARM_CM55_MPU portable stack symbol is missing (r$regions/$mode): $stack"
+                }
+                $null = $stackLines[0] -match '^\s*(?<address>[0-9a-fA-F]+)'
+                $stackAddress = [Convert]::ToUInt32($Matches['address'], 16)
+                if (($stackAddress -lt 0x24000000) -or
+                        ($stackAddress -ge 0x24010000) -or
+                        (($stackAddress -band 0x1F) -ne 0)) {
+                    throw "ARM_CM55_MPU portable stack escaped exact unprivileged RAM geometry (r$regions/$mode): $stack"
+                }
+            }
+            foreach ($privilegedObject in @(
+                    "portable_fixture_context_1",
+                    "portable_fixture_context_2",
+                    "portable_fixture_scheduler_user")) {
+                $objectLines = @($defined | Where-Object {
+                    $_ -match ("^\s*(?<address>[0-9a-fA-F]+)\s+[Bb]\s+" +
+                        [regex]::Escape($privilegedObject) + "$")
+                })
+                if ($objectLines.Count -ne 1) {
+                    throw "ARM_CM55_MPU privileged application object is missing (r$regions/$mode): $privilegedObject"
+                }
+                $null = $objectLines[0] -match '^\s*(?<address>[0-9a-fA-F]+)'
+                $objectAddress = [Convert]::ToUInt32($Matches['address'], 16)
+                if (($objectAddress -lt 0x30000020) -or
+                        ($objectAddress -ge 0x30010000)) {
+                    throw "ARM_CM55_MPU application object escaped privileged data (r$regions/$mode): $privilegedObject"
+                }
+            }
+
+            $slotLines = @($defined | Where-Object {
+                $_ -match '^\s*30000000\s+[Bb]\s+fiber_internal_runtime_current_context_slot$'
+            })
+            if ($slotLines.Count -ne 1) {
+                throw "ARM_CM55_MPU current slot escaped its exact 32-byte aperture (r$regions/$mode)"
+            }
+
+            $sections = (& $Objdump -h $elfPath) -join "`n"
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU final ELF section audit failed (r$regions/$mode)"
+            }
+            foreach ($requiredSection in @(
+                    '\.isr_vector\s+00000040\s+08000000\s+',
+                    '\.fiber_port_unprivileged_code\s+[0-9a-fA-F]+\s+08010000\s+',
+                    '\.fiber_port_privileged_code\s+[0-9a-fA-F]+\s+08000080\s+',
+                    '\.fiber_port_syscalls\s+[0-9a-fA-F]+\s+08020000\s+',
+                    '\.fiber_current_context_slot\s+00000020\s+30000000\s+',
+                    '\.fiber_port_unprivileged_ram\s+[0-9a-fA-F]+\s+24000000\s+',
+                    '\.fiber_port_privileged_data\s+[0-9a-fA-F]+\s+30000020\s+')) {
+                if ($sections -notmatch $requiredSection) {
+                    throw "ARM_CM55_MPU final ELF lost exact MPU output section (r$regions/$mode): $requiredSection"
+                }
+            }
+
+            $vectorPath = Join-Path $probeDir "vectors.bin"
+            & $Objcopy -O binary --only-section=.isr_vector $elfPath $vectorPath
+            if (($LASTEXITCODE -ne 0) -or (-not (Test-Path $vectorPath))) {
+                throw "ARM_CM55_MPU runtime vector extraction failed (r$regions/$mode)"
+            }
+            $vectorBytes = [IO.File]::ReadAllBytes($vectorPath)
+            if ($vectorBytes.Length -ne 64) {
+                throw "ARM_CM55_MPU runtime vector fixture changed size (r$regions/$mode)"
+            }
+            if ([BitConverter]::ToUInt32($vectorBytes, 11 * 4) -ne
+                    ($svcAddress -bor 1)) {
+                throw "ARM_CM55_MPU vector slot 11 lost strong SVC (r$regions/$mode)"
+            }
+            if ([BitConverter]::ToUInt32($vectorBytes, 14 * 4) -ne
+                    ($pendsvAddress -bor 1)) {
+                throw "ARM_CM55_MPU vector slot 14 lost strong PendSV (r$regions/$mode)"
+            }
+
+            foreach ($competing in @(
+                    [pscustomobject]@{ Source = $competingSvc; Symbol = "SVC_Handler" },
+                    [pscustomobject]@{ Source = $competingPendSv; Symbol = "PendSV_Handler" })) {
+                $competingObject = Join-Path $probeDir `
+                    ("competing-" + $competing.Symbol + ".o")
+                & $Compiler @($baseArgs + $counterFlags + @(
+                    "-c", $competing.Source, "-o", $competingObject))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ARM_CM55_MPU competing $($competing.Symbol) fixture failed compile (r$regions/$mode)"
+                }
+                $duplicateLog = Join-Path $probeDir `
+                    ("duplicate-" + $competing.Symbol + ".log")
+                $duplicateMapPath = Join-Path $probeDir `
+                    ("duplicate-" + $competing.Symbol + ".map")
+                $duplicatePrefix = @($linkArgs[0..($linkArgs.Count - 3)] |
+                    Where-Object { $_ -ne "-Wl,-Map,$mapPath" })
+                $duplicateArgs = @($duplicatePrefix + @(
+                    "-Wl,-Map,$duplicateMapPath", $competingObject, "-o",
+                    (Join-Path $probeDir ("duplicate-" + $competing.Symbol + ".elf"))))
+                $duplicate = Invoke-CompilerProbe -Compiler $Compiler `
+                    -Arguments $duplicateArgs -LogPath $duplicateLog
+                if (($duplicate.ExitCode -eq 0) -or
+                        ($duplicate.Output -notmatch
+                            ("(?s)multiple definition.*" + $competing.Symbol))) {
+                    throw "ARM_CM55_MPU competing strong $($competing.Symbol) must fail link (r$regions/$mode)`n$($duplicate.Output)"
+                }
+            }
+
+            # A complete stale archive is the failure mode the external
+            # expectation exists to catch. Test both 8 -> 16 and 16 -> 8.
+            $staleBaseArgs = @($baseArgs | Where-Object {
+                $_ -notmatch '^\-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS='
+            }) + @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=$otherRegions")
+            $staleObjects = @()
+            foreach ($source in ($commonSources + $portSources)) {
+                $object = Join-Path $probeDir `
+                    ((($source -replace '[\\/]', '_') -replace '\.c$', '') + "-stale.o")
+                $extraFlags = if ($portSources -contains $source) {
+                    $counterFlags
+                }
+                else {
+                    @()
+                }
+                & $Compiler @($staleBaseArgs + $extraFlags + @(
+                    "-c", (Join-Path $RepositoryRoot $source), "-o", $object))
+                if ($LASTEXITCODE -ne 0) {
+                    throw "ARM_CM55_MPU stale archive compile failed (r$regions/$mode): $source"
+                }
+                $staleObjects += $object
+            }
+            $staleArchive = Join-Path $probeDir `
+                "libfiber-arm-cm55-mpu-r$otherRegions-stale.a"
+            & $Ar rcs $staleArchive @staleObjects
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55_MPU stale archive creation failed (r$regions/$mode)"
+            }
+            $staleLog = Join-Path $probeDir "stale-archive.log"
+            $staleMapPath = Join-Path $probeDir "stale-archive.map"
+            $stalePrefix = @($linkArgs[0..($linkArgs.Count - 4)] |
+                Where-Object { $_ -ne "-Wl,-Map,$mapPath" })
+            $staleArgs = @($stalePrefix + @(
+                "-Wl,-Map,$staleMapPath", $staleArchive, "-o",
+                (Join-Path $probeDir "stale.elf")))
+            $stale = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments $staleArgs -LogPath $staleLog
+            $staleOutput = $stale.Output -replace '\s+', ''
+            if (($stale.ExitCode -eq 0) -or
+                    ($staleOutput -notmatch [regex]::Escape($expectedCohort))) {
+                throw "ARM_CM55_MPU stale complete archive must fail the exact cohort expectation (r$regions/$mode)`n$($stale.Output)"
+            }
+
+            $positiveMapAfterNegativeLinks = Get-Content -LiteralPath $mapPath -Raw
+            if (($positiveMapAfterNegativeLinks.IndexOf(
+                    [IO.Path]::GetFileName($archivePath),
+                    [System.StringComparison]::Ordinal) -lt 0) -or
+                    ($positiveMapAfterNegativeLinks.IndexOf(
+                    [IO.Path]::GetFileName($staleArchive),
+                    [System.StringComparison]::Ordinal) -ge 0)) {
+                throw "ARM_CM55_MPU retained positive map was overwritten by a negative link (r$regions/$mode)"
             }
         }
     }
@@ -19516,6 +20003,11 @@ try {
     Test-ArmCm55MpuProtectedRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -Objcopy $objcopy -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55_MPU full runtime/archive/MPU-linker contract =="
+    Test-ArmCm55MpuRuntimeIntegration -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -Objcopy $objcopy -Ar $ar -CmsisPath $cmsis `
+        -BuildRoot $buildRoot
     Write-Host "== ARM_CM55_NTZ full runtime/archive/ELF contract =="
     Test-ArmCm55NtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `

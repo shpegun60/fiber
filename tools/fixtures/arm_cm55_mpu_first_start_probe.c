@@ -33,6 +33,22 @@ void fiber_panic(char code)
 __attribute__((section(".bss.fiber_runtime_current_context_slot")))
 FiberContext *volatile fiber_internal_runtime_current_context_slot;
 
+/* The isolated port fixture supplies the public Thread entries whose real
+ * definitions live in the common runtime archive. They deliberately use the
+ * same unprivileged section policy so first-start linker placement validation
+ * remains meaningful without pulling a second common-runtime test cohort in. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
+FiberContext *fiber_current(void)
+{
+	return fiber_internal_runtime_current_context_slot;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
+void fiber_schedule(void)
+{
+	fiber_port_runtime_schedule();
+}
+
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_internal_runtime_select_scheduler_candidate(
 		FiberContext *current)

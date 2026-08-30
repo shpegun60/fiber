@@ -22,10 +22,9 @@ assembly parity:       PASS at -O2 and -Os
 ```
 
 This inventory snapshot accompanies the exact build-selected CM55 scalar,
-scalar-FP, and MVE-FP runtimes plus the separate no-feature MPU
-construction/first-SVC checkpoint. It does not claim complete M55 MPU,
-TrustZone, TF-M, PAC/BTI, or
-hardware roles required by a full STM32N6 image.
+scalar-FP, MVE-FP, and no-feature MPU runtimes. It does not claim M55 MPU
+hardware isolation, TrustZone, TF-M, PAC/BTI, or hardware roles required by a
+full STM32N6 image.
 
 ## Scope Rule
 
@@ -88,13 +87,14 @@ hardware execution and MPU isolation remain unvalidated.
 This does not promote the profiles without current board evidence to
 `hardware validated`.
 
-One additional profile is deliberately not counted as a complete runtime:
-`ARM_CM55_MPU/non_secure` slice 4 is a non-selectable `C55M` no-FPU/no-MVE
-protected SVC/PendSV cohort. It freezes the 8/16-region storage and exact
-cohort identity, sealed construction, linker-boundary validation, global MPU
-image, strong slots 11/14, private SVC 71 yield, and protected PendSV
-save/select/MPU-replace/restore. It has no forward ABI, complete
-archive/cohort runtime proof, or hardware claim.
+`ARM_CM55_MPU/non_secure` slice 5 now counts as a complete explicit
+build-selected `C55M` no-FPU/no-MVE protected runtime. It freezes the
+8/16-region storage and exact cohort identity, sealed construction,
+linker-boundary validation, global MPU image, all eight forward operations,
+strong slots 11/14, public SVC 71 yield, protected PendSV
+save/select/MPU-replace/restore, normal/LTO archive extraction, external
+cohort expectation, and stale 8/16 archive rejection. It has no global
+auto-selector, optional MPU API, or hardware claim.
 
 ## Remaining Port-Freeze Work
 
@@ -242,17 +242,19 @@ construction/SVC/PendSV parity plus normal/LTO archive, vector, exact-cohort,
 reverse-surface, and duplicate-handler proofs pass. It has no global selector
 route or hardware-support claim.
 
-`ARM_CM55_MPU/non_secure` is the separate non-selectable `C55M`
-no-FPU/no-MVE protected role. Slice 4 freezes MAIR0, 8/16-region per-context
+`ARM_CM55_MPU/non_secure` is the separate explicit build-selected `C55M`
+no-FPU/no-MVE protected role. Slice 5 freezes MAIR0, 8/16-region per-context
 RBAR/RLAR storage, the 20-active-word plus one-past cursor image, exact M55
 MPU cohort identity, sealed construction, linker MPU boundaries, and the
-global image. It owns strict first-start SVC, protected MPU activation/first
-restore, and private protected PendSV switching in the pinned FreeRTOS order.
-PendSV preflights the live image before cursor access, selects through reverse
-ABI v1 under BASEPRI, replaces MAIR0/context regions while PRIMASK is set, and
-restores the inverse protected frame. It intentionally has no forward runtime
-ABI. The next slice must activate the proven engine and add archive/cohort
-proof without changing its protected geometry.
+global image. `fiber_port_boot.c` supplies construction; `fiber_port.c`
+supplies the seven remaining forward operations, strict first-start SVC,
+public SVC 71 yield, protected MPU activation/restore, and protected PendSV
+switching in the pinned FreeRTOS order. PendSV preflights the live image before
+cursor access, selects through reverse ABI v1 under BASEPRI, replaces
+MAIR0/context regions while PRIMASK is set, publishes current while MPU access
+is disabled, and restores the inverse protected frame. Normal/LTO archive,
+external-cohort, stale 8/16 archive, vector, and duplicate-handler proofs pass.
+It has no global selector, optional heterogeneous-MPU API, or hardware claim.
 
 `transitional_v8m` now provides compile-only bring-up coverage only for the
 unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.
@@ -260,7 +262,7 @@ unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.
 The remaining concrete STM32N6 feature profiles must own and prove:
 
 ```text
-M55 MPU forward-runtime activation and isolation state
+M55 MPU hardware isolation state
 M55 MPU FPU/MVE protected-frame variants
 TrustZone banked state
 SecureContext or TF-M integration

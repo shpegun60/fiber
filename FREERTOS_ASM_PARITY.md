@@ -103,7 +103,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
 | `ARM_CM55F_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | basic construction, strict first SVC/restore, and conditional scalar-FP `s16-s31` PSPLIM PendSV |
 | `ARM_CM55_MVEF_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=1` | basic construction, integer-only strict first SVC/restore, and conditional MVE-FP `s16-s31` PSPLIM PendSV with no VPR software slot |
-| `ARM_CM55_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, no FPU/MVE/TrustZone/PAC | slice-4 staged protected SVC/PendSV engine: first MPU activation/restore, 20-word frame copy, reverse-ABI selection under BASEPRI, atomic MAIR0/context-MPU replacement, and inverse restore for exact 8/16-region cohorts |
+| `ARM_CM55_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, no FPU/MVE/TrustZone/PAC | complete build-selected protected runtime: public SVC-71 yield, first MPU activation/restore, 20-word frame copy, reverse-ABI selection under BASEPRI, atomic MAIR0/context-MPU replacement, and inverse restore for exact 8/16-region cohorts |
 | `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
 | `ARM_CM33/non_secure` plus Secure companion | `GCC/ARM_CM33/non_secure` and `secure` | 19-word construction, PRIS/Secure init, SVC first start, Secure save/unload, lazy bounded allocation, Secure load, and segmented eleven-word PendSV save/restore |
 | `ARM_CM33_MPU/non_secure` | `GCC/ARM_CM33_NTZ/non_secure`, MPU enabled | public SVC 70/71/72 route, protected first MPU activation/restore, protected PendSV frame copy, BASEPRI scheduler bridge, atomic MAIR0/context-MPU replacement, protected restore |
@@ -144,18 +144,18 @@ normal/LTO archive extraction, vector slots 11/14, external cohort retention,
 and duplicate-handler failure. The profile remains build-selected only and
 hardware-unvalidated.
 
-`ARM_CM55_MPU/non_secure` slice 4 owns a staged protected `fiber_port.c` with
-strong SVC and PendSV handlers, but deliberately has no forward runtime ABI.
-`fiber_port_boot.c` owns sealed protected construction and the linker-derived
-global image. The runtime owns strict SVC provenance, private SVC 71 yield,
-MPU disable/MAIR0/per-context RBAR-RLAR/enable transfer, and protected first
-restore plus ordinary save/select/replace/restore. Its 8/16-region proof covers
-no-CMSIS public storage, exact `C55M` cohort spelling, frozen protected
-offsets, normal/LTO construction and runtime objects, synthetic linker isolation,
-slots 11/14 vector ownership, duplicate-SVC/PendSV failure, selected-manifest
-negatives, and paired protected PendSV generated assembly. The later activation
-slice must add the eight forward operations plus archive/cohort proof before a
-complete runtime is claimed here.
+`ARM_CM55_MPU/non_secure` slice 5 is a complete build-selected protected
+runtime. `fiber_port_boot.c` owns sealed protected construction and the
+linker-derived global image; `fiber_port.c` owns the seven remaining forward
+operations, strict SVC provenance, public SVC 71 yield, MPU
+disable/MAIR0/per-context RBAR-RLAR/enable transfer, and protected first plus
+ordinary save/select/replace/restore. Its 8/16-region proof covers no-CMSIS
+public storage, exact `C55M` cohort spelling, frozen protected offsets,
+normal/LTO construction and runtime objects, portable archive extraction,
+external cohort expectation, stale 8/16 archive rejection, slots 11/14 vector
+ownership, duplicate-SVC/PendSV failure, selected-manifest negatives, and paired
+protected PendSV generated assembly. It remains build-selected only and
+hardware-unvalidated.
 
 `ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
 pinned 8- and 16-region MPU reference configurations. Its public
@@ -461,9 +461,10 @@ The synthetic ELF proof requires every protected output section and rejects a
 missing boundary. It also preserves M55-only `RLAR.PXN` acceptance for a later
 configurable-region ABI.
 
-### FAP-M55MPU-STAGED-PENDSV
+### FAP-M55MPU-PENDSV
 
-The staged protected engine preserves the pinned FreeRTOS M55 MPU backbone:
+The complete build-selected protected engine preserves the pinned FreeRTOS M55
+MPU backbone:
 `vStartFirstTask` rewinds MSP and invokes SVC, while
 `vRestoreContextOfFirstTask` disables the MPU, loads MAIR0, programs
 RNR 4/8/12 RBAR/RLAR blocks, enables the MPU, restores
@@ -474,7 +475,9 @@ MPU readback, frame sealing, and register readback. It enables
 `MPU_CTRL.ENABLE | PRIVDEFENA`, rather than only `ENABLE`, so selected-port
 privileged code can retain the common current-slot aperture. Private SVC `#71`
 is accepted only from the exact syscall-flash veneer and pends the selected
-strong PendSV handler; it does not run scheduler policy.
+strong PendSV handler; it does not run scheduler policy. The frozen forward ABI
+maps `fiber_schedule()` to that veneer while common lifecycle and scheduler
+policy remain outside the unprivileged Thread-mode path.
 
 ### FAP-M55MPU-PENDSV-PREFLIGHT
 

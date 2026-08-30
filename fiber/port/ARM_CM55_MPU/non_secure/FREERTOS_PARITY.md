@@ -2,15 +2,17 @@
 
 ## Status
 
-This is slice 4 of the explicit build-selected `ARM_CM55_MPU/non_secure`
+This is slice 5 of the explicit build-selected `ARM_CM55_MPU/non_secure`
 ARMv8.1-M Mainline profile. It freezes public storage, selected-port traits,
 the exact protected frame shape, cohort identity, sealed construction, and
-linker-derived global MPU image. `fiber_port.c` owns the staged protected
-SVC/PendSV engine: strict first-start SVC, private SVC 71 yield, complete protected
-PendSV save/select/MAIR0-plus-context-MPU replacement/restore, and strong
-slots 11 and 14. It consumes frozen reverse ABI v1 for scheduler selection and
-current publication, but exposes no forward runtime ABI symbol, global
-selector route, optional MPU API, or hardware-support claim.
+linker-derived global MPU image. `fiber_port_boot.c` owns
+`fiber_port_context_init()` and `fiber_port.c` owns the remaining seven frozen
+forward operations plus the protected SVC/PendSV engine: strict first-start SVC,
+public SVC 71 yield, complete protected PendSV save/select/MAIR0-plus-context-
+MPU replacement/restore, and strong slots 11 and 14. It consumes frozen reverse
+ABI v1 for scheduler selection and current publication. It remains outside the
+global selector, exposes no optional MPU policy API, and has no hardware-support
+claim.
 
 The reference is the MPU branch selected by `configENABLE_MPU = 1` inside the
 Non-secure `GCC/ARM_CM55_NTZ/non_secure` source group. It is not the separate
@@ -145,12 +147,12 @@ the selected context's RNR 4/8/12 pairs before the sole enable transition.
 | `pxPortInitialiseStack()` | Implemented as `fiber_port_context_init()`: it seeds the protected image and sets `protected_context_cursor` to `cursor_limit`. |
 | `vPortStoreTaskMPUSettings()` and global MPU setup | The fixed linker/global image and stack/current-slot pairs are implemented; first SVC programs the permanent four-region image. Configurable per-fiber regions remain deferred to an optional MPU policy ABI. |
 | `vStartFirstTask()` / `vRestoreContextOfFirstTask()` | Implemented as `fiber_port_start_first_context()` and `fiber_port_restore_first_context_from_svc()`. The assembly preserves the MPU disable/MAIR0/RNR 4-8-12/enable and protected-frame copy ordering, with strict Fiber provenance and readback checks. |
-| MPU `PendSV_Handler` | Implemented as the private protected engine: exact 20-word save/copy/special-register image, reverse-ABI selection under BASEPRI, PRIMASK-protected MAIR0/context-pair replacement, and inverse restore. |
+| MPU `PendSV_Handler` | Implemented as the selected protected engine: exact 20-word save/copy/special-register image, reverse-ABI selection under BASEPRI, PRIMASK-protected MAIR0/context-pair replacement, and inverse restore. |
 | `xIsPrivileged`, privilege transitions, syscall dispatch | Deferred with the optional MPU application policy ABI; no no-op public stubs exist. |
 | `mpu_wrappers_v2_asm.c`, ACL, system-call stack | Deferred as optional wrapper functionality. |
 | SecureContext, TF-M, FPU, MVE, PAC, BTI | Absent by construction; each requires a different profile or optional ABI. |
 
-## Slice-4 Proof
+## Slice-5 Proof
 
 The compile matrix proves:
 
@@ -159,7 +161,7 @@ type-only C and C++ storage compiles without CMSIS
 8- and 16-region exact manifests compile at -O2 and -Os
 one exact C55M cohort symbol is emitted per manifest and the spellings differ
 all context, boot, MPU pair, and cursor-limit offsets are static-asserted
-sealed construction plus protected SVC/PendSV runtime compile at -O2/-Os and normal/LTO synthetic ELF links
+sealed construction plus the complete protected runtime compile at -O2/-Os and normal/LTO synthetic ELF links
 all linker boundaries and selected privileged/unprivileged sections are proven
 a missing syscall boundary fails the linker contract
 slots 11 and 14 retain exactly one strong SVC/PendSV handler; competing strong SVC/PendSV handlers fail link
@@ -167,7 +169,8 @@ M55 MPU first-start, activation, protected PendSV save, special-word save,
 MPU replacement, and inverse restore are paired with FreeRTOS at -O2/-Os
 Secure CMSE, missing MPU/VTOR, wrong core/selected profile, FPU, MVE, PAC/BTI,
 invalid region count, runtime-selectable override, and selector mode fail closed
-the forward runtime ABI and optional MPU application APIs remain absent
+all eight forward ABI operations are defined exactly once; optional MPU application APIs remain absent
+portable-application archive extraction, external cohort retention, and stale 8/16 archive rejection pass
 ```
 
 PendSV preflights the running pointer, seal, live PSP frame, canary,
@@ -177,7 +180,7 @@ full CPU/MPU snapshot/readback around the callback. The selected MAIR0 and
 RNR 4/8/12 context pairs are replaced only while PRIMASK protects the
 MPU-disabled interval, then the exact inverse protected frame is restored.
 
-No forward ABI, global selector, optional MPU policy, or board validation is
-claimed. The next slice may activate this proven private engine through the
-frozen forward ABI and archive/cohort proofs without changing frame geometry
-or handler ownership.
+The profile is build-selected only: it has no global selector route, optional
+MPU policy, or board validation claim. The next work is MPU isolation hardware
+validation or an explicitly requested optional configurable-region ABI; neither
+requires changing the frozen frame geometry or handler ownership.

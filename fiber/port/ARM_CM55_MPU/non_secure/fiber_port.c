@@ -1,13 +1,14 @@
 /*
- * ARM_CM55_MPU/non_secure protected first-start runtime.
+ * ARM_CM55_MPU/non_secure protected selected runtime.
  *
- * This staged source implements the protected SVC/PendSV engine for the
- * sealed no-FPU/no-TrustZone cohort. It follows pinned FreeRTOS
+ * This selected source implements the protected SVC/PendSV engine plus the
+ * frozen eight-function forward ABI for the sealed no-FPU/no-TrustZone cohort.
+ * It follows pinned FreeRTOS
  * GCC/ARM_CM55_NTZ/non_secure MPU ordering: first start installs global MPU
  * regions, PendSV copies the complete basic hardware frame into privileged
  * context storage, selects under BASEPRI, replaces MAIR0/context pairs while
- * the MPU is disabled, and restores through the protected frame. The forward
- * runtime ABI and public MPU policy remain deliberately absent.
+ * the MPU is disabled, and restores through the protected frame. Public
+ * heterogeneous MPU policy remains deliberately absent.
  */
 
 #include "fiber_port_private.h"
@@ -20,7 +21,30 @@
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
 	fiber_portPRIVILEGED_FUNCTION
 
+#define FIBER_CM55_MPU_UNPRIVILEGED \
+	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
+	fiber_portUNPRIVILEGED_FUNCTION
+
 FIBER_PORT_CONTEXT_COHORT_DEFINE();
+
+/* Thread-mode common helpers must remain executable by an unprivileged fiber.
+ * They access neither protected context storage nor privileged scheduler state. */
+FIBER_CM55_MPU_UNPRIVILEGED
+void fiber_port_runtime_memory_barrier(void)
+{
+	fiber_portASM volatile("dmb" ::: "memory");
+	fiber_portCOMPILER_BARRIER();
+}
+
+FIBER_API_NORETURN FIBER_CM55_MPU_PRIVILEGED
+void fiber_port_panic_wait(void)
+{
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
+	for (;;) {
+		__WFE();
+	}
+}
 
 static FIBER_CM55_MPU_PRIVILEGED
 uintptr_t fiber_port_code_address(uintptr_t address)
@@ -158,6 +182,12 @@ void fiber_port_validate_runtime_linker_placement(
 {
 	FIBER_REQUIRE(layout != NULL, 'L');
 	const uintptr_t privileged_targets[] = {
+		fiber_port_code_address((uintptr_t)&fiber_port_panic_wait),
+		fiber_port_code_address(
+			(uintptr_t)&fiber_port_require_scheduler_configuration_environment),
+		fiber_port_code_address((uintptr_t)&fiber_port_runtime_prepare_start),
+		fiber_port_code_address((uintptr_t)&fiber_port_runtime_select_first),
+		fiber_port_code_address((uintptr_t)&fiber_port_runtime_start_first),
 		fiber_port_code_address((uintptr_t)&fiber_port_prepare_first_start),
 		fiber_port_code_address((uintptr_t)&fiber_port_svc_dispatch),
 		fiber_port_code_address((uintptr_t)&fiber_port_context_validate_restore),
@@ -186,6 +216,24 @@ void fiber_port_validate_runtime_linker_placement(
 					layout->privileged_flash_end,
 					privileged_targets[index]), 'L');
 	}
+	/* These public Thread entries execute after CONTROL.nPRIV becomes one. The
+	 * linker contract places their shared input section in unprivileged flash;
+	 * check the externally visible entries here as the board-side fail-closed
+	 * counterpart to the synthetic ELF range audit. */
+	const uintptr_t unprivileged_targets[] = {
+		fiber_port_code_address((uintptr_t)&fiber_current),
+		fiber_port_code_address((uintptr_t)&fiber_schedule),
+		fiber_port_code_address(
+			(uintptr_t)&fiber_port_runtime_memory_barrier)
+	};
+	for (uint32_t index = 0u;
+			index < (uint32_t)(sizeof(unprivileged_targets) /
+				sizeof(unprivileged_targets[0])); ++index) {
+		FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+					layout->unprivileged_flash_start,
+					layout->unprivileged_flash_end,
+					unprivileged_targets[index]), 'L');
+	}
 	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
 			layout->unprivileged_syscalls_start,
 			layout->unprivileged_syscalls_end,
@@ -195,7 +243,7 @@ void fiber_port_validate_runtime_linker_placement(
 			layout->unprivileged_syscalls_start,
 			layout->unprivileged_syscalls_end,
 			fiber_port_code_address(
-				(uintptr_t)&fiber_port_unprivileged_yield)), 'L');
+				(uintptr_t)&fiber_port_runtime_schedule)), 'L');
 }
 
 static FIBER_CM55_MPU_PRIVILEGED
@@ -533,8 +581,11 @@ void fiber_port_capture_scheduler_mpu_image(
 		FiberPortMpuSchedulerCpuState *state)
 {
 	FIBER_REQUIRE(state != NULL, 'C');
-	FIBER_REQUIRE(state->mpu_rnr ==
-			fiber_portMPU_LAST_CONTEXT_BLOCK_REGION, 'M');
+	/* The first scheduler selection runs before MPU activation, so RNR has no
+	 * canonical active-context value yet. Preserve exactly whichever valid RNR
+	 * the application supplied; ordinary PendSV still reaches the canonical
+	 * last context region through fiber_port_mpu_validate_active_context(). */
+	FIBER_REQUIRE(state->mpu_rnr < fiber_portMPU_TOTAL_REGIONS, 'M');
 
 	for (uint32_t region = 0u; region < fiber_portMPU_TOTAL_REGIONS;
 			++region) {
@@ -557,8 +608,7 @@ void fiber_port_validate_scheduler_mpu_image(
 		const FiberPortMpuSchedulerCpuState *before)
 {
 	FIBER_REQUIRE(before != NULL, 'C');
-	FIBER_REQUIRE(before->mpu_rnr ==
-			fiber_portMPU_LAST_CONTEXT_BLOCK_REGION, 'M');
+	FIBER_REQUIRE(before->mpu_rnr < fiber_portMPU_TOTAL_REGIONS, 'M');
 
 	for (uint32_t region = 0u; region < fiber_portMPU_TOTAL_REGIONS;
 			++region) {
@@ -653,7 +703,6 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 			fiber_internal_runtime_select_scheduler_candidate(current);
 	fiber_port_validate_scheduler_cpu_state(&cpu_state);
 	fiber_port_context_validate_restore(next);
-	fiber_internal_runtime_publish_current_context(next);
 	return next;
 }
 
@@ -692,6 +741,12 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 				&next->mpu_regions[index]);
 	}
 
+	/* ARMv8-M cannot encode privileged-RW plus unprivileged-RO for the
+	 * current-slot aperture. Its selected context pair is therefore RO/XN for
+	 * both privilege levels. Publish only while MPU_CTRL is disabled, after all
+	 * candidate image writes/readbacks and before exposing that image. */
+	fiber_internal_runtime_publish_current_context(next);
+
 	fiber_portMPU_CTRL_REG = fiber_portMPU_CTRL_REQUIRED;
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
@@ -700,24 +755,77 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 }
 
 FIBER_CM55_MPU_PRIVILEGED
-void fiber_port_prepare_first_start(FiberContext *first)
+void fiber_port_require_scheduler_configuration_environment(void)
+{
+	fiber_port_require_privileged_thread_start_environment();
+	fiber_port_require_mpu_geometry();
+	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
+}
+
+/* Common fiber_start() calls this before the first scheduler selection. The
+ * first hook therefore sees a fully checked port environment, but MPU remains
+ * disabled until the selected first context enters through SVC 70. */
+FIBER_CM55_MPU_PRIVILEGED
+void fiber_port_runtime_prepare_start(void)
 {
 	FiberPortMpuMemoryLayout layout;
 	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
-	FIBER_REQUIRE(first != NULL, 'N');
-	fiber_internal_runtime_require_current_context();
-	fiber_port_require_privileged_thread_start_environment();
+	fiber_port_require_scheduler_configuration_environment();
 	fiber_port_mpu_load_linker_layout(&layout);
 	fiber_port_mpu_linker_layout_check(&layout);
 	fiber_port_validate_runtime_linker_placement(&layout);
-	fiber_port_require_mpu_geometry();
-	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
-	fiber_port_context_validate_initial_restore(first);
 	fiber_port_validate_runtime_vector_source(&layout);
 	fiber_port_configure_first_start_exceptions();
 	fiber_port_validate_runtime_vector_source(&layout);
-	fiber_port_require_privileged_thread_start_environment();
+	fiber_port_require_scheduler_configuration_environment();
+}
+
+FIBER_CM55_MPU_PRIVILEGED
+FiberContext *fiber_port_runtime_select_first(void)
+{
+	fiber_port_require_scheduler_configuration_environment();
+
+	/* The first hook runs privileged while MPU_CTRL is disabled. Preserve all
+	 * architectural state, including the otherwise non-canonical pre-start RNR,
+	 * so policy code cannot mutate the prepared SVC transfer contract. */
+	const uint32_t previous = fiber_port_primask_save_disable();
+	FIBER_REQUIRE(previous == 0u, 'p');
+	FiberPortMpuSchedulerCpuState cpu_state;
+	fiber_port_capture_scheduler_cpu_state(&cpu_state);
+	FiberContext *const first =
+			fiber_internal_runtime_select_scheduler_candidate(NULL);
+	fiber_port_validate_scheduler_cpu_state(&cpu_state);
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_primask_restore(previous);
+	return first;
+}
+
+FIBER_API_NORETURN FIBER_CM55_MPU_PRIVILEGED
+void fiber_port_runtime_start_first(FiberContext *first)
+{
+	FIBER_REQUIRE(first != NULL, 'N');
+	fiber_internal_runtime_require_current_context();
+	fiber_port_require_scheduler_configuration_environment();
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_start_first_context(first);
+	FIBER_API_UNREACHABLE();
+}
+
+/* The naked first-start veneer repeats only final transfer checks. Setup and
+ * exception configuration completed before the scheduler chose `first`. */
+FIBER_CM55_MPU_PRIVILEGED
+void fiber_port_prepare_first_start(FiberContext *first)
+{
+	FiberPortMpuMemoryLayout layout;
+	FIBER_REQUIRE(first != NULL, 'N');
+	fiber_internal_runtime_require_current_context();
+	fiber_port_require_scheduler_configuration_environment();
+	fiber_port_mpu_load_linker_layout(&layout);
+	fiber_port_mpu_linker_layout_check(&layout);
+	fiber_port_validate_runtime_linker_placement(&layout);
+	fiber_port_context_validate_initial_restore(first);
+	fiber_port_validate_runtime_vector_source(&layout);
 }
 
 FIBER_CM55_MPU_PRIVILEGED
@@ -1005,12 +1113,11 @@ void fiber_port_unprivileged_task_return(void)
 			: "memory", "cc");
 }
 
-/* This exact syscall-flash veneer is the only private Thread-mode route to
- * SVC 71. It stays out of the public forward ABI until the complete selected
- * runtime activation slice can expose fiber_schedule() safely. */
+/* The forward ABI keeps fiber_schedule() CPU-neutral. On this protected port
+ * its only Thread-mode transfer is the exact syscall-flash SVC 71 veneer. */
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FIBER_ATTR_NAKED_ASM fiber_portSYSCALL_FUNCTION
-void fiber_port_unprivileged_yield(void)
+void fiber_port_runtime_schedule(void)
 {
 	fiber_portASM volatile(
 			".syntax unified                                      \n"
@@ -1096,9 +1203,9 @@ void PendSV_Handler(void)
 			"stmia r1!, {r0, r3, r4, lr}                          \n"
 			"str   r1, [r2, #0]                                   \n"
 
-			/* The reverse bridge owns scheduler policy and common current
-			 * publication. It validates the selected restore image before
-			 * returning it in r0. */
+			/* The reverse bridge owns scheduler policy and validates the selected
+			 * restore image before returning it in r0. Publication moves with the
+			 * MPU image below, while MPU_CTRL is disabled. */
 			"movs  r0, #%c[sched_basepri]                          \n"
 			fiber_portASM_WRITE_BASEPRI_R0_SYNC
 			"mov   r0, r2                                         \n"
@@ -1180,6 +1287,7 @@ void PendSV_Handler(void)
 			: "memory", "cc");
 }
 
+#undef FIBER_CM55_MPU_UNPRIVILEGED
 #undef FIBER_CM55_MPU_PRIVILEGED
 #undef fiber_portSTRINGIFY
 #undef fiber_portSTRINGIFY2

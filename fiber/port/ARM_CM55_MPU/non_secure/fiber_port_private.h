@@ -4,14 +4,16 @@
 
 #include "fiber_port_boot.h"
 #include "../../fiber_port_context_cohort.h"
+#include "../../fiber_port_runtime_abi.h"
+#include "../../../fiber_api_decl.h"
 #include "../../../fiber_runtime_port_abi.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* This staged profile owns protected SVC/PendSV mechanics but deliberately
- * exposes neither the forward runtime ABI nor a public MPU-management API. */
+/* The frozen forward runtime ABI is implemented in fiber_port.c. Heterogeneous
+ * MPU policy remains a separate optional port API and is not declared here. */
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
 void fiber_port_prepare_first_start(FiberContext *first);
@@ -53,12 +55,6 @@ void fiber_port_restore_first_context_from_svc(FiberContext *first,
 FIBER_API_NORETURN FIBER_ATTR_NAKED_ASM
 fiber_portSYSCALL_FUNCTION
 void fiber_port_unprivileged_task_return(void);
-
-/* Private staging veneer only. It is intentionally not part of the public
- * forward ABI until this complete protected runtime becomes selectable. */
-FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
-FIBER_ATTR_NAKED_ASM fiber_portSYSCALL_FUNCTION
-void fiber_port_unprivileged_yield(void);
 
 FIBER_ATTR_NAKED_ASM fiber_portPRIVILEGED_FUNCTION
 void SVC_Handler(void);
