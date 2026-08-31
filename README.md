@@ -146,11 +146,13 @@ M55 hardware remains unvalidated. See
 not a runnable M55 port. It freezes only the scalar Non-secure eleven-word
 `[SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]` layout, the pre-start
 `secure_stack_bytes` request, and the Cortex-M55 ARMv8.1-M CMSE-level-1
-manifest. The paired `ARM_CM55/secure` Slice-2 artifact exports only four
-C55S-named v1 identity NSC veneers; matching CMSE linkage and missing/v2/foreign
-import failure are covered. It deliberately exports no runtime ABI, SVC/PendSV
-handler, attachment API, allocator, stateful Secure gateway, or hardware claim.
-The later Secure lifecycle and runtime remain separate identity-matched slices. See
+manifest. The paired `ARM_CM55/secure` Slice-2/3 artifact exports eight
+C55S-named v1 identity/capacity NSC veneers and reserves an explicit Secure-only
+static pool; matching CMSE linkage, pool placement, invalid capacity, and
+missing/v2/foreign import failure are covered. It deliberately exports no
+runtime ABI, SVC/PendSV handler, attachment API, initializer, allocator, or
+stateful Secure gateway. The later Secure lifecycle and runtime remain separate
+identity-matched slices. See
 `fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55F_NTZ/non_secure` is the complete build-selected scalar-FP M55
@@ -342,6 +344,11 @@ group):
                fiber/port/ARM_CM55/secure/fiber_secure_gateway_contract.h
                fiber/port/ARM_CM55/secure/fiber_secure_gateway_abi.h
                fiber/port/ARM_CM55/secure/fiber_secure_gateway.c
+               fiber/port/ARM_CM55/secure/fiber_secure_context_gateway_contract.h
+               fiber/port/ARM_CM55/secure/fiber_secure_context_gateway_abi.h
+               fiber/port/ARM_CM55/secure/fiber_secure_context_gateway.c
+               fiber/port/ARM_CM55/secure/fiber_secure_context_pool.h
+               fiber/port/ARM_CM55/secure/fiber_secure_context_pool.c
 
 M55 MVE-FP complete build-selected runtime source group (not globally
 selectable):

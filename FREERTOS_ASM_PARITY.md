@@ -132,12 +132,13 @@ proof covers the exact eleven-word layout, type-only C/C++ use, scalar M55
 pinned FreeRTOS source hashes and deferred mechanics are recorded in
 `fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55/secure` Slice 2 adds only the versioned C55S CMSE identity gateway.
-It builds real Secure `-mcmse` and Non-secure images at `-O2`, `-Os`, and
-`-O2 -flto`, proves four NSC veneers in `.gnu.sgstubs`, and rejects missing,
-v2-only, and foreign generic import libraries. It still contributes no context
-construction, SVC, PendSV, or SecureContext save/load assembly to the table.
-Its ledger is `fiber/port/ARM_CM55/secure/FREERTOS_PARITY.md`.
+`ARM_CM55/secure` Slice 2/3 adds versioned C55S CMSE identity and immutable
+capacity gateways. It builds real Secure `-mcmse` and Non-secure images at
+`-O2`, `-Os`, and `-O2 -flto`, proves eight NSC veneers in `.gnu.sgstubs`, an
+explicit retained Secure pool section, and rejects missing, v2-only, foreign,
+and invalid-capacity manifests. It still contributes no context construction,
+SVC, PendSV, or SecureContext save/load assembly to the table. Its ledger is
+`fiber/port/ARM_CM55/secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55F_NTZ/non_secure` slices 1-4 use `fiber_port_boot.c`,
 `fiber_port_svc.c`, and `fiber_port.c` as one complete scalar-FP runtime group.

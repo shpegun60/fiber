@@ -6,9 +6,10 @@ This staged selected-port profile freezes the exact scalar Cortex-M55
 TrustZone Non-secure context dictionary used by the pinned FreeRTOS
 `GCC/ARM_CM55/non_secure` port. It is build-selected only, has no runtime claim,
 and provides no context constructor, SVC/PendSV handler, forward runtime ABI,
-SecureContext pool, attachment API, or global selector route. Slice 2 adds only
-the paired immutable identity gateway in `ARM_CM55/secure`; it does not change
-this profile into a runtime port.
+SecureContext pool, attachment API, or global selector route. Slice 2 adds the
+paired immutable identity gateway, and Slice 3 adds a Secure-only static
+capacity reservation plus immutable capacity queries in `ARM_CM55/secure`;
+neither changes this profile into a runtime port.
 
 The future profile is one privileged, no-MPU, no-FPU, no-MVE Non-secure
 scheduler image paired with one matching `ARM_CM55/secure` SecureContext
@@ -80,15 +81,14 @@ Non-secure compiler: __ARM_FEATURE_CMSE=1
 
 Secure `-mcmse` compilation reports CMSE level 3 and is rejected by the
 Non-secure profile. The eventual Secure image is a separate artifact, not a
-second fiber runtime. Its Slice-2 identity veneers are link-proved separately.
-Runtime selection is zero until the future source group can provide all eight
-mandatory forward operations and strong vector handlers.
+second fiber runtime. Its Slice-2 identity and Slice-3 capacity veneers are
+link-proved separately. Runtime selection is zero until the future source group
+can provide all eight mandatory forward operations and strong vector handlers.
 
 ## Deferred Work
 
-1. Versioned Secure identity/gateway ABI and a paired Secure-image manifest.
-2. Secure-private static pool and one-shot initialization.
-3. Sealed pre-start attachment API.
-4. Exact constructor, first SVC, Secure save/load, PendSV, archive, CMSE, and
+1. One-shot Secure pool initialization plus stateful allocation/load/save.
+2. Sealed pre-start attachment API.
+3. Exact constructor, first SVC, Secure save/load, PendSV, archive, CMSE, and
    generated-assembly proof.
-5. M55 hardware TrustZone validation.
+4. M55 hardware TrustZone validation.

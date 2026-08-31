@@ -10513,9 +10513,19 @@ function Test-ArmCm55SecureGatewayAbi {
     $secureSource = Join-Path $secureDir "fiber_secure_gateway.c"
     $secureHeader = Join-Path $secureDir "fiber_secure_gateway_abi.h"
     $contractHeader = Join-Path $secureDir "fiber_secure_gateway_contract.h"
+    $secureContextGatewaySource = Join-Path $secureDir `
+        "fiber_secure_context_gateway.c"
+    $secureContextGatewayHeader = Join-Path $secureDir `
+        "fiber_secure_context_gateway_abi.h"
+    $secureContextContractHeader = Join-Path $secureDir `
+        "fiber_secure_context_gateway_contract.h"
+    $securePoolSource = Join-Path $secureDir "fiber_secure_context_pool.c"
+    $securePoolHeader = Join-Path $secureDir "fiber_secure_context_pool.h"
     $secureParity = Join-Path $secureDir "FREERTOS_PARITY.md"
     $nonSecureHeader = Join-Path $nonSecureDir `
         "fiber_port_secure_gateway_abi.h"
+    $nonSecureContextGatewayHeader = Join-Path $nonSecureDir `
+        "fiber_port_secure_context_gateway_abi.h"
     $secureProbe = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm55_secure_gateway_secure_probe.c"
     $nonSecureProbe = Join-Path $RepositoryRoot `
@@ -10526,11 +10536,14 @@ function Test-ArmCm55SecureGatewayAbi {
         "tools\fixtures\arm_cm55_secure_gateway_non_secure.ld"
 
     foreach ($required in @(
-            $secureSource, $secureHeader, $contractHeader, $secureParity,
-            $nonSecureHeader, $secureProbe, $nonSecureProbe,
+            $secureSource, $secureHeader, $contractHeader,
+            $secureContextGatewaySource, $secureContextGatewayHeader,
+            $secureContextContractHeader, $securePoolSource, $securePoolHeader,
+            $secureParity, $nonSecureHeader, $nonSecureContextGatewayHeader,
+            $secureProbe, $nonSecureProbe,
             $secureLinker, $nonSecureLinker)) {
         if (-not (Test-Path -LiteralPath $required)) {
-            throw "ARM_CM55 Secure gateway Slice 2 is missing: $required"
+            throw "ARM_CM55 Secure gateway Slice 3 is missing: $required"
         }
     }
 
@@ -10542,20 +10555,28 @@ function Test-ArmCm55SecureGatewayAbi {
             (Join-Path $nonSecureDir "fiber_port_private.h"),
             (Join-Path $nonSecureDir "fiber_port_secure_context.c"),
             (Join-Path $nonSecureDir "fiber_port_secure_context_abi.h"),
-            (Join-Path $secureDir "fiber_secure_context_gateway.c"),
-            (Join-Path $secureDir "fiber_secure_context_gateway_abi.h"),
-            (Join-Path $secureDir "fiber_secure_context_pool.c"),
-            (Join-Path $secureDir "fiber_secure_context_pool.h"))) {
+            (Join-Path $secureDir "fiber_secure_context_lifecycle.c"),
+            (Join-Path $secureDir "fiber_secure_context_lifecycle.h"),
+            (Join-Path $secureDir "fiber_secure_context_port.c"))) {
         if (Test-Path -LiteralPath $forbidden) {
-            throw "ARM_CM55 Secure gateway Slice 2 exposed future runtime artifact: $forbidden"
+            throw "ARM_CM55 Secure gateway Slice 3 exposed future runtime artifact: $forbidden"
         }
     }
 
-    $expectedGatewayFunctions = @(
+    $expectedIdentityGatewayFunctions = @(
         "fiber_secure_gateway_c55s_v1_abi_version",
         "fiber_secure_gateway_c55s_v1_context_port_id",
         "fiber_secure_gateway_c55s_v1_context_layout_version",
         "fiber_secure_gateway_c55s_v1_context_feature_mask"
+    ) | Sort-Object
+    $expectedCapacityGatewayFunctions = @(
+        "fiber_secure_context_gateway_c55s_v1_abi_version",
+        "fiber_secure_context_gateway_c55s_v1_stack_alignment",
+        "fiber_secure_context_gateway_c55s_v1_max_stack_bytes",
+        "fiber_secure_context_gateway_c55s_v1_max_contexts"
+    ) | Sort-Object
+    $expectedGatewayFunctions = @(
+        $expectedIdentityGatewayFunctions + $expectedCapacityGatewayFunctions
     ) | Sort-Object
 
     foreach ($headerPath in @($secureHeader, $nonSecureHeader)) {
@@ -10563,10 +10584,22 @@ function Test-ArmCm55SecureGatewayAbi {
         $actual = @([regex]::Matches($header,
             '\b(fiber_secure_gateway_c55s_v1_[A-Za-z0-9_]+)\s*\(') |
             ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
-        if (($actual.Count -ne $expectedGatewayFunctions.Count) -or
-                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+        if (($actual.Count -ne $expectedIdentityGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedIdentityGatewayFunctions `
                     -DifferenceObject $actual)) {
-            throw "ARM_CM55 C55S Secure gateway function surface changed: $headerPath"
+            throw "ARM_CM55 C55S Secure identity gateway function surface changed: $headerPath"
+        }
+    }
+    foreach ($headerPath in @(
+            $secureContextGatewayHeader, $nonSecureContextGatewayHeader)) {
+        $header = Get-Content -LiteralPath $headerPath -Raw
+        $actual = @([regex]::Matches($header,
+            '\b(fiber_secure_context_gateway_c55s_v1_[A-Za-z0-9_]+)\s*\(') |
+            ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+        if (($actual.Count -ne $expectedCapacityGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedCapacityGatewayFunctions `
+                    -DifferenceObject $actual)) {
+            throw "ARM_CM55 C55S Secure capacity gateway function surface changed: $headerPath"
         }
     }
 
@@ -10587,7 +10620,23 @@ function Test-ArmCm55SecureGatewayAbi {
             throw "ARM_CM55 Secure gateway header lost required contract: $requiredText"
         }
     }
-    $nonSecureHeaderText = Get-Content -LiteralPath $nonSecureHeader -Raw
+    $secureContextHeaderText = (Get-Content -LiteralPath `
+            $secureContextGatewayHeader -Raw) +
+            (Get-Content -LiteralPath $secureContextContractHeader -Raw) +
+            (Get-Content -LiteralPath $securePoolHeader -Raw)
+    foreach ($requiredText in @(
+            "capacity gateway",
+            "FIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT",
+            "FIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES",
+            "STATIC capacity reservation",
+            "eight-byte aligned")) {
+        if ($secureContextHeaderText.IndexOf($requiredText,
+                [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            throw "ARM_CM55 Secure capacity foundation lost required contract: $requiredText"
+        }
+    }
+    $nonSecureHeaderText = (Get-Content -LiteralPath $nonSecureHeader -Raw) +
+            (Get-Content -LiteralPath $nonSecureContextGatewayHeader -Raw)
     foreach ($requiredText in @(
             "fiber_portmacro.h",
             "fiber_secure_gateway_contract.h",
@@ -10601,7 +10650,7 @@ function Test-ArmCm55SecureGatewayAbi {
     }
     if ($nonSecureHeaderText.IndexOf("cmse_nonsecure_entry",
             [System.StringComparison]::Ordinal) -ge 0) {
-        throw "ARM_CM55 Non-secure gateway import must not declare Secure entry attributes"
+        throw "ARM_CM55 Non-secure gateway imports must not declare Secure entry attributes"
     }
 
     $parity = Get-Content -LiteralPath $secureParity -Raw
@@ -10617,7 +10666,9 @@ function Test-ArmCm55SecureGatewayAbi {
             "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
             "5F2DF28DF3D445F08727CAF41F83ED6C67E0494E40AF5572B5E18F6416B2838D",
             "generic CM33 import library",
-            "No generated SecureContext allocation/save/load")) {
+            "No generated SecureContext initialization, allocation, save/load",
+            "Slice 3",
+            "capacity")) {
         if ($parity.IndexOf($requiredParity,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "ARM_CM55 Secure gateway parity ledger lost reference evidence: $requiredParity"
@@ -10694,6 +10745,10 @@ typedef enum IRQn {
         "-DFIBER_PORT_BUILD_SELECTED=1",
         "-DFIBER_PORT_ARMV81M_MAINLINE=1"
     )
+    $securePoolDefines = @(
+        "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3",
+        "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=1024"
+    )
 
     foreach ($modeSpec in @(
             [pscustomobject]@{ Name = "o2"; Optimization = "-O2"; Lto = 0 },
@@ -10706,7 +10761,7 @@ typedef enum IRQn {
         $secureArgs = @(
             "-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft",
             "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
-            $selectedDefines + $secureIncludes
+            $selectedDefines + $securePoolDefines + $secureIncludes
         $nonSecureArgs = @(
             "-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft",
             "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
@@ -10715,13 +10770,16 @@ typedef enum IRQn {
             "-x", "c++", "-mcpu=cortex-m55", "-mthumb", "-mcmse",
             "-mfloat-abi=soft", "-std=gnu++17", "-fno-exceptions",
             "-fno-rtti", $modeSpec.Optimization) + $ltoArgs + $cppWarningArgs +
-            $selectedDefines + $secureIncludes
+            $selectedDefines + $securePoolDefines + $secureIncludes
         $nonSecureCppArgs = @(
             "-x", "c++", "-mcpu=cortex-m55", "-mthumb",
             "-mfloat-abi=soft", "-std=gnu++17", "-fno-exceptions",
             "-fno-rtti", $modeSpec.Optimization) + $ltoArgs + $cppWarningArgs +
             $selectedDefines + $nonSecureIncludes
         $secureObject = Join-Path $modeDir "secure-gateway.o"
+        $secureContextGatewayObject = Join-Path $modeDir `
+            "secure-context-gateway.o"
+        $securePoolObject = Join-Path $modeDir "secure-context-pool.o"
         $secureProbeObject = Join-Path $modeDir "secure-probe.o"
         $nonSecureProbeObject = Join-Path $modeDir "non-secure-probe.o"
         $secureCppProbeObject = Join-Path $modeDir "secure-probe-cpp.o"
@@ -10729,6 +10787,8 @@ typedef enum IRQn {
 
         foreach ($compile in @(
                 [pscustomobject]@{ Args = $secureArgs; Source = $secureSource; Object = $secureObject; Label = "Secure gateway" },
+                [pscustomobject]@{ Args = $secureArgs; Source = $secureContextGatewaySource; Object = $secureContextGatewayObject; Label = "Secure capacity gateway" },
+                [pscustomobject]@{ Args = $secureArgs; Source = $securePoolSource; Object = $securePoolObject; Label = "Secure capacity pool" },
                 [pscustomobject]@{ Args = $secureArgs; Source = $secureProbe; Object = $secureProbeObject; Label = "Secure probe" },
                 [pscustomobject]@{ Args = $nonSecureArgs; Source = $nonSecureProbe; Object = $nonSecureProbeObject; Label = "Non-secure probe" },
                 [pscustomobject]@{ Args = $secureCppArgs; Source = $secureProbe; Object = $secureCppProbeObject; Label = "Secure C++ header probe" },
@@ -10756,7 +10816,8 @@ typedef enum IRQn {
         & $Compiler @($secureArgs + @(
             "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
             "-Wl,--out-implib,$importLibrary", "-Wl,-T,$secureLinker",
-            $secureObject, $secureProbeObject, "-o", $secureElf))
+            $secureObject, $secureContextGatewayObject, $securePoolObject,
+            $secureProbeObject, "-o", $secureElf))
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM55 Secure CMSE gateway image failed link ($mode)"
         }
@@ -10765,7 +10826,7 @@ typedef enum IRQn {
         }
         $importDefinitions = @(& $Nm -g --defined-only $importLibrary)
         $actualGatewayImports = @($importDefinitions | ForEach-Object {
-            if ($_ -match '\b(fiber_secure_gateway_c55s_v[0-9]+_[A-Za-z0-9_]+)$') {
+            if ($_ -match '\b((?:fiber_secure_gateway|fiber_secure_context_gateway)_c55s_v[0-9]+_[A-Za-z0-9_]+)$') {
                 $Matches[1]
             }
         } | Sort-Object -Unique)
@@ -10775,7 +10836,7 @@ typedef enum IRQn {
             throw "ARM_CM55 Secure CMSE import surface changed ($mode)"
         }
         if (@($importDefinitions | Where-Object {
-                $_ -match '\bfiber_secure_gateway_v[0-9]+_'
+                $_ -match '\bfiber_(?:secure_gateway|secure_context_gateway)_v[0-9]+_'
             }).Count -ne 0) {
             throw "ARM_CM55 Secure CMSE import library exposed a generic profile symbol ($mode)"
         }
@@ -10809,6 +10870,18 @@ typedef enum IRQn {
                 ($secureNscSection[0] -notmatch "2\*\*5$")) {
             throw "ARM_CM55 Secure CMSE image lost the aligned NSC veneer section ($mode)"
         }
+        $expectedPoolBytes = 3 * (24 + (1024 + 8))
+        $expectedPoolSize = ("{0:x8}" -f $expectedPoolBytes)
+        $securePoolSection = @($secureSections | Where-Object {
+            $_ -match "\.fiber_secure_context_pool"
+        })
+        if (($securePoolSection.Count -ne 1) -or
+                ($securePoolSection[0] -notmatch
+                    ("\s" + [regex]::Escape($expectedPoolSize) + "\s")) -or
+                ($securePoolSection[0] -notmatch "\s30000000\s") -or
+                ($securePoolSection[0] -notmatch "2\*\*3$")) {
+            throw "ARM_CM55 Secure CMSE image lost the exact SecureContext pool section ($mode)"
+        }
 
         $nonSecureElf = Join-Path $modeDir "non-secure.elf"
         & $Compiler @($nonSecureArgs + @(
@@ -10822,7 +10895,7 @@ typedef enum IRQn {
             throw "nm failed for ARM_CM55 matching Non-secure image ($mode)"
         }
         if (@($nonSecureUndefinedAfterLink | Where-Object {
-                $_ -match '\bfiber_secure_gateway_c55s_v'
+                $_ -match '\bfiber_(?:secure_gateway|secure_context_gateway)_c55s_v'
             }).Count -ne 0) {
             throw "ARM_CM55 matching Non-secure image retained an unresolved gateway symbol ($mode)"
         }
@@ -10849,6 +10922,10 @@ NSC uint32_t fiber_secure_gateway_c55s_v2_abi_version(void) { return 2u; }
 NSC uint32_t fiber_secure_gateway_c55s_v2_context_port_id(void) { return 0x43353553u; }
 NSC uint32_t fiber_secure_gateway_c55s_v2_context_layout_version(void) { return 0x00010001u; }
 NSC uint32_t fiber_secure_gateway_c55s_v2_context_feature_mask(void) { return 0x8Au; }
+NSC uint32_t fiber_secure_context_gateway_c55s_v2_abi_version(void) { return 2u; }
+NSC uint32_t fiber_secure_context_gateway_c55s_v2_stack_alignment(void) { return 8u; }
+NSC uint32_t fiber_secure_context_gateway_c55s_v2_max_stack_bytes(void) { return 1024u; }
+NSC uint32_t fiber_secure_context_gateway_c55s_v2_max_contexts(void) { return 3u; }
 '@
         Set-Content -LiteralPath $v2Probe -Encoding ASCII -Value @'
 #include <stdint.h>
@@ -10857,13 +10934,21 @@ extern uint32_t fiber_secure_gateway_c55s_v2_abi_version(void);
 extern uint32_t fiber_secure_gateway_c55s_v2_context_port_id(void);
 extern uint32_t fiber_secure_gateway_c55s_v2_context_layout_version(void);
 extern uint32_t fiber_secure_gateway_c55s_v2_context_feature_mask(void);
+extern uint32_t fiber_secure_context_gateway_c55s_v2_abi_version(void);
+extern uint32_t fiber_secure_context_gateway_c55s_v2_stack_alignment(void);
+extern uint32_t fiber_secure_context_gateway_c55s_v2_max_stack_bytes(void);
+extern uint32_t fiber_secure_context_gateway_c55s_v2_max_contexts(void);
 
 void Reset_Handler(void)
 {
     volatile uint32_t value = fiber_secure_gateway_c55s_v2_abi_version() ^
         fiber_secure_gateway_c55s_v2_context_port_id() ^
         fiber_secure_gateway_c55s_v2_context_layout_version() ^
-        fiber_secure_gateway_c55s_v2_context_feature_mask();
+        fiber_secure_gateway_c55s_v2_context_feature_mask() ^
+        fiber_secure_context_gateway_c55s_v2_abi_version() ^
+        fiber_secure_context_gateway_c55s_v2_stack_alignment() ^
+        fiber_secure_context_gateway_c55s_v2_max_stack_bytes() ^
+        fiber_secure_context_gateway_c55s_v2_max_contexts();
     (void)value;
     for (;;) { __asm volatile ("wfe"); }
 }
@@ -10909,6 +10994,10 @@ NSC uint32_t fiber_secure_gateway_v1_abi_version(void) { return 1u; }
 NSC uint32_t fiber_secure_gateway_v1_context_port_id(void) { return 0x43333353u; }
 NSC uint32_t fiber_secure_gateway_v1_context_layout_version(void) { return 0x00010001u; }
 NSC uint32_t fiber_secure_gateway_v1_context_feature_mask(void) { return 0x8Au; }
+NSC uint32_t fiber_secure_context_gateway_v1_abi_version(void) { return 1u; }
+NSC uint32_t fiber_secure_context_gateway_v1_stack_alignment(void) { return 8u; }
+NSC uint32_t fiber_secure_context_gateway_v1_max_stack_bytes(void) { return 1024u; }
+NSC uint32_t fiber_secure_context_gateway_v1_max_contexts(void) { return 3u; }
 '@
         Set-Content -LiteralPath $foreignProbe -Encoding ASCII -Value @'
 #include <stdint.h>
@@ -10917,13 +11006,21 @@ extern uint32_t fiber_secure_gateway_v1_abi_version(void);
 extern uint32_t fiber_secure_gateway_v1_context_port_id(void);
 extern uint32_t fiber_secure_gateway_v1_context_layout_version(void);
 extern uint32_t fiber_secure_gateway_v1_context_feature_mask(void);
+extern uint32_t fiber_secure_context_gateway_v1_abi_version(void);
+extern uint32_t fiber_secure_context_gateway_v1_stack_alignment(void);
+extern uint32_t fiber_secure_context_gateway_v1_max_stack_bytes(void);
+extern uint32_t fiber_secure_context_gateway_v1_max_contexts(void);
 
 void Reset_Handler(void)
 {
     volatile uint32_t value = fiber_secure_gateway_v1_abi_version() ^
         fiber_secure_gateway_v1_context_port_id() ^
         fiber_secure_gateway_v1_context_layout_version() ^
-        fiber_secure_gateway_v1_context_feature_mask();
+        fiber_secure_gateway_v1_context_feature_mask() ^
+        fiber_secure_context_gateway_v1_abi_version() ^
+        fiber_secure_context_gateway_v1_stack_alignment() ^
+        fiber_secure_context_gateway_v1_max_stack_bytes() ^
+        fiber_secure_context_gateway_v1_max_contexts();
     (void)value;
     for (;;) { __asm volatile ("wfe"); }
 }
@@ -11024,6 +11121,62 @@ void Reset_Handler(void)
             Defines = $selectedDefines + @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
             Diagnostic = "not an MPU companion ABI"
             Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pool-missing-count"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=1024")
+            Diagnostic = "pool requires FIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-missing-stack-capacity"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3")
+            Diagnostic = "pool requires FIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-zero-count"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=0", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=1024")
+            Diagnostic = "pool count must be non-zero"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-count-handle-overflow"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=4294967295u", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=1024")
+            Diagnostic = "pool count exceeds handle range"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-small-stack-capacity"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=4")
+            Diagnostic = "stack capacity is too small"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-unaligned-stack-capacity"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=1025")
+            Diagnostic = "stack capacity must be eight-byte aligned"
+            Main = $mainHeader
+            Source = $securePoolSource
+        },
+        [pscustomobject]@{
+            Name = "pool-seal-overflow"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=4294967288u")
+            Diagnostic = "stack capacity overflows the seal allocation"
+            Main = $mainHeader
+            Source = $securePoolSource
         }
     )
     foreach ($case in $negativeCases) {
@@ -11031,13 +11184,17 @@ void Reset_Handler(void)
         New-Item -ItemType Directory -Path $caseDir | Out-Null
         Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
             -Value $case.Main -Encoding ASCII
+        $source = $secureSource
+        if ($case.PSObject.Properties.Match("Source").Count -ne 0) {
+            $source = $case.Source
+        }
         $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments @(
             $case.CompilerArgs + @(
                 "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-common",
                 "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
                 "-I$caseDir", "-I$secureDir", "-I$RepositoryRoot",
                 "-I$CmsisPath") + $case.Defines + @(
-                "-c", $secureSource, "-o", (Join-Path $caseDir "invalid.o"))) `
+                "-c", $source, "-o", (Join-Path $caseDir "invalid.o"))) `
             -LogPath (Join-Path $caseDir "compile.log")
         if (($result.ExitCode -eq 0) -or
                 ($result.Output.IndexOf($case.Diagnostic,
@@ -21644,7 +21801,7 @@ try {
     Write-Host "== ARM_CM55 SecureContext Slice 1 layout/trait contract =="
     Test-ArmCm55SecureContextLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
-    Write-Host "== ARM_CM55 SecureContext Slice 2 CMSE gateway contract =="
+    Write-Host "== ARM_CM55 SecureContext Slice 2/3 CMSE gateway and capacity contract =="
     Test-ArmCm55SecureGatewayAbi -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -CmsisPath $cmsis -BuildRoot $buildRoot

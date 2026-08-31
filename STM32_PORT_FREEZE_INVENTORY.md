@@ -81,10 +81,11 @@ groups and pinned FreeRTOS parity ledgers:
 `ARM_CM55/non_secure` is a deliberately staged `C55S` TrustZone SecureContext
 layout dictionary, not a nineteenth complete runtime profile. It freezes the
 eleven-word Non-secure frame and scalar M55/CMSE manifest. The paired
-`ARM_CM55/secure` Slice-2 artifact now provides only four immutable
-cohort-named identity NSC veneers with real CMSE import/negative-link proof;
-no port runtime, SecureContext lifecycle, handler, archive/vector runtime, or
-hardware evidence exists yet.
+`ARM_CM55/secure` Slice-2/3 artifact provides eight immutable cohort-named
+identity/capacity NSC veneers and a manifest-budgeted, retained Secure-only
+pool with real CMSE import/negative-link and section-placement proof; no port
+runtime, SecureContext lifecycle, handler, archive/vector runtime, or hardware
+evidence exists yet.
 
 The current matrix pairs every complete runtime source group against the pinned
 FreeRTOS reference where applicable and separately tests the paired CM33

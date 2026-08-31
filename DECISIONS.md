@@ -1,5 +1,32 @@
 # Fiber Decision Log
 
+## 2026-08-31: Add ARM_CM55 SecureContext Capacity Foundation
+
+`ARM_CM55/secure` slice 3 adds a Secure-only, manifest-budgeted static
+capacity foundation after the Slice-2 C55S identity gateway. It exports four
+additional immutable C55S-named NSC veneers for gateway ABI version, stack
+alignment, maximum Secure stack bytes, and maximum SecureContext count. The
+matching Non-secure import header remains port-private and is still not a
+user-facing attachment API.
+
+The Secure manifest must explicitly define
+`FIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT` and
+`FIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES`. The private, eight-byte
+aligned `.fiber_secure_context_pool` section reserves the matching static
+record and stack image. Its record prefix follows the FreeRTOS
+`[PSP][PSPLIM][stack top][owner]` shape and reserves the two-word stack seal,
+but Slice 3 does not read or write it. A later one-shot initialization must
+erase the `NOLOAD` pool before any allocation becomes available.
+
+The matrix verifies eight exact C55S NSC veneers, matching CMSE linkage,
+missing/v2/foreign import failures, C/C++ headers, exact retained pool geometry
+for an explicit `3 x 1024` manifest, and invalid/missing capacity manifests at
+`-O2`, `-Os`, and `-O2 -flto`.
+
+This is not a stateful SecureContext runtime. It deliberately adds no
+initialization, allocation, attachment, load, save, constructor, SVC/PendSV
+handler, forward runtime ABI, or hardware claim.
+
 ## 2026-08-31: Add ARM_CM55 Secure Companion Identity Gateway
 
 `ARM_CM55/secure` slice 2 adds only the paired C55S identity gateway. Its
