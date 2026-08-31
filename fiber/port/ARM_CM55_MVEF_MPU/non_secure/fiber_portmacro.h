@@ -1,116 +1,125 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M55 scalar-FP MPU Non-secure dictionary, implementation slices 1-4.
- * This is the FreeRTOS ARM_CM55_NTZ FPU/MPU/no-MVE/no-TrustZone/no-PAC
+ * Exact Cortex-M55 MVE-FP MPU Non-secure dictionary, implementation slices 1-3.
+ * This is the FreeRTOS ARM_CM55_NTZ FPU/MPU/MVE/no-TrustZone/no-PAC
  * protected profile with an explicit 8- or 16-region manifest. It freezes the
- * overlapping basic/extended protected image, construction and linker policy;
- * strict SVC/PendSV mechanics and the frozen forward runtime ABI are active.
+ * overlapping basic/extended protected image, construction, strict SVC,
+ * protected PendSV mechanics, and linker policy. The frozen forward runtime
+ * ABI arrives in a later composition slice.
  */
-#ifndef FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORTMACRO_H_
-#define FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORTMACRO_H_
+#ifndef FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORTMACRO_H_
+#define FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORTMACRO_H_
 
 #include <stddef.h>
 #include <stdint.h>
 
 #ifdef FIBER_PORT_NAME
-# error "[fiber]: ARM_CM55F_MPU port name must not be predefined"
+# error "[fiber]: ARM_CM55_MVEF_MPU port name must not be predefined"
 #endif
-#define FIBER_PORT_NAME "ARM_CM55F_MPU"
+#define FIBER_PORT_NAME "ARM_CM55_MVEF_MPU"
 
 #include "../../fiber_port_select.h"
 #include "../../fiber_settings.h"
 #include "../../fiber_compiler.h"
 
 #if !FIBER_PORT_BUILD_SELECTED
-# error "[fiber]: ARM_CM55F_MPU is build-selected only"
+# error "[fiber]: ARM_CM55_MVEF_MPU is build-selected only"
 #endif
 
 #if !FIBER_PORT_ARMV81M_MAINLINE
-# error "[fiber]: ARM_CM55F_MPU requires the ARMv8.1-M Mainline selected profile"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires the ARMv8.1-M Mainline selected profile"
 #endif
 
 /* GNU Arm reports the same Armv8-M Mainline preprocessor result for several
  * Mainline targets. The selected profile and generated CMSIS M55 identity are
- * both required; the compiler FPU result below then binds scalar FP exactly. */
+ * both required; the compiler MVE-FP result below then binds this cohort
+ * exactly. */
 #if !defined(__ARM_ARCH_8M_MAIN__) && !defined(__ARM_ARCH_8_1M_MAIN__)
-# error "[fiber]: ARM_CM55F_MPU requires an ARMv8-M Mainline compiler target"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires an ARMv8-M Mainline compiler target"
 #endif
 
 #if !defined(__CORTEX_M) || (__CORTEX_M != 55)
-# error "[fiber]: ARM_CM55F_MPU manifest requires CMSIS __CORTEX_M == 55"
+# error "[fiber]: ARM_CM55_MVEF_MPU manifest requires CMSIS __CORTEX_M == 55"
 #endif
 
 #if !defined(__MPU_PRESENT) || (__MPU_PRESENT != 1)
-# error "[fiber]: ARM_CM55F_MPU manifest requires __MPU_PRESENT == 1"
+# error "[fiber]: ARM_CM55_MVEF_MPU manifest requires __MPU_PRESENT == 1"
 #endif
 
 #if !defined(__VTOR_PRESENT) || (__VTOR_PRESENT != 1)
-# error "[fiber]: ARM_CM55F_MPU manifest requires __VTOR_PRESENT == 1"
+# error "[fiber]: ARM_CM55_MVEF_MPU manifest requires __VTOR_PRESENT == 1"
 #endif
 
 #if defined(__ARM_FEATURE_CMSE) && ((__ARM_FEATURE_CMSE + 0) >= 3)
-# error "[fiber]: ARM_CM55F_MPU selected profile excludes Secure CMSE builds"
+# error "[fiber]: ARM_CM55_MVEF_MPU selected profile excludes Secure CMSE builds"
 #endif
 
 #if defined(FIBER_PORT_TOOLCHAIN_HAS_FP) || \
 		defined(FIBER_PORT_SILICON_HAS_FPU) || \
 		defined(FIBER_PORT_CMSIS_FPU_USED) || \
 		defined(FIBER_PORT_HAS_FPU) || \
-		defined(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT)
-# error "[fiber]: ARM_CM55F_MPU FPU facts are selected-port-owned"
+		defined(FIBER_PORT_HAS_EXTENDED_FP_CONTEXT) || \
+		defined(FIBER_PORT_HAS_MVE)
+# error "[fiber]: ARM_CM55_MVEF_MPU FPU facts are selected-port-owned"
 #endif
 
 #if !defined(__FPU_PRESENT) || ((__FPU_PRESENT + 0) != 1)
-# error "[fiber]: ARM_CM55F_MPU requires CMSIS __FPU_PRESENT == 1"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires CMSIS __FPU_PRESENT == 1"
 #endif
 
 #if !defined(__FPU_USED) || ((__FPU_USED + 0) != 1)
-# error "[fiber]: ARM_CM55F_MPU requires CMSIS __FPU_USED == 1"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires CMSIS __FPU_USED == 1"
 #endif
 
 #if !defined(__ARM_FP) || ((__ARM_FP + 0) == 0)
-# error "[fiber]: ARM_CM55F_MPU requires compiler FP code generation"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires compiler FP code generation"
 #endif
 
 #define FIBER_PORT_TOOLCHAIN_HAS_FP 1
 #define FIBER_PORT_SILICON_HAS_FPU 1
 #define FIBER_PORT_CMSIS_FPU_USED 1
 
-#if defined(__ARM_FEATURE_MVE) && ((__ARM_FEATURE_MVE + 0) != 0)
-# error "[fiber]: ARM_CM55F_MPU selected profile does not permit MVE"
+/* Bit 0 denotes MVE integer and bit 1 denotes MVE floating point. The pinned
+ * FreeRTOS MPU branch treats FPU and MVE identically for its conditional FP
+ * frame but still requires the MVE-FP compiler contract for this cohort. */
+#if !defined(__ARM_FEATURE_MVE) || \
+		(((__ARM_FEATURE_MVE + 0) & 3) != 3)
+# error "[fiber]: ARM_CM55_MVEF_MPU requires MVE FP compiler support"
 #endif
 
 #if defined(__ARM_FEATURE_PAC_DEFAULT) || defined(__ARM_FEATURE_PAUTH) || \
 		defined(__ARM_FEATURE_PAUTH_DEFAULT)
-# error "[fiber]: ARM_CM55F_MPU selected profile does not permit PAC"
+# error "[fiber]: ARM_CM55_MVEF_MPU selected profile does not permit PAC"
 #endif
 
 #if defined(__ARM_FEATURE_BTI_DEFAULT) || defined(__ARM_FEATURE_BTI)
-# error "[fiber]: ARM_CM55F_MPU selected profile does not permit BTI"
+# error "[fiber]: ARM_CM55_MVEF_MPU selected profile does not permit BTI"
 #endif
 
 #if !defined(__NVIC_PRIO_BITS) || (__NVIC_PRIO_BITS < 1) || \
 		(__NVIC_PRIO_BITS > 8)
-# error "[fiber]: ARM_CM55F_MPU requires 1..8 implemented NVIC priority bits"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires 1..8 implemented NVIC priority bits"
 #endif
 
-#ifndef FIBER_PORT_CM55F_MPU_TOTAL_REGIONS
-# error "[fiber]: ARM_CM55F_MPU requires FIBER_PORT_CM55F_MPU_TOTAL_REGIONS=8 or 16"
+#ifndef FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS
+# error "[fiber]: ARM_CM55_MVEF_MPU requires FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS=8 or 16"
 #endif
+
 
 #if defined(FIBER_PORT_CM55_MPU_TOTAL_REGIONS) || \
+		defined(FIBER_PORT_CM55F_MPU_TOTAL_REGIONS) || \
 		defined(FIBER_PORT_MPU_TOTAL_REGIONS)
-# error "[fiber]: ARM_CM55F_MPU requires its own MPU-region manifest macro"
+# error "[fiber]: ARM_CM55_MVEF_MPU requires its own MPU-region manifest macro"
 #endif
 
-#if (FIBER_PORT_CM55F_MPU_TOTAL_REGIONS != 8) && \
-		(FIBER_PORT_CM55F_MPU_TOTAL_REGIONS != 16)
-# error "[fiber]: ARM_CM55F_MPU supports exactly 8 or 16 MPU regions"
+#if (FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS != 8) && \
+		(FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS != 16)
+# error "[fiber]: ARM_CM55_MVEF_MPU supports exactly 8 or 16 MPU regions"
 #endif
 
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
-# error "[fiber]: ARM_CM55F_MPU runtime-selectable state must not be predefined"
+# error "[fiber]: ARM_CM55_MVEF_MPU runtime-selectable state must not be predefined"
 #endif
 #define FIBER_PORT_RUNTIME_SELECTABLE 0
 
@@ -138,7 +147,7 @@
 /* Port-owned SVC namespace, reserved now so later runtime slices cannot drift
  * from the protected first-start/yield/task-return provenance contract. */
 #ifdef FIBER_SVC_START_NUMBER
-# error "[fiber]: ARM_CM55F_MPU owns its complete SVC namespace"
+# error "[fiber]: ARM_CM55_MVEF_MPU owns its complete SVC namespace"
 #endif
 #define FIBER_SVC_START_NUMBER 70u
 #define fiber_portSVC_START FIBER_SVC_START_NUMBER
@@ -204,7 +213,7 @@
  * intentionally named separately.  FreeRTOS programs the first context pair
  * through RNR 4, but stores it at xRegionsSettings[0].  Treating both as
  * "stack region" would index four words past the 8-region context image. */
-#define fiber_portMPU_TOTAL_REGIONS FIBER_PORT_CM55F_MPU_TOTAL_REGIONS
+#define fiber_portMPU_TOTAL_REGIONS FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS
 #define fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER 0u
 #define fiber_portMPU_UNPRIVILEGED_FLASH_REGION_NUMBER 1u
 #define fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER 2u
@@ -226,7 +235,7 @@
 	(fiber_portMPU_TOTAL_REGIONS - \
 	 fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER)
 #define fiber_portMPU_CONTEXT_REGION_COUNT \
-	FIBER_PORT_CM55F_MPU_CONTEXT_REGION_COUNT
+	FIBER_PORT_CM55_MVEF_MPU_CONTEXT_REGION_COUNT
 #define fiber_portMPU_CONTEXT_STACK_INDEX 0u
 #define fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX 1u
 #define fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX 2u
@@ -366,7 +375,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 #define FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1
 #define FIBER_PORT_STACK_ALIGNMENT fiber_portBYTE_ALIGNMENT
 #define FIBER_PORT_BOOT_CLEARS_FPCA 1
-#define FIBER_PORT_HAS_MVE 0
+#define FIBER_PORT_HAS_MVE 1
 #define FIBER_PORT_HAS_PAC 0
 #define FIBER_PORT_HAS_BTI 0
 #define FIBER_PORT_USES_PSPLIM_REGISTER 1
@@ -400,41 +409,43 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 #endif
 
 #if FIBER_PORT_SCHEDULER_BASEPRI == 0u
-# error "[fiber]: ARM_CM55F_MPU scheduler BASEPRI threshold must be non-zero"
+# error "[fiber]: ARM_CM55_MVEF_MPU scheduler BASEPRI threshold must be non-zero"
 #endif
 
 #if FIBER_PORT_SCHEDULER_BASEPRI > 255u
-# error "[fiber]: ARM_CM55F_MPU scheduler BASEPRI threshold must fit in 8 bits"
+# error "[fiber]: ARM_CM55_MVEF_MPU scheduler BASEPRI threshold must fit in 8 bits"
 #endif
 
 FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI &
 		((1u << (8u - __NVIC_PRIO_BITS)) - 1u)) == 0u,
-		"[fiber]: ARM_CM55F_MPU BASEPRI uses unimplemented priority bits");
+		"[fiber]: ARM_CM55_MVEF_MPU BASEPRI uses unimplemented priority bits");
 #if __NVIC_PRIO_BITS == 8
 FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
-		"[fiber]: ARM_CM55F_MPU BASEPRI bit 0 is subpriority");
+		"[fiber]: ARM_CM55_MVEF_MPU BASEPRI bit 0 is subpriority");
 #endif
 
-#if FIBER_PORT_CM55F_MPU_TOTAL_REGIONS == 8
+#if FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS == 8
 # define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010008u
-# define FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_OFFSET 40u
-# define FIBER_PORT_CM55F_MPU_RUNTIME_FLAGS_OFFSET 256u
-# define FIBER_PORT_CM55F_MPU_BOOT_OFFSET 260u
-# define FIBER_PORT_CM55F_MPU_CONTEXT_SIZE 352u
+# define FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET 40u
+# define FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET 256u
+# define FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET 260u
+# define FIBER_PORT_CM55_MVEF_MPU_CONTEXT_SIZE 352u
 #else
 # define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010010u
-# define FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_OFFSET 104u
-# define FIBER_PORT_CM55F_MPU_RUNTIME_FLAGS_OFFSET 320u
-# define FIBER_PORT_CM55F_MPU_BOOT_OFFSET 324u
-# define FIBER_PORT_CM55F_MPU_CONTEXT_SIZE 416u
+# define FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET 104u
+# define FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET 320u
+# define FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET 324u
+# define FIBER_PORT_CM55_MVEF_MPU_CONTEXT_SIZE 416u
 #endif
 
-/* ASCII "C55P": scalar-FP protected M55. This no-TrustZone cohort has a
- * one-past context cursor target, not a SecureContext slot. */
-#define FIBER_PORT_CONTEXT_ABI_PORT_ID 0x43353550u
+/* ASCII "C55W": MVE-FP protected M55. This no-TrustZone cohort has a
+ * one-past context cursor target, not a SecureContext slot. FreeRTOS does
+ * not add a VPR software slot for this MVE-FP MPU branch. */
+#define FIBER_PORT_CONTEXT_ABI_PORT_ID 0x43353557u
 #define FIBER_PORT_CONTEXT_FEATURE_EXTENDED_FP 0x00000001u
 #define FIBER_PORT_CONTEXT_FEATURE_PSPLIM_SLOT 0x00000002u
 #define FIBER_PORT_CONTEXT_FEATURE_CONTROL_SLOT 0x00000004u
+#define FIBER_PORT_CONTEXT_FEATURE_MVE 0x00000010u
 #define FIBER_PORT_CONTEXT_FEATURE_RUNS_NONSECURE 0x00000080u
 #define FIBER_PORT_CONTEXT_FEATURE_MPU_IMAGE 0x00000400u
 #define FIBER_PORT_CONTEXT_FEATURE_PROTECTED_HW_FRAME 0x00000800u
@@ -443,6 +454,7 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 	(FIBER_PORT_CONTEXT_FEATURE_EXTENDED_FP | \
 	 FIBER_PORT_CONTEXT_FEATURE_PSPLIM_SLOT | \
 	 FIBER_PORT_CONTEXT_FEATURE_CONTROL_SLOT | \
+	 FIBER_PORT_CONTEXT_FEATURE_MVE | \
 	 FIBER_PORT_CONTEXT_FEATURE_RUNS_NONSECURE | \
 	 FIBER_PORT_CONTEXT_FEATURE_MPU_IMAGE | \
 	 FIBER_PORT_CONTEXT_FEATURE_PROTECTED_HW_FRAME | \
@@ -477,101 +489,101 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 
 /* Physical user-PSP geometry. The protected image is copied to and from
  * privileged storage, so raw stack admission must not count its 54 words. */
-#define FIBER_PORT_CM55F_MPU_PSP_INITIAL_FRAME_BYTES \
+#define FIBER_PORT_CM55_MVEF_MPU_PSP_INITIAL_FRAME_BYTES \
 	FIBER_PORT_EXC_BASE_BYTES
-#define FIBER_PORT_CM55F_MPU_PSP_MAX_FRAME_BYTES \
+#define FIBER_PORT_CM55_MVEF_MPU_PSP_MAX_FRAME_BYTES \
 	(FIBER_PORT_EXC_PER_LEVEL_BYTES + \
 	 FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES)
-#define FIBER_PORT_CM55F_MPU_STACK_REQUIRED_BYTES \
-	((FIBER_PORT_CM55F_MPU_PSP_MAX_FRAME_BYTES + \
+#define FIBER_PORT_CM55_MVEF_MPU_STACK_REQUIRED_BYTES \
+	((FIBER_PORT_CM55_MVEF_MPU_PSP_MAX_FRAME_BYTES + \
 	  FIBER_PORT_STACK_ALIGNMENT - 1u) & \
 	 ~((uint32_t)FIBER_PORT_STACK_ALIGNMENT - 1u))
 
 /* Frozen GCC 32-bit storage offsets consumed by later protected assembly. */
-#define FIBER_PORT_CM55F_MPU_REGION_RBAR_OFFSET 0u
-#define FIBER_PORT_CM55F_MPU_REGION_RLAR_OFFSET 4u
-#define FIBER_PORT_CM55F_MPU_REGION_SIZE 8u
-#define FIBER_PORT_CM55F_MPU_BASIC_R4_OFFSET 0u
-#define FIBER_PORT_CM55F_MPU_BASIC_R9_OFFSET 20u
-#define FIBER_PORT_CM55F_MPU_BASIC_R0_OFFSET 32u
-#define FIBER_PORT_CM55F_MPU_BASIC_LR_OFFSET 52u
-#define FIBER_PORT_CM55F_MPU_BASIC_PC_OFFSET 56u
-#define FIBER_PORT_CM55F_MPU_BASIC_XPSR_OFFSET 60u
-#define FIBER_PORT_CM55F_MPU_BASIC_PSP_OFFSET 64u
-#define FIBER_PORT_CM55F_MPU_BASIC_PSPLIM_OFFSET 68u
-#define FIBER_PORT_CM55F_MPU_BASIC_CONTROL_OFFSET 72u
-#define FIBER_PORT_CM55F_MPU_BASIC_EXC_RETURN_OFFSET 76u
-#define FIBER_PORT_CM55F_MPU_BASIC_CURSOR_LIMIT_OFFSET 80u
-#define FIBER_PORT_CM55F_MPU_BASIC_RESERVED_OFFSET 84u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_HIGH_FP_OFFSET 0u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_LOW_FP_OFFSET 64u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_R4_OFFSET 132u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_R0_OFFSET 164u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_PSP_OFFSET 196u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_PSPLIM_OFFSET 200u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_CONTROL_OFFSET 204u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_EXC_RETURN_OFFSET 208u
-#define FIBER_PORT_CM55F_MPU_EXTENDED_CURSOR_LIMIT_OFFSET 212u
-#define FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE 216u
-#define FIBER_PORT_CM55F_MPU_CURSOR_OFFSET 0u
-#define FIBER_PORT_CM55F_MPU_MAIR0_OFFSET 4u
-#define FIBER_PORT_CM55F_MPU_REGIONS_OFFSET 8u
-#define FIBER_PORT_CM55F_MPU_CONTEXT_ALIGNMENT 8u
+#define FIBER_PORT_CM55_MVEF_MPU_REGION_RBAR_OFFSET 0u
+#define FIBER_PORT_CM55_MVEF_MPU_REGION_RLAR_OFFSET 4u
+#define FIBER_PORT_CM55_MVEF_MPU_REGION_SIZE 8u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_R4_OFFSET 0u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_R9_OFFSET 20u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_R0_OFFSET 32u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_LR_OFFSET 52u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_PC_OFFSET 56u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_XPSR_OFFSET 60u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_PSP_OFFSET 64u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_PSPLIM_OFFSET 68u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_CONTROL_OFFSET 72u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_EXC_RETURN_OFFSET 76u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_CURSOR_LIMIT_OFFSET 80u
+#define FIBER_PORT_CM55_MVEF_MPU_BASIC_RESERVED_OFFSET 84u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_HIGH_FP_OFFSET 0u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_LOW_FP_OFFSET 64u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_R4_OFFSET 132u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_R0_OFFSET 164u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_PSP_OFFSET 196u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_PSPLIM_OFFSET 200u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_CONTROL_OFFSET 204u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_EXC_RETURN_OFFSET 208u
+#define FIBER_PORT_CM55_MVEF_MPU_EXTENDED_CURSOR_LIMIT_OFFSET 212u
+#define FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE 216u
+#define FIBER_PORT_CM55_MVEF_MPU_CURSOR_OFFSET 0u
+#define FIBER_PORT_CM55_MVEF_MPU_MAIR0_OFFSET 4u
+#define FIBER_PORT_CM55_MVEF_MPU_REGIONS_OFFSET 8u
+#define FIBER_PORT_CM55_MVEF_MPU_CONTEXT_ALIGNMENT 8u
 
-#define FIBER_PORT_CM55F_MPU_BOOT_BEGIN_OFFSET 0u
-#define FIBER_PORT_CM55F_MPU_BOOT_END_OFFSET 4u
-#define FIBER_PORT_CM55F_MPU_BOOT_STACK_BASE_OFFSET 8u
-#define FIBER_PORT_CM55F_MPU_BOOT_STACK_TOP_OFFSET 12u
-#define FIBER_PORT_CM55F_MPU_BOOT_AVAIL_OFFSET 16u
-#define FIBER_PORT_CM55F_MPU_BOOT_ENTRY_OFFSET 20u
-#define FIBER_PORT_CM55F_MPU_BOOT_ARG_OFFSET 24u
-#define FIBER_PORT_CM55F_MPU_BOOT_PORT_ID_OFFSET 28u
-#define FIBER_PORT_CM55F_MPU_BOOT_LAYOUT_VERSION_OFFSET 32u
-#define FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_SIZE_OFFSET 36u
-#define FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_ALIGNMENT_OFFSET 40u
-#define FIBER_PORT_CM55F_MPU_BOOT_FEATURE_MASK_OFFSET 44u
-#define FIBER_PORT_CM55F_MPU_BOOT_INITIAL_EXC_RETURN_OFFSET 48u
-#define FIBER_PORT_CM55F_MPU_BOOT_INITIAL_CONTROL_OFFSET 52u
-#define FIBER_PORT_CM55F_MPU_BOOT_TOTAL_REGIONS_OFFSET 56u
-#define FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_REGIONS_OFFSET 60u
-#define FIBER_PORT_CM55F_MPU_BOOT_PROTECTED_WORDS_OFFSET 64u
-#define FIBER_PORT_CM55F_MPU_BOOT_MAGIC_OFFSET 68u
-#define FIBER_PORT_CM55F_MPU_BOOT_VERSION_OFFSET 72u
-#define FIBER_PORT_CM55F_MPU_BOOT_SEALED_OFFSET 74u
-#define FIBER_PORT_CM55F_MPU_BOOT_GUARD_LO_OFFSET 76u
-#define FIBER_PORT_CM55F_MPU_BOOT_GUARD_HI_OFFSET 80u
-#define FIBER_PORT_CM55F_MPU_BOOT_HASH_OFFSET 84u
-#define FIBER_PORT_CM55F_MPU_BOOT_SIZE 88u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_BEGIN_OFFSET 0u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_END_OFFSET 4u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_STACK_BASE_OFFSET 8u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_STACK_TOP_OFFSET 12u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_AVAIL_OFFSET 16u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_ENTRY_OFFSET 20u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_ARG_OFFSET 24u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_PORT_ID_OFFSET 28u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_LAYOUT_VERSION_OFFSET 32u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_SIZE_OFFSET 36u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_ALIGNMENT_OFFSET 40u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_FEATURE_MASK_OFFSET 44u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_INITIAL_EXC_RETURN_OFFSET 48u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_INITIAL_CONTROL_OFFSET 52u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_TOTAL_REGIONS_OFFSET 56u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_REGIONS_OFFSET 60u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_PROTECTED_WORDS_OFFSET 64u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_MAGIC_OFFSET 68u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_VERSION_OFFSET 72u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_SEALED_OFFSET 74u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_GUARD_LO_OFFSET 76u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_GUARD_HI_OFFSET 80u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_HASH_OFFSET 84u
+#define FIBER_PORT_CM55_MVEF_MPU_BOOT_SIZE 88u
 
 FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
-		"[fiber]: ARM_CM55F_MPU requires 32-bit pointers");
+		"[fiber]: ARM_CM55_MVEF_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
-		"[fiber]: ARM_CM55F_MPU requires 32-bit size_t");
+		"[fiber]: ARM_CM55_MVEF_MPU requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55F_MPU construction cohort must not expose runtime operations");
+		"[fiber]: ARM_CM55_MVEF_MPU remains outside global runtime auto-selection");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
-		"[fiber]: ARM_CM55F_MPU first-start SVC changed");
+		"[fiber]: ARM_CM55_MVEF_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,
-		"[fiber]: ARM_CM55F_MPU yield SVC changed");
+		"[fiber]: ARM_CM55_MVEF_MPU yield SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_RETURN == 72u,
-		"[fiber]: ARM_CM55F_MPU task-return SVC changed");
+		"[fiber]: ARM_CM55_MVEF_MPU task-return SVC changed");
 FIBER_STATIC_ASSERT((fiber_portSVC_START != fiber_portSVC_YIELD) &&
 		(fiber_portSVC_START != fiber_portSVC_RETURN) &&
 		(fiber_portSVC_YIELD != fiber_portSVC_RETURN),
-		"[fiber]: ARM_CM55F_MPU SVC namespace collided");
+		"[fiber]: ARM_CM55_MVEF_MPU SVC namespace collided");
 FIBER_STATIC_ASSERT(fiber_portVECTOR_INDEX_SVC == 11u &&
 		fiber_portVECTOR_INDEX_PENDSV == 14u &&
 		fiber_portVECTOR_ALIGNMENT == 128u,
-		"[fiber]: ARM_CM55F_MPU vector facts changed");
+		"[fiber]: ARM_CM55_MVEF_MPU vector facts changed");
 FIBER_STATIC_ASSERT((fiber_portMPU_LAST_CONTEXT_BLOCK_REGION == 4u) ||
 		(fiber_portMPU_LAST_CONTEXT_BLOCK_REGION == 12u),
-		"[fiber]: ARM_CM55F_MPU context MPU block geometry changed");
+		"[fiber]: ARM_CM55_MVEF_MPU context MPU block geometry changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
-		FIBER_PORT_CM55F_MPU_CONTEXT_REGION_COUNT,
-		"[fiber]: ARM_CM55F_MPU per-context region count changed");
+		FIBER_PORT_CM55_MVEF_MPU_CONTEXT_REGION_COUNT,
+		"[fiber]: ARM_CM55_MVEF_MPU per-context region count changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		(fiber_portMPU_TOTAL_REGIONS - 4u),
-		"[fiber]: ARM_CM55F_MPU global/per-context region geometry changed");
+		"[fiber]: ARM_CM55_MVEF_MPU global/per-context region geometry changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER == 0u &&
 		fiber_portMPU_UNPRIVILEGED_FLASH_REGION_NUMBER == 1u &&
 		fiber_portMPU_UNPRIVILEGED_SYSCALLS_REGION_NUMBER == 2u &&
@@ -579,23 +591,23 @@ FIBER_STATIC_ASSERT(fiber_portMPU_PRIVILEGED_FLASH_REGION_NUMBER == 0u &&
 		fiber_portMPU_STACK_REGION_NUMBER == 4u &&
 		fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER == 5u &&
 		fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER == 6u,
-		"[fiber]: ARM_CM55F_MPU hardware MPU region numbering changed");
+		"[fiber]: ARM_CM55_MVEF_MPU hardware MPU region numbering changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_STACK_INDEX == 0u &&
 		fiber_portMPU_CONTEXT_CURRENT_CONTEXT_INDEX == 1u &&
 		fiber_portMPU_CONTEXT_FIRST_CONFIGURABLE_INDEX == 2u &&
 		fiber_portMPU_CONTEXT_LAST_CONFIGURABLE_INDEX ==
 			(fiber_portMPU_CONTEXT_REGION_COUNT - 1u),
-		"[fiber]: ARM_CM55F_MPU context-image indexes changed");
+		"[fiber]: ARM_CM55_MVEF_MPU context-image indexes changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_REGION_COUNT ==
 		(2u + fiber_portMPU_CONFIGURABLE_REGION_COUNT) &&
 		fiber_portMPU_LAST_CONFIGURABLE_REGION_NUMBER ==
 			(fiber_portMPU_TOTAL_REGIONS - 1u),
-		"[fiber]: ARM_CM55F_MPU context/hardware region mapping changed");
+		"[fiber]: ARM_CM55_MVEF_MPU context/hardware region mapping changed");
 FIBER_STATIC_ASSERT(fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES == 32u,
-		"[fiber]: ARM_CM55F_MPU current-slot aperture must be one MPU granule");
+		"[fiber]: ARM_CM55_MVEF_MPU current-slot aperture must be one MPU granule");
 FIBER_STATIC_ASSERT(fiber_portARMV8M_MINOR_VERSION == 1u &&
 		fiber_portMPU_RLAR_PRIVILEGED_EXECUTE_NEVER == (1u << 4u),
-		"[fiber]: ARM_CM55F_MPU must retain the ARMv8.1-M MPU PXN capability");
+		"[fiber]: ARM_CM55_MVEF_MPU must retain the ARMv8.1-M MPU PXN capability");
 FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 54u &&
 		fiber_portPROTECTED_BASIC_RESTORE_WORDS == 20u &&
 		fiber_portPROTECTED_EXTENDED_RESTORE_WORDS == 53u &&
@@ -603,166 +615,166 @@ FIBER_STATIC_ASSERT(fiber_portPROTECTED_CONTEXT_WORDS == 54u &&
 		fiber_portPROTECTED_LOW_FP_WORDS == 17u &&
 		fiber_portPROTECTED_HARDWARE_WORDS == 8u &&
 		fiber_portPROTECTED_SPECIAL_WORDS == 4u,
-		"[fiber]: ARM_CM55F_MPU protected context word geometry changed");
+		"[fiber]: ARM_CM55_MVEF_MPU protected context word geometry changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 20u &&
 		FIBER_PORT_EXC_RETURN_WORD_INDEX == 19u &&
 		FIBER_PORT_HIGH_FP_SOFTWARE_BYTES == 132u &&
 		FIBER_PORT_INITIAL_CONTEXT_BYTES == 112u &&
 		FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 320u,
-		"[fiber]: ARM_CM55F_MPU logical restore geometry changed");
+		"[fiber]: ARM_CM55_MVEF_MPU logical restore geometry changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_CONTROL_SLOT == 1,
-		"[fiber]: ARM_CM55F_MPU must preserve CONTROL per context");
+		"[fiber]: ARM_CM55_MVEF_MPU must preserve CONTROL per context");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_PSPLIM_SLOT == 1,
-		"[fiber]: ARM_CM55F_MPU must preserve PSPLIM per context");
+		"[fiber]: ARM_CM55_MVEF_MPU must preserve PSPLIM per context");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_SECURE_CONTEXT_SLOT == 0,
-		"[fiber]: ARM_CM55F_MPU selected profile must not expose SecureContext");
+		"[fiber]: ARM_CM55_MVEF_MPU selected profile must not expose SecureContext");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_PAC_KEY_SLOT == 0,
-		"[fiber]: ARM_CM55F_MPU selected profile must not expose PAC state");
+		"[fiber]: ARM_CM55_MVEF_MPU selected profile must not expose PAC state");
 FIBER_STATIC_ASSERT(FIBER_PORT_HAS_FPU == 1 &&
 		FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 1 &&
-		FIBER_PORT_BOOT_CLEARS_FPCA == 1 && FIBER_PORT_HAS_MVE == 0 &&
+		FIBER_PORT_BOOT_CLEARS_FPCA == 1 && FIBER_PORT_HAS_MVE == 1 &&
 		FIBER_PORT_HAS_PAC == 0 &&
 		FIBER_PORT_HAS_BTI == 0,
-		"[fiber]: ARM_CM55F_MPU selected feature cohort changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C87u,
-		"[fiber]: ARM_CM55F_MPU context feature identity changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CM55F_MPU_PSP_INITIAL_FRAME_BYTES == 32u &&
-		FIBER_PORT_CM55F_MPU_PSP_MAX_FRAME_BYTES == 108u &&
-		FIBER_PORT_CM55F_MPU_STACK_REQUIRED_BYTES == 112u,
-		"[fiber]: ARM_CM55F_MPU physical PSP geometry changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_OFFSET ==
-		(FIBER_PORT_CM55F_MPU_REGIONS_OFFSET +
-		 (FIBER_PORT_CM55F_MPU_CONTEXT_REGION_COUNT *
-		  FIBER_PORT_CM55F_MPU_REGION_SIZE)),
-		"[fiber]: ARM_CM55F_MPU protected context offset changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CM55F_MPU_BOOT_OFFSET ==
-		(FIBER_PORT_CM55F_MPU_RUNTIME_FLAGS_OFFSET + 4u),
-		"[fiber]: ARM_CM55F_MPU boot offset changed");
+		"[fiber]: ARM_CM55_MVEF_MPU selected feature cohort changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x00001C97u,
+		"[fiber]: ARM_CM55_MVEF_MPU context feature identity changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM55_MVEF_MPU_PSP_INITIAL_FRAME_BYTES == 32u &&
+		FIBER_PORT_CM55_MVEF_MPU_PSP_MAX_FRAME_BYTES == 108u &&
+		FIBER_PORT_CM55_MVEF_MPU_STACK_REQUIRED_BYTES == 112u,
+		"[fiber]: ARM_CM55_MVEF_MPU physical PSP geometry changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET ==
+		(FIBER_PORT_CM55_MVEF_MPU_REGIONS_OFFSET +
+		 (FIBER_PORT_CM55_MVEF_MPU_CONTEXT_REGION_COUNT *
+		  FIBER_PORT_CM55_MVEF_MPU_REGION_SIZE)),
+		"[fiber]: ARM_CM55_MVEF_MPU protected context offset changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET ==
+		(FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET + 4u),
+		"[fiber]: ARM_CM55_MVEF_MPU boot offset changed");
 FIBER_STATIC_ASSERT(offsetof(FiberPortMpuRegionRegisters, rbar) ==
-		FIBER_PORT_CM55F_MPU_REGION_RBAR_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_REGION_RBAR_OFFSET &&
 		offsetof(FiberPortMpuRegionRegisters, rlar) ==
-		FIBER_PORT_CM55F_MPU_REGION_RLAR_OFFSET &&
-		sizeof(FiberPortMpuRegionRegisters) == FIBER_PORT_CM55F_MPU_REGION_SIZE,
-		"[fiber]: ARM_CM55F_MPU MPU region layout changed");
+		FIBER_PORT_CM55_MVEF_MPU_REGION_RLAR_OFFSET &&
+		sizeof(FiberPortMpuRegionRegisters) == FIBER_PORT_CM55_MVEF_MPU_REGION_SIZE,
+		"[fiber]: ARM_CM55_MVEF_MPU MPU region layout changed");
 FIBER_STATIC_ASSERT(sizeof(FiberPortProtectedBasicContext) ==
-		FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE &&
+		FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE &&
 		sizeof(FiberPortProtectedExtendedContext) ==
-		FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE &&
+		FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE &&
 		sizeof(FiberPortProtectedContext) ==
-		FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE,
-		"[fiber]: ARM_CM55F_MPU overlapping protected image size changed");
+		FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE,
+		"[fiber]: ARM_CM55_MVEF_MPU overlapping protected image size changed");
 FIBER_STATIC_ASSERT(offsetof(FiberPortProtectedBasicContext, r4) ==
-		FIBER_PORT_CM55F_MPU_BASIC_R4_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_R4_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, r9) ==
-		FIBER_PORT_CM55F_MPU_BASIC_R9_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_R9_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, r0) ==
-		FIBER_PORT_CM55F_MPU_BASIC_R0_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_R0_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, lr) ==
-		FIBER_PORT_CM55F_MPU_BASIC_LR_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_LR_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, pc) ==
-		FIBER_PORT_CM55F_MPU_BASIC_PC_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_PC_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, xpsr) ==
-		FIBER_PORT_CM55F_MPU_BASIC_XPSR_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_XPSR_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, psp) ==
-		FIBER_PORT_CM55F_MPU_BASIC_PSP_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_PSP_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, psplim) ==
-		FIBER_PORT_CM55F_MPU_BASIC_PSPLIM_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_PSPLIM_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, control) ==
-		FIBER_PORT_CM55F_MPU_BASIC_CONTROL_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_CONTROL_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, exc_return) ==
-		FIBER_PORT_CM55F_MPU_BASIC_EXC_RETURN_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_EXC_RETURN_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, cursor_limit) ==
-		FIBER_PORT_CM55F_MPU_BASIC_CURSOR_LIMIT_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_CURSOR_LIMIT_OFFSET &&
 		offsetof(FiberPortProtectedBasicContext, reserved) ==
-		FIBER_PORT_CM55F_MPU_BASIC_RESERVED_OFFSET,
-		"[fiber]: ARM_CM55F_MPU basic protected offsets changed");
+		FIBER_PORT_CM55_MVEF_MPU_BASIC_RESERVED_OFFSET,
+		"[fiber]: ARM_CM55_MVEF_MPU basic protected offsets changed");
 FIBER_STATIC_ASSERT(offsetof(FiberPortProtectedExtendedContext,
-		high_fp_s16_s31) == FIBER_PORT_CM55F_MPU_EXTENDED_HIGH_FP_OFFSET &&
+		high_fp_s16_s31) == FIBER_PORT_CM55_MVEF_MPU_EXTENDED_HIGH_FP_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext,
-		low_fp_s0_s15_fpscr) == FIBER_PORT_CM55F_MPU_EXTENDED_LOW_FP_OFFSET &&
+		low_fp_s0_s15_fpscr) == FIBER_PORT_CM55_MVEF_MPU_EXTENDED_LOW_FP_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, r4) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_R4_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_R4_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, r0) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_R0_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_R0_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, psp) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_PSP_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_PSP_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, psplim) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_PSPLIM_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_PSPLIM_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, control) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_CONTROL_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_CONTROL_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, exc_return) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_EXC_RETURN_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_EXC_RETURN_OFFSET &&
 		offsetof(FiberPortProtectedExtendedContext, cursor_limit) ==
-		FIBER_PORT_CM55F_MPU_EXTENDED_CURSOR_LIMIT_OFFSET,
-		"[fiber]: ARM_CM55F_MPU extended protected offsets changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CM55F_MPU_BASIC_RESERVED_OFFSET ==
-		(FIBER_PORT_CM55F_MPU_BASIC_CURSOR_LIMIT_OFFSET + 4u) &&
-		(FIBER_PORT_CM55F_MPU_BASIC_RESERVED_OFFSET + (33u * 4u)) ==
-			FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE,
-		"[fiber]: ARM_CM55F_MPU basic protected capacity changed");
-FIBER_STATIC_ASSERT(FIBER_PORT_CM55F_MPU_EXTENDED_CURSOR_LIMIT_OFFSET ==
-		(FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_SIZE - 4u),
-		"[fiber]: ARM_CM55F_MPU extended cursor limit must remain final");
+		FIBER_PORT_CM55_MVEF_MPU_EXTENDED_CURSOR_LIMIT_OFFSET,
+		"[fiber]: ARM_CM55_MVEF_MPU extended protected offsets changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM55_MVEF_MPU_BASIC_RESERVED_OFFSET ==
+		(FIBER_PORT_CM55_MVEF_MPU_BASIC_CURSOR_LIMIT_OFFSET + 4u) &&
+		(FIBER_PORT_CM55_MVEF_MPU_BASIC_RESERVED_OFFSET + (33u * 4u)) ==
+			FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE,
+		"[fiber]: ARM_CM55_MVEF_MPU basic protected capacity changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CM55_MVEF_MPU_EXTENDED_CURSOR_LIMIT_OFFSET ==
+		(FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_SIZE - 4u),
+		"[fiber]: ARM_CM55_MVEF_MPU extended cursor limit must remain final");
 FIBER_STATIC_ASSERT(offsetof(FiberPortBoot, begin) ==
-		FIBER_PORT_CM55F_MPU_BOOT_BEGIN_OFFSET &&
-		offsetof(FiberPortBoot, end) == FIBER_PORT_CM55F_MPU_BOOT_END_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_BEGIN_OFFSET &&
+		offsetof(FiberPortBoot, end) == FIBER_PORT_CM55_MVEF_MPU_BOOT_END_OFFSET &&
 		offsetof(FiberPortBoot, stack_base) ==
-		FIBER_PORT_CM55F_MPU_BOOT_STACK_BASE_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_STACK_BASE_OFFSET &&
 		offsetof(FiberPortBoot, stack_top) ==
-		FIBER_PORT_CM55F_MPU_BOOT_STACK_TOP_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_STACK_TOP_OFFSET &&
 		offsetof(FiberPortBoot, avail) ==
-		FIBER_PORT_CM55F_MPU_BOOT_AVAIL_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_AVAIL_OFFSET &&
 		offsetof(FiberPortBoot, entry) ==
-		FIBER_PORT_CM55F_MPU_BOOT_ENTRY_OFFSET &&
-		offsetof(FiberPortBoot, arg) == FIBER_PORT_CM55F_MPU_BOOT_ARG_OFFSET,
-		"[fiber]: ARM_CM55F_MPU boot base offsets changed");
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_ENTRY_OFFSET &&
+		offsetof(FiberPortBoot, arg) == FIBER_PORT_CM55_MVEF_MPU_BOOT_ARG_OFFSET,
+		"[fiber]: ARM_CM55_MVEF_MPU boot base offsets changed");
 FIBER_STATIC_ASSERT(offsetof(FiberPortBoot, abi_port_id) ==
-		FIBER_PORT_CM55F_MPU_BOOT_PORT_ID_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_PORT_ID_OFFSET &&
 		offsetof(FiberPortBoot, abi_layout_version) ==
-		FIBER_PORT_CM55F_MPU_BOOT_LAYOUT_VERSION_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_LAYOUT_VERSION_OFFSET &&
 		offsetof(FiberPortBoot, abi_context_size) ==
-		FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_SIZE_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_SIZE_OFFSET &&
 		offsetof(FiberPortBoot, abi_context_alignment) ==
-		FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_ALIGNMENT_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_ALIGNMENT_OFFSET &&
 		offsetof(FiberPortBoot, abi_feature_mask) ==
-		FIBER_PORT_CM55F_MPU_BOOT_FEATURE_MASK_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_FEATURE_MASK_OFFSET &&
 		offsetof(FiberPortBoot, abi_initial_exc_return) ==
-		FIBER_PORT_CM55F_MPU_BOOT_INITIAL_EXC_RETURN_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_INITIAL_EXC_RETURN_OFFSET &&
 		offsetof(FiberPortBoot, abi_initial_control) ==
-		FIBER_PORT_CM55F_MPU_BOOT_INITIAL_CONTROL_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_INITIAL_CONTROL_OFFSET &&
 		offsetof(FiberPortBoot, abi_mpu_total_regions) ==
-		FIBER_PORT_CM55F_MPU_BOOT_TOTAL_REGIONS_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_TOTAL_REGIONS_OFFSET &&
 		offsetof(FiberPortBoot, abi_mpu_context_regions) ==
-		FIBER_PORT_CM55F_MPU_BOOT_CONTEXT_REGIONS_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_CONTEXT_REGIONS_OFFSET &&
 		offsetof(FiberPortBoot, abi_protected_context_words) ==
-		FIBER_PORT_CM55F_MPU_BOOT_PROTECTED_WORDS_OFFSET,
-		"[fiber]: ARM_CM55F_MPU boot ABI offsets changed");
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_PROTECTED_WORDS_OFFSET,
+		"[fiber]: ARM_CM55_MVEF_MPU boot ABI offsets changed");
 FIBER_STATIC_ASSERT(offsetof(FiberPortBoot, magic) ==
-		FIBER_PORT_CM55F_MPU_BOOT_MAGIC_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_MAGIC_OFFSET &&
 		offsetof(FiberPortBoot, version) ==
-		FIBER_PORT_CM55F_MPU_BOOT_VERSION_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_VERSION_OFFSET &&
 		offsetof(FiberPortBoot, sealed) ==
-		FIBER_PORT_CM55F_MPU_BOOT_SEALED_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_SEALED_OFFSET &&
 		offsetof(FiberPortBoot, guard_lo) ==
-		FIBER_PORT_CM55F_MPU_BOOT_GUARD_LO_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_GUARD_LO_OFFSET &&
 		offsetof(FiberPortBoot, guard_hi) ==
-		FIBER_PORT_CM55F_MPU_BOOT_GUARD_HI_OFFSET &&
-		offsetof(FiberPortBoot, hash) == FIBER_PORT_CM55F_MPU_BOOT_HASH_OFFSET &&
-		sizeof(FiberPortBoot) == FIBER_PORT_CM55F_MPU_BOOT_SIZE,
-		"[fiber]: ARM_CM55F_MPU boot seal offsets changed");
+		FIBER_PORT_CM55_MVEF_MPU_BOOT_GUARD_HI_OFFSET &&
+		offsetof(FiberPortBoot, hash) == FIBER_PORT_CM55_MVEF_MPU_BOOT_HASH_OFFSET &&
+		sizeof(FiberPortBoot) == FIBER_PORT_CM55_MVEF_MPU_BOOT_SIZE,
+		"[fiber]: ARM_CM55_MVEF_MPU boot seal offsets changed");
 FIBER_STATIC_ASSERT(offsetof(FiberContext, protected_context_cursor) ==
-		FIBER_PORT_CM55F_MPU_CURSOR_OFFSET &&
-		offsetof(FiberContext, mair0) == FIBER_PORT_CM55F_MPU_MAIR0_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_CURSOR_OFFSET &&
+		offsetof(FiberContext, mair0) == FIBER_PORT_CM55_MVEF_MPU_MAIR0_OFFSET &&
 		offsetof(FiberContext, mpu_regions) ==
-		FIBER_PORT_CM55F_MPU_REGIONS_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_REGIONS_OFFSET &&
 		offsetof(FiberContext, protected_context) ==
-		FIBER_PORT_CM55F_MPU_PROTECTED_CONTEXT_OFFSET &&
+		FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET &&
 		offsetof(FiberContext, runtime_flags) ==
-		FIBER_PORT_CM55F_MPU_RUNTIME_FLAGS_OFFSET &&
-		offsetof(FiberContext, boot) == FIBER_PORT_CM55F_MPU_BOOT_OFFSET &&
-		sizeof(FiberContext) == FIBER_PORT_CM55F_MPU_CONTEXT_SIZE &&
-		alignof(FiberContext) == FIBER_PORT_CM55F_MPU_CONTEXT_ALIGNMENT,
-		"[fiber]: ARM_CM55F_MPU FiberContext layout changed");
+		FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET &&
+		offsetof(FiberContext, boot) == FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET &&
+		sizeof(FiberContext) == FIBER_PORT_CM55_MVEF_MPU_CONTEXT_SIZE &&
+		alignof(FiberContext) == FIBER_PORT_CM55_MVEF_MPU_CONTEXT_ALIGNMENT,
+		"[fiber]: ARM_CM55_MVEF_MPU FiberContext layout changed");
 
 /* The selected-port dictionary owns the full trait and exact-cohort contract
  * even before a runtime source exists. */
@@ -770,4 +782,4 @@ FIBER_STATIC_ASSERT(offsetof(FiberContext, protected_context_cursor) ==
 #include "../../fiber_port_context_cohort.h"
 #include "../../fiber_port_geometry.h"
 
-#endif /* FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORTMACRO_H_ */
+#endif /* FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORTMACRO_H_ */

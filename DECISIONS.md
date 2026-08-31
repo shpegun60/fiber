@@ -1,5 +1,168 @@
 # Fiber Decision Log
 
+## 2026-08-31: Complete ARM_CM55 MVE-FP MPU Selected Runtime
+
+`ARM_CM55_MVEF_MPU/non_secure` slice 4 activates the frozen eight-function
+forward ABI without changing the already paired FreeRTOS 54-word protected
+layout, strict first-start SVC #70, private task-return SVC #72, or protected
+MVE-FP PendSV move sequence. Boot continues to own
+`fiber_port_context_init()`. The mandatory SVC/runtime object defines the exact
+C55W cohort and owns the other seven forward operations, including the public
+SVC #71 yield veneer. Its private handler-bundle anchor retains a relocation to
+the separately compiled PendSV component anchor, so a weak startup alias cannot
+satisfy static-archive extraction.
+
+The protected PendSV component remains the only owner of the MVE-FP
+save/select/MPU-replace/restore engine. Its FreeRTOS-derived extended sequence
+still saves `s16-s31`, copies `s0-s15/FPSCR`, then records the core frame and
+`[PSP][PSPLIM][CONTROL][EXC_RETURN]`; restore is the inverse. MVE changes the
+selected compiler/cohort identity but adds no VPR software slot or VPR transfer.
+
+Hard/softfp `-O2`/`-Os` construction/SVC/PendSV parity, normal/LTO archive
+extraction, external cohort expectation, stale 8/16-region archive rejection,
+placement, vector slots 11/14, and duplicate SVC/PendSV negative links pass.
+The completed runtime stays explicitly build-selected and makes no optional MPU,
+TrustZone/SecureContext, TF-M, PAC/BTI, or hardware claim.
+
+## 2026-08-31: Add ARM_CM55 MVE-FP MPU Protected PendSV Mechanics
+
+`ARM_CM55_MVEF_MPU/non_secure` slice 3 adds only the private protected MVE-FP
+PendSV component. It uses the same pinned FreeRTOS 54-word overlapping backing
+image as C55P: extended save moves `s16-s31`, then copies
+`s0-s15/FPSCR`, records the core and hardware frame, and finally records
+`[PSP][PSPLIM][CONTROL][EXC_RETURN]`. Restore is the exact inverse. MVE changes
+the compiler/cohort contract but adds neither a VPR software slot nor a VPR
+transfer.
+
+The naked handler validates the running protected context before it reads the
+mutable cursor, then calls reverse-ABI scheduler selection under BASEPRI. It
+captures scheduler CPU/MPU state, holds PRIMASK across the disabled-MPU MAIR0
+and context-region replacement interval, publishes current only through common
+state, validates the selected MPU image, and restores the selected protected
+frame. The separate component retains both the frozen reverse-ABI v1 and exact
+C55W cohort identities. It owns strong slot-14 `PendSV_Handler`; the existing
+strict SVC component continues to own strong slot 11.
+
+Hard/softfp `-O2`/`-Os` generated parity against pinned FreeRTOS, 8/16-region
+synthetic links, direct-object slots 11/14, duplicate-PendSV rejection, and
+hard-float `-O2` LTO checks pass. This deliberately does not activate the
+eight-operation forward ABI, public SVC #71 yield, archive component extraction,
+global selection, an optional MPU API, or hardware support. Those are the next
+composition boundary, not incidental behavior bundled into handler mechanics.
+
+## 2026-08-31: Add ARM_CM55 MVE-FP MPU Strict First-Start SVC
+
+`ARM_CM55_MVEF_MPU/non_secure` slice 2 adds only the MVE-FP protected
+first-start SVC mechanism. It deliberately retains the basic 20-word view of
+the existing 54-word privileged backing store: the first restore does not move
+`s16-s31`, copied low FP state, MVE registers, or VPR, because the initial
+FreeRTOS image does not contain any of them. Those moves belong exclusively to
+the later protected PendSV slice.
+
+The SVC object defines the exact C55W cohort; construction retains a relocation
+to it. It owns strict SVC #70 first start, private SVC #72 task return, the
+strong slot-11 `SVC_Handler`, FreeRTOS-shaped MPU disable/MAIR0/RBAR/RLAR
+installation/basic restore, and stronger vector, mask, FPU, linker, context,
+and MPU readback checks. At the Slice-2-only checkpoint slot 14 remained
+deliberately unowned, while pending PendSV state was cleared before first
+transfer.
+
+At that checkpoint this did not activate PendSV, public SVC #71 yield, the
+forward runtime ABI, global selection, optional MPU policy, TrustZone, PAC/BTI,
+or hardware support. Hard/softfp `-O2`/`-Os` FreeRTOS SVC parity, 8/16 region
+linker/cohort checks, slot-11/empty-slot-14 proof, and duplicate-SVC negative
+links were complete.
+
+## 2026-08-31: Freeze ARM_CM55 MVE-FP MPU Construction Cohort
+
+`ARM_CM55_MVEF_MPU/non_secure` begins as a separate explicit build-selected
+`C55W` MVE-FP MPU construction cohort rather than as a feature switch on the
+complete scalar-FP `C55P` runtime. The selected manifest requires
+`-march=armv8.1-m.main+mve.fp`, CMSIS M55/MPU/VTOR/FPU facts, both MVE bits,
+and an explicit 8- or 16-region C55W manifest. It rejects scalar-FP-only and
+integer-MVE-only compilation, Secure CMSE, PAC, BTI, and foreign C55P region
+configuration.
+
+The construction port preserves the pinned FreeRTOS MPU+FPU+MVE 54-word
+privileged backing image exactly: words 0-20 are the basic first-start view and
+words 0-53 are the later extended FP/MVE view. MVE changes the exact cohort but
+does not create a VPR software slot. `fiber_port_boot.c` owns sealed
+construction, FPU policy/readback, linker boundary checks, and exact cohort
+definition. Hard/softfp `-O2`/`-Os` generated construction parity, type/layout,
+cohort, linker, and invalid-manifest proofs are complete.
+
+This slice deliberately adds no forward runtime ABI, SVC/PendSV handler,
+global selector route, optional heterogeneous MPU API, or hardware claim.
+Strict protected SVC, MVE-FP MPU PendSV, and runtime/archive/vector proof are
+separate behavior-changing slices.
+
+## 2026-08-31: Complete ARM_CM55F MPU Selected Runtime
+
+`ARM_CM55F_MPU/non_secure` slice 4 activates the frozen eight-function
+forward ABI without changing the already paired FreeRTOS protected frame
+layout, first-start SVC #70, or scalar-FP PendSV movement. Construction remains
+in `fiber_port_boot.c`; the mandatory SVC object defines the exact C55P
+cohort, owns the other seven forward operations, and exposes the public
+`fiber_schedule()` SVC #71 veneer. That service accepts only its exact
+syscall-flash continuation, validates the active protected context, and pends
+the selected port's PendSV handler. It never runs scheduler policy itself.
+
+SVC and PendSV intentionally remain separate archive components. The mandatory
+SVC object owns `fiber_port_handler_bundle_v1_anchor()`, which retains the
+private PendSV component anchor. This forces the strong PendSV object into a
+static link independently of startup weak aliases; the component retains its
+own reverse-ABI and exact-cohort relocations. The runtime matrix proves this
+layout for 8/16 MPU regions, hard-float -O2, softfp -Os, and hard-float -O2
+LTO archive links, external exact cohorts, stale-region archive rejection,
+slots 11/14, protected placement, and duplicate strong handlers.
+
+This is complete build-selected software evidence only. It does not add global
+selection, a heterogeneous MPU policy API, MVE, TrustZone, PAC/BTI, or a
+hardware-execution/isolation claim.
+
+## 2026-08-31: Add ARM_CM55F MPU Protected Scalar-FP PendSV
+
+`ARM_CM55F_MPU/non_secure` slice 3 adds only the scalar-FP protected
+`PendSV_Handler` and its private validation/scheduler/MPU helpers. It preserves
+the pinned FreeRTOS MPU+FPU/no-MVE use of one overlapping 54-word privileged
+image: extended save moves `s16-s31`, then copies `s0-s15/FPSCR`, then stores
+the core and special words; restore is the exact inverse. The special extended
+PSP layout is treated as the protected FreeRTOS layout, not as the ordinary
+non-MPU FP frame.
+
+The handler validates current state before reading its mutable cursor, invokes
+the frozen reverse scheduler ABI under BASEPRI, captures and verifies scheduler
+CPU/MPU state, and holds PRIMASK over MPU disable, MAIR0/RBAR/RLAR replacement,
+and common current-context publication. It adds strong vector slot 14 ownership
+but deliberately does not add `fiber_port.c`, the eight forward runtime
+operations, public SVC #71 yield, a global selector route, an optional MPU API,
+or a hardware claim. The matrix covers 8/16 regions, hard/softfp `-O2`/`-Os`,
+hard-float LTO ELF, FreeRTOS split PendSV assembly parity, vector slots, reverse
+ABI/cohort retention, and duplicate PendSV-handler failure.
+
+## 2026-08-31: Add ARM_CM55F MPU Strict First-Start SVC
+
+`ARM_CM55F_MPU/non_secure` slice 2 adds only the protected scalar-FP profile's
+strict first-start SVC path. It leaves `fiber_port.c`, `PendSV_Handler`, the
+eight-operation forward ABI, public yield, and optional MPU application policy
+absent. The profile stays explicit build-selected and has no hardware claim.
+
+The source follows the pinned FreeRTOS MPU+FPU/no-MVE first-entry backbone:
+`vStartFirstTask()` rewinds MSP from VTOR and enters SVC; first restore disables
+the MPU, writes MAIR0 plus RNR 4 and optionally 8/12 context pairs, enables the
+MPU, restores the basic protected image, clears BASEPRI, and exception-returns.
+Even with scalar FP enabled, first restore must contain no VFP/MVE transfer;
+the shared 54-word extended representation only becomes live after the later
+PendSV save.
+
+Fiber adds strict vector, call-site, mask, FPU, linker, sealed-context, and MPU
+readback checks. It owns strong `SVC_Handler`, fixed internal SVC #70, and a
+private SVC #72 task-return veneer. `MPU_CTRL.PRIVDEFENA` is paired with enable
+so selected privileged common runtime remains reachable while unprivileged
+fiber mappings are active. Generated `-O2`/`-Os` parity covers the reference
+first start and basic first restore for hard/softfp plus 8/16-region matrix
+proof; protected FP PendSV is the next behavior slice.
+
 ## 2026-08-31: Freeze ARM_CM55F MPU Scalar-FP Construction Cohort
 
 `ARM_CM55F_MPU/non_secure` begins as a separate explicit build-selected `C55P`

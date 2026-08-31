@@ -971,11 +971,20 @@ The selected port must use one of these two layouts:
    guaranteed always-linked mandatory ABI object retains a strong relocation to
    that unique anchor, forcing archive extraction independently of startup weak
    aliases.
+3. Split the handlers across selected-port objects only when the mandatory
+   always-linked object is the bundle coordinator. It defines
+   `fiber_port_handler_bundle_v1_anchor` and retains a unique private
+   component anchor from every separately archived handler object. The
+   coordinator and component anchors must be independent of generic
+   `SVC_Handler`/`PendSV_Handler` names, so startup weak aliases cannot
+   satisfy extraction accidentally.
 
 The handler-bundle anchor is port-owned and is not part of either directional
-runtime ABI. Exactly one selected handler object may define it. The common ABI
-version anchor and the handler extraction anchor are independent proofs and may
-not be combined into one relocation.
+runtime ABI. Exactly one selected port object may define it. Every separately
+compiled handler component that calls reverse symbols retains its matching
+runtime ABI and cohort relocations itself. The common ABI version anchor and
+the handler extraction anchors are independent proofs and may not be combined
+into one relocation.
 
 The `v1` suffix also identifies the selected port's internal mandatory-object
 to handler-object bundle contract. If their private calling convention, helper

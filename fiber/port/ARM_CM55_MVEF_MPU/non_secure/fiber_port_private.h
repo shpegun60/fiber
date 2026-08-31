@@ -1,6 +1,6 @@
-/* ARM_CM55F_MPU/non_secure declarations private to its selected runtime. */
-#ifndef FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_
-#define FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_
+/* ARM_CM55_MVEF_MPU/non_secure declarations private to its selected runtime. */
+#ifndef FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_
+#define FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_
 
 #include "fiber_port_boot.h"
 #include "../../fiber_port_context_cohort.h"
@@ -88,7 +88,7 @@ void fiber_port_handler_bundle_v1_anchor(void);
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portPRIVILEGED_FUNCTION
-void fiber_port_arm_cm55f_mpu_pendsv_handler_component_v1_anchor(void);
+void fiber_port_arm_cm55_mvef_mpu_pendsv_handler_component_v1_anchor(void);
 
 /* Exact post-SVC continuation markers are provenance data, never API. */
 extern const unsigned char fiber_port_svc_start_return_site[];
@@ -99,4 +99,4 @@ extern const unsigned char fiber_port_svc_return_return_site[];
 } /* extern "C" */
 #endif
 
-#endif /* FIBER_PORT_ARM_CM55F_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_ */
+#endif /* FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORT_PRIVATE_H_ */

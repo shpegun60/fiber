@@ -156,17 +156,44 @@ an alternative configuration of `ARM_CM55_NTZ`; MVE, MPU, TrustZone,
 SecureContext/TF-M, PAC, and BTI need distinct cohorts. See
 `fiber/port/ARM_CM55F_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55F_MPU/non_secure` is the next, deliberately staged `C55P`
-scalar-FP MPU cohort. Slice 1 freezes the FreeRTOS 54-word (216-byte)
-privileged protected-context backing store with its essential overlapping
-basic and extended-FP views, the 8/16-region MPU image, exact layout/cohort
-identity, sealed construction, linker-boundary checks, and CPACR/FPCCR policy
-helpers. It accepts scalar `-march=armv8.1-m.main+fp` hard-float or softfp
-builds and rejects MVE, CMSE, PAC, and BTI. It intentionally has no forward
-runtime ABI, SVC/PendSV handlers, global selector route, optional MPU API, or
-hardware claim yet. The later protected SVC and FP-aware PendSV slices must
-operate on this same overlapping backing store. See
-`fiber/port/ARM_CM55F_MPU/non_secure/FREERTOS_PARITY.md`.
+`ARM_CM55F_MPU/non_secure` is the complete explicit build-selected `C55P`
+scalar-FP MPU cohort. Its four slices freeze the FreeRTOS 54-word (216-byte)
+privileged backing store with overlapping basic and extended-FP views, the
+8/16-region MPU image, sealed construction, linker/cohort identity, and
+CPACR/FPCCR policy. Strong SVC #70 first start and protected scalar-FP PendSV
+retain the exact `s16-s31` plus copied `s0-s15/FPSCR` FreeRTOS move order.
+
+The boot object owns context construction; the mandatory SVC object owns the
+other seven frozen forward ABI operations, public SVC #71 yield, and strong
+slot 11. Its private bundle anchor forces the separate strong PendSV slot-14
+component out of a static archive. Separate checks cover hard-float/softfp
+`-O2`/`-Os`; archive proof samples hard-float `-O2`, softfp `-Os`, and
+hard-float `-O2` LTO, plus external cohort, stale archive, vector, placement,
+and duplicate-handler failures. It rejects MVE, CMSE, PAC, and BTI. It still
+has no global selector route, optional heterogeneous MPU API, or hardware
+claim. See `fiber/port/ARM_CM55F_MPU/non_secure/FREERTOS_PARITY.md`.
+
+`ARM_CM55_MVEF_MPU/non_secure` is a separate complete explicit build-selected
+`C55W` MVE-FP MPU runtime cohort. It is not an MVE option on `C55P`: its
+manifest requires `-march=armv8.1-m.main+mve.fp`, 8 or 16 MPU regions, and both
+MVE capability bits. It freezes the pinned FreeRTOS 54-word protected backing
+store, including overlapping basic words 0-20 and later extended FP/MVE words
+0-53, plus the C55W exact cohort, CPACR/FPCCR policy, and protected linker
+boundaries. MVE records feature identity but adds no VPR software slot.
+
+The boot object owns construction. The mandatory SVC/runtime object owns the
+other seven frozen forward ABI operations, public SVC #71 yield, strict SVC #70
+first start, private SVC #72 task return, strong slot 11, and the private
+handler-bundle anchor. The separate strong slot-14 `PendSV_Handler` keeps the
+exact protected `s16-s31` plus copied `s0-s15/FPSCR` save/restore order,
+reverse-ABI selection under BASEPRI, and PRIMASK-protected MPU replacement.
+It has no VPR software slot or VPR transfer. Hard-float and softfp `-O2`/`-Os`
+construction, SVC, and PendSV parity are checked against the pinned FreeRTOS
+MPU+FPU+MVE branch; normal/LTO archive, cohort, placement, vector, stale
+8/16-region archive, and duplicate-handler proofs pass. It has no global
+selector route, optional heterogeneous MPU API, TrustZone/SecureContext or
+TF-M companion, PAC/BTI policy, or hardware-support claim.
+See `fiber/port/ARM_CM55_MVEF_MPU/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55_MVEF_NTZ/non_secure` is a distinct, non-selectable M55 MVE-FP
 runtime cohort, not an option on the scalar-FP port. Its `C55V` identity

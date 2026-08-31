@@ -1,18 +1,19 @@
-/* ARM_CM55F_MPU/non_secure sealed construction and linker-owned MPU image. */
+/* ARM_CM55_MVEF_MPU/non_secure sealed construction and linker-owned MPU image. */
 
 #include "fiber_port_boot.h"
 
-/* The SVC/runtime object defines the exact selected-port cohort. Construction
- * keeps a retained relocation so a stale boot object cannot join that runtime. */
+/* Strict first-start SVC owns the exact selected-port cohort. Construction
+ * keeps its retained relocation in fiber_port_context_init(). */
 
-#define FIBER_CM55F_MPU_BOOT \
+#define FIBER_CM55_MVEF_MPU_BOOT \
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
 	fiber_portPRIVILEGED_FUNCTION
 
-/* This scalar-FP MPU cohort keeps the same CPACR/FPCCR policy as the pinned
+/* This MVE-FP MPU cohort keeps the same CPACR/FPCCR policy as the pinned
  * FreeRTOS M55 branch. These helpers use only general registers; no VFP/MVE
- * instruction is allowed before CP10/CP11 readback has succeeded. */
-FIBER_CM55F_MPU_BOOT
+ * instruction is allowed before CP10/CP11 readback has succeeded. The pinned
+ * MVE branch adds no separate VPR policy or context slot. */
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_fpu_require_configured(void)
 {
 	FIBER_REQUIRE((fiber_portCPACR_REG & fiber_portCPACR_CP10_CP11_FULL) ==
@@ -27,7 +28,7 @@ void fiber_port_fpu_require_configured(void)
 #endif
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_fpu_require_ready(void)
 {
 	fiber_port_fpu_require_configured();
@@ -35,7 +36,7 @@ void fiber_port_fpu_require_ready(void)
 			'E');
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_fpu_prepare(void)
 {
 	uint32_t cpacr = fiber_portCPACR_REG;
@@ -65,7 +66,7 @@ void fiber_port_fpu_prepare(void)
 	fiber_port_fpu_require_ready();
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 uint32_t fiber_port_hash32_accum(uint32_t hash, uint32_t value)
 {
 	hash ^= (uint8_t)value;
@@ -79,7 +80,7 @@ uint32_t fiber_port_hash32_accum(uint32_t hash, uint32_t value)
 	return hash;
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_range_contains(uintptr_t outer_start,
 		uintptr_t outer_end,
 		uintptr_t inner_start,
@@ -89,7 +90,7 @@ int fiber_port_range_contains(uintptr_t outer_start,
 			(inner_start >= outer_start) && (inner_end <= outer_end);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_ranges_overlap(uintptr_t first_start,
 		uintptr_t first_end,
 		uintptr_t second_start,
@@ -98,13 +99,13 @@ int fiber_port_ranges_overlap(uintptr_t first_start,
 	return (first_start < second_end) && (second_start < first_end);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 uintptr_t fiber_port_function_address(uintptr_t address)
 {
 	return address & ~(uintptr_t)1u;
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_code_address_is_in_range(uintptr_t range_start,
 		uintptr_t range_end,
 		uintptr_t address)
@@ -114,7 +115,7 @@ int fiber_port_code_address_is_in_range(uintptr_t range_start,
 					address, address + 2u);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_require_32_byte_range(uintptr_t start,
 		uintptr_t end,
 		char code)
@@ -127,7 +128,7 @@ void fiber_port_require_32_byte_range(uintptr_t start,
 	FIBER_REQUIRE((end - start) >= 32u, code);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_mpu_rbar_attributes_are_valid(uint32_t attributes)
 {
 	const uint32_t allowed = fiber_portMPU_RBAR_ACCESS_MASK |
@@ -151,7 +152,7 @@ int fiber_port_mpu_rbar_attributes_are_valid(uint32_t attributes)
 			(shareability == fiber_portMPU_REGION_OUTER_SHAREABLE);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_mpu_rlar_attributes_are_valid(uint32_t attributes)
 {
 	const uint32_t allowed = fiber_portMPU_RLAR_ATTR_INDEX_MASK |
@@ -164,7 +165,7 @@ int fiber_port_mpu_rlar_attributes_are_valid(uint32_t attributes)
 			 (attribute_index == fiber_portMPU_RLAR_ATTR_INDEX1));
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 int fiber_port_mpu_try_encode_exact_region(uintptr_t start,
 		uintptr_t end,
 		uint32_t region_number,
@@ -193,7 +194,7 @@ int fiber_port_mpu_try_encode_exact_region(uintptr_t start,
 	return 1;
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_mpu_encode_exact_region(uintptr_t start,
 		uintptr_t end,
 		uint32_t region_number,
@@ -206,7 +207,7 @@ void fiber_port_mpu_encode_exact_region(uintptr_t start,
 			'M');
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_mpu_disable_context_region(FiberPortMpuRegionRegisters *encoded)
 {
 	FIBER_REQUIRE(encoded != NULL, 'M');
@@ -214,7 +215,7 @@ void fiber_port_mpu_disable_context_region(FiberPortMpuRegionRegisters *encoded)
 	encoded->rlar = 0u;
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_mpu_load_linker_layout(FiberPortMpuMemoryLayout *layout)
 {
 	FIBER_REQUIRE(layout != NULL, 'L');
@@ -244,7 +245,7 @@ void fiber_port_mpu_load_linker_layout(FiberPortMpuMemoryLayout *layout)
 			(uintptr_t)__fiber_mpu_unprivileged_ram_end__;
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_require_disjoint(uintptr_t first_start,
 		uintptr_t first_end,
 		uintptr_t second_start,
@@ -254,7 +255,7 @@ void fiber_port_require_disjoint(uintptr_t first_start,
 				second_start, second_end), 'L');
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_mpu_linker_layout_check(
 		const FiberPortMpuMemoryLayout *layout)
 {
@@ -421,7 +422,7 @@ void fiber_port_mpu_linker_layout_check(
 			layout->unprivileged_syscalls_end, return_target), 'L');
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_mpu_build_global_regions(FiberPortMpuGlobalRegionImage *image)
 {
 	FiberPortMpuMemoryLayout layout;
@@ -461,7 +462,7 @@ void fiber_port_mpu_build_global_regions(FiberPortMpuGlobalRegionImage *image)
 			&image->regions[fiber_portMPU_PRIVILEGED_DATA_REGION_NUMBER]);
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_pointer_check(const FiberContext *ctx,
 		const FiberPortMpuMemoryLayout *layout)
 {
@@ -479,7 +480,7 @@ void fiber_port_context_pointer_check(const FiberContext *ctx,
 				layout->current_context_slot_end), 'C');
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_fast_check(const FiberContext *ctx,
 		const FiberPortMpuMemoryLayout *layout)
 {
@@ -527,7 +528,7 @@ void fiber_port_context_fast_check(const FiberContext *ctx,
 	FIBER_REQUIRE(boot->avail ==
 			(size_t)(expected_stack_top - expected_stack_base), 'a');
 	FIBER_REQUIRE(boot->avail >=
-			(size_t)FIBER_PORT_CM55F_MPU_STACK_REQUIRED_BYTES, 'H');
+			(size_t)FIBER_PORT_CM55_MVEF_MPU_STACK_REQUIRED_BYTES, 'H');
 
 	const uintptr_t entry_address = (uintptr_t)boot->entry;
 	FIBER_REQUIRE(entry_address != 0u, 'E');
@@ -576,7 +577,7 @@ void fiber_port_context_fast_check(const FiberContext *ctx,
 	}
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 uint32_t fiber_port_context_compute_seal(const FiberContext *ctx)
 {
 	FiberPortMpuMemoryLayout layout;
@@ -616,7 +617,7 @@ uint32_t fiber_port_context_compute_seal(const FiberContext *ctx)
 	return hash;
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_seal_check(const FiberContext *ctx)
 {
 	FiberPortMpuMemoryLayout layout;
@@ -626,7 +627,7 @@ void fiber_port_context_seal_check(const FiberContext *ctx)
 	FIBER_REQUIRE(ctx->boot.hash == fiber_port_context_compute_seal(ctx), 'h');
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_validate_initial_restore(const FiberContext *ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
@@ -670,7 +671,7 @@ void fiber_port_context_validate_initial_restore(const FiberContext *ctx)
 #endif
 }
 
-static FIBER_CM55F_MPU_BOOT
+static FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_initial_image_check(const FiberContext *ctx,
 		uintptr_t initial_psp,
 		uintptr_t entry_address,
@@ -689,7 +690,7 @@ void fiber_port_context_initial_image_check(const FiberContext *ctx,
 	FIBER_REQUIRE(image->psp == (uint32_t)initial_psp, 'P');
 }
 
-FIBER_CM55F_MPU_BOOT
+FIBER_CM55_MVEF_MPU_BOOT
 void fiber_port_context_init(FiberContext *ctx,
 		void *stack_begin,
 		void *stack_end,
@@ -759,7 +760,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	const uintptr_t stack_top = fiber_stack_align_down(raw_stack_end);
 	FIBER_REQUIRE(stack_top > stack_base, 'H');
 	FIBER_REQUIRE((stack_top - stack_base) >=
-			(uintptr_t)FIBER_PORT_CM55F_MPU_STACK_REQUIRED_BYTES, 'H');
+			(uintptr_t)FIBER_PORT_CM55_MVEF_MPU_STACK_REQUIRED_BYTES, 'H');
 	FIBER_REQUIRE(stack_top >= (uintptr_t)FIBER_PORT_EXC_BASE_BYTES, 'H');
 	const uintptr_t initial_psp = stack_top -
 			(uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
@@ -850,4 +851,4 @@ void fiber_port_context_init(FiberContext *ctx,
 			initial_r9, return_address);
 }
 
-#undef FIBER_CM55F_MPU_BOOT
+#undef FIBER_CM55_MVEF_MPU_BOOT

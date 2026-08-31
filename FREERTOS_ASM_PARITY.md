@@ -102,7 +102,8 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
 | `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
 | `ARM_CM55F_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | basic construction, strict first SVC/restore, and conditional scalar-FP `s16-s31` PSPLIM PendSV |
-| `ARM_CM55F_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | slice-1 protected scalar-FP constructor only: overlapping 54-word basic/extended context storage and no VFP/MVE transfer before the deferred SVC/PendSV slice |
+| `ARM_CM55F_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | complete build-selected protected scalar-FP runtime: overlapping 54-word storage, strict basic first-start SVC/restore, public SVC-71 yield, and protected FP PendSV with exact `s16-s31` and copied low-FP moves, with no MVE/VPR state |
+| `ARM_CM55_MVEF_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, `configENABLE_FPU=1`, `configENABLE_MVE=1` | complete build-selected protected MVE-FP runtime: overlapping 54-word storage, strict basic first-start SVC/restore, public SVC-71 yield, and protected MVE-FP PendSV with exact `s16-s31` and copied low-FP moves, with no VPR software slot or transfer |
 | `ARM_CM55_MVEF_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=1` | basic construction, integer-only strict first SVC/restore, and conditional MVE-FP `s16-s31` PSPLIM PendSV with no VPR software slot |
 | `ARM_CM55_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, no FPU/MVE/TrustZone/PAC | complete build-selected protected runtime: public SVC-71 yield, first MPU activation/restore, 20-word frame copy, reverse-ABI selection under BASEPRI, atomic MAIR0/context-MPU replacement, and inverse restore for exact 8/16-region cohorts |
 | `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
@@ -112,13 +113,16 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM3_MPU` | `GCC/ARM_CM3_MPU` | SVC dispatch, first MPU restore, protected PendSV |
 | `ARM_CM4_MPU` | `GCC/ARM_CM4_MPU` | SVC dispatch, first MPU/FP restore, protected FP PendSV |
 
-The script derives the complete-runtime inventory from every
-`fiber/port/**/fiber_port.c`; an explicitly listed staged source is checked
-separately against only the mechanisms named in its ledger. Every directory must contain
-`FREERTOS_PARITY.md`. A staged profile never inherits a complete runtime claim.
-The script fails if a staged profile becomes selectable, is also listed as
-complete parity, or a new complete port source is neither paired nor explicitly
-staged. Adding a port source therefore cannot silently reduce coverage.
+The script derives the ordinary complete-runtime inventory from every
+`fiber/port/**/fiber_port.c`. A profile deliberately split into boot, SVC, and
+PendSV source objects is declared as an explicit complete runtime group below
+and must have a dedicated archive/ELF proof. An explicitly listed staged source
+is checked separately against only the mechanisms named in its ledger. Every
+directory must contain `FREERTOS_PARITY.md`. A staged profile never inherits a
+complete runtime claim. The script fails if a staged profile becomes selectable,
+is also listed as complete parity, or a new ordinary port source is neither
+paired nor explicitly staged. Adding a port source therefore cannot silently
+reduce coverage.
 
 `ARM_CM55F_NTZ/non_secure` slices 1-4 use `fiber_port_boot.c`,
 `fiber_port_svc.c`, and `fiber_port.c` as one complete scalar-FP runtime group.
@@ -158,13 +162,45 @@ ownership, duplicate-SVC/PendSV failure, selected-manifest negatives, and paired
 protected PendSV generated assembly. It remains build-selected only and
 hardware-unvalidated.
 
-`ARM_CM55F_MPU/non_secure` slice 1 is a staged construction-only profile. It
-uses the pinned `configENABLE_MPU=1`, `configENABLE_FPU=1`, no-MVE FreeRTOS
-branch under hard-float `-O2`/`-Os` generated-code comparison. Both constructors
-build the basic protected image without VFP/MVE transfer; Fiber additionally
-freezes the overlapping 54-word extended representation, seals boot metadata,
-and validates linker-owned MPU boundaries. Its protected SVC/PendSV transfer
-does not exist yet and cannot inherit a runtime-parity claim.
+`ARM_CM55F_MPU/non_secure` slice 4 completes the build-selected scalar-FP
+MPU runtime group with `fiber_port_boot.c`, `fiber_port_svc.c`, and
+`fiber_port_pendsv.c`. It retains the pinned `configENABLE_MPU=1`,
+`configENABLE_FPU=1`, no-MVE FreeRTOS construction, first-SVC, and protected
+scalar-FP PendSV mechanisms under hard-float and softfp `-O2`/`-Os`
+generated-code comparison. Construction remains basic without VFP/MVE transfer;
+the protected PendSV keeps the overlapping 54-word extended representation,
+exact `s16-s31` and copied low-FP order, reverse scheduler selection, MPU
+replacement, and inverse restore.
+
+The runtime additions are Fiber integration rather than a FreeRTOS frame-move
+substitution: boot owns `fiber_port_context_init()`; the SVC object owns the
+other seven forward operations and exact public SVC-71 yield; the strong PendSV
+component is extracted through a private archive anchor. Its full archive proof
+uses hard-float -O2, softfp -Os, and hard-float -O2 LTO; the separate
+generated-code checks cover hard-float/softfp -O2/-Os. It proves external exact
+cohort retention, stale 8/16 archive rejection, privileged/unprivileged/syscall
+placement, vector slots 11/14, and duplicate-handler failure. It remains
+build-selected only and hardware-unvalidated.
+
+`ARM_CM55_MVEF_MPU/non_secure` slice 4 completes the distinct build-selected
+MVE-FP MPU runtime group with `fiber_port_boot.c`, `fiber_port_svc.c`, and
+`fiber_port_pendsv.c`. It retains the pinned `configENABLE_MPU=1`,
+`configENABLE_FPU=1`, `configENABLE_MVE=1` FreeRTOS construction, first-SVC,
+and protected MVE-FP PendSV mechanisms under hard-float and softfp `-O2`/`-Os`
+generated-code comparison. Construction remains general-register-only; protected
+PendSV keeps the overlapping 54-word extended representation, exact `s16-s31`
+and copied low-FP order, reverse scheduler selection, MPU replacement, inverse
+restore, and no VPR state.
+
+The runtime additions are Fiber integration rather than a FreeRTOS frame-move
+substitution: boot owns `fiber_port_context_init()`; the SVC object owns the
+other seven forward operations and exact public SVC-71 yield; the strong PendSV
+component is extracted through a private archive anchor. Its full archive proof
+uses hard-float -O2, softfp -Os, and hard-float -O2 LTO; the separate
+generated-code checks cover hard-float/softfp -O2/-Os. It proves external exact
+cohort retention, stale 8/16 archive rejection, privileged/unprivileged/syscall
+placement, vector slots 11/14, and duplicate-handler failure. It remains
+build-selected only and hardware-unvalidated.
 
 `ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
 pinned 8- and 16-region MPU reference configurations. Its public
@@ -462,9 +498,9 @@ FP PendSV save deliberately overwrites the same `ulContext[54]` backing array
 and moves the cursor to its final word. Fiber freezes the same two overlapping
 views under C55P, clears all 54 words before filling the basic view, preserves
 `r9`, adds sealed boot and linker/MPU validation, and keeps CPACR/FPCCR setup
-general-registers-only. This construction-only difference is valid because it
-does not add, remove, or reorder a saved runtime slot; direct SVC/PendSV
-assembly pairing is deferred until those handlers exist.
+general-registers-only. This construction difference is valid because it does
+not add, remove, or reorder a saved runtime slot; the later scalar-FP PendSV
+handler now pairs that exact shared backing-store growth separately.
 
 The generated-code proof additionally requires both constructors to derive the
 initial PSP from the stack top minus the 32-byte basic hardware frame. Fiber's
@@ -473,6 +509,102 @@ the final seal. The generic C55P geometry records a 20-word basic restore image
 with `EXC_RETURN` at word 19, 33 privileged FP words added by the extended
 image, and a 320-byte logical maximum. The separate physical PSP admission
 remains 112 bytes.
+
+### FAP-M55MVE-MPU-CONSTRUCTION
+
+The pinned FreeRTOS `configENABLE_MPU=1`, `configENABLE_FPU=1`,
+`configENABLE_MVE=1` constructor retains the same basic protected image as
+the scalar-FP MPU branch. MVE changes the compiler and later conditional
+high-FP save contract, but it does not add a VPR word, pre-save task vector
+state, or alter the 54-word `ulContext` backing array.
+
+GCC may vectorize FreeRTOS's static initialization into transient q-register
+stores under `+mve.fp`; that is not a saved-context operation. Fiber records
+the profile as the separate exact C55W cohort and keeps its construction path
+`general-regs-only`, so `fiber_init()` does not depend on live vector state
+before `fiber_start()` configures CPU policy. Both sides are checked for the
+absence of VPR state transfer and a VPR software slot. Fiber preserves the
+shared 20-word basic cursor, 33-word later FP growth, 112-byte PSP admission,
+and CPACR/FPCCR setup, then adds sealed boot and linker/MPU checks. The
+dedicated C55W PendSV proof demonstrates the conditional `s16-s31` copy
+sequence and the continued absence of VPR software state.
+
+### FAP-M55MVE-MPU-SVC
+
+The pinned FreeRTOS MPU+FPU+MVE first-start path enters SVC, disables the
+MPU, restores MAIR0 and the selected context RBAR/RLAR pairs, enables the MPU,
+then restores only the basic protected image before exception return. Despite
+the MVE-FP compiler target, this initial image contains no VPR word and no
+high- or low-FP/vector transfer. Those registers first become part of the
+protected image only after the later MVE-FP PendSV save.
+
+Fiber's strict `ARM_CM55_MVEF_MPU/non_secure` slice keeps that exact basic
+first-restore geometry in `fiber_port_start_first_context()` and
+`fiber_port_restore_first_context_from_svc()`. It adds exact SVC #70 and #72
+provenance, vector/mask/FPU/linker/context/MPU readback validation, stale
+PendSV clearing, and `PRIVDEFENA` with MPU enable so privileged port code
+remains reachable. The isolated Slice-2 fixture owns a strong `SVC_Handler` in
+slot 11 and deliberately leaves slot 14 unowned. Slice 3 separately owns the
+MVE-FP save/restore component and strong slot 14 handler. Slice 4 adds the
+public SVC #71 veneer and frozen forward ABI without changing either
+FreeRTOS-derived transfer sequence.
+
+### FAP-M55MVE-MPU-PENDSV
+
+The pinned FreeRTOS `configENABLE_MPU=1`, `configENABLE_FPU=1`,
+`configENABLE_MVE=1` `PendSV_Handler` uses the same overlapping 54-word
+protected backing store as its scalar-FP MPU sibling. For an extended return it
+saves `s16-s31`, copies `s0-s15/FPSCR`, saves `r4-r11`, copies the basic
+hardware frame, then records `[PSP][PSPLIM][CONTROL][EXC_RETURN]`; restore is
+the inverse. MVE does not add a VPR software word or a VPR transfer to this
+mechanism.
+
+Fiber's C55W PendSV component retains that exact transfer ordering. It adds
+preflight before protected-cursor access, sealed-context and active-MPU
+validation, reverse-ABI scheduler selection under BASEPRI, CPU/MPU state
+preservation across the scheduler callback, a PRIMASK-protected disabled-MPU
+interval, readback validation, and common-owned current publication. Slice 3
+owns strong slot-14 `PendSV_Handler`, while the existing strict SVC retains
+slot 11. Slice 4 activates the forward ABI, public SVC #71 yield, and archive
+extraction around those unchanged protected mechanics.
+
+### FAP-M55FMPU-SVC
+
+The pinned FreeRTOS MPU+FPU/no-MVE first-start path rewinds MSP from VTOR,
+enables exceptions, enters SVC, then disables the MPU, loads MAIR0 and the
+context RBAR/RLAR blocks, restores the basic protected image, clears BASEPRI,
+and exception-returns. It does not transfer VFP/MVE state because the initial
+protected image is basic.
+
+Fiber retains that ordered MPU and basic-image mechanism in
+`fiber_port_start_first_context()` and
+`fiber_port_restore_first_context_from_svc()`. It adds exact SVC #70
+provenance, vector/mask/FPU/linker/context/MPU readback validation, stale
+PendSV clearing, a common-published current context, and `PRIVDEFENA` alongside
+MPU enable so privileged common runtime remains reachable. SVC #72 is a
+private task-return service. The separate PendSV handler is the only place
+allowed to create or restore the overlapping scalar-FP state.
+
+### FAP-M55FMPU-PENDSV
+
+The pinned FreeRTOS `configENABLE_MPU=1`, `configENABLE_FPU=1`, no-MVE
+`PendSV_Handler` copies state into one overlapping protected 54-word backing
+store in this exact order: `s16-s31`, copied `s0-s15/FPSCR`, `r4-r11`, copied
+basic hardware frame, then `[PSP][PSPLIM][CONTROL][EXC_RETURN]`. Restore is
+the inverse. Its extended form still treats PSP as the copied basic hardware
+frame and places the low FP copy after that 32-byte frame; it is not the normal
+non-MPU PSP layout.
+
+Fiber preserves those VFP and integer moves in `fiber_port_pendsv.c`. It adds
+selected Non-secure provenance and frame preflight before current metadata,
+sealed context and active-MPU validation, scheduler CPU/MPU-state preservation,
+an explicitly PRIMASK-protected MPU-disabled interval, readback validation, and
+common-owned current publication. A kept but never-called privileged helper in
+the handler object retains link-only relocations to both the frozen reverse ABI
+and exact context cohort, so neither check adds a read to the PendSV hot path.
+The matrix pairs save, scheduler, MPU replacement, restore, and completion
+labels for 8/16 region images and rejects MVE/VPR transfer in both
+implementations.
 
 ### FAP-M55MPU-LAYOUT
 
