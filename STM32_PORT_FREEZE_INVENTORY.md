@@ -78,6 +78,14 @@ groups and pinned FreeRTOS parity ledgers:
 | `ARM_CM55F_MPU/non_secure` | scalar-FP MPU C55P protected frame, 8/16-region image, public SVC-71 yield, and protected FP PendSV | compile/assembly/archive/ELF/vector/cohort validated; hardware isolation pending |
 | `ARM_CM55_MVEF_MPU/non_secure` | MVE-FP MPU C55W 54-word protected frame, public SVC-71 yield, protected `s16-s31`/copied-low-FP PendSV, 8/16-region image, and no VPR software slot | compile/assembly/archive/ELF/vector/cohort validated; hardware isolation pending |
 
+`ARM_CM55/non_secure` is a deliberately staged `C55S` TrustZone SecureContext
+layout dictionary, not a nineteenth complete runtime profile. It freezes the
+eleven-word Non-secure frame and scalar M55/CMSE manifest. The paired
+`ARM_CM55/secure` Slice-2 artifact now provides only four immutable
+cohort-named identity NSC veneers with real CMSE import/negative-link proof;
+no port runtime, SecureContext lifecycle, handler, archive/vector runtime, or
+hardware evidence exists yet.
+
 The current matrix pairs every complete runtime source group against the pinned
 FreeRTOS reference where applicable and separately tests the paired CM33
 companion layout/gateway. It passes the existing directional ABI, exact cohort,

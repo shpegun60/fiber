@@ -10165,6 +10165,888 @@ FiberContext fiber_arm_cm55_mpu_cpp_type_only_object;
     }
 }
 
+function Test-ArmCm55SecureContextLayoutContract {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $profileDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM55\non_secure"
+    $fixture = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_secure_context_layout_probe.c"
+
+    foreach ($required in @(
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h",
+            "fiber_portmacro.h",
+            "FREERTOS_PARITY.md")) {
+        $path = Join-Path $profileDir $required
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "ARM_CM55 SecureContext Slice 1 is missing required file: $path"
+        }
+    }
+    if (-not (Test-Path -LiteralPath $fixture)) {
+        throw "ARM_CM55 SecureContext Slice 1 is missing its layout fixture"
+    }
+
+    foreach ($prematureArtifact in @(
+            "fiber_port_boot.c",
+            "fiber_port_boot.h",
+            "fiber_port.c",
+            "fiber_port_svc.c",
+            "fiber_port_private.h",
+            "fiber_port_secure_context.c",
+            "fiber_port_secure_context_abi.h")) {
+        if (Test-Path -LiteralPath (Join-Path $profileDir $prematureArtifact)) {
+            throw "ARM_CM55 SecureContext Slice 1 exposed runtime artifact: $prematureArtifact"
+        }
+    }
+    foreach ($selector in @(
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_select.h"),
+            (Join-Path $RepositoryRoot "fiber\port\fiber_port_selected.h"))) {
+        if ((Get-Content -LiteralPath $selector -Raw).IndexOf(
+                "ARM_CM55\non_secure", [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM55 SecureContext Slice 1 must not enter global selection: $selector"
+        }
+    }
+
+    foreach ($typeHeader in @(
+            "fiber_port_boot_types.h",
+            "fiber_port_types.h")) {
+        $typeText = Get-Content -LiteralPath `
+            (Join-Path $profileDir $typeHeader) -Raw
+        foreach ($forbiddenTypeDependency in @(
+                "mcu_core.h",
+                "fiber_compiler.h",
+                "fiber_portmacro.h",
+                "fiber_port_select.h")) {
+            $includePattern = '(?m)^\s*#\s*include\s*["<][^">]*' +
+                [regex]::Escape($forbiddenTypeDependency) + '[">]'
+            if ([regex]::IsMatch($typeText, $includePattern)) {
+                throw "ARM_CM55 SecureContext public storage acquired CPU dependency: $typeHeader -> $forbiddenTypeDependency"
+            }
+        }
+    }
+
+    $macroText = Get-Content -LiteralPath `
+        (Join-Path $profileDir "fiber_portmacro.h") -Raw
+    foreach ($forbiddenRuntimeToken in @(
+            "FIBER_PORT_CONTEXT_COHORT_DEFINE",
+            "fiber_port_runtime_",
+            "SVC_Handler",
+            "PendSV_Handler",
+            "fiber_port_secure_context_attach")) {
+        if ($macroText.IndexOf($forbiddenRuntimeToken,
+                [System.StringComparison]::Ordinal) -ge 0) {
+            throw "ARM_CM55 SecureContext Slice 1 macro exposed runtime token: $forbiddenRuntimeToken"
+        }
+    }
+
+    $parity = Get-Content -LiteralPath `
+        (Join-Path $profileDir "FREERTOS_PARITY.md") -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "GCC/ARM_CM55/non_secure",
+            "GCC/ARM_CM55/secure",
+            "B7F94C8C21A4B583837C10F00ED93A1EA8C5801DEA8A3AD6C6DB13A49F947420",
+            "324ACBC8D95D75FCFBDA0703E7891B35948BC21D1526BD32780EA8B935B724A2",
+            "BEE0956FE5384827D28E63BC0F20D5837A09A87DC8B348B60E124B1B51EDBB9A",
+            "6F39F5CB7A24766DF3FA025E41E0E502301550136151B5E2EABDFA9AC4E42D60",
+            "185477BF5A84B9B61927E4A0894427A4F471C448840DBF521F312B6F52D03B6C",
+            "0DC69DD4372646D176CDF98429C8BC9A056E6B0200CB558C51DF4E1F10378D4F",
+            "8209F4BAF60741E8ED5516AF9706FC4B5B2EE3CF16452EDB0C034B7DDDE443B4",
+            "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72",
+            "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E",
+            "E58805B998EE73A9EB84627EBD2955787CDFD0CD968D1BC7D93423441BAB6C87",
+            "CE5D5F7FC774E7EC51157F5078361F3CB0A20CE9C94593396F543E5046E53F42",
+            "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149",
+            "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
+            "5F2DF28DF3D445F08727CAF41F83ED6C67E0494E40AF5572B5E18F6416B2838D",
+            "eleven words",
+            "0x43353553",
+            "outside no-MPU C55S",
+            "no runtime claim")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55 SecureContext parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm55-secure-context-layout"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 1U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+#ifndef FIBER_TEST_FPU_USED
+#define FIBER_TEST_FPU_USED 0U
+#endif
+#ifndef FIBER_TEST_CMSE_LEVEL
+#define FIBER_TEST_CMSE_LEVEL 1U
+#endif
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    SVCall_IRQn = -5, PendSV_IRQn = -2, SysTick_IRQn = -1,
+    DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm55.h"
+#if FIBER_TEST_FPU_USED != 0U
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#if FIBER_TEST_CMSE_LEVEL != 1U
+#undef __ARM_FEATURE_CMSE
+#define __ARM_FEATURE_CMSE FIBER_TEST_CMSE_LEVEL
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-common",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $cppWarningArgs = @($warningArgs | Where-Object {
+        ($_ -ne "-Werror=implicit-function-declaration")
+    })
+    $typeIncludeArgs = @("-I$profileDir")
+    $manifestIncludeArgs = @(
+        "-I$probeDir",
+        "-I$profileDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+
+    $typeProbe = Join-Path $probeDir "type-only.c"
+    Set-Content -LiteralPath $typeProbe -Encoding ASCII -Value @'
+#include <stddef.h>
+#include "fiber_port_types.h"
+
+_Static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
+_Static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
+_Static_assert(sizeof(FiberContext) == 80u, "context size");
+_Static_assert(_Alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_arm_cm55_secure_context_type_only_object;
+'@
+    $cppProbe = Join-Path $probeDir "type-only.cpp"
+    Set-Content -LiteralPath $cppProbe -Encoding ASCII -Value @'
+#include <cstddef>
+#include "fiber_port_types.h"
+
+static_assert(sizeof(FiberPortBoot) == 76u, "boot size");
+static_assert(offsetof(FiberPortBoot, secure_stack_bytes) == 28u, "secure request offset");
+static_assert(sizeof(FiberContext) == 80u, "context size");
+static_assert(alignof(FiberContext) == 4u, "context alignment");
+FiberContext fiber_arm_cm55_secure_context_cpp_type_only_object;
+'@
+
+    $typeObject = Join-Path $probeDir "type-only.o"
+    & $Compiler -mcpu=cortex-m55 -mthumb -mfloat-abi=soft -std=c11 `
+        @warningArgs @typeIncludeArgs -c $typeProbe -o $typeObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55 SecureContext type-only C header failed without CMSIS"
+    }
+    $cppObject = Join-Path $probeDir "type-only-cpp.o"
+    & $Compiler -x c++ -mcpu=cortex-m55 -mthumb -mfloat-abi=soft -std=c++17 `
+        -fno-exceptions -fno-rtti @cppWarningArgs @typeIncludeArgs `
+        -c $cppProbe -o $cppObject
+    if ($LASTEXITCODE -ne 0) {
+        throw "ARM_CM55 SecureContext type-only C++ header failed without CMSIS"
+    }
+
+    $selectedDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+    foreach ($optimization in @("-O2", "-Os")) {
+        $mode = $optimization.Substring(1).ToLowerInvariant()
+        $layoutObject = Join-Path $probeDir "layout-$mode.o"
+        $manifestArgs = @(
+            "-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft", "-std=c11",
+            $optimization) + $warningArgs + $selectedDefines + $manifestIncludeArgs
+        & $Compiler @manifestArgs -c $fixture -o $layoutObject
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 SecureContext exact layout manifest failed compile ($mode)"
+        }
+        $defined = @(& $Nm -g --defined-only $layoutObject)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55 SecureContext layout probe ($mode)"
+        }
+        if (@($defined | Where-Object {
+                $_ -match '\bfiber_port_context_cohort_'
+            }).Count -ne 0) {
+            throw "ARM_CM55 SecureContext Slice 1 must not define a runtime cohort ($mode)"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "selector-mode"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_PROFILE=6")
+            Diagnostic = "ARM_CM55 is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "manifest requires CMSIS __CORTEX_M == 55"
+            Main = ($mainHeader -replace 'core_cm55.h', 'core_cm33.h')
+        },
+        [pscustomobject]@{
+            Name = "wrong-architecture"
+            CompilerArgs = @("-mcpu=cortex-m23", "-mthumb", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1", "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1")
+            Diagnostic = "requires an ARMv8.1-M Mainline compiler target"
+            Main = ($mainHeader -replace 'core_cm55.h', 'core_cm23.h')
+        },
+        [pscustomobject]@{
+            Name = "secure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft", "-mcmse")
+            Defines = $selectedDefines
+            Diagnostic = "requires a Non-secure CMSE level 1 build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "missing-cmse"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_TEST_CMSE_LEVEL=0")
+            Diagnostic = "requires a Non-secure CMSE level 1 build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_TEST_FPU_USED=1")
+            Diagnostic = "requires __FPU_USED == 0"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mve"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-D__ARM_FEATURE_MVE=1")
+            Diagnostic = "does not permit MVE"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pac"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-D__ARM_FEATURE_PAUTH=1")
+            Diagnostic = "does not permit PAC"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mpu-manifest"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "is non-MPU; select a separate MPU profile"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "runtime-selectable-override"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_PORT_RUNTIME_SELECTABLE=1")
+            Diagnostic = "runtime-selectable state must not be predefined"
+            Main = $mainHeader
+        }
+    )
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments @(
+            $case.CompilerArgs + @(
+                "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-common",
+                "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+                "-I$caseDir", "-I$profileDir",
+                "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+                "-I$(Join-Path $RepositoryRoot 'fiber')",
+                "-I$RepositoryRoot", "-I$CmsisPath") +
+            $case.Defines + @(
+                "-c", $fixture, "-o", (Join-Path $caseDir "invalid.o"))) `
+            -LogPath (Join-Path $caseDir "compile.log")
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM55 SecureContext manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
+function Test-ArmCm55SecureGatewayAbi {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Compiler,
+        [string]$Nm,
+        [string]$GccNm,
+        [string]$Objdump,
+        [string]$CmsisPath,
+        [string]$BuildRoot
+    )
+
+    $nonSecureDir = Join-Path $RepositoryRoot `
+        "fiber\port\ARM_CM55\non_secure"
+    $secureDir = Join-Path $RepositoryRoot "fiber\port\ARM_CM55\secure"
+    $secureSource = Join-Path $secureDir "fiber_secure_gateway.c"
+    $secureHeader = Join-Path $secureDir "fiber_secure_gateway_abi.h"
+    $contractHeader = Join-Path $secureDir "fiber_secure_gateway_contract.h"
+    $secureParity = Join-Path $secureDir "FREERTOS_PARITY.md"
+    $nonSecureHeader = Join-Path $nonSecureDir `
+        "fiber_port_secure_gateway_abi.h"
+    $secureProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_secure_gateway_secure_probe.c"
+    $nonSecureProbe = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_secure_gateway_non_secure_probe.c"
+    $secureLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_secure_gateway_secure.ld"
+    $nonSecureLinker = Join-Path $RepositoryRoot `
+        "tools\fixtures\arm_cm55_secure_gateway_non_secure.ld"
+
+    foreach ($required in @(
+            $secureSource, $secureHeader, $contractHeader, $secureParity,
+            $nonSecureHeader, $secureProbe, $nonSecureProbe,
+            $secureLinker, $nonSecureLinker)) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "ARM_CM55 Secure gateway Slice 2 is missing: $required"
+        }
+    }
+
+    foreach ($forbidden in @(
+            (Join-Path $nonSecureDir "fiber_port_boot.c"),
+            (Join-Path $nonSecureDir "fiber_port_boot.h"),
+            (Join-Path $nonSecureDir "fiber_port.c"),
+            (Join-Path $nonSecureDir "fiber_port_svc.c"),
+            (Join-Path $nonSecureDir "fiber_port_private.h"),
+            (Join-Path $nonSecureDir "fiber_port_secure_context.c"),
+            (Join-Path $nonSecureDir "fiber_port_secure_context_abi.h"),
+            (Join-Path $secureDir "fiber_secure_context_gateway.c"),
+            (Join-Path $secureDir "fiber_secure_context_gateway_abi.h"),
+            (Join-Path $secureDir "fiber_secure_context_pool.c"),
+            (Join-Path $secureDir "fiber_secure_context_pool.h"))) {
+        if (Test-Path -LiteralPath $forbidden) {
+            throw "ARM_CM55 Secure gateway Slice 2 exposed future runtime artifact: $forbidden"
+        }
+    }
+
+    $expectedGatewayFunctions = @(
+        "fiber_secure_gateway_c55s_v1_abi_version",
+        "fiber_secure_gateway_c55s_v1_context_port_id",
+        "fiber_secure_gateway_c55s_v1_context_layout_version",
+        "fiber_secure_gateway_c55s_v1_context_feature_mask"
+    ) | Sort-Object
+
+    foreach ($headerPath in @($secureHeader, $nonSecureHeader)) {
+        $header = Get-Content -LiteralPath $headerPath -Raw
+        $actual = @([regex]::Matches($header,
+            '\b(fiber_secure_gateway_c55s_v1_[A-Za-z0-9_]+)\s*\(') |
+            ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+        if (($actual.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $actual)) {
+            throw "ARM_CM55 C55S Secure gateway function surface changed: $headerPath"
+        }
+    }
+
+    $secureHeaderText = Get-Content -LiteralPath $secureHeader -Raw
+    foreach ($requiredText in @(
+            "FIBER_PORT_BUILD_SELECTED",
+            "FIBER_PORT_ARMV81M_MAINLINE",
+            "cmse_nonsecure_entry",
+            "Secure CMSE level 3 build",
+            "CMSIS __CORTEX_M == 55",
+            "no-FPU C55S companion ABI",
+            "does not permit MVE",
+            "does not permit PAC",
+            "not an MPU companion ABI")) {
+        if (($secureHeaderText +
+                (Get-Content -LiteralPath $contractHeader -Raw)).IndexOf(
+                $requiredText, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55 Secure gateway header lost required contract: $requiredText"
+        }
+    }
+    $nonSecureHeaderText = Get-Content -LiteralPath $nonSecureHeader -Raw
+    foreach ($requiredText in @(
+            "fiber_portmacro.h",
+            "fiber_secure_gateway_contract.h",
+            "FIBER_PORT_CONTEXT_ABI_PORT_ID",
+            "FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION",
+            "FIBER_PORT_CONTEXT_ABI_FEATURE_MASK")) {
+        if ($nonSecureHeaderText.IndexOf($requiredText,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55 Non-secure gateway header lost cohort check: $requiredText"
+        }
+    }
+    if ($nonSecureHeaderText.IndexOf("cmse_nonsecure_entry",
+            [System.StringComparison]::Ordinal) -ge 0) {
+        throw "ARM_CM55 Non-secure gateway import must not declare Secure entry attributes"
+    }
+
+    $parity = Get-Content -LiteralPath $secureParity -Raw
+    foreach ($requiredParity in @(
+            "a50edad08b29052631aa469d4df6e6ec7ff68878",
+            "GCC/ARM_CM55/secure",
+            "8209F4BAF60741E8ED5516AF9706FC4B5B2EE3CF16452EDB0C034B7DDDE443B4",
+            "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72",
+            "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E",
+            "E58805B998EE73A9EB84627EBD2955787CDFD0CD968D1BC7D93423441BAB6C87",
+            "CE5D5F7FC774E7EC51157F5078361F3CB0A20CE9C94593396F543E5046E53F42",
+            "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149",
+            "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55",
+            "5F2DF28DF3D445F08727CAF41F83ED6C67E0494E40AF5572B5E18F6416B2838D",
+            "generic CM33 import library",
+            "No generated SecureContext allocation/save/load")) {
+        if ($parity.IndexOf($requiredParity,
+                [System.StringComparison]::Ordinal) -lt 0) {
+            throw "ARM_CM55 Secure gateway parity ledger lost reference evidence: $requiredParity"
+        }
+    }
+
+    $probeDir = Join-Path $BuildRoot "arm-cm55-secure-gateway-abi"
+    New-Item -ItemType Directory -Path $probeDir | Out-Null
+    $mainHeader = @"
+#ifndef MAIN_H_
+#define MAIN_H_
+#define __MPU_PRESENT 0U
+#define __VTOR_PRESENT 1U
+#define __NVIC_PRIO_BITS 3U
+#define __Vendor_SysTickConfig 0U
+#define __FPU_PRESENT 0U
+#define __FPU_USED 0U
+#define __DSP_PRESENT 1U
+#define __SAUREGION_PRESENT 1U
+#ifndef FIBER_TEST_FPU_USED
+#define FIBER_TEST_FPU_USED 0U
+#endif
+typedef enum IRQn {
+    NonMaskableInt_IRQn = -14, HardFault_IRQn = -13,
+    MemoryManagement_IRQn = -12, BusFault_IRQn = -11,
+    UsageFault_IRQn = -10, SecureFault_IRQn = -9,
+    SVCall_IRQn = -5, DebugMonitor_IRQn = -4,
+    PendSV_IRQn = -2, SysTick_IRQn = -1, DummyDevice_IRQn = 0
+} IRQn_Type;
+#include "core_cm55.h"
+#if FIBER_TEST_FPU_USED != 0U
+#undef __FPU_USED
+#define __FPU_USED FIBER_TEST_FPU_USED
+#endif
+#endif
+"@
+    Set-Content -LiteralPath (Join-Path $probeDir "main.h") `
+        -Value $mainHeader -Encoding ASCII
+
+    $warningArgs = @(
+        "-ffreestanding",
+        "-fno-builtin",
+        "-fno-common",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fno-unwind-tables",
+        "-fno-asynchronous-unwind-tables",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wundef",
+        "-Werror=undef",
+        "-Werror=implicit-function-declaration",
+        "-Werror=return-type"
+    )
+    $cppWarningArgs = @($warningArgs | Where-Object {
+        $_ -ne "-Werror=implicit-function-declaration"
+    })
+    $secureIncludes = @(
+        "-I$probeDir",
+        "-I$secureDir",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $nonSecureIncludes = @(
+        "-I$probeDir",
+        "-I$nonSecureDir",
+        "-I$(Join-Path $RepositoryRoot 'fiber\port')",
+        "-I$(Join-Path $RepositoryRoot 'fiber')",
+        "-I$RepositoryRoot",
+        "-I$CmsisPath"
+    )
+    $selectedDefines = @(
+        "-DFIBER_PORT_BUILD_SELECTED=1",
+        "-DFIBER_PORT_ARMV81M_MAINLINE=1"
+    )
+
+    foreach ($modeSpec in @(
+            [pscustomobject]@{ Name = "o2"; Optimization = "-O2"; Lto = 0 },
+            [pscustomobject]@{ Name = "os"; Optimization = "-Os"; Lto = 0 },
+            [pscustomobject]@{ Name = "o2-lto"; Optimization = "-O2"; Lto = 1 })) {
+        $mode = $modeSpec.Name
+        $ltoArgs = if ($modeSpec.Lto -ne 0) { @("-flto") } else { @() }
+        $modeDir = Join-Path $probeDir $mode
+        New-Item -ItemType Directory -Path $modeDir | Out-Null
+        $secureArgs = @(
+            "-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft",
+            "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
+            $selectedDefines + $secureIncludes
+        $nonSecureArgs = @(
+            "-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft",
+            "-std=gnu11", $modeSpec.Optimization) + $ltoArgs + $warningArgs +
+            $selectedDefines + $nonSecureIncludes
+        $secureCppArgs = @(
+            "-x", "c++", "-mcpu=cortex-m55", "-mthumb", "-mcmse",
+            "-mfloat-abi=soft", "-std=gnu++17", "-fno-exceptions",
+            "-fno-rtti", $modeSpec.Optimization) + $ltoArgs + $cppWarningArgs +
+            $selectedDefines + $secureIncludes
+        $nonSecureCppArgs = @(
+            "-x", "c++", "-mcpu=cortex-m55", "-mthumb",
+            "-mfloat-abi=soft", "-std=gnu++17", "-fno-exceptions",
+            "-fno-rtti", $modeSpec.Optimization) + $ltoArgs + $cppWarningArgs +
+            $selectedDefines + $nonSecureIncludes
+        $secureObject = Join-Path $modeDir "secure-gateway.o"
+        $secureProbeObject = Join-Path $modeDir "secure-probe.o"
+        $nonSecureProbeObject = Join-Path $modeDir "non-secure-probe.o"
+        $secureCppProbeObject = Join-Path $modeDir "secure-probe-cpp.o"
+        $nonSecureCppProbeObject = Join-Path $modeDir "non-secure-probe-cpp.o"
+
+        foreach ($compile in @(
+                [pscustomobject]@{ Args = $secureArgs; Source = $secureSource; Object = $secureObject; Label = "Secure gateway" },
+                [pscustomobject]@{ Args = $secureArgs; Source = $secureProbe; Object = $secureProbeObject; Label = "Secure probe" },
+                [pscustomobject]@{ Args = $nonSecureArgs; Source = $nonSecureProbe; Object = $nonSecureProbeObject; Label = "Non-secure probe" },
+                [pscustomobject]@{ Args = $secureCppArgs; Source = $secureProbe; Object = $secureCppProbeObject; Label = "Secure C++ header probe" },
+                [pscustomobject]@{ Args = $nonSecureCppArgs; Source = $nonSecureProbe; Object = $nonSecureCppProbeObject; Label = "Non-secure C++ header probe" })) {
+            & $Compiler @($compile.Args + @("-c", $compile.Source,
+                "-o", $compile.Object))
+            if ($LASTEXITCODE -ne 0) {
+                throw "ARM_CM55 $($compile.Label) failed compile ($mode)"
+            }
+        }
+
+        $objectNm = if ($modeSpec.Lto -ne 0) { $GccNm } else { $Nm }
+        $nonSecureUndefined = @(& $objectNm -u $nonSecureProbeObject |
+            ForEach-Object {
+                if ($_ -match '\bU\s+(\S+)$') { $Matches[1] }
+            } | Sort-Object -Unique)
+        if (($nonSecureUndefined.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $nonSecureUndefined)) {
+            throw "ARM_CM55 Non-secure probe dependency surface changed ($mode). Expected: $($expectedGatewayFunctions -join ', '); actual: $($nonSecureUndefined -join ', ')"
+        }
+
+        $importLibrary = Join-Path $modeDir "secure-gateway-import.o"
+        $secureElf = Join-Path $modeDir "secure.elf"
+        & $Compiler @($secureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
+            "-Wl,--out-implib,$importLibrary", "-Wl,-T,$secureLinker",
+            $secureObject, $secureProbeObject, "-o", $secureElf))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 Secure CMSE gateway image failed link ($mode)"
+        }
+        if (-not (Test-Path -LiteralPath $importLibrary)) {
+            throw "ARM_CM55 Secure CMSE link did not create an import library ($mode)"
+        }
+        $importDefinitions = @(& $Nm -g --defined-only $importLibrary)
+        $actualGatewayImports = @($importDefinitions | ForEach-Object {
+            if ($_ -match '\b(fiber_secure_gateway_c55s_v[0-9]+_[A-Za-z0-9_]+)$') {
+                $Matches[1]
+            }
+        } | Sort-Object -Unique)
+        if (($actualGatewayImports.Count -ne $expectedGatewayFunctions.Count) -or
+                (Compare-Object -ReferenceObject $expectedGatewayFunctions `
+                    -DifferenceObject $actualGatewayImports)) {
+            throw "ARM_CM55 Secure CMSE import surface changed ($mode)"
+        }
+        if (@($importDefinitions | Where-Object {
+                $_ -match '\bfiber_secure_gateway_v[0-9]+_'
+            }).Count -ne 0) {
+            throw "ARM_CM55 Secure CMSE import library exposed a generic profile symbol ($mode)"
+        }
+        $nscStart = [uint64]0x0C010000
+        $nscEnd = [uint64]0x0C011000
+        foreach ($symbol in $expectedGatewayFunctions) {
+            $definition = @($importDefinitions | Where-Object {
+                $_ -match ("\b" + [regex]::Escape($symbol) + "$")
+            })
+            if ($definition.Count -ne 1) {
+                throw "ARM_CM55 Secure CMSE import library lost $symbol ($mode)"
+            }
+            $definitionMatch = [regex]::Match($definition[0],
+                ("^\s*([0-9A-Fa-f]+)\s+[A-Za-z]\s+" +
+                 [regex]::Escape($symbol) + "$"))
+            if (-not $definitionMatch.Success) {
+                throw "ARM_CM55 Secure CMSE import library malformed $symbol ($mode)"
+            }
+            $veneerAddress = [Convert]::ToUInt64(
+                $definitionMatch.Groups[1].Value, 16)
+            if (($veneerAddress -lt $nscStart) -or ($veneerAddress -ge $nscEnd)) {
+                throw "ARM_CM55 Secure CMSE import $symbol is outside the NSC veneer region ($mode)"
+            }
+        }
+        $secureSections = @(& $Objdump -h $secureElf)
+        $secureNscSection = @($secureSections | Where-Object {
+            $_ -match "\.gnu\.sgstubs"
+        })
+        if (($secureNscSection.Count -ne 1) -or
+                ($secureNscSection[0] -notmatch "\s0c010000\s") -or
+                ($secureNscSection[0] -notmatch "2\*\*5$")) {
+            throw "ARM_CM55 Secure CMSE image lost the aligned NSC veneer section ($mode)"
+        }
+
+        $nonSecureElf = Join-Path $modeDir "non-secure.elf"
+        & $Compiler @($nonSecureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+            $nonSecureProbeObject, $importLibrary, "-o", $nonSecureElf))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 matching Non-secure CMSE gateway link failed ($mode)"
+        }
+        $nonSecureUndefinedAfterLink = @(& $objectNm -u $nonSecureElf)
+        if ($LASTEXITCODE -ne 0) {
+            throw "nm failed for ARM_CM55 matching Non-secure image ($mode)"
+        }
+        if (@($nonSecureUndefinedAfterLink | Where-Object {
+                $_ -match '\bfiber_secure_gateway_c55s_v'
+            }).Count -ne 0) {
+            throw "ARM_CM55 matching Non-secure image retained an unresolved gateway symbol ($mode)"
+        }
+
+        $missing = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+                $nonSecureProbeObject, "-o",
+                (Join-Path $modeDir "missing-import.elf"))) `
+            -LogPath (Join-Path $modeDir "missing-import.log")
+        if (($missing.ExitCode -eq 0) -or ($missing.Output -notmatch
+                [regex]::Escape("fiber_secure_gateway_c55s_v1_abi_version"))) {
+            throw "ARM_CM55 Non-secure image without import library must fail on C55S v1 ($mode).`n$($missing.Output)"
+        }
+
+        $v2Source = Join-Path $modeDir "secure-gateway-v2.c"
+        $v2Probe = Join-Path $modeDir "secure-probe-v2.c"
+        Set-Content -LiteralPath $v2Source -Encoding ASCII -Value @'
+#include <stdint.h>
+
+#define NSC __attribute__((cmse_nonsecure_entry, used, noinline))
+
+NSC uint32_t fiber_secure_gateway_c55s_v2_abi_version(void) { return 2u; }
+NSC uint32_t fiber_secure_gateway_c55s_v2_context_port_id(void) { return 0x43353553u; }
+NSC uint32_t fiber_secure_gateway_c55s_v2_context_layout_version(void) { return 0x00010001u; }
+NSC uint32_t fiber_secure_gateway_c55s_v2_context_feature_mask(void) { return 0x8Au; }
+'@
+        Set-Content -LiteralPath $v2Probe -Encoding ASCII -Value @'
+#include <stdint.h>
+
+extern uint32_t fiber_secure_gateway_c55s_v2_abi_version(void);
+extern uint32_t fiber_secure_gateway_c55s_v2_context_port_id(void);
+extern uint32_t fiber_secure_gateway_c55s_v2_context_layout_version(void);
+extern uint32_t fiber_secure_gateway_c55s_v2_context_feature_mask(void);
+
+void Reset_Handler(void)
+{
+    volatile uint32_t value = fiber_secure_gateway_c55s_v2_abi_version() ^
+        fiber_secure_gateway_c55s_v2_context_port_id() ^
+        fiber_secure_gateway_c55s_v2_context_layout_version() ^
+        fiber_secure_gateway_c55s_v2_context_feature_mask();
+    (void)value;
+    for (;;) { __asm volatile ("wfe"); }
+}
+'@
+        $v2Object = Join-Path $modeDir "secure-gateway-v2.o"
+        $v2ProbeObject = Join-Path $modeDir "secure-probe-v2.o"
+        & $Compiler @($secureArgs + @("-c", $v2Source, "-o", $v2Object))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 v2 Secure gateway fixture failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $v2Probe, "-o", $v2ProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 v2 Secure probe fixture failed compile ($mode)"
+        }
+        $v2ImportLibrary = Join-Path $modeDir "secure-gateway-v2-import.o"
+        & $Compiler @($secureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
+            "-Wl,--out-implib,$v2ImportLibrary", "-Wl,-T,$secureLinker",
+            $v2Object, $v2ProbeObject, "-o",
+            (Join-Path $modeDir "secure-v2.elf")))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 v2 Secure CMSE gateway image failed link ($mode)"
+        }
+        $v2Mismatch = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+                $nonSecureProbeObject, $v2ImportLibrary, "-o",
+                (Join-Path $modeDir "v2-mismatch.elf"))) `
+            -LogPath (Join-Path $modeDir "v2-mismatch.log")
+        if (($v2Mismatch.ExitCode -eq 0) -or ($v2Mismatch.Output -notmatch
+                [regex]::Escape("fiber_secure_gateway_c55s_v1_abi_version"))) {
+            throw "ARM_CM55 C55S v1 Non-secure image accepted a v2-only import library ($mode).`n$($v2Mismatch.Output)"
+        }
+
+        $foreignSource = Join-Path $modeDir "secure-gateway-foreign.c"
+        $foreignProbe = Join-Path $modeDir "secure-probe-foreign.c"
+        Set-Content -LiteralPath $foreignSource -Encoding ASCII -Value @'
+#include <stdint.h>
+
+#define NSC __attribute__((cmse_nonsecure_entry, used, noinline))
+
+NSC uint32_t fiber_secure_gateway_v1_abi_version(void) { return 1u; }
+NSC uint32_t fiber_secure_gateway_v1_context_port_id(void) { return 0x43333353u; }
+NSC uint32_t fiber_secure_gateway_v1_context_layout_version(void) { return 0x00010001u; }
+NSC uint32_t fiber_secure_gateway_v1_context_feature_mask(void) { return 0x8Au; }
+'@
+        Set-Content -LiteralPath $foreignProbe -Encoding ASCII -Value @'
+#include <stdint.h>
+
+extern uint32_t fiber_secure_gateway_v1_abi_version(void);
+extern uint32_t fiber_secure_gateway_v1_context_port_id(void);
+extern uint32_t fiber_secure_gateway_v1_context_layout_version(void);
+extern uint32_t fiber_secure_gateway_v1_context_feature_mask(void);
+
+void Reset_Handler(void)
+{
+    volatile uint32_t value = fiber_secure_gateway_v1_abi_version() ^
+        fiber_secure_gateway_v1_context_port_id() ^
+        fiber_secure_gateway_v1_context_layout_version() ^
+        fiber_secure_gateway_v1_context_feature_mask();
+    (void)value;
+    for (;;) { __asm volatile ("wfe"); }
+}
+'@
+        $foreignObject = Join-Path $modeDir "secure-gateway-foreign.o"
+        $foreignProbeObject = Join-Path $modeDir "secure-probe-foreign.o"
+        & $Compiler @($secureArgs + @("-c", $foreignSource,
+            "-o", $foreignObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 foreign Secure gateway fixture failed compile ($mode)"
+        }
+        & $Compiler @($secureArgs + @("-c", $foreignProbe,
+            "-o", $foreignProbeObject))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 foreign Secure probe fixture failed compile ($mode)"
+        }
+        $foreignImportLibrary = Join-Path $modeDir "secure-gateway-foreign-import.o"
+        & $Compiler @($secureArgs + @(
+            "-nostdlib", "-Wl,--gc-sections", "-Wl,--cmse-implib",
+            "-Wl,--out-implib,$foreignImportLibrary", "-Wl,-T,$secureLinker",
+            $foreignObject, $foreignProbeObject, "-o",
+            (Join-Path $modeDir "secure-foreign.elf")))
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM_CM55 foreign Secure CMSE gateway image failed link ($mode)"
+        }
+        $foreignMismatch = Invoke-CompilerProbe -Compiler $Compiler -Arguments `
+            @($nonSecureArgs + @(
+                "-nostdlib", "-Wl,--gc-sections", "-Wl,-T,$nonSecureLinker",
+                $nonSecureProbeObject, $foreignImportLibrary, "-o",
+                (Join-Path $modeDir "foreign-mismatch.elf"))) `
+            -LogPath (Join-Path $modeDir "foreign-mismatch.log")
+        if (($foreignMismatch.ExitCode -eq 0) -or ($foreignMismatch.Output -notmatch
+                [regex]::Escape("fiber_secure_gateway_c55s_v1_abi_version"))) {
+            throw "ARM_CM55 C55S Non-secure image accepted a foreign generic import library ($mode).`n$($foreignMismatch.Output)"
+        }
+    }
+
+    $negativeCases = @(
+        [pscustomobject]@{
+            Name = "not-build-selected"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=0", "-DFIBER_PORT_ARMV81M_MAINLINE=1")
+            Diagnostic = "Secure gateway is build-selected only"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "missing-selection"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = @("-DFIBER_PORT_BUILD_SELECTED=1")
+            Diagnostic = "requires ARMv8.1-M Mainline selection"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "nonsecure-cmse"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "requires a Secure CMSE level 3 build"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "wrong-cmsis-core"
+            CompilerArgs = @("-mcpu=cortex-m33", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "manifest requires CMSIS __CORTEX_M == 55"
+            Main = ($mainHeader -replace 'core_cm55.h', 'core_cm33.h')
+        },
+        [pscustomobject]@{
+            Name = "vtor-absent"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines
+            Diagnostic = "requires __VTOR_PRESENT == 1"
+            Main = ($mainHeader -replace '#define __VTOR_PRESENT 1U', '#define __VTOR_PRESENT 0U')
+        },
+        [pscustomobject]@{
+            Name = "fpu-used"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_TEST_FPU_USED=1")
+            Diagnostic = "no-FPU C55S companion ABI"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mve"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-D__ARM_FEATURE_MVE=1")
+            Diagnostic = "does not permit MVE"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "pac"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-D__ARM_FEATURE_PAUTH=1")
+            Diagnostic = "does not permit PAC"
+            Main = $mainHeader
+        },
+        [pscustomobject]@{
+            Name = "mpu-manifest"
+            CompilerArgs = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft")
+            Defines = $selectedDefines + @("-DFIBER_PORT_CM55_MPU_TOTAL_REGIONS=8")
+            Diagnostic = "not an MPU companion ABI"
+            Main = $mainHeader
+        }
+    )
+    foreach ($case in $negativeCases) {
+        $caseDir = Join-Path $probeDir $case.Name
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        Set-Content -LiteralPath (Join-Path $caseDir "main.h") `
+            -Value $case.Main -Encoding ASCII
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments @(
+            $case.CompilerArgs + @(
+                "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-common",
+                "-Wall", "-Wextra", "-Wundef", "-Werror=undef",
+                "-I$caseDir", "-I$secureDir", "-I$RepositoryRoot",
+                "-I$CmsisPath") + $case.Defines + @(
+                "-c", $secureSource, "-o", (Join-Path $caseDir "invalid.o"))) `
+            -LogPath (Join-Path $caseDir "compile.log")
+        if (($result.ExitCode -eq 0) -or
+                ($result.Output.IndexOf($case.Diagnostic,
+                [System.StringComparison]::Ordinal) -lt 0)) {
+            throw "Invalid ARM_CM55 Secure gateway manifest failed for the wrong reason: $($case.Name)`n$($result.Output)"
+        }
+    }
+}
+
 function Test-ArmCm55NtzRuntimeContract {
     param(
         [string]$RepositoryRoot,
@@ -20759,6 +21641,13 @@ try {
     Test-ArmCm33NtzRuntimeContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump -Ar $ar `
         -Objcopy $objcopy -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55 SecureContext Slice 1 layout/trait contract =="
+    Test-ArmCm55SecureContextLayoutContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55 SecureContext Slice 2 CMSE gateway contract =="
+    Test-ArmCm55SecureGatewayAbi -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM55_MPU type/layout contract =="
     Test-ArmCm55MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot

@@ -1,5 +1,71 @@
 # Fiber Decision Log
 
+## 2026-08-31: Add ARM_CM55 Secure Companion Identity Gateway
+
+`ARM_CM55/secure` slice 2 adds only the paired C55S identity gateway. Its
+Secure `-mcmse` artifact exports four immutable NSC veneers for ABI version,
+port ID, layout version, and feature mask. The matching Non-secure import
+header is port-private; it remains outside `fiber_core.h` and adds no public
+SecureContext attachment API.
+
+Unlike the older generic CM33 identity names, every C55S symbol carries the
+exact cohort spelling and ABI version:
+
+```text
+fiber_secure_gateway_c55s_v1_*
+```
+
+This makes an unrelated CM33/generic import library, a different C55 profile,
+or a v2-only companion fail during the Non-secure link. The returned identity
+values remain a second later runtime check when stateful attachment is added.
+
+The matrix builds real Secure and Non-secure M55 images at `-O2`, `-Os`, and
+`-O2 -flto`; emits a GNU CMSE import library; validates its four aligned NSC
+veneers; links the matching Non-secure probe; and rejects missing, v2-only, and
+foreign generic import libraries. It also rejects unselected, Non-secure,
+wrong-core, VTOR-less, FPU, MVE, PAC, and MPU Secure manifests.
+
+This slice deliberately adds no SecureContext pool, allocator, initialization,
+attach API, constructor, SVC/PendSV handler, forward runtime ABI, or hardware
+claim. Those require separate stateful lifecycle and exact save/load slices.
+
+## 2026-08-31: Stage ARM_CM55 TrustZone SecureContext Layout
+
+`ARM_CM55/non_secure` begins as an explicit, build-selected-only `C55S`
+TrustZone Non-secure SecureContext layout dictionary. It is not a nineteenth
+runtime profile, is outside global selection, and has no SVC/PendSV source,
+forward runtime ABI definition, attachment API, allocator, or hardware claim.
+The later Slice-2 Secure companion is an immutable identity gateway only and
+does not change this Slice-1 boundary into a runtime.
+
+The frozen initial software frame is eleven words:
+
+```text
+[SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]
+```
+
+The selected type records a zero-initialized `secure_stack_bytes` request for
+the later pre-start attachment lifecycle. The durable opaque SecureContext
+handle remains a future saved-frame word-zero value and is not exposed to
+common runtime. The manifest requires a Cortex-M55 ARMv8.1-M Mainline
+Non-secure compiler target (`__ARM_FEATURE_CMSE == 1`), VTOR, and scalar
+no-FPU/no-MVE/no-MPU/no-PAC/no-BTI facts. A Secure `-mcmse` compilation is
+rejected rather than silently becoming a scheduler port.
+
+The pinned FreeRTOS `GCC/ARM_CM55/non_secure` `port.c`, `portasm.c`,
+`portmacrocommon.h`, `secure_context.c`, and `secure_context_port.c` are
+byte-identical to the matching CM33 artifacts in this reference tree. M55
+differs in `portmacro.h`: it identifies Cortex-M55, requires ARMv8.1-M, and
+requires an explicit MVE configuration. Fiber captures those facts as an
+exact C55S cohort before any runtime mechanics are introduced.
+
+The Slice-1 matrix proves type-only C/C++ use without CMSIS, scalar M55
+`-O2`/`-Os` manifests, and fail-closed negative manifests for selector mode,
+foreign core/architecture, Secure CMSE, missing CMSE, FPU, MVE, PAC, MPU, and
+runtime-selectable overrides. Later slices must add the paired Secure
+artifact and versioned gateway before attachment, first-start allocation,
+Secure save/load, SVC/PendSV, archive/vector, and generated-assembly proofs.
+
 ## 2026-08-31: Complete ARM_CM55 MVE-FP MPU Selected Runtime
 
 `ARM_CM55_MVEF_MPU/non_secure` slice 4 activates the frozen eight-function

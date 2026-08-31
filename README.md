@@ -142,6 +142,17 @@ normal/LTO archives, vectors, ABI, cohort, and negative manifests are covered;
 M55 hardware remains unvalidated. See
 `fiber/port/ARM_CM55_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM55/non_secure` is a staged `C55S` TrustZone SecureContext foundation,
+not a runnable M55 port. It freezes only the scalar Non-secure eleven-word
+`[SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]` layout, the pre-start
+`secure_stack_bytes` request, and the Cortex-M55 ARMv8.1-M CMSE-level-1
+manifest. The paired `ARM_CM55/secure` Slice-2 artifact exports only four
+C55S-named v1 identity NSC veneers; matching CMSE linkage and missing/v2/foreign
+import failure are covered. It deliberately exports no runtime ABI, SVC/PendSV
+handler, attachment API, allocator, stateful Secure gateway, or hardware claim.
+The later Secure lifecycle and runtime remain separate identity-matched slices. See
+`fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
+
 `ARM_CM55F_NTZ/non_secure` is the complete build-selected scalar-FP M55
 cohort. Its `C55F` slices 1-4 freeze the 72-byte basic and 212-byte bounded
 extended-FP frame, PSPLIM/FPU/FPCA traits, and the scalar-FP-without-MVE target
@@ -321,6 +332,16 @@ M55 scalar NTZ full build-selected runtime source group:
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_private.h
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
+
+M55 TrustZone SecureContext staged type/trait foundation (not a runtime source
+group):
+               fiber/port/ARM_CM55/non_secure/fiber_port_types.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_boot_types.h
+               fiber/port/ARM_CM55/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_secure_gateway_abi.h
+               fiber/port/ARM_CM55/secure/fiber_secure_gateway_contract.h
+               fiber/port/ARM_CM55/secure/fiber_secure_gateway_abi.h
+               fiber/port/ARM_CM55/secure/fiber_secure_gateway.c
 
 M55 MVE-FP complete build-selected runtime source group (not globally
 selectable):

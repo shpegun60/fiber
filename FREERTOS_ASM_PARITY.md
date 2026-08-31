@@ -124,6 +124,21 @@ is also listed as complete parity, or a new ordinary port source is neither
 paired nor explicitly staged. Adding a port source therefore cannot silently
 reduce coverage.
 
+`ARM_CM55/non_secure` Slice 1 is a type/trait-only `C55S` SecureContext
+foundation. It has no generated SVC/PendSV or runtime object yet, so it is
+intentionally absent from the generated-assembly table. Its separate matrix
+proof covers the exact eleven-word layout, type-only C/C++ use, scalar M55
+`-O2`/`-Os` manifests, and fail-closed feature/security-role negatives. The
+pinned FreeRTOS source hashes and deferred mechanics are recorded in
+`fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
+
+`ARM_CM55/secure` Slice 2 adds only the versioned C55S CMSE identity gateway.
+It builds real Secure `-mcmse` and Non-secure images at `-O2`, `-Os`, and
+`-O2 -flto`, proves four NSC veneers in `.gnu.sgstubs`, and rejects missing,
+v2-only, and foreign generic import libraries. It still contributes no context
+construction, SVC, PendSV, or SecureContext save/load assembly to the table.
+Its ledger is `fiber/port/ARM_CM55/secure/FREERTOS_PARITY.md`.
+
 `ARM_CM55F_NTZ/non_secure` slices 1-4 use `fiber_port_boot.c`,
 `fiber_port_svc.c`, and `fiber_port.c` as one complete scalar-FP runtime group.
 Its dedicated matrix checks hard/softfp `-O2`/`-Os` FreeRTOS-shaped initial

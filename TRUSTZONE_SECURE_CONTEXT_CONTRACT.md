@@ -14,6 +14,17 @@ PendSV performs Secure save/unload, scheduler selection, lazy allocation, and
 owned Secure load. This is compile/assembly/CMSE/ELF/LTO evidence only, not a
 hardware support claim.
 
+`ARM_CM55/non_secure` currently provides only the staged `C55S` M55
+Non-secure type/trait foundation: its eleven-word SecureContext-shaped frame,
+pre-start request field, and scalar ARMv8.1-M CMSE-level-1 manifest. Its
+paired `ARM_CM55/secure` Slice-2 artifact exposes only four immutable,
+C55S-named v1 NSC identity veneers; matching Secure/Non-secure CMSE linkage
+and foreign/v2/missing-import rejection are compile-covered. It still has no
+runtime source, public attachment API, pool, stateful gateway, SVC or PendSV
+handler, or SecureContext hardware claim. It must not be treated as an
+alternative build flag for the complete CM33 profile; later lifecycle and
+runtime mechanics need their own exact C55S evidence.
+
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in
 `CONTEXT_FIBER_ARCHITECTURE.md`, the same saved-state mechanics and companion
