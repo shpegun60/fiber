@@ -174,6 +174,13 @@ Every boolean is normalized to exactly `0` or `1` and statically validated.
 Application/build flags must not predefine canonical selected-port traits; they
 are port outputs, and such a predefinition is a compile error.
 
+`FIBER_PORT_HIGH_FP_SOFTWARE_BYTES` names the incremental selected-port
+software state required by an extended FP context. On ordinary PSP-resident
+ports this is normally only `s16-s31`. A protected-context port may also copy
+`s0-s15/FPSCR` into privileged context storage, so its value must cover all
+words added to the basic software restore image. It is a geometry trait, not a
+claim that those bytes are all high VFP registers.
+
 The context ABI identifier and layout version must be nonzero and stable for one
 selected source group. Increment the layout version whenever a field offset,
 saved-frame format, required alignment, initial EXC_RETURN semantics, or enabled

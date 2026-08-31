@@ -22,9 +22,9 @@ assembly parity:       PASS at -O2 and -Os
 ```
 
 This inventory snapshot accompanies the exact build-selected CM55 scalar,
-scalar-FP, MVE-FP, and no-feature MPU runtimes. It does not claim M55 MPU
-hardware isolation, TrustZone, TF-M, PAC/BTI, or hardware roles required by a
-full STM32N6 image.
+scalar-FP, MVE-FP, and no-feature MPU runtimes, plus the staged scalar-FP MPU
+construction cohort. It does not claim M55 MPU hardware isolation, TrustZone,
+TF-M, PAC/BTI, or hardware roles required by a full STM32N6 image.
 
 ## Scope Rule
 
@@ -79,6 +79,13 @@ The current matrix pairs every complete runtime source group against the pinned
 FreeRTOS reference where applicable and separately tests the paired CM33
 companion layout/gateway. It passes the existing directional ABI, exact cohort,
 vector, archive, section-GC, LTO, CMSE import-library, and negative-link proofs.
+
+One additional profile is intentionally staged rather than counted as a
+complete runtime parity profile:
+
+| Fiber profile | Frozen slice | Current claim |
+| --- | --- | --- |
+| `ARM_CM55F_MPU/non_secure` | scalar-FP MPU `C55P` protected context construction, FPU policy, 8/16-region layout, linker boundaries, and exact cohort identity | compile/assembly/linker construction validated; SVC/PendSV/runtime/hardware pending |
 
 `ARM_CM0_MPU` is complete only as an explicit build-selected profile. It is not
 inferred from `__MPU_PRESENT` and remains outside global auto/profile routing;
@@ -256,6 +263,17 @@ is disabled, and restores the inverse protected frame. Normal/LTO archive,
 external-cohort, stale 8/16 archive, vector, and duplicate-handler proofs pass.
 It has no global selector, optional heterogeneous-MPU API, or hardware claim.
 
+`ARM_CM55F_MPU/non_secure` is a distinct staged `C55P` scalar-FP MPU cohort,
+not a feature switch on `C55M` or `C55F`. Slice 1 freezes the pinned FreeRTOS
+54-word privileged protected backing store with its required overlap: the
+basic first-start view occupies words 0-20 while a later extended FP save
+occupies words 0-53 in the same array. It also fixes the scalar-FP compiler
+manifest, FPU policy/readback helpers, MAIR0 and 8/16-region storage, sealed
+construction, linker checks, and distinct exact cohort identity. It has no
+forward runtime ABI, SVC/PendSV handlers, global selector route, optional MPU
+API, or hardware claim. The later protected scalar-FP SVC and PendSV must use
+this backing store without changing its layout.
+
 `transitional_v8m` now provides compile-only bring-up coverage only for the
 unported ARMv8-M/ARMv8.1-M roles. It is not a Cortex-M55 production port.
 
@@ -263,7 +281,8 @@ The remaining concrete STM32N6 feature profiles must own and prove:
 
 ```text
 M55 MPU hardware isolation state
-M55 MPU FPU/MVE protected-frame variants
+M55 scalar-FP MPU protected SVC/PendSV/runtime proof
+M55 MPU MVE-FP protected-frame variants
 TrustZone banked state
 SecureContext or TF-M integration
 PSPLIM

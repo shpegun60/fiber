@@ -156,6 +156,18 @@ an alternative configuration of `ARM_CM55_NTZ`; MVE, MPU, TrustZone,
 SecureContext/TF-M, PAC, and BTI need distinct cohorts. See
 `fiber/port/ARM_CM55F_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM55F_MPU/non_secure` is the next, deliberately staged `C55P`
+scalar-FP MPU cohort. Slice 1 freezes the FreeRTOS 54-word (216-byte)
+privileged protected-context backing store with its essential overlapping
+basic and extended-FP views, the 8/16-region MPU image, exact layout/cohort
+identity, sealed construction, linker-boundary checks, and CPACR/FPCCR policy
+helpers. It accepts scalar `-march=armv8.1-m.main+fp` hard-float or softfp
+builds and rejects MVE, CMSE, PAC, and BTI. It intentionally has no forward
+runtime ABI, SVC/PendSV handlers, global selector route, optional MPU API, or
+hardware claim yet. The later protected SVC and FP-aware PendSV slices must
+operate on this same overlapping backing store. See
+`fiber/port/ARM_CM55F_MPU/non_secure/FREERTOS_PARITY.md`.
+
 `ARM_CM55_MVEF_NTZ/non_secure` is a distinct, non-selectable M55 MVE-FP
 runtime cohort, not an option on the scalar-FP port. Its `C55V` identity
 requires `-march=armv8.1-m.main+mve.fp`, records the pinned FreeRTOS

@@ -501,6 +501,18 @@ $ports = @(
         ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1")
     },
+    # Slice 1 freezes only the scalar-FP MPU constructor. The protected
+    # SVC/PendSV transfer remains absent until its own parity slice.
+    [pscustomobject]@{
+        Name = "ARM_CM55F_MPU_CONSTRUCTION"
+        CpuArgs = @("-march=armv8.1-m.main+fp", "-mfloat-abi=hard")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 1; Fpu = 1; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55F_MPU\non_secure"; FiberSource = "fiber_port_boot.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1", "-DFIBER_PORT_CM55F_MPU_TOTAL_REGIONS=8")
+        ReferenceDir = "portable\GCC\ARM_CM55_NTZ\non_secure"; ReferenceSource = "port.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1", "-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1", "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=8")
+        Auxiliary = 1
+    },
     # Construction and SVC remain independently audited auxiliary objects;
     # the complete MVE-FP runtime below owns the selected PendSV mechanics.
     [pscustomobject]@{
@@ -1745,6 +1757,37 @@ try {
     Assert-AbsentPatterns -Body $cm55fFiberConstruction `
         -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
         -Label "ARM_CM55F_NTZ Fiber initial construction"
+
+    # The MPU plus scalar-FP profile begins with the FreeRTOS protected basic
+    # image. Its later extended FP copy/restore path is intentionally absent
+    # from this construction-only slice and must receive its own pairing.
+    $pair = $compiled["ARM_CM55F_MPU_CONSTRUCTION"]
+    Assert-MechanismParity -PortName "ARM_CM55F_MPU" `
+        -Mechanism "MPU-FPU-initial-construction" `
+        -ReferenceDisassembly $pair.Reference `
+        -ReferenceSymbol "pxPortInitialiseStack" `
+        -ReferencePatterns @('\bsub(?:s|\.w)?\s+\w+(?:,\s*\w+)?,\s*#32\b',
+            '\bstr(?:\.w)?\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_context_init" `
+        -FiberPatterns @('fiber_port_mpu_encode_exact_region',
+            '\bsub(?:s|\.w)?\s+\w+(?:,\s*\w+)?,\s*#32\b', '#54\b',
+            'fiber_port_context_compute_seal') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-M55FMPU-CONSTRUCTION") `
+        -Ledger $ledger
+    $cm55fMpuReferenceConstruction = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Reference -Symbol "pxPortInitialiseStack" `
+        -Path $pair.ReferencePath
+    $cm55fMpuFiberConstruction = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Fiber -Symbol "fiber_port_context_init" `
+        -Path $pair.FiberPath
+    Assert-AbsentPatterns -Body $cm55fMpuReferenceConstruction `
+        -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b', '\b(?:vpr|mve)\b') `
+        -Label "ARM_CM55F_MPU FreeRTOS initial construction"
+    Assert-AbsentPatterns -Body $cm55fMpuFiberConstruction `
+        -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b', '\b(?:vpr|mve)\b') `
+        -Label "ARM_CM55F_MPU Fiber initial construction"
 
     # MVE-FP uses the same pinned non-MPU basic initial frame as scalar FP.
     # MVE changes the later conditional high-register save contract, not this

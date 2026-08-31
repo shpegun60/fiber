@@ -19592,6 +19592,8 @@ function Test-ArmCm3MpuRuntimeIntegration {
     }
 }
 
+. (Join-Path $PSScriptRoot "arm_cm55f_mpu_slice1_checks.ps1")
+
 $gcc = Find-ArmGcc
 $cmsis = Find-CmsisCore
 $nm = Join-Path (Split-Path -Parent $gcc) "arm-none-eabi-nm.exe"
@@ -19997,6 +19999,10 @@ try {
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM55_MPU sealed construction/linker contract =="
     Test-ArmCm55MpuConstructionContract -RepositoryRoot $RepoRoot `
+        -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
+        -CmsisPath $cmsis -BuildRoot $buildRoot
+    Write-Host "== ARM_CM55F_MPU scalar-FP construction/linker contract =="
+    Test-ArmCm55fMpuSlice1Contract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -GccNm $gccNm -Objdump $objdump `
         -CmsisPath $cmsis -BuildRoot $buildRoot
     Write-Host "== ARM_CM55_MPU protected SVC/PendSV runtime contract =="

@@ -102,6 +102,7 @@ is accepted only when the generated object still passes the paired proof.
 | `ARM_CM33_NTZ/non_secure` | `GCC/ARM_CM33_NTZ/non_secure` | first SVC request, full ten-word Mainline restore, PSPLIM-aware PendSV |
 | `ARM_CM55_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure` | no-FPU/no-MVE first SVC request, full ten-word ARMv8.1-M restore, PSPLIM-aware PendSV |
 | `ARM_CM55F_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | basic construction, strict first SVC/restore, and conditional scalar-FP `s16-s31` PSPLIM PendSV |
+| `ARM_CM55F_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, `configENABLE_FPU=1`, `configENABLE_MVE=0` | slice-1 protected scalar-FP constructor only: overlapping 54-word basic/extended context storage and no VFP/MVE transfer before the deferred SVC/PendSV slice |
 | `ARM_CM55_MVEF_NTZ/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_FPU=1`, `configENABLE_MVE=1` | basic construction, integer-only strict first SVC/restore, and conditional MVE-FP `s16-s31` PSPLIM PendSV with no VPR software slot |
 | `ARM_CM55_MPU/non_secure` | `GCC/ARM_CM55_NTZ/non_secure`, `configENABLE_MPU=1`, no FPU/MVE/TrustZone/PAC | complete build-selected protected runtime: public SVC-71 yield, first MPU activation/restore, 20-word frame copy, reverse-ABI selection under BASEPRI, atomic MAIR0/context-MPU replacement, and inverse restore for exact 8/16-region cohorts |
 | `ARM_CM33_TFM/non_secure` | `ThirdParty/GCC/ARM_TFM` plus `GCC/ARM_CM33_NTZ/non_secure` | exact TF-M v2.0 adapter provenance; independent first SVC request, ten-word Mainline restore, and PSPLIM-aware PendSV proof |
@@ -156,6 +157,14 @@ external cohort expectation, stale 8/16 archive rejection, slots 11/14 vector
 ownership, duplicate-SVC/PendSV failure, selected-manifest negatives, and paired
 protected PendSV generated assembly. It remains build-selected only and
 hardware-unvalidated.
+
+`ARM_CM55F_MPU/non_secure` slice 1 is a staged construction-only profile. It
+uses the pinned `configENABLE_MPU=1`, `configENABLE_FPU=1`, no-MVE FreeRTOS
+branch under hard-float `-O2`/`-Os` generated-code comparison. Both constructors
+build the basic protected image without VFP/MVE transfer; Fiber additionally
+freezes the overlapping 54-word extended representation, seals boot metadata,
+and validates linker-owned MPU boundaries. Its protected SVC/PendSV transfer
+does not exist yet and cannot inherit a runtime-parity claim.
 
 `ARM_CM33_MPU/non_secure` is a complete explicit build-selected runtime for the
 pinned 8- and 16-region MPU reference configurations. Its public
@@ -443,6 +452,27 @@ scheduler CPU/FPU-state preservation, selected restore validation,
 common-owned current publication, and PSPLIM/PSP readback. The explicit parity
 proof rejects a VPR software-frame transfer in both FreeRTOS and Fiber. These
 checks do not add, remove, or reorder a saved context slot.
+
+### FAP-M55FMPU-CONSTRUCTION
+
+The pinned FreeRTOS `configENABLE_MPU=1`, `configENABLE_FPU=1`, no-MVE
+`pxPortInitialiseStack()` does not pre-save VFP state. It creates only the
+basic protected image, with a cursor after the basic words; a later extended
+FP PendSV save deliberately overwrites the same `ulContext[54]` backing array
+and moves the cursor to its final word. Fiber freezes the same two overlapping
+views under C55P, clears all 54 words before filling the basic view, preserves
+`r9`, adds sealed boot and linker/MPU validation, and keeps CPACR/FPCCR setup
+general-registers-only. This construction-only difference is valid because it
+does not add, remove, or reorder a saved runtime slot; direct SVC/PendSV
+assembly pairing is deferred until those handlers exist.
+
+The generated-code proof additionally requires both constructors to derive the
+initial PSP from the stack top minus the 32-byte basic hardware frame. Fiber's
+constructor must then materialize the frozen 54-word backing-store extent before
+the final seal. The generic C55P geometry records a 20-word basic restore image
+with `EXC_RETURN` at word 19, 33 privileged FP words added by the extended
+image, and a 320-byte logical maximum. The separate physical PSP admission
+remains 112 bytes.
 
 ### FAP-M55MPU-LAYOUT
 

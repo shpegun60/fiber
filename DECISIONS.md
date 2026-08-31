@@ -1,5 +1,29 @@
 # Fiber Decision Log
 
+## 2026-08-31: Freeze ARM_CM55F MPU Scalar-FP Construction Cohort
+
+`ARM_CM55F_MPU/non_secure` begins as a separate explicit build-selected `C55P`
+scalar-FP MPU cohort. It is not an option on either the completed no-FPU `C55M`
+protected runtime or the completed non-MPU scalar-FP `C55F` runtime. The pinned
+FreeRTOS `GCC/ARM_CM55_NTZ/non_secure` MPU+FPU/no-MVE branch requires one
+overlapping 54-word privileged backing array: basic first-start data occupies
+words 0-20 while a later extended FP save occupies words 0-53. The overlap is
+the contract; adding separate basic and extended arrays would break the
+reference save-growth semantics.
+
+Slice 1 freezes public 8/16-region storage, MAIR0 and RBAR/RLAR ownership,
+exact context/cohort identity, sealed construction, protected linker
+boundaries, and CPACR/FPCCR scalar-FP policy helpers. It accepts only M55
+scalar-FP hard-float or softfp builds and rejects MVE, CMSE, PAC, and BTI.
+Its matrix covers the 8/16 manifests, hard/softfp `-O2`/`-Os`, construction
+assembly parity, exact cohort/linker proofs, and invalid-manifest failures.
+
+This is deliberately not a runtime activation: there is no forward ABI,
+strong SVC/PendSV handler, global selector route, optional MPU API, or M55F
+MPU hardware claim. The following slices must retain the frozen backing store
+while adding strict protected SVC, FP-aware PendSV, then runtime/archive/vector
+proof.
+
 ## 2026-08-30: Complete ARM_CM55 MPU Selected Runtime
 
 `ARM_CM55_MPU/non_secure` slice 5 completes the explicit build-selected
