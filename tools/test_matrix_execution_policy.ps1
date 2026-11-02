@@ -60,6 +60,14 @@ $commands = @($ast.FindAll({param($node)
     $node -is [Management.Automation.Language.CommandAst] -and
     $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand
 }, $true))
+$shellDispatch = @($commands | Where-Object {
+    $_.Extent.Text.Contains('"tools\test_shell_exports.ps1"')
+})
+Check 'shell-export/one-dispatch' ($shellDispatch.Count -eq 1)
+Check 'shell-export/before-parity' ($shellDispatch[0].Extent.StartOffset -lt
+    $source.IndexOf('foreach ($parityOptimization'))
+Check 'shell-export/dedicated-artifacts' ($shellDispatch[0].Extent.Text.Contains(
+    '-BuildRoot (Join-Path $buildRoot "audit-shell-exports")'))
 foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime_admission',
         'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
     $needle = '"tools\' + $runner + '.ps1"'

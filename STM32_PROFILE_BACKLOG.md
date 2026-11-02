@@ -40,12 +40,14 @@ The following are separate captured receipts, not a current aggregate PASS:
 | C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
 | C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
 
-The latest retained [exported-source aggregate](PORT_ARCHITECTURE_AUDIT.md#e69a839-exported-source-aggregate)
-is **FAIL**, not software freeze: `C:/fq-bf2431ee2b/matrix-result.json` records
-e69a839, 958 files and zero source drift. Pinned O2/Os parity and preceding gates
-passed; the historical-handler archive control then required `git show` in a
-source export without `.git`. Its self-contained repair and a complete fresh
-replay remain separate; later aggregate gates are NOT_RUN.
+The latest retained [exported-source aggregate](PORT_ARCHITECTURE_AUDIT.md#094ff9d-exported-source-aggregate)
+is **FAIL**, not software freeze: `C:/fq-d494cb9774/matrix-result.json` records
+094ff9d, 974 files and zero source drift. Pinned O2/Os parity and the repaired
+no-Git historical-handler gate passed, followed by the FP/MVE MPU, Secure-cohort,
+CONTROL and CM33 dual-origin gates. The existing CM33F initializer's shell
+launcher then failed before execution because Git archive emitted CRLF. A shared
+LF export policy and its maintained controls now pass; a complete fresh replay
+remains separate. Later gates in the failed aggregate are NOT_RUN.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at

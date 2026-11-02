@@ -3206,3 +3206,33 @@ and independent replay rejects boolean/array/numeric/null verdicts. This pure
 receipt-parser refinement does not change generated ARM code. The running
 094ff9d immutable aggregate remains attributed only to its captured sources;
 real wrapper receipts use the required string PASS, not the counterfeit value.
+
+### 094ff9d Exported-Source Aggregate
+
+The next immutable aggregate also records **FAIL**, not software freeze:
+`C:/fq-d494cb9774/matrix-result.json`, source
+`094ff9d17ba231eddf56e9a593b914cd9bafdb9c`, 974 files, zero source drift,
+1,169.79 seconds. Its result SHA-256 is
+`E86BD97A35EE7B6E980AB841E736542DEA5EAC81BD8705F4B090926EA023D133`.
+Pinned O2/Os parity, the repaired no-Git historical-handler gate, FP/MVE MPU
+state checks, both private Secure cohorts, CM33 ISA checks, CONTROL transitions,
+Secure caller guards and 75 dual-origin CM33 executions passed. The existing
+CM33F paired-initializer runner then failed before execution: Bash rejected
+`set -euo pipefail` because its exported `qemu.sh` contained CRLF. Later aggregate
+gates, including the composed C55S full admission, remain NOT_RUN in this receipt.
+
+The working tree and index both stored LF, but `git archive` applied the active
+autocrlf conversion to shell files without explicit attributes. A shared
+`tools/.gitattributes` now fixes `*.sh` to LF for checkouts and source archives.
+No runtime C, instruction stream, context layout or activation flag changes.
+
+The maintained `test_shell_exports.ps1` checks actual source bytes and creates
+real Git tree archives of every shell fixture under autocrlf true/input/false.
+It disables global attributes, rejects injected CRLF, and proves that removing
+the shared policy reproduces an invalid archive. Its fresh receipt passes all
+eleven scripts and 35 checks:
+`%TEMP%/shell-exports-f99e3ed5b5aa44529ccd58212e7be836/results.json`, SHA-256
+`B208ABC28C37D71C78CFDC2649AFEDD3C32E53226B022936C16EF2925BBA5953`.
+The central matrix dispatches this guard before parity; its configuration suite
+now passes 69 checks. These are export/configuration proofs, not ARM execution,
+and do not relabel the failed aggregate or promote a staged profile.

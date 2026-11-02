@@ -1,0 +1,2 @@
+# WSL executes these fixtures directly from Windows checkouts and source exports.
+*.sh text eol=lf

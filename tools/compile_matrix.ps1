@@ -22204,6 +22204,9 @@ try {
     Write-Host "== audit / deterministic matrix artifact paths =="
     & (Join-Path $RepoRoot "tools\test_matrix_artifacts.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-matrix-artifacts")
+    Write-Host "== audit / shell source-export line endings =="
+    & (Join-Path $RepoRoot "tools\test_shell_exports.ps1") `
+        -BuildRoot (Join-Path $buildRoot "audit-shell-exports")
     Write-Host "== audit / required architecture-execution policy =="
     & (Join-Path $RepoRoot "tools\test_matrix_execution_policy.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-matrix-execution-policy")
