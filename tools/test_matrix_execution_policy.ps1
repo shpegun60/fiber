@@ -60,7 +60,7 @@ $commands = @($ast.FindAll({param($node)
     $node -is [Management.Automation.Language.CommandAst] -and
     $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand
 }, $true))
-foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime',
+foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime_admission',
         'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
     $needle = '"tools\' + $runner + '.ps1"'
     $dispatch = @($commands | Where-Object {$_.Extent.Text.Contains($needle)})
@@ -87,6 +87,69 @@ foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime',
         Check ($runner + '/staged-not-promoted') ($text -cmatch
             '-ExpectedRuntimeSelectable 0\b')
     }
+}
+$admissionGuards = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -ceq 'Assert-MatrixC55sAdmissionReceipt'
+})
+Check 'C55S/one-receipt-guard' ($admissionGuards.Count -eq 1)
+. ([scriptblock]::Create($admissionGuards[0].Extent.Text))
+Check 'C55S/no-duplicate-legacy-runtime-dispatch' (
+    @($commands | Where-Object {
+        $_.Extent.Text.Contains('"tools\test_m55_secure_runtime.ps1"')
+    }).Count -eq 0)
+Check 'C55S/fresh-root-required-before-dispatch' ($source -cmatch
+    '(?s)if \(Test-Path -LiteralPath \$c55sAdmissionRoot\) \{\s+throw "C55S admission requires a fresh evidence directory:[^\r\n]+\s+\}\s+& \(Join-Path \$RepoRoot "tools\\test_m55_secure_runtime_admission.ps1"\)')
+Check 'C55S/post-dispatch-receipt-required' ($source -cmatch
+    '(?s)-BuildRoot \$c55sAdmissionRoot\s+Assert-MatrixC55sAdmissionReceipt -EvidenceRoot \$c55sAdmissionRoot')
+$receiptCases = @(
+    @{Name='complete';Field=$null;Value=$null;Reject=$false},
+    @{Name='failed';Field='Verdict';Value='FAIL';Reject=$true},
+    @{Name='development';Field='CompleteSuite';Value=$false;Reject=$true},
+    @{Name='truthy-string';Field='CompleteSuite';Value='true';Reject=$true},
+    @{Name='null-complete';Field='CompleteSuite';Value=$null;Reject=$true},
+    @{Name='short-runtime';Field='OriginalRuntimeLaunches';Value=2489;Reject=$true},
+    @{Name='boolean-runtime';Field='OriginalRuntimeLaunches';Value=$true;Reject=$true},
+    @{Name='string-runtime';Field='OriginalRuntimeLaunches';Value='2490';Reject=$true},
+    @{Name='short-default';Field='DefaultLaunches';Value=79;Reject=$true},
+    @{Name='boolean-default';Field='DefaultLaunches';Value=$true;Reject=$true},
+    @{Name='fractional-default';Field='DefaultLaunches';Value=80.5;Reject=$true},
+    @{Name='drift';Field='InputDrift';Value=1;Reject=$true},
+    @{Name='boolean-drift';Field='InputDrift';Value=$false;Reject=$true},
+    @{Name='promoted';Field='RuntimeSelectable';Value=1;Reject=$true},
+    @{Name='string-selection';Field='RuntimeSelectable';Value='0';Reject=$true},
+    @{Name='missing-field';Field=$null;Value=$null;Reject=$true},
+    @{Name='missing-file';Field=$null;Value=$null;Reject=$true},
+    @{Name='missing-directory';Field=$null;Value=$null;Reject=$true},
+    @{Name='multiple';Field=$null;Value=$null;Reject=$true},
+    @{Name='malformed';Field=$null;Value=$null;Reject=$true}
+)
+foreach ($case in $receiptCases) {
+    $root = Join-Path $out ('receipt-' + $case.Name)
+    $dir = Join-Path $root 'c55sa-fixture'
+    $null = New-Item -ItemType Directory -Path $dir -Force
+    $receipt = [ordered]@{Verdict='PASS';CompleteSuite=$true;OriginalRuntimeLaunches=2490;
+        DefaultLaunches=80;InputDrift=0;RuntimeSelectable=0}
+    if ($null -ne $case.Field) { $receipt[$case.Field] = $case.Value }
+    if ($case.Name -eq 'missing-field') { $receipt.Remove('DefaultLaunches') }
+    if ($case.Name -ne 'missing-file' -and $case.Name -ne 'missing-directory') {
+        $text = if ($case.Name -eq 'malformed') { '{ invalid JSON' } else {
+            $receipt | ConvertTo-Json
+        }
+        [IO.File]::WriteAllText((Join-Path $dir 'results.json'), $text)
+    }
+    if ($case.Name -eq 'missing-directory') {
+        $empty = Join-Path $root 'empty'
+        $null = New-Item -ItemType Directory -Path $empty
+        $root = $empty
+    }
+    if ($case.Name -eq 'multiple') {
+        $null = New-Item -ItemType Directory -Path (Join-Path $root 'c55sa-other')
+    }
+    $caught = $null
+    try { Assert-MatrixC55sAdmissionReceipt -EvidenceRoot $root }
+    catch { $caught = $_.Exception.Message }
+    Check ('C55S/receipt-' + $case.Name) (($null -ne $caught) -eq $case.Reject)
 }
 $tfmDispatch = @($commands | Where-Object {
     $_.Extent.Text.Contains('"tools\test_cm33f_tfm.ps1"')

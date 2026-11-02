@@ -30,6 +30,31 @@ function Assert-MatrixExecutionPolicy {
     }
 }
 
+function Assert-MatrixC55sAdmissionReceipt {
+    param([string]$EvidenceRoot)
+
+    $receipts = @(Get-ChildItem -LiteralPath $EvidenceRoot -Directory -Filter "c55sa-*" |
+        ForEach-Object { Join-Path $_.FullName "results.json" })
+    if ($receipts.Count -ne 1) {
+        throw "C55S admission must produce exactly one fresh receipt"
+    }
+    $receipt = Get-Content -LiteralPath $receipts[0] -Raw | ConvertFrom-Json
+    foreach ($name in @('OriginalRuntimeLaunches', 'DefaultLaunches',
+            'InputDrift', 'RuntimeSelectable')) {
+        $value = $receipt.$name
+        if ($value -isnot [int] -and $value -isnot [long]) {
+            throw "C55S admission inventory fields must be JSON integers: $name"
+        }
+    }
+    if ($receipt.Verdict -cne "PASS" -or
+            $receipt.CompleteSuite -isnot [bool] -or -not $receipt.CompleteSuite -or
+            $receipt.OriginalRuntimeLaunches -ne 2490 -or
+            $receipt.DefaultLaunches -ne 80 -or $receipt.InputDrift -ne 0 -or
+            $receipt.RuntimeSelectable -ne 0) {
+        throw "C55S admission is incomplete or has the wrong execution inventory"
+    }
+}
+
 Assert-MatrixExecutionPolicy -Required $RequireArchitectureExecution `
     -SettingsSubset $SettingsOnly -QemuRoot $ControlQemuRoot
 
@@ -22304,11 +22329,16 @@ try {
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
             -WslDistro $ControlWslDistro `
             -BuildRoot (Join-Path $buildRoot "audit-c55s-first-start-qemu")
-        Write-Host "== audit / staged M55 Secure complete common runtime =="
-        & (Join-Path $RepoRoot "tools\test_m55_secure_runtime.ps1") `
+        Write-Host "== audit / staged M55 Secure public/default/full runtime admission =="
+        $c55sAdmissionRoot = Join-Path $buildRoot "audit-c55s-runtime-qemu"
+        if (Test-Path -LiteralPath $c55sAdmissionRoot) {
+            throw "C55S admission requires a fresh evidence directory: $c55sAdmissionRoot"
+        }
+        & (Join-Path $RepoRoot "tools\test_m55_secure_runtime_admission.ps1") `
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
-            -WslDistro $ControlWslDistro `
-            -BuildRoot (Join-Path $buildRoot "audit-c55s-runtime-qemu")
+            -WslDistro $ControlWslDistro -ExpectedRuntimeSelectable 0 `
+            -BuildRoot $c55sAdmissionRoot
+        Assert-MatrixC55sAdmissionReceipt -EvidenceRoot $c55sAdmissionRoot
         Write-Host "== audit / executed staged CM33F MPU first basic restore =="
         & (Join-Path $RepoRoot "tools\test_cm33f_mpu_first_start_execution.ps1") `
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `

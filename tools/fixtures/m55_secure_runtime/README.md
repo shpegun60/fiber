@@ -1,5 +1,79 @@
 # C55S Actual Common Runtime
 
+## Public And Default Admission
+
+`tools/test_m55_secure_runtime_admission.ps1` composes the complete existing
+runtime gate with maintained public/default/constructor-archive admission.
+It accepts `-ArmGcc -CmsisCore -QemuRoot -WslDistro`, optional `-BuildRoot`,
+`-FreeRtosRoot`, `-Python`, and `-ExpectedRuntimeSelectable 0`. It never
+changes the production profile or permits metadata promotion.
+
+Before any build it copies the consumed repository/CMSIS inputs into a
+read-only source snapshot and makes a local, non-hardlinked sparse FreeRTOS
+checkout of the exact pin. The sparse checkout contains `include` and the
+actual M55 reference branch, not a substituted implementation. Tracked and
+untracked cleanliness are required before and after. Stable external compiler
+tools/headers are hashed before/after. Source/snapshot mappings, commands,
+source/tool hashes and contemporaneous artifact hashes are retained.
+The actual `gcc -### -flto` linker-plugin path must agree with its compiler
+query and exist; `liblto_plugin.dll` is a required before/after input. Missing,
+duplicate and nonexistent plugin plans, plus an omitted manifest row, are
+maintained rejection controls, not changes to the installed toolchain.
+Nothing is downloaded or provisioned; the stopped unrelated reference task is
+not an input.
+
+The static phase compiles the unchanged shared `portable_application.c` as C11
+and C++17 without CMSIS, device, private runtime or optional SecureContext
+headers. Its exact imports are the five public calls plus its derived public
+storage token. The C-only fixture's `static _Alignas(8)` spelling is mapped to
+GCC's aligned attribute in C++ only; this is not a library-user macro. Final
+stack sizes/alignment are checked. Direct and full static-archive GC links use
+actual common/NS objects and imports generated from the three actual Secure
+production units. The static Secure root program is not executed; it is not a
+bootstrap or a fake runtime provider.
+The include closure is an exact eleven-header repository allowlist. A real
+compiled declaration-only optional-header leak must be rejected even though
+its public undefined-symbol set is unchanged. Explicit optional-header use by
+an application remains supported; this control targets the plain five-call
+consumer contract, not opt-in users.
+
+Constructor-only C/C++ archive tests run O2/Os native/LTO, with no optional
+attachment call, handlers, scheduler or Secure provider retained. Current
+common must link and contain the constructor's actual cold readonly one-byte
+reverse-v1 read. The incompatible common model removes only the real v1 marker
+definition; it is not presented as an entire historical checkout. It must fail
+solely for that missing marker. Every diagnostic line must be a recognized
+function context, exact undefined reference, or final collect2 summary; unknown
+or mixed failures are rejected. Controls exercise the real link method with
+synthetic mixed diagnostics and a compiled missing-v1-plus-RAM-overflow program.
+Removing only the actual constructor retain
+must make the same stale archive link successfully with no v1 marker. This is
+an explicitly unexecuted causal control, never a production configuration.
+
+Default-policy observations independently read nine actual target constants:
+eager FP policy, MSP rewind, hash1/map0, no permissive hooks, enabled canary,
+32-byte redzone, model-derived BASEPRI and metadata0. A compiled hash0 control
+must fail only the observer's default-hash assertion; hash0 remains a supported
+explicit production policy. Separate no-policy-override images execute all
+five original positive scenarios in O2/Os native/LTO, direct/archive and both
+ordinary/reserved NS r9 modes: 80 additional launches. They reuse real common,
+the real paired Secure provider, actual handlers and the existing runtime
+oracle. They are not TF-M execution.
+
+Final `CompleteSuite=true` additionally requires the unchanged existing 2,490
+runtime launches and one model probe, with no `Development*` argument supplied
+to that runner, plus all 80 new default launches and static admission. Thus
+the composed complete execution inventory is 2,571 launches. Its original
+runtime evidence remains closed; extra defaults use separate command logs and
+cannot invalidate that runtime's final SHA256 inventory.
+`-DevelopmentAdmissionOnly` and `-DevelopmentDefaultOnly` are development
+preflights only and always force `CompleteSuite=false`. No subset PASS is an
+activation qualification. No full composed qualification is claimed merely
+because these new files exist; inspect the invocation's final receipt.
+Receipts from before these diagnostic/plugin checks remain evidence for their
+recorded source version only. Focused development replays do not retroactively
+qualify that older full run or replace a fresh complete invocation.
+
 `tools/test_m55_secure_runtime.ps1` runs the actual five-operation common API,
 all eight selected-port forward operations, real common reverse ABI/state,
 and actual C55S Secure gateway/pool in two images on the existing AN547 QEMU.

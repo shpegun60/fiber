@@ -3163,3 +3163,38 @@ without mismatch. Receipt:
 %TEMP%/source-export-identity-cbc2308a81e34be79bb11567344291f7/receipt.json,
 SHA-256 912218ACC3904C70AB422FDE8FF783E3691CB563C583D0374E65291CCDFDB4BD.
 Installed tools are unchanged; full-suite requalification remains separate.
+
+### C55S Public, Default And Archive Admission
+
+A new composed gate compiles the unchanged portable application in C/C++ with
+exact public includes/imports, rejects declaration-only optional-header leaks,
+and verifies all eight providers, strong vectors and storage/context identities.
+Constructor-only current/stale-common/no-retain archive links separate the cold
+v1 anchor requirement from runtime or optional Secure roots. Sixteen additional
+direct/archive/normal/LTO configurations execute five cases each with actual
+unoverridden default policy observed in the ELF.
+
+Independent review found two assurance defects before integration: the initial
+negative-link classifier accepted unrelated errors alongside an expected missing
+anchor, and the LTO plugin was missing from the tool manifest. The repaired
+classifier admits only the exact linker diagnostic grammar/undefined set.
+Maintained controls include real compiled missing-only and missing-plus-RAM-
+overflow links, plus counterfeit results through the actual link method. Driver
+`-###` plugin discovery must match the queried DLL and its before/after hash.
+
+The repaired focused replay passes 44 links, 44 diagnostic controls, four plugin
+controls and 80 default executions plus one model probe. Parent rehashes 2,044
+before and 2,044 after input entries, 4,669 artifacts and twelve owned files with
+zero mismatch. Receipt:
+%TEMP%/c55s-admission-assurance/c55sa-09b50fdb55ec468a/results.json,
+SHA-256 99C39BCBAC7BF89FE0BE5EBACAC4B4E04A757DA3602D4AED0FA3675E736B981D.
+It correctly retains CompleteSuite=false. The preserved earlier 2,571-launch
+full run does not retroactively qualify the strengthened checks.
+
+The central matrix now calls the composed wrapper instead of duplicating the
+unchanged full runtime suite. It requires a fresh evidence directory, one PASS
+receipt, boolean CompleteSuite=true, exact integer 2,490/80 execution counts,
+zero drift and unchanged staged activation. Sixty-five maintained policy tests
+include malformed/missing/multiple/subset receipts and boolean/string count
+coercion counterexamples. A fresh full combined execution is still required;
+no production source, activation or hardware claim changes in this slice.
