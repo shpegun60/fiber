@@ -46,6 +46,34 @@ def collect(m):
     return bodies, records
 
 
+def cold_memory_checks(bodies):
+    sites = sorted((side,name,op,arg) for side,functions in bodies.items()
+                   for name,body in functions.items() for op,arg in body
+                   if op in ('bl','b') and arg in ('memset','memcpy'))
+    require(sites == [('Boot','fiber_port_boot_create','bl','memcpy'),
+                      ('Boot','fiber_port_boot_create','bl','memset'),
+                      ('Boot','fiber_port_context_init','bl','memcpy')],
+            'BRANCH','exact cold-only memory-helper call sites')
+    class ReachedZeroingBoundary(Exception):
+        pass
+    state = Machine({'factory':bodies['Boot']['fiber_port_boot_create']})
+    seen = []
+    def zeroing(m,args):
+        require(args[0] == m.r['sp'] and args[1:3] == [0,72],
+                'BRANCH','factory memset must zero exactly the 72-byte stack-local boot record')
+        require(0x2000EC00 <= args[0] <= 0x2000F000-72,
+                'BRANCH','factory memset destination outside admitted stack')
+        seen.append(args[:3])
+        raise ReachedZeroingBoundary()
+    state.external['memset'] = zeroing
+    try:
+        state.run('factory',0x22000000,0x20002000,0x20003000,0x08001001)
+    except ReachedZeroingBoundary:
+        pass
+    require(len(seen) == 1,'BRANCH','factory zeroing prefix did not reach its exact boundary')
+    return 1
+
+
 def pendsv_case(body, reference, mode, outgoing, incoming, edge=None, bad=None):
     companion = mode == 'A30'
     m = Machine({'handler':body})
@@ -130,6 +158,8 @@ def pendsv_case(body, reference, mode, outgoing, incoming, edge=None, bad=None):
 def branches(m,bodies):
     count = 0
     mode = m['Mode']
+    if mode != 'A30':
+        count += cold_memory_checks(bodies)
     fiber = bodies['Handlers' if mode == 'A30' else 'Fiber']['PendSV_Handler']
     ref = bodies['Reference']['PendSV_Handler']
     try:

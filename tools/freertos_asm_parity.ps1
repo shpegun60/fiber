@@ -11,6 +11,8 @@ param(
     [switch]$Cm33SecureContextOnly,
     [switch]$Cm33SecureOnly,
     [switch]$Cm55SecureOnly,
+    [switch]$Cm0Only,
+    [switch]$Cm3Only,
     [switch]$KeepBuild,
     [string]$Python = "python",
     [string]$PythonModules = $env:FIBER_CLASSIC_AUDIT_PYTHONPATH
@@ -21,6 +23,9 @@ Set-StrictMode -Version 2.0
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $ExpectedFreeRtosCommit = "a50edad08b29052631aa469d4df6e6ec7ff68878"
+$ClassicOnly = $Cm0Only -or $Cm3Only
+$ClassicName = if ($Cm3Only) { 'CM3' } else { 'CM0' }
+$ClassicEvidence = "$ClassicName-FOCUSED"
 
 function Find-ArmGcc {
     if (-not [string]::IsNullOrWhiteSpace($ArmGcc)) {
@@ -249,6 +254,10 @@ function Invoke-Compile {
         [string]$Label
     )
 
+    if ($ClassicOnly) {
+        ConvertTo-Json -InputObject (@($Compiler) + $Arguments) -Compress |
+            Add-Content -LiteralPath (Join-Path $BuildRoot "$ClassicEvidence/commands.jsonl") -Encoding ASCII
+    }
     & $Compiler @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "$Label compile failed"
@@ -291,6 +300,10 @@ function Get-ObjectDisassembly {
         [string]$ObjectPath
     )
 
+    if ($ClassicOnly) {
+        ConvertTo-Json -InputObject @($Objdump, '-dr', $ObjectPath) -Compress |
+            Add-Content -LiteralPath (Join-Path $BuildRoot "$ClassicEvidence/commands.jsonl") -Encoding ASCII
+    }
     $result = (& $Objdump -dr $ObjectPath) -join "`n"
     if ($LASTEXITCODE -ne 0) {
         throw "objdump failed: $ObjectPath"
@@ -493,6 +506,132 @@ function Assert-MechanismParity {
 
     Write-Host ("PASS {0,-14} {1,-18} {2} -> {3}" -f `
         $PortName, $Mechanism, $ReferenceSymbol, $FiberSymbol)
+    if ($ClassicOnly) {
+        $script:cm0Mechanisms += [ordered]@{Port=$PortName; Mechanism=$Mechanism;
+            ReferenceSymbol=$ReferenceSymbol; FiberSymbol=$FiberSymbol;
+            ReferencePatterns=$ReferencePatterns; FiberPatterns=$FiberPatterns; DifferenceIds=$DifferenceIds}
+    }
+}
+
+function Assert-Cm3Mechanisms {
+    param([object]$Pair, [string]$Ledger)
+    # ARMv7-M uses BASEPRI in both implementations. Fiber additionally carries
+    # EXC_RETURN per context instead of manufacturing FD in the SVC handler.
+    $pair = $Pair
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-start" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "prvPortStartFirstTask" `
+        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+0') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_port_start_first_context" `
+        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-restore" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vPortSVCHandler" `
+        -ReferencePatterns @('\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\borr(\.w)?\s+lr,\s*lr,\s*#13', '\bbx\s+lr') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "SVC_Handler" `
+        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-CM3-EXC-RETURN") `
+        -Ledger $ledger
+    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "PendSV" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "xPortPendSVHandler" `
+        -ReferencePatterns @('\bmrs\s+r0,\s*PSP', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'vTaskSwitchContext', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "PendSV_Handler" `
+        -FiberPatterns @('\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'fiber_port_scheduler_pick_next_from_pendsv', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
+        -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-CM3-EXC-RETURN") `
+        -Ledger $ledger
+}
+
+function Start-ClassicFocusedEvidence {
+    $directory = Join-Path $BuildRoot $ClassicEvidence
+    if (@(Get-ChildItem -LiteralPath $BuildRoot -Force).Count) { throw "$ClassicName focused proof requires an empty BuildRoot" }
+    $rationale = if ($Cm3Only) { 'FAP-CM3-LOCAL-LITERAL-POOLS' } else { 'FAP-CM0-THUMB1-VECTOR' }
+    if ($ledger.IndexOf($rationale, [StringComparison]::Ordinal) -lt 0) { throw "$ClassicName focused rationale missing" }
+    if (Test-Path -LiteralPath $directory) { throw "$ClassicName evidence exists; choose a fresh BuildRoot: $directory" }
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    $paths = @($PSCommandPath, $ledgerPath, $compiler, $objdump, (Join-Path $toolDir 'arm-none-eabi-readelf.exe'))
+    foreach ($tool in @('cc1', 'as')) {
+        $path = (& $compiler "-print-prog-name=$tool") -join ''
+        if ($LASTEXITCODE -ne 0) { throw "Cannot locate compiler $tool" }
+        $paths += (Resolve-Path -LiteralPath $path.Trim()).Path
+    }
+    $include = (& $compiler '-print-file-name=include') -join ''
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot locate compiler headers' }
+    foreach ($root in @($include.Trim(), (Join-Path (Split-Path $toolDir) 'arm-none-eabi/include'))) {
+        $paths += @(Get-ChildItem -LiteralPath $root -Recurse -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
+    }
+    $profileRoots = if ($Cm3Only) { @('ARM_CM3') } else { @('ARM_CM0', 'ARM_CM0_MPU') }
+    $roots = @($RepoRoot, (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber/port'),
+        (Join-Path $kernel "portable/GCC/ARM_$ClassicName"), (Join-Path $kernel 'include'), $cmsis, $configDir)
+    $roots += @($profileRoots | ForEach-Object { Join-Path $RepoRoot "fiber/port/$_" })
+    foreach ($root in $roots) {
+        $paths += @(Get-ChildItem -LiteralPath $root -File | Where-Object {
+            $_.Extension -in @('.c', '.h', '.ld', '.md') -and
+                ($root -ne $RepoRoot -or $_.Name -in @('mcu_core.h', 'basic_types.h', 'FREERTOS_ASM_PARITY.md'))
+        } | Select-Object -ExpandProperty FullName)
+    }
+    $script:cm0SourceInputs = @($paths | Sort-Object -Unique | ForEach-Object {
+        [ordered]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
+    })
+    $script:cm0Inputs = @($script:cm0SourceInputs | ForEach-Object {
+        if ([IO.Path]::GetExtension($_.Path) -ne '.md') { $_; return }
+        $target = Join-Path $directory ('doc-' + [Guid]::NewGuid().ToString('N') + '-' + [IO.Path]::GetFileName($_.Path))
+        Copy-Item -LiteralPath $_.Path -Destination $target
+        if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $_.Sha256) { throw "$ClassicName documentation snapshot drift" }
+        [ordered]@{Path=$target; Sha256=$_.Sha256; SourcePath=$_.Path; Role='DocumentationSnapshot'}
+    })
+    $script:cm0Mechanisms = @()
+    ConvertTo-Json -Depth 8 -InputObject $script:cm0Inputs |
+        Set-Content -LiteralPath (Join-Path $directory 'inputs.before.json') -Encoding ASCII
+}
+
+function Complete-ClassicFocusedEvidence {
+    $directory = Join-Path $BuildRoot $ClassicEvidence
+    $configurations = if ($Cm3Only) { 1 } else { 3 }
+    $objectCount = 2 * $configurations
+    $mechanismCount = if ($Cm3Only) { 3 } else { 18 }
+    $known = @{}
+    foreach ($entry in $script:cm0SourceInputs) { $known[[IO.Path]::GetFullPath($entry.Path)] = $entry.Sha256 }
+    $dependencies = @()
+    $dependencyFiles = @(Get-ChildItem -LiteralPath $BuildRoot -Recurse -Filter '*.d' -File)
+    if ($dependencyFiles.Count -ne $objectCount) { throw "$ClassicName compile dependency inventory changed" }
+    $prefix = [IO.Path]::GetFullPath($BuildRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    foreach ($file in $dependencyFiles) {
+        $text = (Get-Content -LiteralPath $file.FullName -Raw).Replace("\`r`n", ' ').Replace("\`n", ' ')
+        $colon = $text.IndexOf(': ', [StringComparison]::Ordinal)
+        if ($colon -lt 0) { throw "Malformed $ClassicName dependency output: $($file.FullName)" }
+        foreach ($token in [regex]::Matches($text.Substring($colon+2), '(?:\\ |[^\s])+')) {
+            $name = $token.Value.Replace('\ ', ' ')
+            $path = (Resolve-Path -LiteralPath $name).Path
+            $generated = $path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+            if (-not $generated -and -not $known.ContainsKey($path)) { throw "Unhashed $ClassicName compile dependency: $path" }
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            if (-not $generated -and $hash -ne $known[$path]) { throw "$ClassicName dependency changed: $path" }
+            $dependencies += [ordered]@{DependencyFile=$file.FullName; Path=$path; Sha256=$hash; Generated=$generated}
+        }
+    }
+    ConvertTo-Json -Depth 6 -InputObject $dependencies | Set-Content -LiteralPath (Join-Path $directory 'dependencies.json') -Encoding ASCII
+    $drift = @((@($script:cm0SourceInputs) + @($script:cm0Inputs)) | Where-Object {
+        -not (Test-Path -LiteralPath $_.Path) -or (Get-FileHash -LiteralPath $_.Path -Algorithm SHA256).Hash -ne $_.Sha256
+    })
+    ConvertTo-Json -Depth 6 -InputObject $drift | Set-Content -LiteralPath (Join-Path $directory 'inputs.drift.json') -Encoding ASCII
+    if ($drift.Count) { throw "$ClassicName source/tool inputs changed; no qualification" }
+    if ($script:cm0Mechanisms.Count -ne $mechanismCount) { throw "$ClassicName focused mechanism inventory changed" }
+    [ordered]@{Status='PASS'; Optimization=$Optimization; Configurations=$configurations; CompiledObjects=$objectCount;
+        Mechanisms=$script:cm0Mechanisms; SourceDrift=0; RuntimeProfileAdded=$false;
+        Scope='Existing ordered mechanism checks only; not closed whole-provider, hostile-pressure or CPU execution proof'} |
+        ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $directory 'result.json') -Encoding ASCII
+    $artifacts = @(Get-ChildItem -LiteralPath $BuildRoot -Recurse -File | ForEach-Object {
+        [ordered]@{Path=$_.FullName; Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
+    })
+    [ordered]@{Status='PASS'; ReferenceCommit=$ExpectedFreeRtosCommit; Inputs=$script:cm0Inputs; Artifacts=$artifacts} |
+        ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $directory 'artifacts.json') -Encoding ASCII
+    Write-Host "${ClassicName}_FOCUSED_PARITY_PASS ($Optimization; $configurations configurations, $objectCount objects, $mechanismCount mechanisms; narrow ordered checks only)"
 }
 
 function Get-C55SGatewayFunctionSpan {
@@ -3113,16 +3252,16 @@ if ($ownsBuildRoot) {
         ("fiber-freertos-asm-parity-" + [Guid]::NewGuid().ToString("N"))
 }
 New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
-if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly) | Where-Object { $_ }).Count -gt 1) {
+if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly, $Cm0Only, $Cm3Only) | Where-Object { $_ }).Count -gt 1) {
     throw 'Choose only one focused parity group'
 }
-if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly) { $KeepBuild = $true }
+if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly -or $ClassicOnly) { $KeepBuild = $true }
 
 try {
     Write-Host "Parity optimization: $Optimization"
 
     foreach ($mode in @('A30', 'C3SO', 'C5SO')) {
-        if ($Cm33fRunningOnly -or $Cm55TfmOnly -or
+        if ($ClassicOnly -or $Cm33fRunningOnly -or $Cm55TfmOnly -or
                 ($Cm33SecureContextOnly -and $mode -ne 'A30') -or
                 ($Cm33SecureOnly -and $mode -ne 'C3SO') -or
                 ($Cm55SecureOnly -and $mode -ne 'C5SO')) { continue }
@@ -3151,12 +3290,13 @@ try {
         return
     }
 
-    if (-not $Cm55TfmOnly) { Assert-Cm33fMpuRunningParity }
+    if (-not $ClassicOnly -and -not $Cm55TfmOnly) { Assert-Cm33fMpuRunningParity }
     if ($Cm33fRunningOnly) {
         Write-Host "C3FP_RUNNING_PARITY_PASS ($Optimization; auxiliary only)"
         return
     }
 
+    if (-not $ClassicOnly) {
     $tfmBuild = Join-Path $BuildRoot 'C5TF'
     foreach ($id in @('FAP-C5TF-CPU', 'FAP-C5TF-CONSTRUCTOR', 'FAP-C5TF-HARDENING',
             'FAP-C5TF-INITIALIZE', 'FAP-C5TF-WRAPPER', 'FAP-C5TF-STAGED')) {
@@ -3173,9 +3313,15 @@ try {
         Write-Host "C5TF_PARITY_PASS ($Optimization; metadata one, no profile promotion by this gate)"
         return
     }
+    }
 
     $compiled = @{}
-    foreach ($port in $ports) {
+    if ($ClassicOnly) { Start-ClassicFocusedEvidence }
+    $compilePorts = @($ports | Where-Object {
+        (-not $ClassicOnly) -or ($Cm3Only -and $_.Name -eq 'ARM_CM3') -or
+        ($Cm0Only -and $_.Name -in @('ARM_CM0', 'ARM_CM0PLUS', 'ARM_CM0_MPU'))
+    })
+    foreach ($port in $compilePorts) {
         $portBuild = Join-Path $BuildRoot $port.Name
         New-Item -ItemType Directory -Path $portBuild -Force | Out-Null
         Write-CmsisMainHeader -Directory $portBuild `
@@ -3201,7 +3347,7 @@ try {
         )
         $captureC33 = $port.Name -in @('ARM_CM33_SECURE_CONTEXT_ALLOCATOR','ARM_CM33_SECURE_CONTEXT_DEPRIORITIZE',
             'ARM_CM33_SECURE_CONTEXT_INITIALIZE','ARM_CM33_SECURE_CONTEXT_LOAD','ARM_CM33_SECURE_CONTEXT_SAVE')
-        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+        if ($ClassicOnly -or $port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
             $fiberArgs += @("-save-temps=obj", "-MMD")
         }
         $initSourceHashes = @()
@@ -3240,7 +3386,7 @@ try {
             "-I$referenceDir", "-c", $referencePath,
             "-o", $referenceObject
         )
-        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+        if ($ClassicOnly -or $port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
             $referenceArgs += @("-save-temps=obj", "-MMD")
         }
         Invoke-Compile -Compiler $compiler -Arguments $referenceArgs `
@@ -3256,6 +3402,24 @@ try {
             FiberArguments = $fiberArgs
             ReferenceArguments = $referenceArgs
             InitSourceHashes = $initSourceHashes
+        }
+        if ($ClassicOnly) {
+            foreach ($entry in @(@($fiberObject, $compiled[$port.Name].Fiber), @($referenceObject, $compiled[$port.Name].Reference))) {
+                Set-Content -LiteralPath ($entry[0]+'.dis') -Value $entry[1] -Encoding ASCII
+                $readelf = Join-Path $toolDir 'arm-none-eabi-readelf.exe'
+                ConvertTo-Json -InputObject @($readelf, '-A', '-h', '-S', '-s', '-r', '-W', $entry[0]) -Compress |
+                    Add-Content -LiteralPath (Join-Path $BuildRoot "$ClassicEvidence/commands.jsonl") -Encoding ASCII
+                $details = (& $readelf -A -h -S -s -r -W $entry[0]) -join "`n"
+                if ($LASTEXITCODE -ne 0) { throw "$ClassicName readelf failed" }
+                $architecture = if ($Cm3Only) { '(?m)^\s*Tag_CPU_arch: v7\r?$' } else { 'Tag_CPU_arch: v6S?-M' }
+                $thumb = if ($Cm3Only) { 'Tag_THUMB_ISA_use: Thumb-2' } else { 'Tag_THUMB_ISA_use: Thumb-1' }
+                if ($details -notmatch $architecture -or $details -notmatch $thumb -or
+                    ($Cm3Only -and $details -notmatch 'Tag_CPU_arch_profile: Microcontroller') -or
+                    $details -match 'Tag_(FP_arch|MVE_arch|Advanced_SIMD_arch|ABI_VFP_args|PAC_extension|BTI_extension):') {
+                    throw "$ClassicName object has unexpected CPU/FP/ABI attributes"
+                }
+                Set-Content -LiteralPath ($entry[0]+'.elf.txt') -Value $details -Encoding ASCII
+            }
         }
         if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
             Set-Content -LiteralPath (Join-Path $portBuild "fiber-port.disasm") `
@@ -3297,6 +3461,12 @@ try {
             } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath `
                 (Join-Path $portBuild "c55spool-evidence.json") -Encoding ASCII
         }
+    }
+
+    if ($Cm3Only) {
+        Assert-Cm3Mechanisms -Pair $compiled['ARM_CM3'] -Ledger $ledger
+        Complete-ClassicFocusedEvidence
+        return
     }
 
     # ARMv6-M keeps the same staged high-register frame as the reference.
@@ -3547,6 +3717,8 @@ try {
             "FAP-MPU-PROTECTED-FRAME", "FAP-MPU-ATOMIC-SWITCH") `
         -Ledger $ledger
 
+
+    if ($Cm0Only) { Complete-ClassicFocusedEvidence; return }
 
     # ARM_CM55_MPU is the complete build-selected protected runtime for both
     # supported MPU geometries. Its SVC/PendSV mechanics remain direct parity
@@ -3872,36 +4044,7 @@ try {
         -Ledger $ledger
     }
 
-    # ARMv7-M uses BASEPRI in both implementations. Fiber additionally carries
-    # EXC_RETURN per context instead of manufacturing FD in the SVC handler.
-    $pair = $compiled["ARM_CM3"]
-    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-start" `
-        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "prvPortStartFirstTask" `
-        -ReferencePatterns @('\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+0') `
-        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
-        -FiberSymbol "fiber_port_start_first_context" `
-        -FiberPatterns @('\bcpsid\s+i', '\bmsr\s+CONTROL', '\bmsr\s+MSP', '\bcpsie\s+i', '\bcpsie\s+f', '\bdsb\b', '\bisb\b', '\bsvc\s+70') `
-        -FiberPath $pair.FiberPath `
-        -DifferenceIds @("FAP-COMMON-START", "FAP-COMMON-PROVENANCE") `
-        -Ledger $ledger
-    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "first-restore" `
-        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "vPortSVCHandler" `
-        -ReferencePatterns @('\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bmsr\s+BASEPRI', '\borr(\.w)?\s+lr,\s*lr,\s*#13', '\bbx\s+lr') `
-        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
-        -FiberSymbol "SVC_Handler" `
-        -FiberPatterns @('\bmsr\s+BASEPRI', 'fiber_port_context_validate_restore', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bbx\s+lr') `
-        -FiberPath $pair.FiberPath `
-        -DifferenceIds @("FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE", "FAP-CM3-EXC-RETURN") `
-        -Ledger $ledger
-    Assert-MechanismParity -PortName "ARM_CM3" -Mechanism "PendSV" `
-        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "xPortPendSVHandler" `
-        -ReferencePatterns @('\bmrs\s+r0,\s*PSP', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'vTaskSwitchContext', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*fp\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
-        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
-        -FiberSymbol "PendSV_Handler" `
-        -FiberPatterns @('\bmrs\s+r0,\s*PSP', 'fiber_port_context_validate_save_current', '\bstmdb\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bstr\s+r0', '\bmsr\s+BASEPRI', 'fiber_port_scheduler_pick_next_from_pendsv', '\bmsr\s+BASEPRI', '\bldmia(\.w)?\s+r0!,\s*\{r4[^\r\n]*lr\}', '\bmsr\s+PSP', '\bisb\b', '\bbx\s+lr') `
-        -FiberPath $pair.FiberPath `
-        -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-CM3-EXC-RETURN") `
-        -Ledger $ledger
+    Assert-Cm3Mechanisms -Pair $compiled["ARM_CM3"] -Ledger $ledger
 
     foreach ($floatingPort in @(
             [pscustomobject]@{ Name = "ARM_CM4"; Errata = $false },

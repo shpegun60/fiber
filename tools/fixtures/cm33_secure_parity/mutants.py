@@ -43,6 +43,10 @@ def cases(mode):
         ('builder-r9','Fiber','frame[fiber_portFRAME_R9] = initial_r9;','frame[fiber_portFRAME_R9] = (initial_r9 & 0u);',1,True),
         ('builder-pc','Fiber','fiber_port_stacked_pc((uintptr_t)ctx->boot.entry)','(uint32_t)(uintptr_t)ctx->boot.entry',1,True),
         ('builder-xpsr','Fiber','frame[fiber_portFRAME_XPSR] = fiber_port_initial_xpsr();','frame[fiber_portFRAME_XPSR] = 0u;',1,True),
+        ('boot-memset-fill','Boot','FiberPortBoot boot = (FiberPortBoot){0};',
+            'FiberPortBoot boot; extern void *memset(void *, int, size_t); (void)memset(&boot, 1, sizeof(boot));',1,True),
+        ('boot-memset-site','Boot','fiber_port_init_context_frame(ctx, initial_r9);',
+            'extern void *memset(void *, int, size_t); (void)memset(ctx, 0, sizeof(*ctx)); fiber_port_init_context_frame(ctx, initial_r9);',1,True),
         ('reference-save-count','Reference','stmdb r0!, {r2-r11}','stmdb r0!, {r2-r10}',1,True),
         ('reference-restore-count','Reference','ldmia r0!, {r2-r11}','ldmia r0!, {r2-r10}',1,True),
     ]

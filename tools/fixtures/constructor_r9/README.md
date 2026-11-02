@@ -88,6 +88,11 @@ The runner discovers that temporary modules directory, then the existing
 `%TEMP%/fiber-classic-audit-python`, or the selected interpreter's default
 modules. `-Python`, `-PythonModules` / `FIBER_CONSTRUCTOR_R9_PYTHONPATH` select
 another audit environment; `-BuildRoot` selects a parent for unique evidence.
+`-ImmutableInputs` first byte-copies the exact selected source/fixture/CMSIS
+inventory, verifies every copy against its original hash, and runs the complete
+suite from that isolated tree. `immutable-inputs/manifest.json` and
+`child-command.json` retain the original-to-copy mapping and exact invocation.
+Production work outside that snapshot can continue without invalidating it.
 `-DevelopmentProfiles CM33NTZ,CM55NTZ` and `-DevelopmentModes O2-lto` are marked
 `CompleteSuite=false` and cannot be reported as full-suite qualification.
 
@@ -114,6 +119,8 @@ had 61 unqualified configurations/controls: 48 literal-pool errors, four
 Thumb1 operand errors, and nine strict-warning-policy failures. The final LTO
 link now explicitly retains `-ffunction-sections -fdata-sections`, matching the
 compile commands; no source extraction, handler rewrite or LTO fallback is used.
+This qualifies sectioned LTO only: it does not establish that those historical
+pool errors were harness-only, or qualify unsectioned production assembly.
 The known no-VTOR diagnostic and the exact CM0 exception-file vector-index
 warning are source-scoped and recorded as non-R9 diagnostics. All other
 warnings remain failures; this is not a warning-free vector-runtime claim.
@@ -122,7 +129,9 @@ warnings remain failures; this is not a warning-free vector-runtime claim.
 assembly with R0 and ABI-conforming, preserved R8 result registers, under
 O2/Os and both R9 contracts. It does not borrow reserved R9. The emitted
 actual-header instruction and assembler result distinguish a Thumb1 operand
-constraint defect from the public constructor ABI test. Expected high-register
-assembly rejection does not make an otherwise unbuildable production source
-group pass: those configuration failures still fail the default runner and
-are reported with their actual source/function/assembly scope.
+constraint defect from the public constructor ABI test. All eight actual-header
+probes must now assemble. Two additional O2 controls, one per R9 ABI, restore
+the original general-register constraints in the actual preprocessed header;
+each must emit the exact invalid R8 LDR and single low-register assembler error.
+Only those explicitly mutated controls accept assembly rejection. A production
+probe or configuration failure still fails the default runner.

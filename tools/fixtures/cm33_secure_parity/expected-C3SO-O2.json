@@ -124,16 +124,37 @@
       "fiber_panic",
       "fiber_port_context_cohort_armv8m_mainline_p0x4333534Fu_l0x00010001u_f0_e0_h1_j1_v1_d1_r1_z8u_y0_w2_g4_u00010000_i0_o0xFFFFFFFDu_c0_s1_x0_m0_a0_b0_t1_n0_k0_q0",
       "fiber_port_init_context_frame",
-      "memcpy"
+      "memcpy",
+      "memset"
     ],
     "Functions": {
+      "fiber_port_hash32_accum": {
+        "Instructions": 15,
+        "Sha256": "4F185F5B46BEDF654597B9A44CFCE8D46BD0AB304BECB9EB6856CF42C3DFABF9"
+      },
+      "fiber_port_validate_initial_frame": {
+        "Instructions": 88,
+        "Sha256": "0AE2A2A50E794AF7A41FCCA624C0089A427364D0C964A8721833DD982030B08E"
+      },
+      "fiber_port_validate_context_pointer": {
+        "Instructions": 13,
+        "Sha256": "950FF86D8C6EDE2D076A25E092DD34ED1503EE73FA45B152F3E57F931C81EAE6"
+      },
       "fiber_port_validate_stack_canary": {
         "Instructions": 23,
         "Sha256": "15B8F41B5491E4E51AA3042F3172E221DAC255641BACAB3041BE66CF4DC62743"
       },
+      "fiber_port_prepare_start_msp_plan": {
+        "Instructions": 35,
+        "Sha256": "A5CA39796E825CDC6EA5D7BBB66708C538DF015AD24E3590B3CFBF621CE94B21"
+      },
+      "fiber_port_validate_start_msp_for_boot": {
+        "Instructions": 49,
+        "Sha256": "7466E831781C26FCD3B47370652919D53019218E983CE3DB7BCCA805062F13DA"
+      },
       "fiber_port_boot_record_compute_hash": {
-        "Instructions": 206,
-        "Sha256": "3672CE55F76F6D008816AC32EAC0E22611B629B91C694D4F95FA8C8DE41E3BA3"
+        "Instructions": 42,
+        "Sha256": "805AE79CC33949B2E4F1CA5D526E1CB30B341EC507EF177AAAF810133E4825CC"
       },
       "fiber_port_boot_record_fast_check": {
         "Instructions": 95,
@@ -141,31 +162,31 @@
       },
       "fiber_port_boot_record_check": {
         "Instructions": 11,
-        "Sha256": "CF14006F933EFD73ED64D04CC2AC3C04CE7347023DAC3385CBF0C59BB383B690"
+        "Sha256": "7CA45D90D8D98E2A1DE55305F1E2F8368272513F96272BB8053D6386A955CB78"
       },
       "fiber_port_boot_check": {
-        "Instructions": 64,
-        "Sha256": "614AE38FF85C77E86B3025CF1846A872E6C693FFF45AC88417F7AE8B5B93F44C"
+        "Instructions": 59,
+        "Sha256": "9EBE75863FC5B3104D143A7D6EFF07D18CB4B20363E5C365A9022C9AA273DF3B"
       },
       "fiber_port_boot_create": {
-        "Instructions": 150,
-        "Sha256": "7BC8E335A9E69470562688BB5E97318AF4CB6BA020FFE778188DCAE6169874A2"
+        "Instructions": 119,
+        "Sha256": "34CB6F116FFD3337486EC262CA0F34FFF88B5B1DFB92588C31E187C2B2507DA1"
       },
       "fiber_port_context_init": {
-        "Instructions": 193,
-        "Sha256": "FCD02326143B130D09557FDF64D252FBD5AE965E33C1D9DD575BEC92EFF9CA6A"
+        "Instructions": 114,
+        "Sha256": "45D418329E58C67F1B989C8EFBF9A0527C9EB3337BB5177FA882D41E527B8712"
       },
       "fiber_port_context_validate_save_current": {
-        "Instructions": 44,
-        "Sha256": "034986ADF5697F76FFA01A8DCF58D1AB0CD3626FF9C23C33E9EC988FA5AB76E9"
+        "Instructions": 29,
+        "Sha256": "2519DDAABAF91A56EE9CE91BF1C651CFC7C358E4F878F40768389826D8FC0FB2"
       },
       "fiber_port_context_validate_restore": {
-        "Instructions": 71,
-        "Sha256": "72ACBA4FAFEC80074CA9A056D1F0BC17F03D96AD13B90D30398E649F3CF0DB7E"
+        "Instructions": 54,
+        "Sha256": "42B860178C76B6AA27F722B700C8BD37F821F9977AF194BEA2DC96A48D0FDA08"
       },
       "fiber_port_context_prepare_first_start": {
-        "Instructions": 56,
-        "Sha256": "7D0BA7672383A7577300398133EE26B85200D12ABA84D49F31AD72E4F55E4590"
+        "Instructions": 15,
+        "Sha256": "6E966B780B1F6406A9869FF01DF133E5708BCE24646997CEB2FAF035B092992A"
       },
       "fiber_port_require_start_environment": {
         "Instructions": 15,
@@ -176,8 +197,8 @@
         "Sha256": "C2228F427EC479D2C1775A311ABB0F33D3E8D7AC7F30C3C7F14DD1A7D8D1C44E"
       },
       "fiber_port_runtime_prepare": {
-        "Instructions": 35,
-        "Sha256": "32883FFD510573FA9DB6BA289FC10F77CD37B6BCB91AF7AD0E6A77AC99723DE2"
+        "Instructions": 1,
+        "Sha256": "EBE67161F72407907F0A672766B0C54058950678E516472818F722AE098A1901"
       }
     }
   },

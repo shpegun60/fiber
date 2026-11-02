@@ -4,6 +4,7 @@ param(
     [string]$BuildRoot,
     [string]$Python = 'python',
     [string]$PythonModules = $env:FIBER_CONSTRUCTOR_R9_PYTHONPATH,
+    [switch]$ImmutableInputs,
     [string[]]$DevelopmentProfiles,
     [string[]]$DevelopmentModes
 )
@@ -40,6 +41,7 @@ try {
         '--arm-gcc',$ArmGcc,'--cmsis-core',$CmsisCore,'--build',$build)
     if ($DevelopmentProfiles) { $arguments += @('--profiles',($DevelopmentProfiles -join ',')) }
     if ($DevelopmentModes) { $arguments += @('--modes',($DevelopmentModes -join ',')) }
+    if ($ImmutableInputs) { $arguments += '--immutable-inputs' }
     Write-Host "Constructor R9 evidence: $build"
     $previous = $ErrorActionPreference
     try {

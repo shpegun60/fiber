@@ -2503,3 +2503,35 @@ Exact forty repository-local compiler-proof inputs:
 Source ZIP SHA-256:
   1BF101F4DD065A71073ABDC3BE082BB63E6CC23F96A1F006CA0039EF62C48CE4
 ```
+
+### Maintained Global Raw-Flag Inventory
+
+The new `test_sensitive_port_closure.ps1` records the entire requested native
+source-group inventory and fails on raw compiler hooks, unqualified builds or
+input drift. It does not silently skip failing profiles. The immutable O2/Os
+inventory completes all 336 attempted cells: 218 pass, 106 fail the additional
+raw policy and twelve fail to build. The 1,607 compiled controls and zero drift
+do not turn this receipt into PASS. Ordinary builds using the documented
+mandatory counterflags retain their separate qualification.
+
+Remaining literal failures concern CM0, CM4, transitional v8-M and the scalar
+CM33 Secure companion. Other raw failures require transitive helper protection;
+their exact profile/body inventories are retained in the receipt. This is an
+explicit software-freeze gap, not a physical-board finding.
+
+The refreshed CM3 constructor-r9 subset separately passes 21 ELFs, 84 calls and
+168 bounded restore slices without drift. It does not qualify the remaining
+profiles or exception/FP/security execution. Parent also reruns the maintained
+CM3 compiler-closure gate: twelve O2/Os cells and 61 controls pass, including
+actual preprocessed literal-pool layout-pressure controls.
+
+```text
+Global raw inventory, FAIL:
+  %TEMP%/fiber-sensitive-port-closure-10f640855c124e58abfd9f79cec30ad2
+results.json SHA-256:
+  698828CE13A78FC4A0B384EAD6F4FC09D4B200172FFA49187CC1ECC3F3A51FCE
+CM3 focused constructor replay:
+  %TEMP%/fiber-constructor-r9-74b244db4e004c36be0fe02bf84de9e5
+Parent CM3 maintained compiler replay, PASS:
+  %TEMP%/fiber-sensitive-port-closure-7f5c68febefb4c1291019568470c23ec
+```

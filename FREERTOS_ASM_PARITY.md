@@ -62,7 +62,7 @@ its SHA-256 is a compact fixed baseline, not a source regex or learned oracle.
   erased. These mechanisms do not require a SecureContext companion or NSC API.
 - **FAP-C3SO-STAGED:** ID `0x4333534F`, layout `0x00010001`, features `0x02`,
   context/boot sizes 76/72 and runtime flag zero remain staged. Each optimization
-  covers 48/50 closed bodies (O2/Os), 23 scenarios, 13 compiled mutants, 12
+  covers 53 closed bodies, 24 scenarios, 15 compiled mutants, 14
   independent mutant rejections and 31 controls. Adding this parity gate does
   not promote global routing or increase the complete runtime profile count.
 
@@ -75,6 +75,56 @@ source/tool closure, commands, generated code and diagnostics are retained;
 all consumed inputs are drift-checked and documentation artifacts are copies.
 No failed/incomplete attempt can emit an artifact PASS manifest. See the
 fixture README for the exact proof split and classified compiled mutants.
+
+### FAP-SCALAR-SECURE-COLD-MEMORY
+
+The C3SO/C5SO canonical helper-attribute repair preserves more Boot helpers as
+distinct functions. Each current O2/Os mode has 53 closed bodies; previously
+inlined helpers and their callers therefore require new exact Boot records.
+Fiber runtime/handler and pinned-reference records are unchanged. The measured
+extra undefined symbol is only `memset`, called once from
+`fiber_port_boot_create` to zero its stack-local 72-byte boot record. The two
+existing `memcpy` sites remain in that factory and `fiber_port_context_init`.
+The checker independently requires exactly those three sites across all
+collected functions, and interprets the actual factory prefix to its first
+memset boundary to require arguments `(current SP, 0, 72)`. It does not execute
+libc or replace the complete factory with a model. Compiled wrong-fill and
+out-of-factory memset mutants fail both the closed graph and independent
+oracle. Runtime, constructor-frame-builder and transfer dependency sets gain
+no libc allowance; no blanket memory-helper whitelist is introduced.
+
+The original immutable `ec02a22` matrix failure at
+`C:/fqm-0501eb9962a8/freertos-asm-parity-o2/C3SO` remains preserved. Its observed
+C3SO O2 canonical records exactly match the fresh measured records; the old
+fixture rejected before reaching the legitimate new Boot function inventory.
+All fourteen current C3SO/C5SO C/H files differ from the failed snapshot only
+by LF versus CRLF representation; fresh receipts retain exact input bytes,
+not line-ending-normalized source hashes. The four measured baseline updates
+change only Boot records, not a normalizer or other object's dependency set.
+
+Fresh default M33/M55 O2/Os replay passed under
+`%TEMP%/fiber-secure-only-a32-qualified-20261102-69398243e1724436bc93e3752c44fcda`.
+Each run has 53 closed bodies, 24 scenarios, 15 compiled mutants, 14 independent
+rejections, 31 controls, 1,498 hashed inputs and 321 hashed artifacts, all with
+zero rehash mismatches. All fourteen current production C/H files match their
+preserved input bytes. `qualification.json` SHA-256 is
+`E4FFBD0A56E952AF20067B4A1D611B42FA4E54705FA1BD21E854ED6E44E235C7`.
+The unchanged receipt copies are:
+
+| Mode | Receipt Below That Root | SHA-256 |
+| --- | --- | --- |
+| C3SO O2 | `C3SO-O2/C3SO/artifacts.json` | `786F9A31C2871356469C155F35D4EB1F0CF5D62291636B003123C83773D26BA7` |
+| C3SO Os | `C3SO-Os/C3SO/artifacts.json` | `76AD74B1163B1EB7E84B5FD0584FDE97637810384F6593C7F63D474E9F3D1902` |
+| C5SO O2 | `C5SO-O2/C5SO/artifacts.json` | `2E7A7A09535210DA21C1ED9A6FFB89BF4FFB18995E087E6CDC29179AB293EC86` |
+| C5SO Os | `C5SO-Os/C5SO/artifacts.json` | `375277B5BBDC6D8BCD0070785C787A6938DEA53506822756D7B033BBF93A4A24` |
+
+The four receipts retain historical absolute paths. `input-mirror.json`
+(SHA-256 `E9314C5A0BAD4861E8580E94FDA545C42406A9349CF4A40A1186548C1B910C32`)
+maps all 1,531 distinct input paths to preserved exact bytes; the qualification
+records original and preserved artifact bases. Documentation inputs are copies
+from before this later receipt table. This normal-object/bounded-instruction
+proof does not imply hostile instrumentation, LTO, Secure CPU or hardware
+execution, runtime promotion or a successful whole matrix.
 
 The pre-helper-attribute-repair A30/C3SO and post-metadata C3FP immutable replay
 is retained under `%TEMP%/fiber-origin-parity-immutable-20261102-8a56264184ae43f1914e4733751016cb`.
@@ -135,8 +185,9 @@ inputs are preserved below
 `21CCABF30C2D48E5034D80C6607186D700C06C4069D0EDB83CC99A038701DD78`.
 They passed 48/50 normal-flag bodies, 23 scenarios, 13 compiled mutants,
 12 independent rejections and 31 controls per optimization. They do not
-qualify the subsequent canonical helper/raw-CPU wrapper fix; source-closure
-replay and independent adversarial qualification remain pending.
+qualify the subsequent canonical helper/raw-CPU wrapper fix. Fresh normal
+source-closure replay is recorded separately; independent adversarial and
+consumer qualification are not inferred from these old receipts.
 
 ## Staged C5TF CPU And Wrapper Parity
 
@@ -524,7 +575,8 @@ The new C5SO `ARM_CM55_SECURE_ONLY/secure` group is explicitly staged inventory
 with actual M55_NTZ Secure-only reference flags and selectable metadata zero.
 It has no inherited C3SO whole-body parity claim; its separate actual M55 gate
 has pre-helper-repair normal-codegen results preserved above. Source-closure
-replay after the canonical helper repair remains pending.
+replay after the canonical helper repair is recorded separately above; neither
+that replay nor shared infrastructure promotes the staged profile.
 
 `ARM_CM55/non_secure` now has staged C55S provider adapters in `fiber_port.c`,
 runtime CPU/MSP-plan support and boot map/hash-switch policy alongside its
@@ -1130,12 +1182,63 @@ forms. Both implementations stage high registers through `r4-r7`. Fiber also
 keeps EXC_RETURN in its explicit nine-word software frame and performs the
 inverse staged restore inside its hardened SVC/PendSV handlers.
 
+### FAP-CM0-THUMB1-VECTOR
+
+CM0 and CM0_MPU inline vector reads use GCC low-register constraints `=l`/`l`
+for both operands of Thumb-1 `ldr`. General-register constraints could select
+an unencodable high destination or base under register pressure. This header
+repair changes allocation constraints, not the naked transfer strings or frame
+layout. The normal O2/Os parity replay does not prove the hostile-pressure case;
+its source-derived compile/Unicorn and mutation proof is a separate gate.
+
+`tools/freertos_asm_parity.ps1 -Cm0Only` compiles the actual CM0, CM0+ and
+CM0_MPU objects and their actual pinned CM0 references, then runs only their
+existing eighteen ordered mechanism comparisons. It retains commands,
+preprocessed/assembler sources, objects, relocations, Thumb-1 attributes,
+disassembly and drift-checked source/tool hashes under a fresh BuildRoot.
+It uses no substituted production body. This is deliberately a narrow replay
+of the maintained ordered checks, not closed whole-body or whole-provider
+equivalence, CPU execution, additional optimization coverage or a full matrix.
+
+The post-constraint-repair narrow replay on 2026-11-02 passed O2 and Os, each
+with three configurations, six actual objects and eighteen ordered mechanisms.
+Each receipt records 1,475 inputs and 47 artifacts with zero drift. Exact
+receipt/artifact bytes and 1,478 distinct input paths are preserved under
+`%TEMP%/fiber-cm0-lowreg-parity-preserved-20261102-d8ef99f3ac074386b85d6f664392891c`.
+`qualification.json` SHA-256 is
+`BD74315E4F68E378DE06B3CA18D87DEAA29C25EB63EA3F47BB2ED704D6A8CC97`.
+The O2/Os receipt hashes are respectively
+`7D2810B338DDAF735538D0D9F075057A4C121B7FE63530AB2E320F1D09AA5D8F`
+and `0C313E76763186ED50730E4E67B2558F892A7F526EA4E11A86E36E1DB5AEFAD7`.
+Original receipt bytes retain historical absolute paths; `input-mirror.json`
+maps those input paths to preserved bytes and the qualification records both
+artifact base paths. This later table is not a live artifact of the replay.
+
 ### FAP-CM3-EXC-RETURN
 
 The pinned FreeRTOS CM3 first restore reconstructs Thread/PSP return by OR-ing
 the handler LR. Fiber stores exact EXC_RETURN in every context and restores it
 with `r4-r11`. This permits exact encoding validation and avoids manufacturing
 return authority in the handler.
+
+### FAP-CM3-LOCAL-LITERAL-POOLS
+
+The CM3 A32 repair annotates the sensitive helper chain and replaces CMSIS
+inline calls with port-local wrappers using the same CPU/NVIC primitives.
+Its three naked blocks also place `.ltorg` after terminal failure branches.
+This bounds PC-relative literal reach when native LTO merges text sections;
+pool placement is a real binary-layout change, not whole-function byte
+equivalence. It does not change the software frame or transfer instruction
+strings. Native-LTO reach and hostile-helper closure are separate gates.
+
+`tools/freertos_asm_parity.ps1 -Cm3Only` compiles actual repaired CM3 and
+pinned `portable/GCC/ARM_CM3/port.c` at the requested O2 or Os, reusing the
+same three first-start, first-restore and PendSV ordered comparisons as the
+whole driver. A fresh BuildRoot retains commands, preprocessed/assembler
+sources, objects, relocations, v7-M/Thumb-2 attributes, disassembly, exact
+compile-dependency closure and drift-checked source/tool hashes. This narrow
+generated-code replay is not closed whole-provider equivalence, CPU execution,
+native-LTO qualification, or an additional runtime-profile claim.
 
 ### FAP-FP-VALIDATION
 

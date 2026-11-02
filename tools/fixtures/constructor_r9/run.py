@@ -459,6 +459,37 @@ class Suite:
                         assembly=str(assembly), sha256=sha(assembly), exit=result["exit"],
                         finding="actual-header-Thumb1-register-constraint" if high else None,
                         scope="assembly-only-initial-MSP-helper-not-public-constructor-execution"))
+                    if register == 8 and not high and optimization == "O2":
+                        preprocessed = directory / (name + ".i")
+                        self.command([self.a.arm_gcc, *flags, "-E", self.fixture/"m0_initial_msp_probe.c", "-o", preprocessed])
+                        original = preprocessed.read_text()
+                        fixed = '\"ldr %0, [%1]\" : \"=l\"(value) : \"l\"(base)'
+                        restored = '\"ldr %0, [%1]\" : \"=r\"(value) : \"r\"(base)'
+                        require(original.count(fixed) == 1, "Exact repaired actual-header constraint anchor drift")
+                        mutant_source = directory / (name + "-restored-constraints.i")
+                        mutant_source.write_text(original.replace(fixed, restored), encoding="ascii")
+                        mutant_assembly = directory / (name + "-restored-constraints.s")
+                        codegen = profile["flags"] + ["-"+optimization, "-std=gnu11", "-ffreestanding", "-fno-builtin",
+                                                       "-ffunction-sections", "-fdata-sections"]
+                        if reserved:
+                            codegen += ["-ffixed-r9"]
+                        self.command([self.a.arm_gcc, *codegen, "-S", mutant_source, "-o", mutant_assembly])
+                        result = self.command([self.a.arm_gcc, *profile["flags"], "-c", mutant_assembly,
+                                               "-o", directory/(name+"-restored-constraints.o")], allow_failure=True)
+                        failures = re.findall(r"^.*?: Error: (.+)$", result["stderr"], re.M)
+                        text = mutant_assembly.read_text()
+                        require(result["exit"] != 0 and len(failures) == 1 and
+                                re.fullmatch(r"lo register required -- `ldr r8,\[r\d+\]'", failures[0]) and
+                                'fiber_portmacro.h\"' in text and "ldr r8, [" in text,
+                                "Restored actual-header constraints did not reject the exact Thumb1 instruction")
+                        self.assembly_probes.append(dict(name=name+"-restored-constraints", register=8,
+                            reserved_r9=reserved, assembly=str(mutant_assembly), sha256=sha(mutant_assembly),
+                            source=str(mutant_source), source_sha256=sha(mutant_source), exit=result["exit"],
+                            finding=None, control="actual-preprocessed-header-constraint-restoration",
+                            expected="THUMB1-LOW-REGISTER-REQUIRED",
+                            scope="compiled-negative-control-not-a-production-failure"))
+        require(not any(p["finding"] for p in self.assembly_probes),
+                "Actual CM0 initial-MSP helper still permits an invalid Thumb1 register operand")
 
     def build_case(self, profile, mode, mutant=None, reserved=False):
         contract = "reserved-r9" if reserved else "ordinary-aapcs"
@@ -592,12 +623,46 @@ def snapshot(repo, fixture, selected, cmsis):
     return {str(p.resolve()): sha(p) for p in sorted(files) if p.is_file() and "__pycache__" not in p.parts}
 
 
+def run_immutable(args, selected):
+    repo, cmsis = Path(args.repo).resolve(), Path(args.cmsis_core).resolve()
+    root = Path(args.build).resolve() / "immutable-inputs"
+    root.mkdir()
+    before = snapshot(repo, Path(__file__).resolve().parent, selected, cmsis)
+    material = []
+    for source_name, expected in before.items():
+        source = Path(source_name)
+        if source.is_relative_to(repo):
+            target = root / "repo" / source.relative_to(repo)
+        else:
+            require(source.is_relative_to(cmsis), "Unmapped immutable input: " + source_name)
+            target = root / "cmsis" / source.relative_to(cmsis)
+        data = source.read_bytes()
+        require(hashlib.sha256(data).hexdigest().upper() == expected, "Input changed while snapshotting: " + source_name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        require(sha(target) == expected, "Immutable byte-copy mismatch")
+        material.append(dict(source=source_name, copy=str(target), sha256=expected))
+    require(before == snapshot(repo, Path(__file__).resolve().parent, selected, cmsis), "Inputs changed during immutable snapshot construction")
+    (root / "manifest.json").write_text(json.dumps(material, indent=2) + "\n", encoding="ascii")
+    child = [sys.executable, "-B", str(root / "repo/tools/fixtures/constructor_r9/run.py"),
+             "--repo", str(root / "repo"), "--cmsis-core", str(root / "cmsis"),
+             "--arm-gcc", args.arm_gcc, "--build", args.build]
+    if args.profiles:
+        child += ["--profiles", args.profiles]
+    if args.modes:
+        child += ["--modes", args.modes]
+    (root / "child-command.json").write_text(json.dumps(child, indent=2) + "\n", encoding="ascii")
+    print("Constructor R9 immutable source/CMSIS snapshot: " + str(root), flush=True)
+    return subprocess.run(child, cwd=root / "repo").returncode
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ("repo", "arm-gcc", "cmsis-core", "build"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--profiles")
     parser.add_argument("--modes")
+    parser.add_argument("--immutable-inputs", action="store_true")
     args = parser.parse_args()
     suite = Suite(args)
     selected = profiles()
@@ -607,6 +672,8 @@ def main():
         selected = [p for p in selected if p["port"] in names]
     modes = args.modes.split(",") if args.modes else list(MODES)
     require(bool(modes) and len(set(modes)) == len(modes) and set(modes) <= set(MODES), "Unknown/duplicate mode")
+    if args.immutable_inputs:
+        raise SystemExit(run_immutable(args, selected))
     before = snapshot(suite.repo, suite.fixture, selected, args.cmsis_core)
     (suite.build / "inputs.before.json").write_text(json.dumps(before, indent=2) + "\n")
     report = dict(Verdict="FAIL", CompleteSuite=not (args.profiles or args.modes),
@@ -617,7 +684,7 @@ def main():
                   SupersededOracle="The preserved fiber-constructor-r9-4778c794c8e3492bb5d0c112c8dc071c ordinary-frame-only FAIL receipts used an overstrong oracle, not a reserved-ABI bug. Current classification keeps ordinary borrowing separate.",
                   PriorExtent={"Root": "fiber-constructor-r9-fec4e1435a99482aa62c3c68ec0d2bcb",
                                "Unqualified": 61, "LiteralPool": 48, "Thumb1Operands": 4, "WarningPolicy": 9,
-                               "Policy": "Preserved historical failures; repaired link flags and scoped diagnostics are requalified, not treated as old ABI failures."},
+                               "Policy": "Preserved failures. Function sections qualify the sectioned LTO configuration only; the 48 literal-pool failures are not dismissed as harness-only. Unsectioned production assembly requires separate qualification. Scoped warning diagnostics and operand constraints are tracked separately from ABI failures."},
                   Limits="Actual compiled constructor and bounded GPR restore instruction effects only; M23/M33/M55 use supported Unicorn instruction subsets, not actual CPU/security/exception/FP execution. Running restore uses an independently seeded saved-image R9, not a full save/exception switch. Reserved-register probe is not arbitrary PIC/TLS ABI qualification. No hardware/TF-M/Secure-runtime claim.")
     error = None
     try:
