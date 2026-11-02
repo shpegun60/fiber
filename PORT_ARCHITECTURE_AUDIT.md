@@ -2748,6 +2748,11 @@ controls still reject, and restoring the old caller dependency reproduces the
 specific undefined-variable error. The central matrix invokes this guard before
 full parity. This is test-infrastructure repair, with no production changes.
 
+An immutable standalone owner/reference replay at 62dca07 subsequently passes
+with zero drift across 933 files; its receipt is under
+%TEMP%/fiber-owner-import-replay-b9d137f8e1794e9ea29a015d12bd4178.
+That scoped result is not a combined-matrix PASS.
+
 ### CM0/CM0 MPU And CM4 Raw Helper Closure
 
 The classic ports now own sensitive/GRO inline CPU primitives and protect the
@@ -2827,3 +2832,32 @@ Production sources and RuntimeSelectable=0 remain unchanged. The Secure
 bootstrap and typed Non-secure provider are fixtures, not a real Secure TF-M
 image, hardware validation or activation approval. Earlier failed receipts
 remain failed; reference parity and fresh combined qualification stay separate.
+
+### Split FP NTZ Runtime-Version Guard
+
+Independent retention review finds two separate runtime/PendSV components,
+CM55F NTZ and M55 MVE-FP NTZ, with exact cohort reads but no own runtime-version
+reference. Their existing first-selection bridges now retain ABI v1 as well.
+The read stays one-shot; no naked transfer body, frame, public ABI or hot path
+changes. Matching, stale-v2-component and retain-removal causal archives are
+checked for both profiles with section GC, normal and native LTO. The named
+first-selection function is explicitly rooted for this bounded link proof;
+it is not substituted for real-common execution evidence.
+
+Fresh raw qualification passes sixty cells and 300 controls across all five
+optimizations and native-LTO text layouts. Parent verifies 66 consumed inputs
+and 7,587 artifacts without mismatch. Both maintained runtime/archive/vector
+gates and twenty-four unchanged pinned O2/Os ordered assertions pass. The first
+new diagnostic classifier attempt rejects its own line-wrapped linker message;
+after accepting whitespace only at that delimiter, the fresh complete focused
+run passes. Exact roots and hashes are in the two selected-port leaf ledgers.
+
+### ac087c6 Combined-Matrix Replay
+
+The new immutable 941-file snapshot passes both full pinned O2/Os parity runs,
+classic/Thumb-1/consumer/owner gates and subsequent constructor/start-policy
+checks. It stops in the source-extracted scalar NTZ host model: production
+functions now use port-local CPU readers while the fixture still supplies only
+CMSIS-named doubles. Its source drift is zero, exit status is FAIL, and later
+gates are NOT_RUN. Preserve C:/fq-eb32f77e84/matrix-result.json and artifacts
+at C:/fqm-eb32f77e84; a fixture repair requires new scoped and combined runs.

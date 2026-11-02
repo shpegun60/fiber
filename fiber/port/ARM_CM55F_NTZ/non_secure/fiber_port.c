@@ -95,6 +95,7 @@ FiberContext *fiber_port_scheduler_pick_first_from_start(void)
 {
 	/* This one-shot call keeps the complete runtime object in the exact cohort
 	 * link proof without adding a cohort read to the PendSV hot path. */
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
 	const uint32_t critical_state = fiber_port_scheduler_critical_enter();
 	FIBER_REQUIRE(fiber_port_basepri_read() ==

@@ -1774,6 +1774,80 @@ function Test-GeneratedCurrentSlotLoadOnly {
     }
 }
 
+function Test-SplitRuntimeComponentAbiGuard {
+    param(
+        [string]$Compiler,
+        [string]$Ar,
+        [string]$Nm,
+        [string[]]$CompileArguments,
+        [string[]]$LinkArguments,
+        [string]$Source,
+        [string]$BootObject,
+        [string]$SvcObject,
+        [string]$Archive,
+        [string]$Elf,
+        [string]$BuildRoot
+    )
+
+    $directory = Join-Path $BuildRoot "component-abi-guard"
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    $sourceText = Get-Content -LiteralPath $Source -Raw
+    $retain = "FIBER_RUNTIME_PORT_ABI_RETAIN_V1();"
+    if (([regex]::Matches($sourceText, [regex]::Escape($retain))).Count -ne 1) {
+        throw "Split runtime must own one cold ABI retain: $Source"
+    }
+    $firstPick = Get-CFunctionBody -Source $sourceText `
+        -Signature "FiberContext *fiber_port_scheduler_pick_first_from_start(void)" `
+        -Path $Source
+    if ($firstPick.IndexOf($retain, [StringComparison]::Ordinal) -lt 0) {
+        throw "Split runtime ABI retain must be on its one-shot first-selection path: $Source"
+    }
+
+    $v2 = "fiber_internal_runtime_port_abi_v2_anchor"
+    $rename = "-Dfiber_internal_runtime_port_abi_v1_anchor=$v2"
+    $controlSource = Join-Path $directory "without-runtime-retain.c"
+    Set-Content -LiteralPath $controlSource -Encoding ASCII `
+        -Value $sourceText.Replace($retain, "/* Deliberate missing component-version guard. */")
+
+    foreach ($kind in @("matching", "stale-v2", "removed-guard-control")) {
+        $candidateArchive = $Archive
+        if ($kind -ne "matching") {
+            $candidateSource = if ($kind -eq "stale-v2") { $Source } else { $controlSource }
+            $object = Join-Path $directory "$kind.o"
+            & $Compiler @CompileArguments $rename -c $candidateSource -o $object
+            if ($LASTEXITCODE -ne 0) { throw "Split component mutation failed compile: $kind" }
+            $undefined = @(& $Nm -u $object)
+            if ($LASTEXITCODE -ne 0) { throw "Split component mutation nm failed: $kind" }
+            $hasV2 = @($undefined | Where-Object { $_ -match "\bU\s+$v2`$" }).Count -eq 1
+            if ($hasV2 -ne ($kind -eq "stale-v2")) {
+                throw "Split component mutation did not isolate its own version dependency: $kind"
+            }
+            $candidateArchive = Join-Path $directory "$kind.a"
+            & $Ar rcs $candidateArchive $BootObject $SvcObject $object
+            if ($LASTEXITCODE -ne 0) { throw "Split component mutation archive failed: $kind" }
+        }
+        $candidateElf = Join-Path $directory "$kind.elf"
+        $arguments = @($LinkArguments | ForEach-Object {
+            if ($_ -eq $Archive) { $candidateArchive }
+            elseif ($_ -eq $Elf) { $candidateElf }
+            else { $_ }
+        }) + @("-Wl,--undefined=fiber_port_scheduler_pick_first_from_start")
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments $arguments `
+            -LogPath (Join-Path $directory "$kind.log")
+        if ($kind -eq "stale-v2") {
+            $missing = @([regex]::Matches($result.Output,
+                'undefined reference to\s+[`'']([^`'']+)[`'']') |
+                ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+            if (($result.ExitCode -eq 0) -or ($missing.Count -ne 1) -or ($missing[0] -ne $v2)) {
+                throw "Stale split runtime must fail solely on its own v2 anchor: $($result.Output)"
+            }
+        }
+        elseif ($result.ExitCode -ne 0) {
+            throw "Split runtime positive/causal control failed ($kind): $($result.Output)"
+        }
+    }
+}
+
 function Test-ReverseAbiVersionMismatch {
     param(
         [string]$Compiler,
@@ -13454,6 +13528,13 @@ SECTIONS
             throw "ARM_CM55F_NTZ runtime archive/ELF proof failed link ($($archiveMode.Name))"
         }
 
+        Test-SplitRuntimeComponentAbiGuard -Compiler $Compiler -Ar $Ar `
+            -Nm $(if ($archiveMode.Name -eq "lto") { $GccNm } else { $Nm }) `
+            -CompileArguments $archiveArgs -LinkArguments $linkArgs `
+            -Source $runtimeSourcePath -BootObject $archiveBootObject `
+            -SvcObject $archiveSvcObject -Archive $archivePath -Elf $elfPath `
+            -BuildRoot $modeDir
+
         $objectNm = if ($archiveMode.Name -eq "lto") { $GccNm } else { $Nm }
         $elfDefined = @(& $objectNm -g --defined-only $elfPath)
         if ($LASTEXITCODE -ne 0) {
@@ -14593,6 +14674,13 @@ SECTIONS
         if ($LASTEXITCODE -ne 0) {
             throw "ARM_CM55_MVEF_NTZ runtime archive/ELF proof failed link ($($archiveMode.Name))"
         }
+
+        Test-SplitRuntimeComponentAbiGuard -Compiler $Compiler -Ar $Ar `
+            -Nm $(if ($archiveMode.Name -eq "lto") { $GccNm } else { $Nm }) `
+            -CompileArguments $archiveArgs -LinkArguments $linkArgs `
+            -Source $runtimeSourcePath -BootObject $archiveBootObject `
+            -SvcObject $archiveSvcObject -Archive $archivePath -Elf $elfPath `
+            -BuildRoot $modeDir
 
         $objectNm = if ($archiveMode.Name -eq "lto") { $GccNm } else { $Nm }
         $elfDefined = @(& $objectNm -g --defined-only $elfPath)

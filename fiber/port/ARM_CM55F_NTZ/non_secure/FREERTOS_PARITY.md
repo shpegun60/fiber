@@ -274,3 +274,34 @@ Focused maintained integration gates:
 Actual pinned ordered-object comparison:
   %TEMP%/fiber-fp-ntz-reference-ad255696f3ed476ba4536c89046c0459
 ```
+
+## Split Runtime Version Binding
+
+The separate runtime/PendSV object now retains its own runtime ABI v1 anchor
+in the existing one-shot first-selection bridge, alongside its exact cohort.
+This closes mixed-version component admission without a new symbol, frame
+change, naked-transfer edit or per-switch read. Cohort identity does not replace
+runtime calling-convention/attribute/semantic version binding.
+
+The maintained runtime gate now links matching, stale-v2-component and
+guard-removal-control archives with section GC, normal and native LTO. The
+real first-selection function is an explicit linker root for this bounded
+component proof. Each stale object must fail only on its missing v2 anchor;
+removing only the component retain must restore the causal control link.
+This does not claim complete real-common execution from the synthetic fixture.
+
+Fresh CM55F/MVE-FP compiler qualification passes sixty baseline/raw cells and
+300 controls at O0/Og/O2/Os/O3 with both native-LTO text layouts. Parent rehashes
+66 consumed inputs and 7,587 artifacts without mismatch. The maintained runtime
+archive/vector gates and unchanged pinned O2/Os transfer assertions also pass.
+
+```text
+Raw compiler root:
+  %TEMP%/fiber-fp-ntz-component-raw-7e0ec7f34e1646d4bdc1c1e1393ec696
+results.json SHA-256:
+  10E48E2DE96916920F6A88036E97F94E3B0292F54B9328E20580F04E2B6300A9
+Maintained runtime/component gates:
+  %TEMP%/fiber-classic-current-integration-0ddfe848c6904e378985cd50a5ba6db8
+Actual pinned ordered-object checks:
+  %TEMP%/fiber-fp-ntz-reference-9f1878d685c9438a8e66aba10fb7f799
+```
