@@ -76,6 +76,21 @@ Check 'concrete-selection/before-parity' ($selectionDispatch[0].Extent.StartOffs
     $source.IndexOf('foreach ($parityOptimization'))
 Check 'concrete-selection/compiler-and-artifacts' ($selectionDispatch[0].Extent.Text -cmatch
     '-ArmGcc \$gcc -BuildRoot \(Join-Path \$buildRoot "audit-concrete-selection"\)')
+foreach ($gate in @(
+        @{Name='runtime-sources';Runner='test_runtime_sources';Tools=$false},
+        @{Name='context-facade';Runner='test_context_facade';Tools=$true})) {
+    $needle = '"tools\' + $gate.Runner + '.ps1"'
+    $dispatch = @($commands | Where-Object {$_.Extent.Text.Contains($needle)})
+    Check ($gate.Name + '/one-dispatch') ($dispatch.Count -eq 1)
+    Check ($gate.Name + '/before-parity') ($dispatch[0].Extent.StartOffset -lt
+        $source.IndexOf('foreach ($parityOptimization'))
+    Check ($gate.Name + '/dedicated-artifacts') ($dispatch[0].Extent.Text.Contains(
+        '-BuildRoot (Join-Path $buildRoot "audit-' + $gate.Name + '")'))
+    if ($gate.Tools) {
+        Check ($gate.Name + '/real-tool-inputs') ($dispatch[0].Extent.Text -cmatch
+            '-ArmGcc \$gcc -CmsisCore \$cmsis')
+    }
+}
 foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime_admission',
         'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
     $needle = '"tools\' + $runner + '.ps1"'

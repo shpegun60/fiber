@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "providers": {
+    "engine": "fiber/fiber_core.c",
+    "state": "fiber/fiber_runtime_state.c",
+    "panic": "fiber/fiber_panic.c",
+    "optional_configuration": "fiber/fiber_runtime_context_configuration.c"
+  },
+  "compatibility": {
+    "legacy_compat": [],
+    "facade_bridge": [
+      "fiber/fiber_context_compat.c"
+    ]
+  }
+}

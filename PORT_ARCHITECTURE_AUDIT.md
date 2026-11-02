@@ -3350,3 +3350,34 @@ The body/attribute proof is not transitive hostile-compiler closure through the
 legacy cold init/setter, global five-optimization FreeRTOS equivalence, completed
 ownership inversion, Fiber lifecycle or hardware qualification. The independent
 0372d72 combined matrix remains in progress against its immutable source archive.
+
+### Common Source-Role Inventory
+
+The ownership extraction first makes proof recipes select explicit source roles
+through `tools/runtime_sources.json`, rather than assume three historical file
+names. This manifest contains paths only, never ABI symbol allowlists, expected
+frame bytes or safety oracles. Optional configuration remains an explicit role.
+The initial mapping still selects the old owners and additive Context bridge;
+selection infrastructure alone is not runtime ownership inversion.
+
+The shared PowerShell/Python reader gate passes 139 cases and 556 API verdicts:
+`%TEMP%/fiber-runtime-source-inventory-a4cbd76dca124826a7601967bfc1ea75/metadata-repair/runtime-sources-472c4be5f70147d1b9e1f66d74cf8597/results.json`,
+SHA-256 `04B0406EC5ECEEC0367CD2C356569B9CC694FF8A489F9ADCF8C3BD89135F362D`.
+Independent rehash checks 1,123 input/artifact records without mismatch.
+The repaired cases reject JSON `__type` metadata hidden as XML attributes,
+including nested objects, ordering, escaped names and duplicates. The earlier
+112-case reader receipt does not cover that repaired boundary and is retained
+as weaker historical evidence.
+
+Matrix dispatch-policy checks now pass 79 assertions, including mandatory
+pre-parity dispatch of both source readers and the Context facade gate. This
+is proof plumbing only; neither reader tests nor dispatch checks establish
+Context execution, full matrix acceptance or hardware validation.
+
+The matrix recipe migration additionally passes 22 focused checks over eleven
+source recipes, preserving their source order and byte-identical output for
+the four existing common objects. Receipt:
+`%TEMP%/fiber-matrix-source-roles-1782737ef6aa47e0825069bc06525819/attempt2/results.json`,
+SHA-256 `FA0AAD6F342C1FB28DE95D7DFE874212C5B1A11B71E0E4568DD3729CEBF2160E`.
+Its 456 before/after inputs and 432 artifacts independently rehash unchanged.
+The production source-role mapping has not changed in this checkpoint.

@@ -14,6 +14,21 @@ Set-StrictMode -Version 2.0
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 . (Join-Path $PSScriptRoot "matrix_artifacts.ps1")
+. (Join-Path $PSScriptRoot "runtime_sources.ps1")
+
+function Get-MatrixRuntimeSources {
+    param(
+        [string]$RepositoryRoot,
+        [Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Roles
+    )
+
+    # Existing matrix recipes use repository-relative Windows paths. Keep that
+    # representation local; the shared readers return canonical absolute paths.
+    $root = (Get-Item -LiteralPath $RepositoryRoot).FullName.TrimEnd('\', '/')
+    foreach ($path in @(Get-RuntimeSourcePaths -RepositoryRoot $root -Roles $Roles)) {
+        $path.Substring($root.Length + 1).Replace('/', '\')
+    }
+}
 
 function Assert-MatrixExecutionPolicy {
     param(
@@ -57,6 +72,16 @@ function Assert-MatrixC55sAdmissionReceipt {
 
 Assert-MatrixExecutionPolicy -Required $RequireArchitectureExecution `
     -SettingsSubset $SettingsOnly -QemuRoot $ControlQemuRoot
+
+# Provenance for role-based recipes, not an ABI/safety oracle or full compiler
+# dependency closure. Capture even unselected optional/bridge roles explicitly.
+$runtimeSourceInputHashesBefore = [ordered]@{}
+foreach ($path in (@(Get-RuntimeSourceInputs -RepositoryRoot $RepoRoot -Roles @(
+        'engine', 'state', 'panic', 'optional_configuration',
+        'legacy_compat', 'facade_bridge')) + @($PSCommandPath))) {
+    $runtimeSourceInputHashesBefore[$path] =
+        (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+}
 
 function Test-CmsisCorePath {
     param([string]$Path)
@@ -203,7 +228,7 @@ function Assert-RetainedCohortExpectationSection {
 function Test-SchedulePortBoundary {
     param([string]$RepositoryRoot)
 
-    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
+    $corePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles engine
     $coreSource = Get-Content -LiteralPath $corePath -Raw
     $scheduleBody = Get-CFunctionBody -Source $coreSource `
         -Signature "void fiber_schedule(void)" -Path $corePath
@@ -324,10 +349,10 @@ function Test-FinalReversePortAbi {
 function Test-ContextPortBoundary {
     param([string]$RepositoryRoot)
 
-    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
-    $runtimePath = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
-    $configurationPath = Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_context_configuration.c"
+    $corePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles engine
+    $runtimePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
+    $configurationPath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot `
+        -Roles optional_configuration
     $sources = @{
         $corePath = Get-Content -LiteralPath $corePath -Raw
         $runtimePath = Get-Content -LiteralPath $runtimePath -Raw
@@ -1372,12 +1397,8 @@ function Test-CommonRuntimeWithoutCmsis {
     $probeDir = Join-Path $BuildRoot "common-runtime-no-cmsis"
     New-Item -ItemType Directory -Path $probeDir | Out-Null
 
-    $sources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_runtime_context_configuration.c",
-        "fiber\fiber_panic.c"
-    )
+    $sources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'optional_configuration', 'panic', 'legacy_compat'))
     foreach ($source in $sources) {
         $sourcePath = Join-Path $RepositoryRoot $source
         $objectPath = Join-Path $probeDir ((Split-Path $source -Leaf) + ".o")
@@ -1407,7 +1428,8 @@ function Test-CommonRuntimeWithoutCmsis {
         }
     }
 
-    $runtimeStateObject = Join-Path $probeDir "fiber_runtime_state.c.o"
+    $runtimeStateSource = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
+    $runtimeStateObject = Join-Path $probeDir ((Split-Path $runtimeStateSource -Leaf) + ".o")
     $runtimeStateSections = (& $Objdump -h $runtimeStateObject) -join "`n"
     if ($LASTEXITCODE -ne 0) {
         throw "objdump failed for common runtime current-slot storage proof"
@@ -1428,10 +1450,9 @@ function Test-OptionalContextConfigurationAbi {
 
     $headerPath = Join-Path $RepositoryRoot `
         "fiber\fiber_runtime_context_configuration_abi.h"
-    $sourcePath = Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_context_configuration.c"
-    $statePath = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
-    $corePath = Join-Path $RepositoryRoot "fiber\fiber_core.c"
+    $sourcePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles optional_configuration
+    $statePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
+    $corePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles engine
     $publicPath = Join-Path $RepositoryRoot "fiber\fiber_core.h"
     $fixturePath = Join-Path $RepositoryRoot `
         "tools\fixtures\runtime_context_configuration_abi_probe.c"
@@ -1441,8 +1462,9 @@ function Test-OptionalContextConfigurationAbi {
             throw "Optional context-configuration ABI is missing: $path"
         }
     }
-    if ($MandatoryCommonSources -contains
-            "fiber\fiber_runtime_context_configuration.c") {
+    $optionalSource = Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot `
+        -Roles optional_configuration
+    if ($MandatoryCommonSources -contains $optionalSource) {
         throw "Optional context-configuration source must not enter the mandatory common source group"
     }
 
@@ -2207,13 +2229,13 @@ function Test-AdversarialSensitiveGeneratedCode {
         "-I$(Join-Path $RepositoryRoot 'fiber')"
     ) + $adversarial
     $commonFunctions = @{
-        "fiber\fiber_core.c" = @(
+        engine = @(
             "fiber_current",
             "fiber_start",
             "fiber_schedule",
             "fiber_internal_task_return"
         )
-        "fiber\fiber_runtime_state.c" = @(
+        state = @(
             "fiber_internal_runtime_load_current_context",
             "fiber_internal_scheduler_is_configured",
             "fiber_internal_runtime_select_scheduler_candidate",
@@ -2222,13 +2244,14 @@ function Test-AdversarialSensitiveGeneratedCode {
             "fiber_internal_runtime_close_context_configuration",
             "fiber_internal_runtime_context_configuration_is_open"
         )
-        "fiber\fiber_runtime_context_configuration.c" = @(
+        optional_configuration = @(
             "fiber_internal_runtime_require_context_configuration_open"
         )
-        "fiber\fiber_panic.c" = @("fiber_panic")
+        panic = @("fiber_panic")
     }
 
-    foreach ($source in $commonFunctions.Keys) {
+    foreach ($role in $commonFunctions.Keys) {
+        $source = Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles $role
         $object = Join-Path $probeDir (($source -replace '[\\/]', '_') + ".o")
         $args = $commonArgs + @(
             "-c",
@@ -2241,7 +2264,7 @@ function Test-AdversarialSensitiveGeneratedCode {
             throw "Adversarial common compile failed: $source"
         }
         $disassembly = (& $Objdump -dr $object) -join "`n"
-        foreach ($symbol in $commonFunctions[$source]) {
+        foreach ($symbol in $commonFunctions[$role]) {
             Assert-SensitiveFunctionClean -Disassembly $disassembly `
                 -Symbol $symbol -Path $source
         }
@@ -2484,11 +2507,8 @@ typedef enum IRQn {
 #include "core_cm7.h"
 #endif
 "@
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
@@ -2787,11 +2807,8 @@ typedef enum IRQn {
 #include "core_cm55.h"
 #endif
 "@
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @{
         Runtime = "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c"
         Boot = "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_boot.c"
@@ -3812,11 +3829,8 @@ function Test-ArmCm23NtzRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
         "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port_boot.c"
@@ -4874,11 +4888,8 @@ function Test-ArmCm33MpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM33_MPU\non_secure\fiber_port.c",
         "fiber\port\ARM_CM33_MPU\non_secure\fiber_port_boot.c"
@@ -6062,11 +6073,8 @@ function Test-ArmCm55MpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM55_MPU\non_secure\fiber_port.c",
         "fiber\port\ARM_CM55_MPU\non_secure\fiber_port_boot.c"
@@ -6537,11 +6545,8 @@ function Test-ArmCm55fMpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM55F_MPU\non_secure\fiber_port_boot.c",
         "fiber\port\ARM_CM55F_MPU\non_secure\fiber_port_svc.c",
@@ -6913,11 +6918,8 @@ function Test-ArmCm55MvefMpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM55_MVEF_MPU\non_secure\fiber_port_boot.c",
         "fiber\port\ARM_CM55_MVEF_MPU\non_secure\fiber_port_svc.c",
@@ -8016,10 +8018,9 @@ function Test-ArmCm33SecureGatewayAbi {
         "tools\fixtures\arm_cm33_secure_context_attach_probe.c"
     $nonSecureAttachStubs = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_context_attach_stubs.c"
-    $configurationSource = Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_context_configuration.c"
-    $runtimeStateSource = Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_state.c"
+    $configurationSource = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot `
+        -Roles optional_configuration
+    $runtimeStateSource = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
     $secureLinker = Join-Path $RepositoryRoot `
         "tools\fixtures\arm_cm33_secure_gateway_secure.ld"
     $nonSecureLinker = Join-Path $RepositoryRoot `
@@ -18361,11 +18362,8 @@ function Test-ArmCm4MpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM4_MPU\fiber_port.c",
         "fiber\port\ARM_CM4_MPU\fiber_port_boot.c"
@@ -18761,7 +18759,7 @@ function Test-ArmCm0MpuLayoutContract {
     $bootSource = Join-Path $profileDir "fiber_port_boot.c"
     $runtimeSource = Join-Path $profileDir "fiber_port.c"
     $linkerContractPath = Join-Path $profileDir "fiber_port_linker_contract.ld"
-    $runtimeStateSource = Join-Path $RepositoryRoot "fiber\fiber_runtime_state.c"
+    $runtimeStateSource = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
     $linkerBoundarySymbols = @(
         "__fiber_mpu_unprivileged_code_start__",
         "__fiber_mpu_unprivileged_code_end__",
@@ -20053,11 +20051,8 @@ function Test-ArmCm0MpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM0_MPU\fiber_port.c",
         "fiber\port\ARM_CM0_MPU\fiber_port_boot.c"
@@ -21341,22 +21336,25 @@ SECTIONS
             throw "ARM_CM3_MPU synthetic ELF lost symbol: $requiredSymbol"
         }
     }
-    $runtimeStateSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_state.c") -Raw
+    $runtimeStatePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
+    $runtimeStateSource = Get-Content -LiteralPath $runtimeStatePath -Raw
     if ($runtimeStateSource.IndexOf(
             '.bss.fiber_runtime_current_context_slot',
             [System.StringComparison]::Ordinal) -lt 0) {
         throw "Common current slot lost its MPU-isolatable .bss subsection"
     }
-    $slotSectionOwners = @(Get-ChildItem -LiteralPath (Join-Path `
-        $RepositoryRoot "fiber") -Recurse -File -Filter "*.c" | Where-Object {
+    # Scan the legacy tree plus the active state-owner tree. Inactive Context
+    # drafts are not source owners; once selected, stale legacy owners must fail.
+    $slotOwnerRoots = @((Join-Path $RepositoryRoot "fiber"),
+        (Split-Path -Parent $runtimeStatePath)) | Select-Object -Unique
+    $slotSectionOwners = @(Get-ChildItem -LiteralPath $slotOwnerRoots `
+        -Recurse -File -Filter "*.c" | Where-Object {
         (Get-Content -LiteralPath $_.FullName -Raw).IndexOf(
             '.bss.fiber_runtime_current_context_slot',
             [System.StringComparison]::Ordinal) -ge 0
     })
     if (($slotSectionOwners.Count -ne 1) -or
-            ($slotSectionOwners[0].FullName -ne (Join-Path $RepositoryRoot `
-                "fiber\fiber_runtime_state.c"))) {
+            ($slotSectionOwners[0].FullName -ne $runtimeStatePath)) {
         throw "Only common runtime may own the isolated current-slot input section"
     }
     $slotSymbolLines = @($elfSymbols | Where-Object {
@@ -21569,11 +21567,8 @@ function Test-ArmCm3MpuRuntimeIntegration {
         }
     }
 
-    $commonSources = @(
-        "fiber\fiber_core.c",
-        "fiber\fiber_runtime_state.c",
-        "fiber\fiber_panic.c"
-    )
+    $commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles @(
+        'engine', 'state', 'panic', 'legacy_compat'))
     $portSources = @(
         "fiber\port\ARM_CM3_MPU\fiber_port.c",
         "fiber\port\ARM_CM3_MPU\fiber_port_boot.c"
@@ -21970,11 +21965,8 @@ Test-SelectedPortHandlerHardening -RepositoryRoot $RepoRoot
 Test-PendSvSaveValidationOrdering -RepositoryRoot $RepoRoot
 Test-ScheduleValidationOwnership -RepositoryRoot $RepoRoot
 
-$commonSources = @(
-    "fiber\fiber_core.c",
-    "fiber\fiber_runtime_state.c",
-    "fiber\fiber_panic.c"
-)
+$commonSources = @(Get-MatrixRuntimeSources -RepositoryRoot $RepoRoot -Roles @(
+    'engine', 'state', 'panic', 'legacy_compat'))
 
 $portableApplicationFixture = "tools\fixtures\portable_application.c"
 $selectedPortContextCohortExpectationFixture =
@@ -22252,6 +22244,8 @@ try {
     Write-Host "Compiler: $gcc"
     Write-Host "CMSIS:    $cmsis"
     Write-Host "Build:    $buildRoot"
+    $runtimeSourceInputHashesBefore | ConvertTo-Json -Depth 3 |
+        Set-Content -LiteralPath (Join-Path $buildRoot 'runtime-source-inputs-before.json') -Encoding UTF8
 
     Write-Host "== audit / deterministic matrix artifact paths =="
     & (Join-Path $RepoRoot "tools\test_matrix_artifacts.ps1") `
@@ -22265,6 +22259,14 @@ try {
     Write-Host "== audit / required architecture-execution policy =="
     & (Join-Path $RepoRoot "tools\test_matrix_execution_policy.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-matrix-execution-policy")
+
+    Write-Host "== audit / shared common-source inventory readers =="
+    & (Join-Path $RepoRoot "tools\test_runtime_sources.ps1") `
+        -BuildRoot (Join-Path $buildRoot "audit-runtime-sources")
+    Write-Host "== audit / additive Context facade =="
+    & (Join-Path $RepoRoot "tools\test_context_facade.ps1") `
+        -ArmGcc $gcc -CmsisCore $cmsis `
+        -BuildRoot (Join-Path $buildRoot "audit-context-facade")
 
     Write-Host "== audit / strict-mode parity helper imports =="
     & (Join-Path $RepoRoot "tools\test_parity_helper_imports.ps1") `
@@ -23529,14 +23531,31 @@ typedef enum IRQn {
     }
 
     $matrixPassed = $true
-    Write-Host ""
-    Write-Host "PASS: compile matrix completed."
 }
 finally {
+    $runtimeSourceInputHashesAfter = [ordered]@{}
+    $runtimeSourceInputDrift = @()
+    foreach ($path in $runtimeSourceInputHashesBefore.Keys) {
+        $hash = if (Test-Path -LiteralPath $path -PathType Leaf) {
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        } else { $null }
+        $runtimeSourceInputHashesAfter[$path] = $hash
+        if ($runtimeSourceInputHashesBefore[$path] -cne $hash) {
+            $runtimeSourceInputDrift += $path
+        }
+    }
+    $runtimeSourceInputHashesAfter | ConvertTo-Json -Depth 3 |
+        Set-Content -LiteralPath (Join-Path $buildRoot 'runtime-source-inputs-after.json') -Encoding UTF8
+    if ($runtimeSourceInputDrift.Count -ne 0) { $matrixPassed = $false }
     if ($KeepBuild -or !$matrixDirectory.Automatic -or !$matrixPassed) {
         Write-Host "Kept build directory: $buildRoot"
     }
     else {
         Remove-FiberAutomaticMatrixBuildDirectory $matrixDirectory
     }
+    if ($runtimeSourceInputDrift.Count -ne 0) {
+        throw "Common source-inventory input drift: $($runtimeSourceInputDrift -join ', ')"
+    }
 }
+Write-Host ""
+Write-Host "PASS: compile matrix completed."
