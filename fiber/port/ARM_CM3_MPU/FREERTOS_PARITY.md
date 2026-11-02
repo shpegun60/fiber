@@ -1103,3 +1103,38 @@ Common runtime choreography and the five/eight-function ABI are frozen during
 all slices. Any discovered need for a ninth mandatory operation is an audit
 failure and must be justified against the complete reference inventory before
 changing common code.
+
+## Raw Compiler Helper Closure
+
+The selected dictionary now annotates its r9/BASEPRI inline helpers with the
+canonical inline-sensitive/GRO bundle and owns integer IPSR, CONTROL, PRIMASK,
+FAULTMASK and PSP reads. Barriers, IRQ operations and terminal WFE use local
+assembly primitives instead of instrumentable CMSIS inline bodies. Runtime C
+consumes those primitives; protection sections, frame geometry, ABI identity,
+guard ordering and all six naked function bodies are unchanged.
+
+The preserved pre-repair O2/Os receipt fails all six raw cells while its six
+ordinary cells pass. Fresh immutable repaired-source qualification passes
+thirty baseline/raw cells and 150 compiled controls over O0/Og/O2/Os/O3,
+ordinary native objects and real native LTO with both section layouts. Parent
+rehashes all 59 recorded inputs and 3,716 artifacts without mismatch.
+
+Fresh actual pinned FreeRTOS/Fiber O2/Os objects pass the maintained SVC,
+first-restore and PendSV ordered assertions. The existing layout and complete
+portable-application archive/GC/LTO/vector/cohort integration gates also pass.
+These are compiler/link and selected ordered-mechanism proofs, not whole-body
+equivalence, exception execution, board support or a global matrix PASS.
+
+```text
+Pre-repair FAIL:
+  %TEMP%/fiber-sensitive-port-closure-1c8d07560d08486bb8ad4a13e9feb42c
+Repaired PASS:
+  %TEMP%/fiber-sensitive-port-closure-2fa6431a535d4557ae7a02e6a4339873
+results.json SHA-256:
+  721BD5AC4E99496DD7FA2F4A92436A284FBAF3DE44DF8A729348C38A863BEF7A
+Paired ordered O2/Os proof:
+  %TEMP%/fiber-classic-mpu-focused-parity-c058fcf33c154fd89b90e8c4da0b2dfb
+Integration gates:
+  %TEMP%/fiber-cm3-mpu-layout-f77f82155c864a0b8c4e2a26f10c08ed
+  %TEMP%/fiber-classic-mpu-integration-b45a4f74ce8e48aeb02f86983172c325
+```

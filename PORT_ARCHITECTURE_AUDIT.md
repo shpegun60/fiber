@@ -2622,3 +2622,39 @@ The independent matrix policy runner passes 41 admission/dispatch checks.
 This is infrastructure proof, not a fresh combined-matrix or CPU receipt. The
 profile execution receipts above remain separate until a new immutable-source
 combined run completes. The earlier retained combined failure is not relabeled.
+
+### Classic MPU Raw Helper Repair
+
+CM3 MPU and CM4 MPU now own canonical sensitive inline CPU primitives instead
+of entering instrumentable CMSIS helpers. The twelve naked transfer bodies,
+frame/layout identities, MPU policy and errata mechanics are unchanged. Each
+fresh immutable primary-profile compiler suite passes thirty baseline/raw
+cells and 150 compiled controls at O0/Og/O2/Os/O3 with ordinary and both native
+LTO text layouts. Parent rehashes 59 inputs and 3,716 artifacts for each suite
+without mismatch; both preserved pre-repair raw receipts remain FAIL.
+
+Fresh paired O2/Os objects pass the maintained twelve ordered mechanisms across
+the two profiles. The existing CM3 layout/runtime and CM4 M4/M7 8/16-region
+archive/GC/LTO/ELF integration gates pass separately. This is not all FP ABIs,
+whole-body reference equivalence, global matrix qualification or CPU execution.
+The exact leaf ledgers retain the commands/artifact roots and limits.
+
+### bc520c5 Combined-Matrix Replay
+
+The required-execution matrix is replayed from 915 immutable files at
+`bc520c5a722ca70a461561cf30a59eb4ad8a4b3d`, with zero source drift. An initial
+parent PowerShell wrapper abort on compiler stderr is retained separately as
+an infrastructure failure. The corrected replay fails the real O2 C33SCOHORT
+exact gateway dependency check. Earlier O2 A30/C3SO/C5SO/C3FP/C5TF and ordered
+transfer passes do not turn that combined result into PASS; later gates did
+not execute. The actual dependency/call-site change requires a precise parity
+repair and new qualification, not a blanket allowlist expansion.
+
+```text
+Immutable source and both attempt records:
+  C:/fq-e6379d9d53
+Real failed matrix artifacts:
+  C:/fqm-e6379d9d53-r2
+Replay result:
+  C:/fq-e6379d9d53/replay-02/matrix-result.json
+```

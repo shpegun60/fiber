@@ -48,6 +48,12 @@
 	fiber_portASM volatile("dsb" ::: "memory")
 #define fiber_portINST_SYNC_BARRIER() \
 	fiber_portASM volatile("isb" ::: "memory")
+#define fiber_portDISABLE_IRQ() \
+	fiber_portASM volatile("cpsid i" ::: "memory")
+#define fiber_portENABLE_IRQ() \
+	fiber_portASM volatile("cpsie i" ::: "memory")
+#define fiber_portWAIT_FOR_EVENT() \
+	fiber_portASM volatile("wfe" ::: "memory")
 
 #define fiber_portSTRINGIFY_I(value) #value
 #define fiber_portSTRINGIFY(value) fiber_portSTRINGIFY_I(value)
@@ -245,21 +251,24 @@
 	__attribute__((section(".fiber_port_privileged_data")))
 
 /* Preserve the platform/static-base register in the synthetic first context. */
-fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_read_r9(void)
 {
 	uint32_t value;
 	fiber_portASM volatile("mov %0, r9" : "=r"(value));
 	return value;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;
 	fiber_portASM volatile("mrs %0, BASEPRI" : "=r"(value) :: "memory");
 	return value;
 }
 
-fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_basepri_write(uint32_t value)
 {
 #if __CORTEX_M == 7
 	uint32_t primask;
@@ -300,7 +309,8 @@ fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 	"isb                                  \n"
 #endif
 
-fiber_portFORCE_INLINE void fiber_port_fpu_prepare(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_fpu_prepare(void)
 {
 	uint32_t cpacr = fiber_portSCB_CPACR_REG;
 	if ((cpacr & fiber_portCPACR_CP10_CP11_FULL) !=
@@ -337,6 +347,48 @@ fiber_portFORCE_INLINE void fiber_port_fpu_prepare(void)
 #endif
 	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
 			fiber_portFPCCR_ASPEN_BIT) != 0u, 'E');
+}
+
+/* The complete CPU helper chain owns the sensitive inline contract; CMSIS
+ * attributes do not inherit the caller's raw instrumentation exclusions. */
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_faultmask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, faultmask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value) :: "memory");
+	return value;
 }
 
 #define fiber_portPROTECTED_CONTEXT_WORDS 53u

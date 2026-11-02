@@ -20408,7 +20408,7 @@ function Test-ArmCm3MpuLayoutContract {
         [System.StringComparison]::Ordinal)
     $mpuSwitchSource = $portSourceText.Substring($mpuSwitchStart)
     $mpuPrimaskCheck = $mpuSwitchSource.IndexOf(
-        "FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');",
+        "FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');",
         [System.StringComparison]::Ordinal)
     $mpuNextFieldRead = $mpuSwitchSource.IndexOf(
         "next->mpu_regions[index]",

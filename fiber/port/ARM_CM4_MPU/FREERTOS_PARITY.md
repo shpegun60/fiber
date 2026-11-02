@@ -340,3 +340,37 @@ No later slice may infer privilege policy merely from `__MPU_PRESENT`, reuse a
 privileged CM4/CM7 context, or add this profile to global architecture-class
 selection. Build selection remains explicit even though the complete runtime
 and link proof now exists.
+
+## Raw Compiler Helper Closure
+
+The dictionary now protects its r9/BASEPRI/FPU inline helpers with the canonical
+inline-sensitive/GRO attributes and owns integer IPSR, CONTROL, PRIMASK,
+FAULTMASK and PSP reads. IRQ/WFE and compiler barriers no longer cross into
+instrumentable CMSIS inline bodies. The errata-preserving BASEPRI sequence,
+protection sections, ABI/frame identities and six naked transfer bodies are
+unchanged. No optional MPU service or privilege policy is added.
+
+The retained pre-repair O2/Os receipt has six ordinary PASS and six raw FAIL
+cells. Fresh immutable M4F/hard/8-region qualification passes thirty cells and
+150 compiled controls over O0/Og/O2/Os/O3, ordinary objects and sectioned/
+unsectioned native LTO. Parent rehashes 59 inputs and 3,716 artifacts without
+mismatch. This raw receipt is not every M4/M7, region-count or FP-ABI tuple.
+
+Fresh actual pinned reference/Fiber O2/Os objects pass the maintained three
+ordered MPU transfer mechanisms. Existing layout and portable-application
+archive/GC/LTO/vector/cohort integration passes, separately covering M4/M7 and
+8/16-region hard-FP manifests. These checks do not execute exceptions, prove
+whole-body equivalence or qualify a physical target/global matrix.
+
+```text
+Pre-repair FAIL:
+  %TEMP%/fiber-sensitive-port-closure-7a45f6cc12c6496fa24591770e89627b
+Repaired PASS:
+  %TEMP%/fiber-sensitive-port-closure-32d63c2b725345d3b0a8af8521c217f2
+results.json SHA-256:
+  AF273F9DA8447AA510450C37BB465EFE20643AEA0DC6F439EC8234EEB2575AF4
+Paired ordered O2/Os proof:
+  %TEMP%/fiber-classic-mpu-focused-parity-c058fcf33c154fd89b90e8c4da0b2dfb
+Integration gates:
+  %TEMP%/fiber-classic-mpu-integration-b45a4f74ce8e48aeb02f86983172c325
+```

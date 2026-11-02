@@ -25,7 +25,7 @@ void fiber_port_panic_wait(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_portWAIT_FOR_EVENT();
 	}
 }
 
@@ -289,11 +289,11 @@ void fiber_port_validate_svc_vector(void)
 static FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_validate_first_start_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 0u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_port_validate_core_identity();
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
 			'M');
@@ -328,10 +328,10 @@ void fiber_port_runtime_prepare_start(void)
 static FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_validate_svc_cpu_state(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 11u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 11u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
@@ -441,7 +441,7 @@ void fiber_port_mpu_activate_first_context(FiberContext *first)
 {
 	FiberPortMpuGlobalRegionImage global;
 	FIBER_REQUIRE(first != NULL, 'N');
-	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
 			'M');
 	fiber_port_mpu_build_global_regions(&global);
@@ -481,15 +481,15 @@ void fiber_port_pendsv_validate_save_current(FiberContext *current,
 		uint32_t *hardware_frame,
 		uint32_t exc_return)
 {
-	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
 	FIBER_REQUIRE((exc_return == fiber_portEXC_RETURN_THREAD_PSP_BASIC) ||
 			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED), 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)__get_PSP(), 'P');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
+	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 
-	const uint32_t control = __get_CONTROL();
+	const uint32_t control = fiber_port_cpu_read_control();
 	FIBER_REQUIRE((control & 3u) ==
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
 	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
@@ -538,13 +538,13 @@ void fiber_port_capture_scheduler_cpu_state(
 		FiberPortMpuSchedulerCpuState *state)
 {
 	FIBER_REQUIRE(state != NULL, 'C');
-	__COMPILER_BARRIER();
-	state->primask = __get_PRIMASK();
+	fiber_portCOMPILER_BARRIER();
+	state->primask = fiber_port_cpu_read_primask();
 	state->basepri = fiber_port_basepri_read();
-	state->faultmask = __get_FAULTMASK();
-	state->control = __get_CONTROL();
-	state->ipsr = __get_IPSR();
-	state->psp = __get_PSP();
+	state->faultmask = fiber_port_cpu_read_faultmask();
+	state->control = fiber_port_cpu_read_control();
+	state->ipsr = fiber_port_cpu_read_ipsr();
+	state->psp = fiber_port_cpu_read_psp();
 	state->vtor = fiber_portSCB_VTOR_REG;
 	state->mpu_ctrl = fiber_portMPU_CTRL_REG;
 	state->mpu_rnr = fiber_portMPU_RNR_REG;
@@ -552,7 +552,7 @@ void fiber_port_capture_scheduler_cpu_state(
 			fiber_portSCB_SHCSR_REG & fiber_portSCB_MEMFAULTENA_BIT;
 	state->cpacr = fiber_portSCB_CPACR_REG;
 	state->fpccr = fiber_portFPU_FPCCR_REG;
-	__COMPILER_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 }
 
 static FIBER_CM4_MPU_PRIVILEGED
@@ -560,13 +560,13 @@ void fiber_port_validate_scheduler_cpu_state(
 		const FiberPortMpuSchedulerCpuState *before)
 {
 	FIBER_REQUIRE(before != NULL, 'C');
-	__COMPILER_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
+	fiber_portCOMPILER_BARRIER();
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'r');
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
-	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
-	FIBER_REQUIRE(__get_IPSR() == before->ipsr, 'i');
-	FIBER_REQUIRE(__get_PSP() == before->psp, 'P');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == before->faultmask, 't');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == before->ipsr, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_psp() == before->psp, 'P');
 	FIBER_REQUIRE(fiber_portSCB_VTOR_REG == before->vtor, 'V');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == before->mpu_ctrl, 'M');
 	FIBER_REQUIRE(fiber_portMPU_RNR_REG == before->mpu_rnr, 'M');
@@ -575,7 +575,7 @@ void fiber_port_validate_scheduler_cpu_state(
 			before->memfault_enabled, 'M');
 	FIBER_REQUIRE(fiber_portSCB_CPACR_REG == before->cpacr, 'e');
 	FIBER_REQUIRE(fiber_portFPU_FPCCR_REG == before->fpccr, 'E');
-	__COMPILER_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 }
 
 FIBER_CM4_MPU_PRIVILEGED
@@ -622,12 +622,12 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 		FiberContext *current)
 {
 	FIBER_REQUIRE(current != NULL, 'C');
-	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) ==
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
 	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
 			fiber_portFPCCR_LSPACT_BIT) == 0u, 'E');
@@ -646,12 +646,12 @@ FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_mpu_switch_to_context(FiberContext *next)
 {
 	FIBER_REQUIRE(next != NULL, 'N');
-	FIBER_REQUIRE(__get_IPSR() == 14u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) ==
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
 			'M');
@@ -715,7 +715,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 	fiber_port_mpu_linker_layout_check(&layout);
 
 	if (exc_return == fiber_portEXC_RETURN_THREAD_MSP) {
-		FIBER_REQUIRE((__get_CONTROL() & 7u) == 0u, 'l');
+		FIBER_REQUIRE((fiber_port_cpu_read_control() & 7u) == 0u, 'l');
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 	} else {
 		FIBER_REQUIRE(current != NULL, 'C');
@@ -734,7 +734,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 				fiber_port_svc_start_return_site, 'u');
 		FIBER_REQUIRE(current != NULL, 'C');
 		fiber_port_context_validate_initial_restore(current);
-		__disable_irq();
+		fiber_portDISABLE_IRQ();
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();
 		fiber_port_mpu_activate_first_context(current);
@@ -745,11 +745,11 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 		FIBER_REQUIRE(exc_return != fiber_portEXC_RETURN_THREAD_MSP, 'l');
 		fiber_port_validate_exact_svc_site(hardware_frame[6],
 				fiber_port_svc_yield_return_site, 'u');
-		__disable_irq();
+		fiber_portDISABLE_IRQ();
 		fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();
-		__enable_irq();
+		fiber_portENABLE_IRQ();
 		return;
 
 	case fiber_portSVC_RETURN:
@@ -849,13 +849,13 @@ FIBER_API_NORETURN FIBER_CM4_MPU_PRIVILEGED
 void fiber_port_start_first_context(void)
 {
 	fiber_port_validate_first_start_environment();
-	__disable_irq();
+	fiber_portDISABLE_IRQ();
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_port_fpu_prepare();
 	fiber_port_validate_svc_vector();
 	fiber_port_start_first_context_transfer();

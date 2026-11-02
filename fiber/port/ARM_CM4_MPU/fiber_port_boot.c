@@ -655,7 +655,7 @@ void fiber_port_context_validate_running_svc(const FiberContext *ctx,
 			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED), 'l');
 	FIBER_REQUIRE(hardware_frame != NULL, 'P');
 
-	const uint32_t control = __get_CONTROL();
+	const uint32_t control = fiber_port_cpu_read_control();
 	FIBER_REQUIRE((control & 3u) ==
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
 	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
@@ -672,7 +672,7 @@ void fiber_port_context_validate_running_svc(const FiberContext *ctx,
 			(uintptr_t)FIBER_PORT_EXC_PER_LEVEL_BYTES :
 			(uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
 	FIBER_REQUIRE((frame_start & 7u) == 0u, 'A');
-	FIBER_REQUIRE(frame_start == (uintptr_t)__get_PSP(), 'P');
+	FIBER_REQUIRE(frame_start == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 	FIBER_REQUIRE(frame_start <= UINTPTR_MAX - frame_bytes, 'O');
 	FIBER_REQUIRE(frame_start >= ctx->boot.stack_base, 'P');
 	FIBER_REQUIRE((frame_start + frame_bytes) <=
@@ -867,7 +867,7 @@ void fiber_port_context_init(FiberContext *ctx,
 
 	ctx->boot.hash = fiber_port_context_compute_seal(ctx);
 	ctx->boot.sealed = 1u;
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 	fiber_port_context_seal_check(ctx);
 
 	FIBER_REQUIRE(ctx->protected_context_cursor ==
