@@ -10,6 +10,20 @@ MPU/unprivileged branches. This profile deliberately implements only the
 privileged ARMv6-M branch; every MPU family is explicitly deferred rather than
 silently ignored. No FreeRTOS source text is copied into fiber.
 
+## Thumb-1 Vector-Load Constraint Repair
+
+The raw initial-MSP load now uses GCC ARM low-register operands (`=l` / `l`).
+The previous general-register operands could select high registers that Thumb-1
+LDR cannot encode. This is a Fiber vector-validation helper correction, not a
+change to the reference's register save/restore sequence. Address zero still
+uses a volatile assembly load rather than an invalid C null dereference.
+
+`tools/test_thumb1_vector_constraints.ps1` covers both privileged and MPU
+profiles at O0/Og/O2/Os/O3, native LTO, both r9 contracts and both VTOR states.
+Its eighty ELF cases pass 4,800 focused checks, with four compiled old-constraint
+controls. Whole-port parity and constructor-r9 qualification remain separate;
+no exception or hardware execution claim follows from those focused probes.
+
 ## Reference
 
 ```text

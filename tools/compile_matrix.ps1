@@ -22092,6 +22092,10 @@ try {
     & (Join-Path $RepoRoot "tools\test_classic_audit.ps1") `
         -ArmGcc $gcc -CmsisCore $cmsis `
         -BuildRoot (Join-Path $buildRoot "audit-classic")
+    Write-Host "== audit / Thumb-1 vector operand constraints =="
+    & (Join-Path $RepoRoot "tools\test_thumb1_vector_constraints.ps1") `
+        -ArmGcc $gcc -CmsisCore $cmsis `
+        -BuildRoot (Join-Path $buildRoot "audit-thumb1-vector-constraints")
     Write-Host "== audit / C-C++ caller-storage cohort negative links =="
     & (Join-Path $RepoRoot "tools\test_consumer_cohort.ps1") `
         -ArmGcc $gcc -CmsisCore $cmsis `

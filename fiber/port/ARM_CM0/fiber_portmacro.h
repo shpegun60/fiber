@@ -275,8 +275,8 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 {
 	const uintptr_t base = fiber_port_vectors_base_addr();
 	uint32_t value;
-	/* Address zero is an architectural vector source, not a C null object. */
-	fiber_portASM volatile("ldr %0, [%1]" : "=r"(value) : "r"(base) : "memory");
+	/* Address zero is architectural; Thumb-1 LDR needs low data/base registers. */
+	fiber_portASM volatile("ldr %0, [%1]" : "=l"(value) : "l"(base) : "memory");
 	return value;
 }
 

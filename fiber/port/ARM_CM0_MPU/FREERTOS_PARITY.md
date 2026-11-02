@@ -6,9 +6,21 @@ This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
 uses the validated initial MSP; preserve-current startup is not implemented.
 The dictionary explicitly rejects `0` instead of silently ignoring it. Default
 startup instructions, frames and context/cohort identity are unchanged. The
-pinned FreeRTOS start also restores the initial MSP; no alternate preserve mode
-is imported. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
+pinned CM0 `vStartFirstTask()` explicitly does not reset MSP because CM0+ VTOR
+is optional. Fiber's stricter validated initial-MSP rewind/remap policy is a
+deliberate adaptation, not reference identity. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
 and exact-diagnostic negative compiles; execution qualification stays separate.
+
+## Thumb-1 Vector-Load Constraint Repair
+
+The raw slot reader uses low-register `=l` / `l` operands for Thumb-1 LDR;
+general `r` operands permitted an unencodable high-register allocation. This
+does not change the protected context, MPU image or naked transfer bodies.
+The maintained focused gate compiles actual CM0 and CM0 MPU headers through
+eighty all-optimization/native-LTO/ABI/VTOR configurations and executes 4,800
+load/SP/callee-register checks; four old-constraint controls must fail on the
+specific assembler diagnostic. Separate whole-runtime/reference and hardware
+qualifications are not implied.
 
 ## Status
 

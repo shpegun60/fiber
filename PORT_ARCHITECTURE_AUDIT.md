@@ -2289,6 +2289,49 @@ elf-proof.json SHA-256:
   27BC26A1FCD81760E2C53C9276C542BE56C9A5412E3AA1D1B61AD86633495D71
 ```
 
+### A34: Thumb-1 Vector-Load Operand Constraints
+
+The constructor-r9 exploration exposes a separate real assembly constraint bug,
+not an observed R9 ABI mismatch. `ARM_CM0/fiber_portmacro.h` expresses the raw
+initial-MSP `LDR` with general `r` output/base operands; GCC can select r8-r10
+under register pressure, which the Thumb-1 instruction cannot encode. The same
+pattern exists in the CM0 MPU raw vector-slot helper. Both now use `=l` / `l`
+constraints, retaining a volatile read and the architectural address-zero path.
+The change does not alter a naked transfer or context/frame identity.
+
+The maintained `test_thumb1_vector_constraints.ps1` gate compiles the actual
+headers and executes eighty real ELF probes: two profiles, VTOR absent/present,
+O0/Og/O2/Os/O3, ordinary/reserved-r9 and normal/native-LTO. Zero/nonzero sources,
+SP and callee registers pass 4,800 checks. Four compiled controls restore only
+the old constraint pair in real preprocessed source and fail specifically on
+low-register LDR encoding. Input capture follows real preprocessor dependencies,
+including compiler system headers and resolved toolchain subprogram hashes,
+rather than observing unrelated mutable profiles. Parent rehashes 636 recorded
+entries across three manifests with zero mismatches.
+
+```text
+Focused gate:
+  %TEMP%/fiber-thumb1-vector-constraints-284bb351c44b43b2bc06a4afab869141
+results.json SHA-256:
+  880F488983338835A3DD0A7DE73877CBD737636DA4C03825BDD648E846C4EE69
+Exact 28 repository-local inputs:
+  %TEMP%/fiber-qualified-repo-inputs-ecd4400040164ddeb8f0c316736623bd
+ZIP SHA-256:
+  FD7F2D364AE05C98AEFEEFB21E16F58E4B3EDA1494428A26E50B246BBB0336A5
+Refreshed classic guards, 84 real ARM ELFs / 842 checks:
+  %TEMP%/fiber-classic-audit-e9a6bbc2789345b195145d7fe17f8eb1
+```
+
+The prior four failed hostile constructor builds remain historical evidence.
+The complete constructor-r9 replay and fresh pinned-reference transfer parity
+are separate qualifications, not implied by these focused probes. The gate is
+now part of the central matrix. It does not execute SVC/PendSV or a board.
+
+The reference CM0 `portasm.c:vStartFirstTask()` deliberately does not rewind
+MSP because VTOR is optional. Fiber's validated rewind/remap adaptation is now
+described accurately in the CM0 MPU ledger instead of claiming reference
+identity for that stronger policy.
+
 ### A30 Actual Common-Runtime Dual-Origin Execution
 
 The generation-two scalar C33S pair now passes a separate actual-common AN505

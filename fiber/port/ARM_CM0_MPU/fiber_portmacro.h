@@ -441,7 +441,8 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot_at(uintptr_t base,
 {
 	const uintptr_t address = base + ((uintptr_t)index * sizeof(uint32_t));
 	uint32_t value;
-	fiber_portASM volatile("ldr %0, [%1]" : "=r"(value) : "r"(address) : "memory");
+	/* Both register operands must be encodable by Thumb-1 LDR. */
+	fiber_portASM volatile("ldr %0, [%1]" : "=l"(value) : "l"(address) : "memory");
 	return value;
 }
 
