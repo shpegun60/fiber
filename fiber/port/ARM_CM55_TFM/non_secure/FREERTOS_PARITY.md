@@ -287,6 +287,24 @@ context slots.
 | `os_wrapper_mutex_release` | `fiber_port_tfm_os_wrapper.c` | TF-M v2.0 mutex ABI; only current owner may release; exact state publication/readback. |
 | `os_wrapper_mutex_delete` | `fiber_port_tfm_os_wrapper.c` | TF-M v2.0 mutex ABI; delete only valid unowned mutex; no detach/free of a context. |
 
+### Repaired-Source Reference Replay
+
+The independent A32 replay uses an immutable source capture and compiles the
+actual pinned M55 CPU and TF-M wrapper reference. At each of O2 and Os it closes
+55 generated bodies, runs 105 bounded data-flow scenarios, rejects 43 compiled
+mutants and eight independent R9 corruptions, and checks 49 harness controls.
+All eleven captured production files still match the live source bytes.
+This is closed codegen and bounded-model evidence, not actual TF-M execution,
+raw hostile-LTO whole-provider qualification or hardware.
+
+```text
+  %TEMP%/fiber-c5tf-a32-immutable-20261102-bdccb02d3f17410bb468dbb66e363374
+qualification.json SHA-256:
+  6F5434A42CE01D523F85493121E9A0089AB9B951C58B9458F3981F2EB9B05FB9
+Immutable source ZIP SHA-256:
+  91F9C8B87175FD21B7ED2928A476FCD960673591FB637EB427CDE0449EA6A2C4
+```
+
 ### A32 CPU Primitive Additions
 
 Each helper lives in this profile's `fiber_portmacro.h`, with canonical

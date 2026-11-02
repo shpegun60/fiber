@@ -2248,6 +2248,31 @@ ZIP SHA-256:
   D97289FE58A0B546D9EC2F6B60403C86435E754100F98A8BFF178D118E814691
 ```
 
+#### Repaired C5TF And C3FP Reference Replays
+
+Separate immutable-source replays now pass against the pinned reference. C5TF
+closes 55 generated bodies per optimization at O2/Os, with 105 bounded scenarios,
+43 compiled mutants, eight independent R9 corruptions and 49 harness controls
+per optimization. All eleven captured production files still match live bytes.
+C3FP running parity passes eight O2/Os, hard/softfp and 8/16-region tuples,
+264 compiled transfer mutants and sixteen controls. Seven production files match
+exactly and the eighth differs only by the recorded EOF newline cleanup.
+
+Neither bounded-model comparison replaces actual runtime, raw hostile-LTO
+whole-group closure or board evidence. The completed profile execution receipts
+and the independent raw-closure gate retain their own distinct scope.
+
+```text
+C5TF immutable replay:
+  %TEMP%/fiber-c5tf-a32-immutable-20261102-bdccb02d3f17410bb468dbb66e363374
+qualification.json SHA-256:
+  6F5434A42CE01D523F85493121E9A0089AB9B951C58B9458F3981F2EB9B05FB9
+C3FP immutable replay:
+  %TEMP%/fiber-c3fp-a32-immutable-20261102-c88eaab7aff6485fa1904ded9f2996e5
+qualification.json SHA-256:
+  10775407DACF2203E318AC97C0C0413EEEAB38E71944A9D4114727A0101219C0
+```
+
 ### A33: CM7 Native-LTO Literal Reach
 
 Retaining the complete sensitive helper chain exposes a separate real build
@@ -2359,4 +2384,30 @@ Source archive:
   %TEMP%/fiber-qualified-repo-inputs-f05d6f2d92414d7faeb75953468ca35e
 ZIP SHA-256:
   18CE199698613E73E05536D4D29C6442F27A74B853916B9F9EFB02D1A511E62B
+```
+
+### ec02a22 Combined-Matrix Attempt
+
+The complete required-execution matrix was attempted from a Git-archive snapshot
+of `ec02a2284aaf068bfaef24664943147c2f80f3d7`, not the concurrently edited shared
+tree. It stops during O2 C3SO closed parity on `Boot/exact undefined set`: the
+repaired boot object now references approved `memset` as well as `memcpy`, but
+that profile's comparison baseline still expects the older set. This is a
+**FAIL**, not a combined qualification or evidence that later gates ran. The
+parity owner must inspect actual codegen and qualify a precise baseline update;
+the existing approved-libc policy is not a reason to bypass the exact check.
+
+All 863 snapshot files rehash without drift. Preserve both the failed output and
+the source archive before replaying a later checkpoint. The separate successful
+profile/focused receipts above do not turn this full-matrix failure into PASS.
+
+```text
+Immutable source/run record:
+  C:/fq-0501eb9962a8/qualification-plan.json
+  C:/fq-0501eb9962a8/matrix-result.json
+  C:/fq-0501eb9962a8/source-rehash.json
+Failed matrix artifacts:
+  C:/fqm-0501eb9962a8
+Source ZIP SHA-256:
+  77A8A4CA00BF261C485A845B20296D95CB0A5EEDFE6B768C861462493A44C80A
 ```

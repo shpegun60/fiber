@@ -69,6 +69,24 @@ under the current v2 ownership model. The later clean CPU/Context extraction
 must wait for the documented port-freeze checkpoint and comparison gates in
 [`CONTEXT_FIBER_ARCHITECTURE.md`](../../../../CONTEXT_FIBER_ARCHITECTURE.md).
 
+### Repaired-Source Running Parity Replay
+
+The independent A32 replay passes actual pinned-reference generated-code
+comparison at O2/Os, hard/softfp and 8/16-region configurations: eight tuples,
+264 compiled transfer mutants and sixteen harness controls. It compares the
+running components, not every C validator or a full provider executing on a CPU.
+Seven captured production files remain byte-identical; the eighth has only the
+documented removal of an extra EOF newline. The immutable receipt continues to
+identify the original exact bytes; naked instruction semantics do not change.
+
+```text
+  %TEMP%/fiber-c3fp-a32-immutable-20261102-c88eaab7aff6485fa1904ded9f2996e5
+qualification.json SHA-256:
+  10775407DACF2203E318AC97C0C0413EEEAB38E71944A9D4114727A0101219C0
+Immutable source ZIP SHA-256:
+  1589E212E775B58333AA29AB144A6D04AA7230A5FC70D7952B2D13650AF250D0
+```
+
 ### Implemented File Boundary
 
 | File | Implemented scope |
