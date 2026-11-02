@@ -3099,3 +3099,32 @@ with zero mismatch and a stable artifact manifest. Receipt:
 SHA-256 10A9C5D7A0F71A952A1A7914BA7A875058F62F425808111E8C93BB9051F22646.
 The earlier aggregate remains FAIL; its later NOT_RUN gates require a fresh
 combined replay. Production code, handler semantics and import sets are unchanged.
+
+### Complete Admitted Concrete Raw Inventory
+
+A new immutable current-classifier replay passes all 348 planned cells and
+1,769 controls with zero errors, failed/unqualified cells or input drift.
+It includes all 27 admitted concrete registry groups: CM0 and CM0MPU each
+contribute 24 VTOR-absent/present cells, and the other 25 groups twelve each.
+O2/Os and baseline/raw each contribute 174 cells; ordinary, sectioned native
+LTO and unsectioned native LTO each contribute 116. Runtime activation flags
+are unchanged.
+
+This is the registry's primary ABI and eight-region MPU configuration, with
+three-slot/1024-byte Secure companion pools. It is not every hard/softfp,
+region-count, geometry, hash/map or optimization tuple. Transitional v8-M stays
+compile-only by user direction; the incomplete CM33F paired Secure tree remains
+outside this registry. External memory/callback implementations, final-reference
+equivalence, physical execution and complete port-roadmap closure are not proved.
+
+Receipt:
+%TEMP%/fiber-concrete-raw-46686b7-68b1fa2fe229412893ef5e19975aafd7/results.json,
+SHA-256 FAA95D2CF7FE7BBEED5A7949C794B9BA89A0E9748CE984DB139B9E23073C5FA6.
+The launch records e69a839; the 272 captured repository files also match
+46686b7 after Git text normalization. Thirty CMSIS files complete the source
+snapshot. The agent verifies all 558 consumed inputs and 43,534 artifacts;
+parent independently rehashes the inputs and final artifacts without mismatch.
+The final artifact manifest is stable before/after that rehash, SHA-256
+BA4D9A44117586A52EDD4396B17775D8F33230DDA6F524CD22ED6130F77FE3AB.
+Early parent counts observed the still-writing CSV and are not the final
+inventory. The preceding combined-matrix FAIL is not relabeled by this PASS.

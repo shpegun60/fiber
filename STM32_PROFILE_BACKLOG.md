@@ -13,12 +13,12 @@ Recorded implementation inventory on 2026-11-02:
 ```text
 Fiber:             current shared v2 worktree
 Runtime profiles:  21 recorded complete software profiles
-Staged profiles:   ARM_CM55/non_secure + secure, C55S, not runtime-complete
-                   ARM_CM33_SECURE_ONLY/secure, C3SO, qualification pending
-                   ARM_CM55_SECURE_ONLY/secure, C5SO, qualification pending
-                   ARM_CM33F/non_secure + secure, C3FS, construction/manifest slice
-                   ARM_CM33F_TFM/non_secure, C3FT, consumer qualification passed,
-                     activation and independent reference parity still pending
+Staged profiles:   ARM_CM55/non_secure + secure, C55S, full staged runtime captured
+                   ARM_CM33_SECURE_ONLY/secure, C3SO, execution/closed proofs captured
+                   ARM_CM55_SECURE_ONLY/secure, C5SO, execution/closed proofs captured
+                   ARM_CM33F/non_secure + secure, C3FS, construction/initializer slice
+                   ARM_CM33F_TFM/non_secure, C3FT, consumer/FP execution/parity captured
+                   All five retain RuntimeSelectable=0; admission/activation separate
 FreeRTOS pin:      a50edad08b29052631aa469d4df6e6ec7ff68878
 Reference root:    experiments/_reference/FreeRTOS-Kernel
 Compiler baseline: GNU Arm GCC from STM32CubeIDE 2.0.0
@@ -26,15 +26,43 @@ Compiler baseline: GNU Arm GCC from STM32CubeIDE 2.0.0
 
 The twenty-one-profile count describes existing implementations and their recorded
 software evidence. It does not certify the current tree after a runtime change.
-The hash-backed audit-repair matrix PASS remains historical software evidence;
-the later Armv8-M CONTROL readback correction has a refreshed full matrix and
-separate six-case QEMU qualification recorded in `PORT_ARCHITECTURE_AUDIT.md`.
-Neither result proves correct board execution or completes the port roadmap.
+Earlier aggregate PASS snapshots remain historical evidence for their captured
+bytes, not proof for later source or a complete port roadmap.
 
-The subsequent A22-A24/C55S private-pool full matrix also passed, including the
-explicit CONTROL, CM33 CMSE and default-M55 pool QEMU gates. The audit document
-retains that separate working-tree receipt; it is not a complete C55S runtime
-or whole-handler execution claim.
+## Current Qualification Boundary
+
+The following are separate captured receipts, not a current aggregate PASS:
+
+| Staged profile | Captured software proof | Remaining boundary |
+| --- | --- | --- |
+| C55S | [Complete real-common/two-image AN547 runtime](PORT_ARCHITECTURE_AUDIT.md#c55s-complete-staged-common-runtime-replay): 2,490 launches plus a priority-mask probe, all eight forward operations and twelve production NSC entries. | Independent admission/freeze and activation; not whole-reference equivalence or hardware. |
+| C3SO / C5SO | [Complete separate runtime suites](PORT_ARCHITECTURE_AUDIT.md#secure-only-selected-group-admission-replay): 297 QEMU cases each, with archive/vector/consumer/raw controls. [Current pinned O2/Os closed proof](FREERTOS_ASM_PARITY.md#fap-scalar-secure-cold-memory): 53 bodies per mode and CPU. | Final independent integration/admission and activation; neither CPU inherits the other's receipt. |
+| C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
+| C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
+
+The latest retained [exported-source aggregate](PORT_ARCHITECTURE_AUDIT.md#e69a839-exported-source-aggregate)
+is **FAIL**, not software freeze: `C:/fq-bf2431ee2b/matrix-result.json` records
+e69a839, 958 files and zero source drift. Pinned O2/Os parity and preceding gates
+passed; the historical-handler archive control then required `git show` in a
+source export without `.git`. Its self-contained repair and a complete fresh
+replay remain separate; later aggregate gates are NOT_RUN.
+
+The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
+passes 348 cells / 1,769 controls across all 27 admitted registry groups at
+O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region
+manifests, not all configurations or final-linked FreeRTOS equivalence; it does
+not turn the failed aggregate into PASS or activate staged profiles.
+
+The [global all-optimization/final-linked-LTO gate](FREERTOS_ASM_PARITY.md#two-stage-optimization-coverage)
+and exact-commit release-blocking CI are still future freeze gates. Focused
+all-option raw compiler receipts do not satisfy that global parity requirement.
+
+Driver proof classification is not production activation: C5TF remains a complete
+runtime with `RuntimeSelectable=1`. Its parity definition deliberately retains
+`Staged=1; PendingSelectableMetadata=1`: the source-inventory guard permits exactly
+production flag 1 in [`freertos_asm_parity.ps1`](tools/freertos_asm_parity.ps1),
+and the ordinary invocation separately runs the [C5TF closed gate](FREERTOS_ASM_PARITY.md#staged-c5tf-cpu-and-wrapper-parity).
+Those driver tags do not demote C5TF or activate any zero-flag profile.
 
 The primary scope remains distinct STM32 execution profiles through Cortex-M55.
 M85 retains the conditional scope recorded in the inventory. Missing FP, MPU,
@@ -44,9 +72,11 @@ TrustZone, Secure-only, or TF-M work is not implicitly excluded by this document
 
 - **Implemented**: an existing concrete runtime profile with a parity ledger and
   recorded software proofs; fresh qualification and hardware status are separate.
-- **Staged**: selected layout or cross-image artifacts exist, but required runtime
-  operations or complete-group qualification are still missing. It cannot count
-  as a complete runtime.
+- **Staged**: artifacts exist, but runtime operations or final independent
+  admission/activation remain incomplete. A staged profile can have captured full
+  runtime execution and parity proofs without becoming runtime-selectable or
+  increasing the complete-profile count. Driver proof-classification tags are
+  separate from this catalog status.
 - **Pending**: identified implementation work in the through-M55 feature roadmap.
 - **Unresolved**: an exact manifest inclusion or target-policy choice still needs
   an explicit decision. This means neither supported nor excluded.
@@ -150,9 +180,14 @@ reserved-MSP plan and guarded first Secure initialization/allocation/load; its
 new execution qualification is separate and is not implied by those earlier
 receipts. PendSV component execution is now separately qualified; Slice 11
 adds all eight forward adapters and prepares the CPU/MSP environment before
-the first protected scheduler selection. Whole-common-runtime execution,
-archive/vector and policy requalification are in progress. Runtime selection
-stays zero until those proofs pass.
+the first protected scheduler selection. The [complete staged common-runtime
+receipt](PORT_ARCHITECTURE_AUDIT.md#c55s-complete-staged-common-runtime-replay)
+now covers real-common/two-image execution, archive/vector and policy cases.
+The later [compiler-group admission receipt](PORT_ARCHITECTURE_AUDIT.md#staged-c55s-compiler-group-admission)
+separately requires all eight forward definitions and rejects missing-operation
+mutants. Neither receipt activates the profile or proves whole-reference
+equivalence; independent admission/freeze remains pending and runtime selection
+stays zero.
 No Secure-only scheduler is implied by the pool's Secure-only placement.
 
 ## Pending And Unresolved Manifests
@@ -169,14 +204,14 @@ region-count and compiler manifests rather than inheriting another profile's
 | M33, Non-secure without fiber companion | Scalar-FP + MPU | C3FP is complete explicit build-selected runtime #20. Post-selectable manifest/constructor/first/running/complete-group gates pass, with 161 full-runtime AN505 executions. A new immutable parity replay and combined-tree qualification remain separate; no board claim. See `ARM_CM33F_MPU/non_secure/FREERTOS_PARITY.md`. |
 | M33, fiber SecureContext | Scalar-FP, no MPU | New staged C3FS construction/manifest/companion artifacts are being implemented against the separately compiled real FP reference pair. Runtime and actual FP/Secure switching qualification remain pending; C33S scalar evidence does not qualify C3FS. |
 | M33, fiber SecureContext | Scalar + MPU; scalar-FP + MPU | Pending protected companion cohorts; exact paired manifests must be defined. |
-| M55, fiber SecureContext | Scalar, no MPU | Staged C55S; Secure, constructor, attachment, first-start and running-component evidence are separate. All eight forward adapters now exist; complete real-common/two-image qualification and release hash/map policy proofs are in progress. Runtime selection remains zero. |
+| M55, fiber SecureContext | Scalar, no MPU | Staged C55S has a [captured complete real-common/two-image runtime receipt](PORT_ARCHITECTURE_AUDIT.md#c55s-complete-staged-common-runtime-replay), including archive/vector and policy cases, plus [separate compiler-group admission](PORT_ARCHITECTURE_AUDIT.md#staged-c55s-compiler-group-admission). Independent final admission/freeze and activation remain pending; runtime selection stays zero. |
 | M55, fiber SecureContext | Scalar-FP, no MPU; MVE-FP, no MPU | Pending, separately identified FP and MVE manifests. |
 | M55, fiber SecureContext | Scalar + MPU; scalar-FP + MPU; MVE-FP + MPU | Pending protected companion cohorts; current six no-companion runtimes do not cover these. |
-| M33, Secure-only scheduler | Scalar, no MPU | Staged C3SO, CMSE level 3, ordinary Secure register bank, initial EXC_RETURN FD. Focused construction/manifest/transfer-subset gate passes; complete-group, closed-body parity and Secure runtime execution are still pending. This is not the SecureContext companion. |
+| M33, Secure-only scheduler | Scalar, no MPU | Staged C3SO, CMSE level 3, Secure bank, initial FD. [Complete runtime/consumer/archive/guard execution](PORT_ARCHITECTURE_AUDIT.md#secure-only-selected-group-admission-replay) and [current M33 O2/Os closed proof](FREERTOS_ASM_PARITY.md#fap-scalar-secure-cold-memory) have captured PASS receipts. Independent final integration/admission and activation remain pending; RuntimeSelectable=0. This is not a companion. |
 | M33, Secure-only scheduler | Scalar + MPU; scalar-FP with/without MPU | Pending distinct manifests; not covered by staged unprotected scalar C3SO and not excluded. |
-| M55, Secure-only scheduler | Scalar, no MPU | Staged C5SO, exact M55/CMSE3 scalar tuple, independent storage/profile identity and FD/F9 Secure-bank frame. Actual pinned M55 reference objects, numeric geometry, symbols and 36 negatives pass at O2/Os. Complete-group execution and closed-body parity remain pending. |
+| M55, Secure-only scheduler | Scalar, no MPU | Staged C5SO, exact M55/CMSE3 scalar tuple and independent FD/F9 Secure-bank identity. [Complete M55 runtime/consumer/archive/guard execution](PORT_ARCHITECTURE_AUDIT.md#secure-only-selected-group-admission-replay) and [current actual-M55 O2/Os closed proof](FREERTOS_ASM_PARITY.md#fap-scalar-secure-cold-memory) have captured PASS receipts. Independent final integration/admission and activation remain pending; RuntimeSelectable=0. No M33 receipt is relabeled. |
 | M55, Secure-only scheduler | Scalar + MPU; scalar-FP or MVE-FP with/without MPU | Not implemented; exact additional manifests remain visible work, not covered by staged scalar C5SO. |
-| M33, TF-M | Scalar-FP without MPU | Staged C3FT source group and consumer gates pass; runtime-selectable remains zero pending activation and independent reference parity. It is distinct from the scalar C3TF provider and actual TF-M Secure-image integration remains unqualified. |
+| M33, TF-M | Scalar-FP without MPU | Staged C3FT has [captured consumer/FP runtime evidence](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission) and [independent actual pinned O2/Os hard/softfp parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity). Activation and fresh combined qualification remain pending; RuntimeSelectable=0. It is distinct from scalar C3TF; actual external Secure TF-M integration remains unqualified. |
 | M33, TF-M | Scalar or scalar-FP with MPU | Not implemented; exact additional TF-M manifest inclusion remains unresolved. Existing scalar/non-MPU C3TF is complete software work. |
 | M55, TF-M | Scalar without MPU | C5TF is complete software runtime #21, with separate scalar M55 CPU and TF-M interface glue. Target/host/actual-M55 dual-r9 and per-object dependency-role gates pass, plus separate reference parity. Typed fixtures do not establish execution with an actual TF-M Secure image. |
 | M55, TF-M | Scalar-FP or MVE-FP without MPU | Pending feature cohorts; exact paired TF-M/compiler manifests must be fixed before implementation. |
@@ -229,19 +264,13 @@ cross-image and private layout/cohort changes receive their appropriate identity
    post-MSR stored SPSEL and SG bank transitions. Close the scoped QEMU and
    maintained regression evidence before new C55S runtime edits. Emulator evidence
    remains separate from board evidence and final freeze qualification.
-2. **Finish scalar non-MPU C55S.** Implement Secure initialization, allocation,
-   save/load, then sealed construction/attachment and first/ordinary context
-   switching. Before a complete freeze claim, bind all three Secure companion
-   objects to an exact private configuration/layout identity, including
-   equal-size pool-geometry collisions; the nineteen-runtime cohort mechanism
-   does not cover those objects automatically. Prove matching and stale private
-   objects under O2/Os, LTO, archives and GC. Independently close the same
-   confirmed private-object binding gap in the existing CM33 Secure companion:
-   individual pool-size checks do not bind gateway capacity/identity facts to
-   that pool. Preserve both profiles' separate manifests and proofs. Prove
-   ordinary no-attachment and attached paths, exact cross-image
-   identity, vectors, archive extraction, GC/LTO and negative links. Do not mix
-   FP, MPU or TF-M expansion into this completion slice.
+2. **Finish scalar non-MPU C55S admission/freeze.** Preserve the captured complete
+   staged runtime and separate compiler-group admission receipts above. Private
+   companion binding, ordinary/attached paths, exact cross-image identity,
+   archive/GC/LTO/vector and negative-link evidence remain separately bounded by
+   their captured sources; neither older pool/component receipts nor the latest
+   failed aggregate substitute for final independent admission. Keep C33S and
+   C55S manifests distinct. Do not mix FP, MPU or TF-M expansion into this slice.
 3. **Close M33 scalar-FP MPU.** This can proceed independently after phase 1,
    alongside C55S. Pair with `ARM_CM33_NTZ/non_secure` configured for FP+MPU;
    define and prove the exact protected manifests.
