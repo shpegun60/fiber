@@ -1,5 +1,399 @@
 # Generated Assembly Parity With FreeRTOS
 
+## C33S Dual-Origin And C3SO Closed Bodies
+
+The maintained `cm33_secure_parity` fixture is dispatched by the parity driver
+at O2/Os, with focused `-Cm33SecureContextOnly` and `-Cm33SecureOnly` modes.
+Actual unchanged production translation units and pinned portasm/port.c are
+compiled, not substituted with another CPU/profile. Complete instruction graphs
+are compared against reviewed fixed GCC 14.3.1 baselines, including all hardening
+and panic branches, exact call/data relocations and exact undefined dependencies.
+These are compiler-specific whole-body checks, not whole-function equivalence
+between different implementations. The artifact retains each canonical body;
+its SHA-256 is a compact fixed baseline, not a source regex or learned oracle.
+
+- **FAP-C33S-DUAL-ORIGIN:** The actual pinned M33 no-MPU/no-FP TrustZone PendSV
+  branches on EXC_RETURN.S. Fiber generation `0x00020001` admits exactly
+  `0xFFFFFFBC` and `0xFFFFFFFC`. Both save the three special words
+  `[handle, PSPLIM, EXC_RETURN]`; only NS-origin also saves/restores R4..R11.
+  Consequently the NS and Secure-origin reservations are 44 and 12 bytes.
+  The reference's shifted-sign test and Fiber's explicit bit-6 branches are
+  separately closed exact graphs, not generally interchangeable branch rules.
+- **FAP-C33S-RESTORE-ADMISSION:** Fiber proves the complete three-word header
+  before reading its fields. FC then requires a nonzero attachment and durable
+  handle, and returns without reading NS GPR/PC/xPSR storage. BC additionally
+  proves its complete 76-byte image, PC/xPSR validity and optional padding.
+  This hardening is additional to the pin's owner-managed TCB/frame assumptions.
+  Actual compiled C validator cases use only 12 mapped bytes for FC, not a fake
+  full NS frame that could conceal a missing Secure-origin branch.
+- **FAP-C33S-PSP-PRESERVATION:** Fiber snapshots and checks NS PSP alongside
+  IPSR/PRIMASK/BASEPRI/FAULTMASK/CONTROL/PSPLIM around hooks/NSC providers.
+  The actual compiled capture/readback and Secure-save functions are exercised
+  with valid states and a provider-corrupted PSP; exact panic and call ordering
+  are checked. Secure image behavior remains an explicit external boundary.
+- **FAP-C33S-CLOSED-PROOF:** Each A30 optimization covers 69 independent
+  decoded-instruction scenarios, 23 compiled actual-source mutants, 21 additional
+  independent mutant rejections and 31 optimization/classifier controls. There
+  are 64 closed bodies at O2 and 66 at Os due to emitted static helper choices.
+  Every BC/FC outgoing/incoming combination runs on both real generated PendSV
+  graphs. The prior segmented C33S receipt is historical and does not qualify
+  A30; the old pattern checks remain supplementary, not replacement evidence.
+- **FAP-C3SO-CPU:** The actual M33_NTZ reference is compiled with Secure-only=1,
+  TrustZone/MPU/FPU/MVE=0, soft ABI and `-mcmse`. It selects Secure Thread/PSP
+  `0xFFFFFFFD`; ordinary register names address the executing Secure bank.
+  Both PendSV paths have ten software words `[PSPLIM, EXC_RETURN, R4..R11]`
+  below the basic core frame, and restore PSPLIM before PSP.
+- **FAP-C3SO-CONSTRUCTION:** The actual constructors share the 18-word/72-byte
+  geometry, PSPLIM, FD and xPSR T. Fiber stores its cursor, zero-initializes GPRs,
+  uses its return trap, clears stacked PC bit zero and supplies captured R9 as
+  an explicit private argument; the pin returns a cursor and uses debug GPR
+  values, its task-exit trap and unmodified entry value. The ordinary-C proof
+  is captured-value consistency, not an outer application R9 inheritance promise.
+- **FAP-C3SO-START:** Fiber admits exact `0xFFFFFFF9` first-SVC provenance and
+  opcode 70, restores all ten software words including R9, and validates written
+  PSPLIM/CONTROL/PSP. The pin starts through its generic SVC dispatcher, skips
+  the initial debug GPR slots and uses the VTOR-derived initial MSP. Fiber uses
+  its validated optional MSP and clears stale PendSV before its only start SVC.
+- **FAP-C3SO-HARDENING:** Fiber adds exact origin/current/stack/frame admission,
+  CPU readbacks and strong handler ownership. Common Fiber scheduler/publication
+  replaces FreeRTOS TCB selection; Fiber preserves the prior BASEPRI rather than
+  unconditionally clearing it. Full bodies preserve this default Fiber-16 versus
+  reference-128 threshold difference; operands and terminal panic calls are not
+  erased. These mechanisms do not require a SecureContext companion or NSC API.
+- **FAP-C3SO-STAGED:** ID `0x4333534F`, layout `0x00010001`, features `0x02`,
+  context/boot sizes 76/72 and runtime flag zero remain staged. Each optimization
+  covers 48/50 closed bodies (O2/Os), 23 scenarios, 13 compiled mutants, 12
+  independent mutant rejections and 31 controls. Adding this parity gate does
+  not promote global routing or increase the complete runtime profile count.
+
+The independent interpreter runs actual decoded integer instructions, not
+models of replacement port functions. Its scheduler, seal/hash/canary admission
+and gateway providers are explicitly bounded assumptions. It is neither CPU
+emulation nor actual exception/TrustZone/NSC execution. Normal/LTO consumer,
+reserved-R9, archive/vector and hardware qualification remain separate. Full
+source/tool closure, commands, generated code and diagnostics are retained;
+all consumed inputs are drift-checked and documentation artifacts are copies.
+No failed/incomplete attempt can emit an artifact PASS manifest. See the
+fixture README for the exact proof split and classified compiled mutants.
+
+The pre-helper-attribute-repair A30/C3SO and post-metadata C3FP immutable replay
+is retained under `%TEMP%/fiber-origin-parity-immutable-20261102-8a56264184ae43f1914e4733751016cb`.
+Its `qualification.json` SHA-256 is
+`C55DD46598BE769B8CDC156501F83889B9FD95B6D5BCA022C87C87C95F4C6DE7`;
+the exact source ZIP SHA-256 is
+`4DCB1C83C6C0A8382AAEA6A6298CF1B28F4B1F919880E80F36E5A1281443C2F9`.
+All six receipts rehash with zero mismatches, all 1,761 copied source/tool-header
+files match their ZIP entries, and 27 frozen production C/H files matched live
+at qualification. C3FP covers its promoted metadata-one source. The C3SO normal
+codegen receipt predates the confirmed helper-annotation/instrumentation gap;
+it is not current hostile-closure or promotion evidence after that repair.
+
+## C5SO Actual M55 Secure-Only Bodies
+
+The separate `C5SO` mode of `cm33_secure_parity` uses actual
+`ARM_CM55_SECURE_ONLY/secure` production and pinned `ARM_CM55_NTZ/non_secure`
+portasm/port.c, not M33 objects or a C3SO receipt. `-Cm55SecureOnly` selects it.
+Both sides use default `-mcpu=cortex-m55 -mthumb -mcmse -mfloat-abi=soft`
+at O2/Os, with Secure-only=1 and TrustZone/MPU/FPU/MVE/PAC/BTI disabled. No
+loop-counter workaround, CPU substitution or compiler-flag downgrade is used.
+
+- **FAP-C5SO-CPU:** The actual pin's Secure-only branch selects FD and the
+  ten-word `[PSPLIM, EXC_RETURN, R4..R11]` software image below the basic core
+  frame. Its ordinary register names address Secure state. Generated M55
+  ARMv8.1-M attributes, full instruction graphs and exact dependencies are
+  checked independently of the M33 mode and against separate fixed baselines.
+- **FAP-C5SO-CONSTRUCTION:** Actual selected-header numeric geometry is checked
+  for C5SO ID `0x4335534F`, layout `0x00010001`, features `0x02`, context/boot
+  sizes 76/72 and an 18-word initial image. Both actual constructors are run
+  through the bounded integer oracle. Fiber's zero/debug-GPR, captured R9,
+  task-return trap, stacked-PC normalization and stored-versus-returned cursor
+  differences remain explicit, as for C3SO; these are not erased transforms.
+  The explicit R9 argument is an internal consistency contract, not an outer
+  ordinary-ABI application's seed-inheritance promise.
+- **FAP-C5SO-START:** Fiber first SVC requires F9 and opcode 70, restores all
+  ten software words including R9 and checks written PSPLIM/CONTROL/PSP. The
+  actual M55 pin's generic SVC dispatcher/first restore and VTOR/MSP policy are
+  separately closed bodies. FD/F9 are preserved numeric operands, not ignored
+  Security-state differences.
+- **FAP-C5SO-HARDENING:** Source hardening retains exact origin/current/bounds,
+  raw-core PC/xPSR admission, special-register readbacks, strong handler ownership
+  and Fiber's scheduler/publication and BASEPRI restoration. Each full function,
+  including terminal panic branches, has its own exact generated-body baseline.
+  The bounded oracle interprets actual M55 integer instructions; it is not M55
+  CPU, Secure exception or physical-no-FPU execution. This ordinary scheduler
+  has no NSC entry; no broad CMSE-M55 FPCXT sequence exemption is introduced.
+- **FAP-C5SO-STAGED:** Runtime metadata remains zero. The new gate does not
+  activate a global route, increase the complete-profile count or substitute for
+  archive/LTO/vector, dual-R9 or actual runtime consumer qualification. Its
+  production sources and reference manifests are separately hashed; shared
+  checker infrastructure does not confer inherited C3SO acceptance.
+
+The pre-attribute-repair C5SO O2/Os development receipts and their 1,502 distinct
+inputs are preserved below
+`%TEMP%/fiber-c5so-pre-attribute-20261102-84f97064665b4ef7a13b82670724368d`.
+`input-mirror.json` SHA-256 is
+`21CCABF30C2D48E5034D80C6607186D700C06C4069D0EDB83CC99A038701DD78`.
+They passed 48/50 normal-flag bodies, 23 scenarios, 13 compiled mutants,
+12 independent rejections and 31 controls per optimization. They do not
+qualify the subsequent canonical helper/raw-CPU wrapper fix; source-closure
+replay and independent adversarial qualification remain pending.
+
+## Staged C5TF CPU And Wrapper Parity
+
+The `C5TF` gate compiles the actual `ARM_CM55_TFM/non_secure` runtime,
+boot, initializer and mutex-wrapper sources against the actual pinned
+`GCC/ARM_CM55_NTZ/non_secure/portasm.c` and `port.c`, plus
+`ThirdParty/GCC/ARM_TFM/os_wrapper_freertos.c`. Every object uses explicit
+`-mcpu=cortex-m55 -mthumb -mfloat-abi=soft` and the selected `-O2` or `-Os`.
+The pinned branch has MPU/FPU/MVE/TrustZone/Secure-only/PAC/BTI disabled and
+one core. The reference CPU is not substituted with M33 assembly, even where
+the pinned source files happen to be identical. Readelf must identify M55
+and ARMv8.1-M code generation; this is not proof of physical CPU features.
+`-Cm55TfmOnly` selects this gate; the ordinary invocation also runs it.
+
+- **FAP-C5TF-CPU:** Both PendSV paths save ten words below raw PSP in the
+  exact order PSPLIM, EXC_RETURN, R4..R11, and restore them with the inverse
+  increment-after transfer. PSPLIM precedes PSP on restore. Neither branch
+  saves CONTROL or FP/MVE state. Numeric decoded-instruction checks use
+  poisoned destinations and platform R9 values to check the cursor and inverse.
+- **FAP-C5TF-CONSTRUCTOR:** Both actual C constructors initialize an 18-word,
+  72-byte frame: software words 0..9, architectural basic core words 10..17.
+  Fiber uses zero GPR values, captured entry R9, its task-return trap and a
+  bit-zero-cleared stacked PC; the pin preloads debug patterns, its task-exit
+  trap and the unmodified entry value. Both seed EXC_RETURN `0xFFFFFFBC`,
+  PSPLIM, argument R0 and xPSR T. Fiber stores the cursor in its context;
+  the pin returns it. Independent numeric header/ELF and bounded instruction
+  data-flow checks cover every slot, canaries, exact write extent and NULL.
+  Boot-record admission is an explicit external assumption of this frame-only
+  interpreter; compiling real boot C is not a substitute for its behavior gate.
+  No CPU register instruction or FP instruction is admitted in frame init.
+- **FAP-C5TF-R9-CAPTURE:** The real constructor captures entry R9 before
+  volatile reverse-ABI/cohort reads or address hooks, forwards it as the
+  private builder's explicit `initial_r9` argument and checks saved word 7
+  against that value. The builder must not re-read its live R9: a C caller can
+  already use that register for `stack_end` or `context_end`. An actual M55 LTO
+  consumer reproduced the old late-read defect, so the pre-repair receipts
+  below are historical only. The repaired builder and caller each have closed
+  O2/Os baselines; the other 53 bodies, including SVC/PendSV, are unchanged.
+  Independent decoded-instruction cases run both actual bodies with AAPCS
+  argument passing and explicit boot/admission provider boundaries. They
+  observe capture before both cold reads/hooks, forwarding despite actual
+  compiler R9 reuse and the exact `'9'` panic after injected saved-slot
+  corruption. Providers do not clobber callee-saved R9. These are bounded
+  data-flow checks, not CPU or final-LTO execution; full consumer qualification
+  remains a separate prerequisite for runtime promotion. This proves consistency
+  with the value captured by this compiled constructor, not an ordinary-call
+  promise that the capture inherits a particular outer application R9 seed.
+- **FAP-C5TF-HARDENING:** Fiber replaces VTOR-derived MSP with its validated
+  optional MSP argument; uses SVC 70 instead of reference SVC 102; clears stale
+  PendSV; and validates origin, raw core frame, current context, stack bounds,
+  live limits and post-write CPU state. First SVC restores all ten software
+  words, including R9, rather than skipping the reference debug GPR words.
+  Its Handler MSR CONTROL=2 must read back as 2, not the exception-entry SPSEL
+  state. PendSV instead checks entry CONTROL bits 0..1 are zero. Common Fiber
+  scheduling replaces `vTaskSwitchContext`/`pxCurrentTCB`; Fiber restores the
+  captured BASEPRI while the reference clears it. The default fixture
+  threshold is Fiber 16 versus reference 128, not an erased operand difference.
+  Each complete function has its own closed instruction/relocation baseline,
+  including terminal panic paths; no hardening prefix is filtered away.
+- **FAP-C5TF-INITIALIZE:** The pinned TF-M README requires application-owned
+  `tfm_ns_interface_init()` before NS use; the FreeRTOS wrapper has no matching
+  initializer implementation. Fiber adds an unmasked Thread/MSP preflight,
+  one-shot INITIALIZING/READY/FAILED states, sticky failure, publication
+  readbacks and exact IPSR/PRIMASK/BASEPRI/FAULTMASK/CONTROL/PSPLIM preservation
+  around the real external TF-M interface provider. Its runtime-prepare order
+  and retained integration/cohort anchors remain explicit generated operations.
+  The current M33 TF-M initializer policy source differs only in the exact
+  profile comment, bundle symbol and count-checked A32 raw-reader call names
+  versus CMSIS readers. These source-relation substitutions do not modify the
+  production source compiled for the closed generated-code comparison; CPU
+  comparisons still use the actual M55 reference.
+- **FAP-C5TF-WRAPPER:** The pinned static semaphore wrapper forwards timeouts
+  to FreeRTOS and permits unconditional delete. Fiber preserves the exact
+  TF-M v2 mutex surface but uses one static owner-checked, nonrecursive mutex.
+  Finite waits poll once, WAIT_FOREVER yields cooperatively outside PRIMASK,
+  release requires the owner and delete requires an unowned valid handle.
+  The current M33 TF-M mutex policy source differs only in count-checked A32
+  raw-reader call names versus CMSIS calls. Both real C wrappers are compiled, and decoded data-flow cases
+  exercise the admitted policies and intentional differences. The fixture's
+  `os_wrapper/mutex.h` is only a declared TF-M ABI compile boundary; it supplies
+  no TF-M implementation, Secure image, semaphore kernel or runtime provider.
+- **FAP-C5TF-A32:** Raw port-local annotated CPU-read, wait and NVIC helpers
+  replace the CMSIS inline chain, whose instrumentation exclusions did not
+  propagate from sensitive callers. This is a source/callgraph change requiring
+  fresh generated-code qualification; earlier receipts remain historical.
+  The SVC, PendSV and first-start naked text is unchanged. Normal O2/Os parity
+  does not by itself qualify the hostile instrumentation or LTO consumer gates.
+- **FAP-C5TF-STAGED:** The selected identity is C5TF `0x43355446`, layout
+  `0x00010001`, features `0x82`; context/boot sizes are 76/72 bytes. The new A32
+  receipts below require selectable metadata exactly one. Earlier receipts
+  captured zero and remain historical; the explicit pending-metadata inventory
+  entry still has `Staged=1` and remains outside the complete-profile count.
+  The numeric geometry oracle now requires exactly one; old zero-metadata receipts
+  do not qualify that change. These source/object
+  comparisons do not activate a global route, increase the complete runtime
+  profile count, prove final archive/GC/LTO integration, or execute actual
+  exceptions, TrustZone transitions, TF-M or physical M55 hardware.
+
+`ARM_CM33F_TFM/non_secure` is separately enumerated as exact staged-zero
+production inventory with an actual M33_NTZ FP reference compile tuple. That
+entry is not a closed-body parity row and does not increase the complete count.
+
+The maintained fixture locks 55 generated function bodies separately for
+GCC 14.3.1 O2/Os, preserving offsets, counts, writeback, instruction order,
+flag-setting forms, local branch targets and exact relocation targets/addends.
+These are reviewed compiler-specific closed baselines, not whole-function byte
+equivalence between different implementations. Independent frame and policy
+oracles interpret actual decoded ordinary integer instructions with explicit
+provider/CPU-register-value assumptions; they are not CPU emulation. A compiler
+codegen change fails closed and needs review, not automatic baseline learning.
+Each optimization runs 105 bounded scenarios, 43 compiled production/reference
+mutants and 49 optimization/classifier controls. Eight R9-related mutants must
+also fail the independent data-flow oracle, without consulting the closed
+baselines. The explicitly named data-flow-only mode cannot create a full
+parity receipt. Exact undefined-dependency
+sets and attributes are checked; the real boot object alone may retain its
+declared memcpy/memset dependencies. No missing provider is fabricated here.
+
+Commands, preprocessing, assembly, object bytes, disassembly, relocations,
+attributes, compile dependency closure, diagnostics and source/tool hashes are
+retained below `C5TF`. Every consumed live input is drift-checked during the
+run; historical documentation inputs name byte-for-byte snapshot copies, not
+mutable live docs. The artifact manifest contains only evidence-root paths.
+No C55S production sources are consumed by this gate. Broader optimization
+coverage remains deferred under the existing final cross-port policy.
+
+Post-A32 C5TF immutable source/object qualification on 2026-11-02 retained:
+
+Root: `%TEMP%/fiber-c5tf-a32-immutable-20261102-bdccb02d3f17410bb468dbb66e363374`.
+The copied repository, CMSIS and pinned FreeRTOS roots were used explicitly.
+
+| Optimization | Receipt under that root | Receipt SHA-256 |
+| --- | --- | --- |
+| O2 | `C5TF-O2/C5TF/artifacts.json` | `B5D0D805C432EEFE8D0A98506013EB65B87F9D9C4FD7C61FC7540D18CB925CA1` |
+| Os | `C5TF-Os/C5TF/artifacts.json` | `6069D3AA91D10538A5B89DE866CCADF377EA1DDB8D684995EC4517ADF6140CEF` |
+
+`qualification.json` SHA-256 is
+`6F5434A42CE01D523F85493121E9A0089AB9B951C58B9458F3981F2EB9B05FB9`;
+`source.zip` SHA-256 is
+`91F9C8B87175FD21B7ED2928A476FCD960673591FB637EB427CDE0449EA6A2C4`;
+`source/source-manifest.json` SHA-256 is
+`C25055B22F5A330A2FDFEDA25026B3508C80406CDA6A4078EB6EB7F00352D0B4`.
+All 1,827 copied files and ZIP payloads were verified. All eleven C5TF C/H
+copies matched the frozen live source at qualification. Each optimization
+passed 55 closed bodies, 105 bounded scenarios, 43 compiled mutants, eight
+independent R9 rejections and 49 harness controls. Each receipt has 1,496 inputs
+and 668 artifacts; independent rehash found zero input/artifact mismatches.
+No body baseline changed, including the SVC, PendSV and first-start bodies.
+This is normal O2/Os object-code and bounded data-flow evidence, not the separate
+parent-owned A32 hostile instrumentation, LTO consumer or actual-M55 execution
+receipt. Other profiles copied for archival inventory are not consumed C5TF
+dependencies or newly qualified profiles. This table was added after the run;
+the receipt's documentation inputs are immutable pre-table snapshots.
+
+Historical post-R9-repair, pre-A32 C5TF qualification on 2026-11-02 retained:
+
+| Optimization | Immutable receipt under `%TEMP%` | Receipt SHA-256 |
+| --- | --- | --- |
+| O2 | `fiber-c5tf-r9-final-20261102e-O2/C5TF/artifacts.json` | `1E30B44F7C03C18A623F66ED2289DD54FB47658D7BE0ECC4494FD065DCC3515A` |
+| Os | `fiber-c5tf-r9-final-20261102d-Os/C5TF/artifacts.json` | `BB779C3DE08786FC2ABD2FB07D0951D50751354C622DC3510701B2D39E9A6513` |
+
+Each historical post-R9 receipt contains 1,496 hashed inputs and 668 hashed artifacts.
+Each passed 55 closed bodies, 105 bounded scenarios, 43 compiled mutants
+(eight also rejected by the independent R9 oracle) and 49 harness controls.
+Independent post-run rehash found zero input/artifact mismatches for both.
+Documentation in these receipts is an immutable pre-receipt snapshot; this
+receipt table is a later attribution-only addition, not a mutable artifact.
+
+Historical pre-R9-repair C5TF qualification on 2026-11-02 retained:
+
+| Optimization | Immutable receipt under `%TEMP%` | Receipt SHA-256 |
+| --- | --- | --- |
+| O2 | `fiber-c5tf-parity-final-20261102a-O2/C5TF/artifacts.json` | `591C0F18A8BAC2D3EF777CCA516C3E30C757BF38A15CA4768AB471C925283855` |
+| Os | `fiber-c5tf-parity-final-20261102b-Os/C5TF/artifacts.json` | `039C9C668C5466D21DFB1739BDE7FDB9E074E21B02487904F6FDEBEF2FD2E15A` |
+
+Each historical receipt contains 1,496 hashed inputs and 572 hashed evidence
+artifacts, including the twelve-file C5TF source-group record. Each passed
+54 closed bodies, 33 constructor scenarios, 12 transfer scenarios, 44 policy
+scenarios, 36 compiled mutants and 46 harness controls with no input drift.
+These receipts apply only to the old source/oracles, not the repaired R9
+contract. They neither detected nor refute the later actual-LTO reproducer;
+they are not current acceptance, full-matrix or runtime-activation receipts.
+The same-driver C3FP replay at
+`fiber-c5tf-c3fp-replay-20261102c-O2/C3FP-RUNNING` completed its four configurations
+and 132 compiled mutants but remains INCOMPLETE: the live
+`CI_VALIDATION_PLAN.md` changed during its run. Its drift guard was not bypassed
+and no PASS artifact manifest was issued for that attempt.
+
+The subsequent immutable C3FP replay passed O2/Os, eight configurations,
+264 compiled mutants and 16 controls under
+`%TEMP%/fiber-c3fp-immutable-20261102-628ea83cb7824117801ccf321994ed7e`.
+Its `qualification.json` SHA-256 is
+`1A89317A28FA87EA9885C1A1F36DDA0896FC4B0C69CEFBEAAF0E3E07EC067C22`;
+the exact `source.zip` SHA-256 is
+`82CBCF3E087A20E443B98A5DC103AECF3217905A3099337A469CB5719E583F9C`.
+Both optimizations used that copied source tree and explicit copied CMSIS and
+FreeRTOS roots, with zero copied-input/artifact drift. Later live root-doc or
+unrelated staged-profile changes do not alter that frozen input set.
+
+## Auxiliary C3FP Running Components
+
+The auxiliary `C3FP-RUNNING` gate in `tools/freertos_asm_parity.ps1` compiles
+actual `ARM_CM33F_MPU/non_secure/fiber_port_pendsv.c` and the pinned actual
+`ARM_CM33_NTZ/non_secure/portasm.c` MPU+FP branch. Each O2/Os invocation builds
+hard/softfp and 8/16-region objects with Cortex-M33/FPv5-SP-D16 flags. It does
+not add a runtime profile or change the frozen construction comparison row.
+`-Cm33fRunningOnly` selects this bounded gate without running the other parity
+mechanisms; the ordinary parity invocation also runs it.
+
+- **FAP-C3FP-RUNNING-TRANSFER:** Both actual closed transfer graphs implement
+  the same protected dictionary: basic payload words 0..19, cursor 20;
+  extended payload words 0..52, cursor 53; and restored cursor zero. The
+  architectural core frame starts at raw PSP and low FP/FPSCR starts at +32.
+  Save high FP before loading low FP into scratch S0..S16; restore in exact
+  inverse order. Reference IT predicates and Fiber's explicit skip branches
+  are separately admitted exact templates, not a general branch-erasing rule.
+  A symbolic interpreter of these compared instruction subsequences checks
+  all four outgoing/incoming form combinations and extended-to-basic stale
+  backing reuse, with independently captured CONTROL=1/5 and poisoned restore
+  destinations. It is not an emulator or a physical FPCA-transition proof.
+- **FAP-C3FP-RUNNING-HARDENING:** Fiber validates origin/current/PSP before
+  reading its mutable cursor, uses its scheduler and MPU-switch bridges,
+  protects the replacement window with PRIMASK, synchronizes mask changes,
+  and verifies PSP, PSPLIM and actual post-write CONTROL. Its expected CONTROL
+  mask is seven with exact comparison to the saved value, not an entry-state
+  SPSEL mask. All instructions and helper-call/slot relocations in the naked
+  PendSV function are compared, including terminal failure paths. These C
+  bridges are compiled unchanged; this gate does not qualify their behavior.
+- **FAP-C3FP-RUNNING-STAGED:** This auxiliary comparison does not qualify the
+  complete generic forward runtime ABI, scheduler integration, production
+  context-cohort provider or a new runtime-selectable route. The actual pinned
+  and Fiber SVC entries, plus Fiber yield/return veneers, have closed assembly
+  templates; SVC C-dispatch behavior, final archive/GC/LTO links and actual exception execution remain
+  separate obligations. No fixture provider manufactures those claims here.
+
+The standard-library-only checker consumes ARM ELF sections, mapping symbols,
+function boundaries, bytes and relocations. It retains changed operands,
+offsets, counts, writeback, order, flag-setting forms and unknown instructions.
+Thirty-three actual compiled mutations per configuration include three changes
+to copied pinned-reference source, not invented disassembly. Python optimized
+invocations/imports and counterfeit diagnostics have explicit negative controls.
+Commands, source/header/tool hashes, preprocessing, assembly, disassembly,
+attributes and rejection diagnostics are retained under `C3FP-RUNNING`.
+Input drift prevents qualification and a PASS artifact manifest. See the owned
+fixture README for exact proof and exclusion boundaries.
+
+C3FP documentation provenance is retained as byte-for-byte copies under
+`C3FP-RUNNING/documentation/`. Each documentation input's `Path` names that
+immutable copy; `SourcePath` records its live origin for attribution only.
+`documentation.json` records the same snapshot paths and SHA-256 values.
+This includes the selected-port ledger, architecture audit and this global
+ledger. Every live original and every retained copy is checked for drift
+during qualification; no document is omitted from the check. After the run,
+ordinary documentation edits do not change the historical snapshot. All
+`Artifacts` paths must remain under the evidence directory. Code/tool inputs
+remain live hashed dependencies, and the assembly oracle/mutants are unchanged.
+
 This document defines the generated-code comparison required before a selected
 port mechanism is accepted. The executable proof is
 `tools/freertos_asm_parity.ps1` and is also invoked by the compile matrix.
@@ -119,26 +513,248 @@ PendSV source objects is declared as an explicit complete runtime group below
 and must have a dedicated archive/ELF proof. An explicitly listed staged source
 is checked separately against only the mechanisms named in its ledger. Every
 directory must contain `FREERTOS_PARITY.md`. A staged profile never inherits a
-complete runtime claim. The script fails if a staged profile becomes selectable,
-is also listed as complete parity, or a new ordinary port source is neither
+complete runtime claim. The script requires its exact declared metadata flag:
+zero normally, or explicit pending-selectable metadata one while post-metadata
+qualification remains pending (currently C5TF). It fails for any other flag,
+if a staged profile is also listed as complete parity, or a new ordinary port source is neither
 paired nor explicitly staged. Adding a port source therefore cannot silently
 reduce coverage.
 
-`ARM_CM55/non_secure` Slice 1 is a type/trait-only `C55S` SecureContext
-foundation. It has no generated SVC/PendSV or runtime object yet, so it is
-intentionally absent from the generated-assembly table. Its separate matrix
-proof covers the exact eleven-word layout, type-only C/C++ use, scalar M55
-`-O2`/`-Os` manifests, and fail-closed feature/security-role negatives. The
-pinned FreeRTOS source hashes and deferred mechanics are recorded in
+The new C5SO `ARM_CM55_SECURE_ONLY/secure` group is explicitly staged inventory
+with actual M55_NTZ Secure-only reference flags and selectable metadata zero.
+It has no inherited C3SO whole-body parity claim; its separate actual M55 gate
+has pre-helper-repair normal-codegen results preserved above. Source-closure
+replay after the canonical helper repair remains pending.
+
+`ARM_CM55/non_secure` now has staged C55S provider adapters in `fiber_port.c`,
+runtime CPU/MSP-plan support and boot map/hash-switch policy alongside its
+existing SVC/PendSV components. The adapters are explicitly staged inventory;
+old type, pool, initializer or transfer-component receipts do not qualify the
+new whole provider. Complete current-provider closed parity is queued separately.
+The prior type proof still covers the exact eleven-word initial layout,
+type-only C/C++ use, scalar M55 O2/Os manifests and feature/security-role
+negatives. Current source hashes and remaining qualification are recorded in
 `fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55/secure` Slice 2/3 adds versioned C55S CMSE identity and immutable
+`ARM_CM55/secure` Slice 2/4 adds versioned C55S CMSE identity and immutable
 capacity gateways. It builds real Secure `-mcmse` and Non-secure images at
 `-O2`, `-Os`, and `-O2 -flto`, proves eight NSC veneers in `.gnu.sgstubs`, an
 explicit retained Secure pool section, and rejects missing, v2-only, foreign,
 and invalid-capacity manifests. It still contributes no context construction,
 SVC, PendSV, or SecureContext save/load assembly to the table. Its ledger is
 `fiber/port/ARM_CM55/secure/FREERTOS_PARITY.md`.
+
+`ARM_CM55/secure` C55SPOOL adds auxiliary generated-code evidence for the
+Secure-private pool only. The script compiles the actual pinned
+`GCC/ARM_CM55/secure/secure_context.c` and actual
+`fiber_secure_context_pool.c` with the same Cortex-M55, Thumb, CMSE,
+soft-float, explicit strict-aliasing, and `-O2`/`-Os` flags. Both use three
+records; Fiber's explicit per-stack capacity is 256 bytes. This does not add a
+runtime profile: C55S remains staged, and CPU initialization, exception-origin
+gates, NSC allocation/load/save gateways, and SVC/PendSV activation remain
+deferred. Actual CONTROL/SG transitions are a separate architectural test.
+
+| Auxiliary C55SPOOL mechanism | Pinned CM55 reference | Fiber private implementation |
+| --- | --- | --- |
+| One-shot memory initialization | `SecureContext_Init`: first-use record clearing, interleaved with reference CPU initialization | `fiber_secure_context_pool_boot_initialize`: one-way BSS marker, complete retained-image byte scrub and readback before READY; no CPU initialization |
+| Bounded allocation and seals | `SecureContext_AllocateContext`: bounded free/duplicate-owner scan, heap stack plus two seal words, index-plus-one handle | `fiber_secure_context_pool_allocate`: bounded static records/stacks, checked byte-safe seals, publication and validation before the same opaque handle convention; no heap |
+| Handle/owner lookup | `SecureContext_LoadContext`: range/index and owner validation before the reference CPU-loading helper | `fiber_secure_context_pool_lookup_owned`: range/index, geometry/seal, and opaque owner validation before returning a Secure-private record; no CPU load |
+
+These are paired mechanism signatures with documented differences, not
+identical assembly or complete SecureContext runtime parity. Object evidence
+does not establish final-linked global LTO behavior or the linker's NOLOAD
+placement; those remain separate integration proofs.
+
+The pinned CMSE entry functions may contain compiler-generated FPCXTNS and
+FP-register/VPR cleanup even with the soft-float calling convention. This is
+reference NSC entry/exit hygiene, not evidence of a C55S FP context-save
+mechanism. The private Fiber pool has no NSC entry and must remain entirely
+general-register-only across all emitted helpers. Retained evidence includes
+both object disassemblies and the exact paired arguments/source hashes in
+`ARM_CM55_SECURE_CONTEXT_POOL/c55spool-evidence.json` below each parity build
+root. Every direct call target must be defined in that inspected private
+object; indirect calls are rejected. Mutation checks reject removal of byte
+readback or its loop edge, replacement of byte seal accesses, and addition of
+a CPU write; the separate pool behavior suite covers lifecycle and invalid inputs.
+
+### Auxiliary C55SINIT Evidence
+
+The C55SINIT slice pairs the actual pinned CM55
+`SecureInit_DePrioritizeNSExceptions()` from `secure_init.c` and
+`SecureContext_Init()` from `secure_context.c` with
+`fiber_secure_context_gateway_c55s_v1_initialize()` at `-O2` and `-Os`.
+It is separate from the preceding C55SPOOL memory-only proof. It adds one
+one-shot initializer to the eight immutable NSC entries. That initializer slice
+had nine mainline C55S NSC exports; the subsequent transfer slice below has
+twelve. Neither adds another complete runtime among the twenty production
+runtime profiles. Non-secure first-start/SVC ownership, context switching and
+the complete C55S runtime remain deferred.
+
+| Required generated mechanism | Pinned CM55 source | C55S initializer |
+| --- | --- | --- |
+| Priority policy | Keyed AIRCR read/modify/write, preserving unrelated low bits and setting PRIS | Same numeric write, preceded by the A26 BFHFNMINS rejection and followed by masked readback/barriers |
+| Secure stack/Thread template | PSPLIM=0, then PSP=0, record clearing, then CONTROL=2 | PSPLIM=0, then PSP=0, checked private-pool initializer, then CONTROL=2; readbacks and barriers |
+| One-shot admission | Any Handler origin and a reference initialized-once word | Immediate Non-secure caller, exactly SVC 11, fresh gateway state, irreversible INITIALIZING/READY commitment |
+
+The runner retains actual objects, assembly, dependency files, disassembly,
+paired compiler arguments/source hashes and linked C-body fixtures. Mechanism
+traces execute ordinary emitted ARM instructions through Unicorn's M33 engine,
+with explicit hooks for banked-register values/readbacks, keyed AIRCR and
+compiler CMSE hygiene. A boundary stub supplies the private pool result; it
+does not replace or requalify the independently tested pool implementation.
+Numeric inputs check write preservation, ordering, gates, failed readbacks,
+sticky failures and repeated calls. Fifteen compiled production-source mutants
+exercise the admission, preservation, readback, barrier, order and FP-data
+guards; a surviving mutant fails the suite. A hostile compiler-flags object
+must retain the exact selected pool dependencies and no instrumentation,
+sanitizer, stack-protector, coverage, heap or libc helper dependencies.
+The complete gateway imports boot-initialize, allocate, owned-lookup, the
+exact private cohort C provider, and the exact selected read-only byte key.
+The init-only link removes only the three unrelated transfer NSC sections and
+their now-unused imports. The initializer's original bytes and relocation
+targets are checked unchanged; its isolated dependencies are boot-initialize
+and those two exact cohort symbols. `FAP-C55S-PRIVATE-COHORT` describes the
+explicitly labelled boundary provider and separate real-provider checks.
+Init mutants are restricted to that actual production function's span.
+Normal and hostile linked executable sections are also scanned for unexpected
+calls and FP data instructions, including unvisited paths. Each mutant must
+produce its exact designated proof failure; an emulator/decoder error cannot
+count as a kill. Traces check C-body stack balance and callee-register retention.
+Separate normal and hostile links use the actual private pool, not the trace
+stub: the pool object must have no external dependency, and every retained
+gateway/pool direct call must target a defined private function. Their complete
+executable sections receive the same FP-data/indirect-call scan. These real-pool
+links are static evidence, not additional M33 execution or pool-memory proofs.
+The isolated pinned `SecureContext_Init` section retains its original bytes
+and relocations; unrelated CMSE-rooted entries are removed rather than supplied
+with fake allocator or assembly providers.
+
+GCC's Cortex-M55 CMSE C entries emit fixed `FPCXTNS` stack save/restore,
+`vscclrm` and `clrm` hygiene even for soft-float/general-register-only source.
+`FAP-CMSE-M55` compares their exact opcode/operand/encoding template against
+both actual pinned initializers, with the required return-register distinction.
+Four decoded-instruction classifier controls reject missing save/scrub, a wrong
+FP context bank, and clearing the returned result; these are separate from the
+fifteen compiled C mutants. The trace explicitly accounts for the measured
+compiler security forms; it does not call the NSC entry wholly
+FP-instruction-free. FP data instructions or other FP context
+transfers are rejected. This is neither whole-function byte equivalence nor
+M55 architectural execution: SG transitions, hardware CONTROL effects,
+exception entry/return and FP cleanup semantics belong to the independent
+actual-M55 QEMU qualifier. No board is programmed by this proof.
+
+Evidence is under `C55SINIT/` and the two
+`ARM_CM55_SECURE_CONTEXT_INIT_*` directories in each parity build root.
+`trace-result.json` records the generated-mechanism traces and mutant failures;
+the separate port evidence files preserve actual pinned-source paths/hashes.
+`C55SINIT/artifacts.json` is emitted only after the executable checks and final
+source-hash guard succeed. It records the compiler hash, captured inputs and
+artifact hashes. A changed source, private header, attribute header, runner,
+ledger or reference/configuration input invalidates that qualification attempt.
+Python dependencies are pinned to Unicorn 2.1.4 and pyelftools 0.33, with no
+implicit installation or silent skipping. Reference-identity-only mode does
+not invoke these executable mechanism checks.
+
+### Auxiliary C55STRANSFER Evidence
+
+This slice compares the actual pinned CM55 `secure_context.c` allocation/load/
+save wrappers and `secure_context_port.c` assembly helpers against the actual
+`fiber_secure_context_gateway_c55s_v1_allocate/load/save` C bodies. Both sources
+are compiled at `-O2` and `-Os`, Cortex-M55 CMSE soft ABI, with the reference
+MPU/FPU/MVE branches explicitly disabled by the selected configuration.
+The preserved record backbone is saved PSP at offset 0, PSPLIM at 4, stack top
+at 8 and owner at 12. Scalar load writes PSPLIM before PSP. Scalar save
+publishes PSP before clearing PSPLIM and then PSP, without a CONTROL stack word
+or lazy FP stacking trigger. The compiler-generated NSC security cleanup is
+still required under `FAP-CMSE-M55`; ordinary FP/MVE data operations are not.
+
+`C55STRANSFER/` retains commands, actual preprocessed C/assembly, objects, maps,
+disassembly, source-derived compiled mutants, trace diagnostics and a final
+hash-guarded `artifacts.json`. The reference link removes only the unrelated
+FreeContext NSC section and verifies that the retained allocation/load/save
+bytes and relocations are identical to the original object. Only the pinned
+allocator's returned address is a fixture-controlled boundary. The actual
+reference allocator still performs its scan, duplicate-owner/exhaustion checks,
+seal stores and record publication; its actual assembly helpers run in traces.
+
+Production gateway traces use an explicitly identified pool-result/owned-lookup
+boundary fixture, not a replacement pool qualification. Actual normal and
+hostile gateway-plus-pool links are separately checked with the four identity
+entries retained: exactly twelve NSC exports, exact five-symbol gateway
+imports, no unexpected external helper dependency, no indirect call and no FP
+data instruction in the inspected private callgraph. New entries must not
+write CONTROL. Pinned and production NSC opcode/operand/encoding templates are
+checked with the void-versus-u32 CLRM return-register difference and the
+compiler's bounded full-versus-short shrink-wrapped cleanup sequences.
+The identity objects import exactly the provider and selected key. All
+eight queries execute against the real pool provider in normal and hostile
+links (sixteen additional ARM calls); they must return independent numeric
+results, call the provider before reading the key byte, and leave CPU, pool
+and BSS state unchanged. All three hot transfer functions must retain no
+provider/key relocations.
+
+Numeric cases exercise SVC/PendSV admission, exact CONTROL=2, unloaded-state
+admission, null/foreign handles and owners, intentional zero-handle no-ops,
+inclusive save bounds/alignment, pool results, ordered writes/barriers/readbacks
+and partial failures. Saved-PSP readback faults and second owned-lookup failures
+are independent cases and must both prevent CPU-state clearing. Each compiled
+guard mutant must fail for its designated proof diagnostic, not an emulator
+exception. Mutants also move the actual register writes, remove publication,
+and insert a CONTROL write or FP data instruction. A modeled allocate/load/save/
+reload round trip checks that the published PSP is the value subsequently
+loaded, with repeated loaded-state admission rejected. Real static-pool
+lifecycle/seal/metadata behavior remains covered by
+the independent pool suite and actual-M55 gateway execution by its independent
+QEMU qualifier. These M33 traces use explicit banked-register/CMSE hooks, not
+physical no-FP or exception/SG architectural execution. No Non-secure runtime
+provider, free/detach entry or additional complete runtime profile is supplied.
+The transfer receipt binds the initializer receipt and rechecks all upstream
+artifact hashes, including actual gateway/pool objects and imported trace
+support, in addition to its own source and artifact hashes.
+
+### Auxiliary C33SCOHORT Evidence
+
+The existing CM33 allocation, priority, initialization, load and save pairs
+still compile their actual pinned `GCC/ARM_CM33/secure` sources at O2/Os.
+`C33SCOHORT/` adds exact private-cohort object/ELF evidence without replacing
+those instruction-backbone comparisons. It compiles the actual CM33 gateway,
+identity unit and pool with `-mcmse`; the exposed pool fact guard requires
+CMSE level 3 even though the pool itself is not NSC. Actual normal and
+supported-hostile direct-object links retain twelve actual NSC exports, the
+real ordinary C provider and one exact read-only key. No modeled provider,
+pool-result stub, query projection or private-provider/key root is used here.
+
+The supported-hostile variant records instrument-functions, stack-protector,
+coverage and UBSan inputs followed by this port's required counterflags:
+`-fno-instrument-functions -fno-stack-protector -fno-profile-arcs
+-fno-test-coverage -fno-sanitize=all`. It is not an attributes-alone hostile
+qualification. Undefined gateway/identity/pool sets must be exactly 5/2/0;
+direct call admission uses explicit private function names, not prefix-based
+external-helper acceptance. All nine cold entry points retain their own exact
+C-call and key relocations. Allocate/load/save must acquire neither dependency.
+
+Ordinary emitted ARM instructions run through Unicorn M33 with explicit
+banked-register, AIRCR and compiler CMSE-return flag-scrub doubles. Sixteen
+query calls use the actual pool provider before pool initialization and must
+preserve CPU/pool/BSS state. Initializer traces execute the real void-returning
+CM33 pool initializer, preserve the masked `(CONTROL & 3) == 2` predicate and
+check the admission/cohort/commit/write/barrier/readback order. Synthetic upper
+CONTROL bits test that source predicate, not physical register availability.
+The actual pinned CM33 priority and CPU initializers run separately too; its
+default eight four-word records are not confused with Fiber's three six-word
+records. Four compiled production-source mutants remove RETAIN, remove its
+key read, or move the retained operations before preflight or after commitment.
+Only their exact designated proof failures count as kills.
+
+Each of the five existing CM33 Secure pair directories retains actual
+arguments, preprocessed C, assembly, disassembly, source hashes and paired
+reference paths in `c33s-evidence.json`. The final C33S receipt covers those
+artifacts and the new links/traces, hashes actual Secure headers/linker
+fragments and CMSIS inputs, and binds the hash-checked generic trace support
+from the C55S initializer receipt. CM33 does not inherit C55S initializer or
+CMSE-M55 semantics. Archive/LTO cohort rejection, ISA admission, pool-fault
+behavior, physical SG/exception/CONTROL effects and board execution remain
+separate qualifications. This slice adds no runtime profile.
 
 `ARM_CM55F_NTZ/non_secure` slices 1-4 use `fiber_port_boot.c`,
 `fiber_port_svc.c`, and `fiber_port.c` as one complete scalar-FP runtime group.
@@ -244,6 +860,233 @@ Every difference ID referenced by the executable proof is normative. A new
 difference requires a new ID and rationale before the generated-code check may
 accept it.
 
+### FAP-CMSE-M55
+
+The selected GCC 14 Cortex-M55 CMSE soft-ABI build emits the following security
+template in the actual pinned `SecureInit_DePrioritizeNSExceptions()` and
+`SecureContext_Init()`, despite no ordinary FP-enabled source requirement:
+`vstr FPCXTNS, [sp, #-4]!` at C-body entry, followed at return by contiguous
+`vscclrm {s0-s15, VPR}`, `clrm {r0, r1, r2, r3, ip, APSR}`,
+`vldr FPCXTNS, [sp], #4`, and `bxns lr`.
+
+Fiber's `uint32_t` initializer must match those generated opcodes, operands and
+encodings exactly except that CLRM excludes `r0`, preserving the result rather
+than clearing it as the pinned void functions do. This comparison covers normal
+and hostile gateway bodies, including the separate actual-pool static links.
+The measured `-O2` Fiber body shrink-wraps its FPCXTNS save/restore after a
+`tst lr,#1`/conditional-branch Secure-origin rejection. The accepted rejection
+target must set `r0=0` and retain the exact contiguous VSCCLRM/CLRM/BXNS scrub
+without a save/restore pair; the Non-secure path retains the full pinned
+template. The `-Os` body instead keeps the full template around that gate. The
+runner checks these bounded layouts and records the prologue offset and short
+epilogue, rather than assuming every linear C-body entry starts with VSTR.
+The later allocation/load/save comparison keeps this initializer gate intact.
+Its actual pinned wrappers can place the short no-save scrub block before the
+full save/restore block, while Fiber can place it after that block. Transfer
+checks accept only the exact full template alone or those two measured linear
+block orders, with contiguous cleanup instructions and per-call executed
+template checks. The u32 Fiber result remains excluded from CLRM; pinned void
+load/save wrappers clear it. Moving a rejection block is not a claim that whole
+functions or their admission policies are equivalent.
+It does not remove security cleanup to satisfy a blanket no-FP rule. Ordinary
+FP/MVE data destinations, unexpected FP context transfers, and helper-generated
+FP operations remain forbidden throughout the inspected private callgraph.
+
+This allowance identifies compiler-generated CMSE security mechanisms, not
+ordinary FP/MVE datapath use. DDI0553B.y
+[C2.4.364, VLDR (System Register), pp. 1160-1162](https://community.arm.com/cfs-file/__key/communityserver-discussions-components-files/471/DDI0553B_5F00_y_5F00_armv8m_5F00_arm.pdf#page=1160)
+and [C2.4.484, VSTR (System Register), pp. 1415-1417](https://community.arm.com/cfs-file/__key/communityserver-discussions-components-files/471/DDI0553B_5F00_y_5F00_armv8m_5F00_arm.pdf#page=1415)
+define the FPCXT_NS inactive case: without FP/MVE, the CP10 check and payload
+memory transfer are suppressed, while address writeback and stack-limit
+checking remain. They are not blanket NOPs.
+[C2.4.470, VSCCLRM, pp. 1383-1384](https://community.arm.com/cfs-file/__key/communityserver-discussions-components-files/471/DDI0553B_5F00_y_5F00_armv8m_5F00_arm.pdf#page=1383)
+defines the Secure-state no-FP/no-MVE clear as NOP.
+
+`GENERAL_REGS_ONLY`, soft ABI and `__ARM_FP == 0` alone do not prove physical
+execution. The cohort's separate default-M55 versus `+nofp+nomve` production
+comparison reports identical assembly; this runner retains default-M55 flags
+and does not silently substitute a different target. The separately reported
+QEMU 8.2.2 physical-no-FP FPCXT mismatch means ordinary M55 QEMU success is not
+absent-hardware proof. This runner's M33 trace explicitly models the measured
+security forms and cannot establish their M55 hardware semantics. No
+whole-function byte-equivalence claim is made.
+
+The [official GCC testsuite discussion](https://gcc.gnu.org/pipermail/gcc-patches/2024-October/666067.html)
+accepts the sequence-based tests for trunk and GCC 14. Its
+`gcc.target/arm/cmse/mainline/8_1m/soft/cmse-5.c` change explicitly requires
+FPCXTNS save/restore plus VSCCLRM under the soft ABI while separately forbidding
+VMOV and VMSR. That is compiler-code-generation evidence, not proof of physical
+FP/MVE datapath availability or no-FPU instruction semantics.
+
+### FAP-C55SINIT-PRIORITY
+
+The reference sets AIRCR.PRIS behind an any-Handler gate with the architectural
+VECTKEY write value. Fiber preserves the same low-bit transformation and does
+not silently reroute faults. A26 rejects BFHFNMINS=1 before commitment, because
+setting PRIS while that routing bit is set is architecturally UNPREDICTABLE.
+The new readback excludes VECTKEYSTAT and proves PRIS plus preservation of the
+remaining low bits. Barriers and explicit rejection are hardening, not reference
+byte-equivalent sequences. Negative tests inject both lost PRIS and an unrelated
+low-bit change, and compile a preservation-mask mutant.
+
+### FAP-C55SINIT-CPU
+
+The pinned `SecureContext_Init()` clears PSPLIM before PSP, initializes its
+three four-word records, then writes CONTROL=2 for privileged Secure Thread
+PSP use. Fiber keeps that order, delegates memory work to its independently
+qualified static pool, requires a one-valued pool result, and reads back the
+stack registers and CONTROL. Armv8-M Handler mode permits the banked SPSEL
+write/readback; SG is not exception entry, so post-write CONTROL is compared
+against 2, not an invented Handler permanent-zero SPSEL value. The mechanism
+trace supplies explicit register readback doubles; actual architectural
+execution is a separate QEMU proof. No Non-secure runtime operation is added.
+
+### FAP-C55SINIT-GATES
+
+The reference accepts any Handler invocation and uses one initialized-once
+word. Fiber additionally requires the incoming NSC caller to be Non-secure,
+IPSR exactly 11, a zeroed gateway marker and serialized boot. Admission checks
+precede INITIALIZING and every destructive write. Post-commit CPU/pool failure
+leaves a sticky nonretryable marker; failed INITIALIZING or READY latch
+readback traps because returning with an unreliable latch could permit retry.
+READY is published only after priority, stack, pool and CONTROL checks. This
+four-byte gateway BSS marker is distinct from the private pool BSS marker and
+NOLOAD image. Exact Non-secure first-start call-site validation remains the
+deferred Non-secure runtime's responsibility, not a claim of this NSC gate.
+
+### FAP-C55S-PRIVATE-COHORT
+
+The pinned sources do not bind separately compiled private objects to Fiber's
+static-pool geometry. Generation 1 adds a real strong ordinary C pool helper,
+`fiber_secure_context_pool_c55s_v1_cohort_provider`, and one allocated read-only
+byte with value 1. Its symbol name encodes twelve uint32 facts as twenty-four
+unsigned decimal halfwords: port, layout, features, identity ABI, context ABI,
+record revision, capacity, maximum stack bytes, alignment, seal words, seal
+bytes and seal value. This is an exact symbol identity, not a runtime key table
+or runtime value comparison. The independent numeric oracle in this runner
+uses C55S/0x00010001/0x8A, ABI 1/1, record revision 1, N=3, S=256, alignment 8,
+two seal words/eight bytes and 0xFEF5EDA5.
+
+Each of the eight query entries and initializer retains one actual C call
+relocation to that helper and one exact key relocation followed by a byte
+read. Initializer admission, including BFHFNMINS rejection, precedes both
+operations; they precede INITIALIZING. Rejected/repeated initialization must
+perform neither operation. Allocate/load/save acquire no such relocations.
+The provider's generated ordinary body must be exactly `bx lr`, have no NSC
+alias, and leave the pool and CPU untouched. Normal and hostile real-pool
+providers are compared byte-for-byte, including relocations, with an explicitly
+labelled fixture-only provider built from the actual DEFINE macro. That
+fixture supplies the modeled init/transfer boundary only; actual pool links
+never use it. Exact query results, call/read traces, read-only key geometry and
+the numeric key identity are checked in the real normal/hostile links.
+
+Links explicitly root the tested NSC entries, never the private helper or key.
+The fixture places the key at 0x0802F000 without KEEP and includes the actual
+`fiber_secure_context_cohort_contract.ld`. That fragment asserts generation
+presence only; selected-key relocations provide tuple identity. Both new
+private header and linker contract are hashed qualification inputs. Gateway,
+isolated initializer, identity, and pool external dependency sets are exactly
+five, three, two, and zero symbols respectively. Canonical hostile-flag scans
+still reject runtime instrumentation, helper dependencies, indirect calls and
+ordinary FP data operations, while preserving `FAP-CMSE-M55` hygiene.
+These direct-object/codegen/mechanism links do not prove archive extraction,
+LTO retention or rejection of mixed archives; the independent private-cohort
+gate owns that evidence. No `-u`/undefined root for the private provider is
+used to manufacture archive extraction, and no runtime profile is added.
+
+### FAP-C55STRANSFER-ALLOCATE
+
+The reference admits any Handler with PSPLIM=0, scans bounded four-word records,
+rejects an existing owner, allocates requested bytes plus an eight-byte seal,
+publishes PSP/limit/top/owner, and returns index plus one. Fiber preserves the
+opaque handle/seal/record backbone through its already-qualified static pool,
+but requires READY, an immediate Non-secure caller, SVC 11 or PendSV 14, exact
+CONTROL=2 and both PSPLIM=0 and PSP=0 before calling that pool. It forwards the
+numeric size and owner without introducing a heap or CPU-register write. The
+pool owns request validation, duplicate ownership and static-capacity policy;
+the gateway boundary fixture does not claim to retest those implementations.
+
+### FAP-C55STRANSFER-LOAD
+
+The pinned wrapper decodes a bounded handle, checks PSPLIM=0 and owner, then
+calls the actual Handler-gated assembly loader. Fiber instead obtains a checked
+Secure-private record from owned lookup, never exposing its pointer across NSC.
+It retains PSPLIM-before-PSP order, adding barriers and explicit first-limit,
+final-limit and final-pointer readbacks. A failure after the first register
+write is partial and terminal to its caller, not a rolled-back transaction.
+Handle zero is a successful no-op only for an admitted nonzero owner with both
+Secure stack registers zero. No CONTROL transfer or repair is performed.
+
+### FAP-C55STRANSFER-SAVE
+
+The pinned wrapper checks handle, loaded PSPLIM and owner; its no-MPU/no-FP
+assembly stores PSP at record offset zero, then clears PSPLIM followed by PSP.
+Fiber keeps that backbone but admits only PendSV 14 with exact CONTROL=2 and
+adds checked ownership, matching limit, eight-byte alignment and inclusive
+limit/top bounds. It publishes PSP through a volatile record view, barriers,
+revalidates owned lookup, and explicitly reads the volatile saved PSP back
+before either clear. A valid-but-different saved PSP must fail even if a fresh
+lookup still returns that record. Both CPU clears have ordered barriers and
+readbacks. Zero handle succeeds only for an already-unloaded admitted owner.
+Failures return zero without silently repairing CPU/record state; callers must
+treat partial publication/transfer failures as terminal.
+
+### FAP-C55STRANSFER-GATES
+
+The reference's low-level Handler admission is narrower in implementation
+detail but broader in accepted exception numbers. Fiber requires incoming
+Non-secure origin, READY, exact scalar privileged-PSP CONTROL=2, and operation-
+specific SVC/PendSV origin before private lookup or destructive writes. These
+are read-only admissions: none of the new three entries writes CONTROL. They
+do not prove the deferred Non-secure SVC/PendSV call site's provenance. The
+twelve NSC exports consist of four identity, four capacity, one initializer and
+three stateful entries, not a new production runtime among the existing twenty.
+
+### FAP-C55SPOOL-INIT
+
+The pinned CM55 `SecureContext_Init()` uses an initialized-once marker, clears
+its four-word records, and writes PSPLIM, PSP, and CONTROL behind its NSC
+Handler gate. The auxiliary private Fiber initializer deliberately does none
+of the CPU or NSC work. Its four-byte normal-BSS marker transitions only from
+zero to INITIALIZING to READY; INITIALIZING/READY repeats return zero without
+scrubbing, and unknown state fails closed. The retained NOLOAD image is not
+trusted to contain startup zeros. Volatile character stores erase all records,
+stacks, tails, and padding, followed by full volatile byte readback and marker
+revalidation before READY publication. Partial failure is not retryable until
+normal BSS initialization on a fresh boot. The generated proof requires both
+loops and fail-closed readback before publication; it does not claim that an
+unlinked object alone proves NOLOAD placement.
+
+### FAP-C55SPOOL-ALLOCATE
+
+The pinned CM55 allocator scans a bounded record table, rejects duplicate task
+ownership, allocates stack bytes plus the eight-byte seal through
+`pvPortMalloc()`, writes two `0xFEF5EDA5` words, records PSP/PSPLIM/top/owner,
+and returns index plus one. Fiber keeps the bounded scan, first four record
+meanings, seal representation, and zero-invalid opaque handle convention, but
+uses manifest-bounded static records and stacks with no allocation/free heap
+dependency. It additionally validates all records and existing seals, rejects
+corruption rather than recycling it, and verifies the new record before
+returning a handle. Owner tokens are compared but never dereferenced.
+
+Fiber's declared byte-array stack storage is sealed through volatile character
+accesses to the native representation of the constant, not a `uint32_t *`
+type-pun. Paired optimized builds explicitly enable strict aliasing; generated
+seal write/read helpers must retain byte accesses and bounded loops. No free,
+detach, NSC entry, mask change, CPU initialization, or context load/save is
+provided by this private pool.
+
+### FAP-C55SPOOL-LOOKUP
+
+The pinned `SecureContext_LoadContext()` converts a nonzero bounded handle to
+an index, checks its owner and unloaded PSPLIM, then calls the assembly loader.
+Fiber's private lookup retains bounded index-plus-one decoding and owner
+comparison but requires READY and validates allocation state, recorded stack
+geometry, and seal before exposing a Secure-private pointer. Invalid handles,
+unallocated records, or wrong owners return null; corrupted metadata or seals
+fail closed. This pairs the authority/lookup mechanism only: it does not
+substitute the private lookup for the deferred NSC/CPU loading path.
+
 ### FAP-COMMON-START
 
 FreeRTOS starts the task already stored in `pxCurrentTCB`. Fiber first obtains a
@@ -260,6 +1103,12 @@ stacked xPSR/PC, context seal, and selected-context state before relying on the
 frame. FreeRTOS can trust its private kernel scheduler and TCBs and therefore
 has shorter handlers. These extra branches must precede the corresponding
 save or restore operation; they may not replace it.
+
+Armv8-M post-write CONTROL checks compare the stored value actually written,
+not the exception-entry value. The privileged first-start paths write and read
+back 2; protected paths check their written privilege/FP state separately.
+Handler execution still uses MSP. This is not the Armv7-M SPSEL readback rule;
+the maintained CONTROL execution gate includes that architectural contrast.
 
 ### FAP-COMMON-SCHEDULER
 
@@ -366,31 +1215,70 @@ proofs; hardware parity remains unclaimed without a suitable TrustZone board.
 ### FAP-CM33-SECURE-CONTEXT-ALLOCATOR
 
 FreeRTOS accepts SecureContext allocation from any Handler mode while Secure
-PSPLIM is zero, then obtains a dynamic stack from `secure_heap`. Fiber preserves
-the generated IPSR-then-PSPLIM gate, narrows IPSR to exact exception 11
-(`SVCall`) for first start or 14 (`PendSV`) for lazy first activation, and
-delegates to a bounded manifest-sized static pool. Fiber rejects
+PSPLIM is zero, then obtains a dynamic stack from `secure_heap`. Fiber first
+checks the immediate Non-secure caller with `cmse_nonsecure_caller()` in the
+actual NSC entry, then preserves the generated IPSR-then-PSPLIM gate. It narrows
+IPSR to exact exception 11 (`SVCall`) for first start or 14 (`PendSV`) for lazy
+first activation and delegates to a bounded manifest-sized static pool. The
+caller-state and exception-number checks are independent; the Non-secure port
+separately validates its owned SVC call site. Fiber rejects
 zero/unaligned/oversized requests, duplicate owners, and pool exhaustion with
 handle zero, retains the reference index-plus-one handle and two-word stack
 seal, and intentionally has no free operation because Fiber contexts have
 static lifetime.
 
+### FAP-C33S-PRIVATE-COHORT
+
+The pinned CM33 sources have no Fiber-private static-pool cohort. CM33
+generation 1 retains an actual C call to
+`fiber_secure_context_pool_c33s_v1_cohort_provider`, then a byte read through
+the exact `fiber_secure_context_cohort_c33s_g1_...` symbol. The twelve uint32
+facts use twenty-four delimited unsigned decimal halfwords, not a runtime
+table. The independent parity oracle selects port 0x43333353, layout
+0x00010001, features 0x8A, identity/context ABI 1/1, record revision 1,
+N=3/S=256, alignment 8, two seal words/eight bytes and seal 0xFEF5EDA5.
+This must not reuse the C55S port ID or pool initialization representation.
+
+The real provider is strong, non-NSC, dependency-free and emits only BX LR
+with optional alignment NOPs; its selected key is one allocated read-only byte
+of value 1. All eight queries and the initializer retain their own call/key
+edges. The initializer performs them only after immediate caller, SVC 11,
+fresh-state and BFHFNMINS admission, but before INITIALIZING. They do not
+belong in allocate/load/save. CM33's retained pool section is 872 bytes for
+this configuration, including its existing eight-byte marker/alignment
+overhead; its pool initializer returns void. CONTROL is written as 2 and
+checked with mask 3, not C55S's exact full-word predicate. None of those
+pre-existing semantics is replaced by this cohort addition.
+
+The actual generation linker ASSERT is included in the real-provider links,
+but is presence-only. Exact relocations and read-only key identity establish
+the selected tuple. Explicit roots are actual NSC entries only; this
+direct-object proof makes no archive extraction or LTO-retention claim.
+
 ### FAP-CM33-SECURE-CONTEXT-INITIALIZE
 
 FreeRTOS splits one-shot TrustZone startup between
 `SecureInit_DePrioritizeNSExceptions()` and `SecureContext_Init()`. Fiber
-combines those operations in one versioned NSC gateway called only by the
-controlled first-start SVC. It preserves the PRIS write, zero Secure
+combines those operations in one versioned NSC gateway. Its entry first checks
+the immediate Non-secure caller through `cmse_nonsecure_caller()`, separately
+requires exception 11, and relies on the Non-secure port to validate the owned
+first-start SVC call site. It preserves the PRIS write, zero Secure
 PSP/PSPLIM state, privileged Secure Thread/PSP policy, and pool reset. Fiber
-narrows Handler mode to exact exception 11, rejects a second initialization,
-reads back AIRCR/PSP/PSPLIM/CONTROL, and uses a bounded static pool instead of
+requires AIRCR.BFHFNMINS=0 before committing initialization: setting PRIS while
+that platform fault-routing bit is 1 is architecturally UNPREDICTABLE. It returns
+0 without changing the gate, AIRCR or pool rather than silently clearing the
+platform policy. The reference's unchecked RMW is not adopted for that input.
+Fiber rejects a second initialization, reads back AIRCR/PSP/PSPLIM/CONTROL,
+and uses a bounded static pool instead of
 the FreeRTOS global context array plus heap.
 
 ### FAP-CM33-SECURE-CONTEXT-LOAD
 
 FreeRTOS validates a nonzero handle and owner before loading Secure PSPLIM and
-PSP from the context record. Fiber preserves the same PSPLIM-before-PSP order,
-but additionally requires exact SVCall or PendSV provenance, completed one-shot
+PSP from the context record. Fiber first checks the immediate Non-secure caller
+in the actual NSC entry and separately requires exception 11 or 14; neither
+check alone establishes the owned Non-secure call site. It preserves the same
+PSPLIM-before-PSP order and additionally requires completed one-shot
 initialization, zero pre-load PSP as well as PSPLIM, an exact opaque owner,
 stack-seal-valid static metadata, barriers, and register readback. Handle zero
 is an explicit successful no-context load only while both Secure stack
@@ -400,8 +1288,9 @@ registers remain zero.
 
 FreeRTOS records the live Secure PSP in the owned SecureContext, then clears
 Secure PSPLIM and Secure PSP before another task can be selected. Fiber retains
-that exact save-then-unload order, but accepts only exception 14 (`PendSV`),
-requires the sealed record to belong to the exact `FiberContext`, proves stack
+that exact save-then-unload order, but first checks the immediate Non-secure
+caller in the actual NSC entry and separately accepts only exception 14
+(`PendSV`). It requires the sealed record to belong to the exact `FiberContext`, proves stack
 alignment and bounds, and reads back both cleared registers. Handle zero is
 accepted only when no Secure stack state is live.
 
@@ -607,9 +1496,10 @@ The pinned FreeRTOS `configENABLE_MPU=1`, `configENABLE_FPU=1`, no-MVE
 `PendSV_Handler` copies state into one overlapping protected 54-word backing
 store in this exact order: `s16-s31`, copied `s0-s15/FPSCR`, `r4-r11`, copied
 basic hardware frame, then `[PSP][PSPLIM][CONTROL][EXC_RETURN]`. Restore is
-the inverse. Its extended form still treats PSP as the copied basic hardware
-frame and places the low FP copy after that 32-byte frame; it is not the normal
-non-MPU PSP layout.
+the inverse. In the hardware extended frame, raw PSP addresses the basic core
+frame and the low FP extension follows that 32-byte frame. This architectural
+PSP order is the same with or without MPU. The MPU difference is the separate
+privileged backing store and copied state, not another hardware-frame order.
 
 Fiber preserves those VFP and integer moves in `fiber_port_pendsv.c`. It adds
 selected Non-secure provenance and frame preflight before current metadata,
@@ -697,6 +1587,26 @@ validation, common-owned current publication, and PSPLIM/PSP readback.
 legitimate lazy preservation; first-start SVC still rejects it. These checks do
 not add, remove, or reorder a saved context slot.
 
+### FAP-ARMV8M-RBAR-SH
+
+The pinned FreeRTOS `portmacrocommon.h` encodes INNER_SHAREABLE as `1 << 3`.
+Armv8-M RBAR.SH instead assigns 0 to Non-shareable, 2 to Outer-shareable and 3
+to Inner-shareable; 1 is reserved. The local CMSIS `mpu_armv8.h` independently
+uses these architectural values. Fiber therefore deliberately defines
+`fiber_portMPU_REGION_INNER_SHAREABLE` as `3u << 3u` in CM33 MPU, CM55 MPU,
+CM55 scalar-FP/MVE MPU, and the staged CM33F MPU dictionary. The reference
+checkout remains unchanged. See the
+[Armv8-M ARM](https://community.arm.com/cfs-file/__key/communityserver-discussions-components-files/471/DDI0553B_5F00_y_5F00_armv8m_5F00_arm.pdf), RBAR SH field, and
+[CMSIS Armv8-M MPU API](https://arm-software.github.io/CMSIS_5/Core/html/group__mpu8__functions.html).
+
+The private encoders must accept raw SH values 0, 2 and 3 and reject 1,
+independently of the symbolic macro being tested. Current standard global and
+per-context mappings use NON_SHAREABLE, so their descriptor bytes and context
+geometry do not change. This dictionary correction does not add a public
+heterogeneous-region API or change either callable ABI. Regression evidence
+must include numeric SH/AP/XN combinations and rejection without output
+mutation; blindly comparing the two copied constants is not sufficient.
+
 ### FAP-MPU-SVC-NAMESPACE
 
 FreeRTOS MPU ports multiplex kernel wrapper and privilege services. Fiber owns
@@ -743,14 +1653,22 @@ does not claim a heterogeneous public MPU API or hardware runtime support.
 
 FreeRTOS reserves RNR 5 and later regions for task-configurable MPU pairs.
 Fiber reserves RNR 5, the second per-context pair, for an exact 32-byte
-current-context aperture. It overlays global privileged SRAM with read-only/XN
-access for both privilege levels so the portable `fiber_current()` call graph
+current-context aperture. It is disjoint from the global privileged-RW SRAM
+region and provides read-only/XN access for both privilege levels, so the
+portable `fiber_current()` call graph
 can read the common current identity from unprivileged Thread mode. ARMv8-M has
 no privileged-RW plus unprivileged-RO access encoding, so the selected port
 updates that one common slot only while `MPU_CTRL` is disabled under the already
 protected context-image replacement interval. The frame, MAIR0 order, and
 RNR 4/8/12 programming sequence remain unchanged; 8-region images retain two,
 and 16-region images retain ten, future configurable pairs.
+
+Armv8-M does not resolve overlapping MPU regions by region number. The earlier
+overlay description and implementation were incorrect (audit A02). The current
+linker and runtime checks require all enabled mappings to be disjoint. Startup
+must explicitly zero the separate current-slot section. In synthetic manifests,
+the slot occupies `0x30000000..0x30000020` and privileged-RW SRAM starts at
+`0x30000020`; this is a fixture placement, not a mandatory board address.
 
 ### FAP-CM33-MPU-PENDSV-PREFLIGHT
 

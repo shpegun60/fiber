@@ -20,46 +20,47 @@
 
 _Static_assert(__NVIC_PRIO_BITS >= 2 && __NVIC_PRIO_BITS <= 8, "__NVIC_PRIO_BITS out of sane range");
 
-static void fiber_require_privileged_thread_msp(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_require_privileged_thread_msp(void)
 {
-    const uint32_t control = __get_CONTROL();
+    const uint32_t control = fiber_port_cpu_read_control();
 
-    FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+    FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
     FIBER_REQUIRE((control & 1u) == 0u, 'v');
     FIBER_REQUIRE((control & 2u) == 0u, 's');
 }
 
 /* Small helpers to save/restore PRIMASK while tweaking SCB/NVIC */
-__STATIC_FORCEINLINE uint32_t fiber_primask_save_disable(void) {
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_primask_save_disable(void) {
     uint32_t pm;
     __ASM volatile("mrs %0, primask \n"
                    "cpsid i         \n"
                    : "=r"(pm) :: "memory");
-    { __DSB(); __ISB(); }
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
     return pm;
 }
 
-__STATIC_FORCEINLINE void fiber_primask_restore(uint32_t pm) {
-    { __DSB(); __ISB(); }
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_primask_restore(uint32_t pm) {
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
     __ASM volatile("msr primask, %0" :: "r"(pm) : "memory");
-    { __DSB(); __ISB(); }
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 }
 
 /* Compute the lowest representable priority value for this MCU */
-__STATIC_FORCEINLINE uint32_t fiber_lowest_prio_val(void) {
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_lowest_prio_val(void) {
     return (1u << __NVIC_PRIO_BITS) - 1u;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_handler_addr(void (*handler)(void)) {
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t fiber_handler_addr(void (*handler)(void)) {
     return (uintptr_t)handler;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_strip_thumb_bit(uintptr_t addr) {
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t fiber_strip_thumb_bit(uintptr_t addr) {
     return addr & ~(uintptr_t)1u;
 }
 
 /* Clear any pending PendSV before the port begins scheduling. */
-__STATIC_FORCEINLINE void fiber_pendsv_clear_pending(void) {
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_pendsv_clear_pending(void) {
 #ifdef SCB_ICSR_PENDSVCLR_Msk
     SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk;
 #else
@@ -68,7 +69,8 @@ __STATIC_FORCEINLINE void fiber_pendsv_clear_pending(void) {
 #endif
 }
 
-static void fiber_validate_vector_entry(uint32_t index, void (*expected)(void), char code)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_vector_entry(uint32_t index, void (*expected)(void), char code)
 {
     const uint32_t *const vectors = fiber_port_vectors_base_ptr();
     const uintptr_t actual = (uintptr_t)vectors[index];
@@ -78,35 +80,38 @@ static void fiber_validate_vector_entry(uint32_t index, void (*expected)(void), 
     FIBER_REQUIRE(fiber_strip_thumb_bit(actual) == fiber_strip_thumb_bit(expect), code);
 }
 
-static void fiber_validate_pendsv_priority(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_pendsv_priority(void)
 {
     const uint32_t lowest = fiber_lowest_prio_val();
-    const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
+    const uint32_t rd = fiber_port_cpu_get_priority(PendSV_IRQn);
 
     FIBER_REQUIRE(rd == lowest, 'P');
 }
 
-static void fiber_validate_svc_priority(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_svc_priority(void)
 {
-    const uint32_t rd = NVIC_GetPriority(SVCall_IRQn);
+    const uint32_t rd = fiber_port_cpu_get_priority(SVCall_IRQn);
 
     FIBER_REQUIRE(rd == 0u, 'w');
 }
 
 #if FIBER_PORT_HAS_BASEPRI
-static uint8_t fiber_probe_implemented_priority_mask(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint8_t fiber_probe_implemented_priority_mask(void)
 {
     volatile uint8_t *const first_user_priority = (volatile uint8_t *)0xE000E400u;
     const uint32_t pm = fiber_primask_save_disable();
     const uint8_t original_priority = *first_user_priority;
 
     *first_user_priority = 0xFFu;
-    { __DSB(); __ISB(); __COMPILER_BARRIER(); }
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
     const uint8_t implemented_mask = *first_user_priority;
 
     *first_user_priority = original_priority;
-    { __DSB(); __ISB(); __COMPILER_BARRIER(); }
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
     FIBER_REQUIRE(*first_user_priority == original_priority, 'Q');
 
@@ -115,7 +120,8 @@ static uint8_t fiber_probe_implemented_priority_mask(void)
     return implemented_mask;
 }
 
-static uint32_t fiber_count_implemented_priority_bits(uint8_t implemented_mask)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_count_implemented_priority_bits(uint8_t implemented_mask)
 {
     uint32_t implemented_bits = 0u;
 
@@ -127,7 +133,8 @@ static uint32_t fiber_count_implemented_priority_bits(uint8_t implemented_mask)
     return implemented_bits;
 }
 
-static void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
 {
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
@@ -144,7 +151,8 @@ static void fiber_validate_basepri_priority_mask(uint8_t implemented_mask)
     }
 }
 
-static void fiber_validate_priority_grouping(uint8_t implemented_mask)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_priority_grouping(uint8_t implemented_mask)
 {
     const uint32_t implemented_bits =
             fiber_count_implemented_priority_bits(implemented_mask);
@@ -161,7 +169,8 @@ static void fiber_validate_priority_grouping(uint8_t implemented_mask)
 }
 #endif /* FIBER_PORT_HAS_BASEPRI */
 
-static void fiber_validate_m7_r0p1_errata_policy(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_m7_r0p1_errata_policy(void)
 {
     enum {
         FIBER_CORTEX_M7_CPUID_ID_MASK = 0xFF0FFFF0u,
@@ -181,7 +190,8 @@ static void fiber_validate_m7_r0p1_errata_policy(void)
     }
 }
 
-static void fiber_validate_feature_policy(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_validate_feature_policy(void)
 {
     (void)0;
 }
@@ -215,9 +225,9 @@ void fiber_exception_runtime_check(void)
 void fiber_pendsv_init_lowest_priority(void)
 {
     fiber_require_privileged_thread_msp();
-    FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+    FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
     FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-    FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+    FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 
     fiber_validate_feature_policy();
 
@@ -226,21 +236,21 @@ void fiber_pendsv_init_lowest_priority(void)
     const uint32_t lowest = fiber_lowest_prio_val();
 
     /* Set PendSV to the absolute lowest preempt priority */
-    NVIC_SetPriority(PendSV_IRQn, lowest);
+    fiber_port_cpu_set_priority(PendSV_IRQn, lowest);
 
     /* Match the FreeRTOS first-task start policy: SVCall is highest priority. */
-    NVIC_SetPriority(SVCall_IRQn, 0u);
+    fiber_port_cpu_set_priority(SVCall_IRQn, 0u);
 
-    { __DSB(); __ISB(); __COMPILER_BARRIER(); }
+    { fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
     /* Paranoid: clear any spurious pending PendSV that might have been latched */
     fiber_pendsv_clear_pending();
 
     /* Read back the exact right-justified CMSIS priority value. */
     {
-        const uint32_t rd = NVIC_GetPriority(PendSV_IRQn);
+        const uint32_t rd = fiber_port_cpu_get_priority(PendSV_IRQn);
         FIBER_REQUIRE(rd == lowest, 'P');  /* 'P' - PendSV priority not at lowest */
-        const uint32_t rd_svc = NVIC_GetPriority(SVCall_IRQn);
+        const uint32_t rd_svc = fiber_port_cpu_get_priority(SVCall_IRQn);
         FIBER_REQUIRE(rd_svc == 0u, 'w'); /* 'w' - SVCall priority is not highest */
     }
 

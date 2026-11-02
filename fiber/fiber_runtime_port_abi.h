@@ -19,12 +19,14 @@ extern "C" {
 
 #define FIBER_RUNTIME_PORT_ABI_VERSION 1u
 
-/* Every mandatory selected-port object retains a relocation to this exact
- * spelling. An incompatible bidirectional ABI removes the old anchor. */
+/* Selected-port construction and one-shot start paths retain dependencies on
+ * this exact spelling. This is a group contract, not one relocation per object.
+ * An incompatible bidirectional ABI removes the old anchor. */
 extern const unsigned char fiber_internal_runtime_port_abi_v1_anchor;
 
 /* Force a real relocation that survives optimization and LTO. The volatile
- * read executes only in one-shot port start preparation, never in PendSV. */
+ * read executes only during context construction and one-shot port start
+ * preparation, never in PendSV. */
 #define FIBER_RUNTIME_PORT_ABI_RETAIN_V1() \
 	((void)*(volatile const unsigned char *) \
 			&fiber_internal_runtime_port_abi_v1_anchor)

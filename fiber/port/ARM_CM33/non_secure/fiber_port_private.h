@@ -17,7 +17,7 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_secure_context_prepare_first_start(FiberContext *ctx);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_secure_context_save_current_from_pendsv(
-		FiberContext *current);
+		FiberContext *current, uint32_t exc_return);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_secure_context_prepare_next_from_pendsv(
 		FiberContext *next);
@@ -36,6 +36,8 @@ void fiber_port_start_first_context(uintptr_t msp_top);
 FIBER_ATTR_NAKED_ASM void SVC_Handler(void);
 FIBER_ATTR_NAKED_ASM void PendSV_Handler(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_arm_cm33_secure_context_handler_component_v1_anchor(void);
 extern const unsigned char
 fiber_port_arm_cm33_secure_context_handler_bundle_v1_anchor;
 extern const unsigned char

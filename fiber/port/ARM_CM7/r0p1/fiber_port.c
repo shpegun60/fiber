@@ -34,7 +34,7 @@ void fiber_port_panic_wait(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_port_cpu_wait();
 	}
 }
 
@@ -46,7 +46,7 @@ void fiber_port_panic_wait(void)
  */
 void fiber_port_require_scheduler_configuration_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -148,12 +148,12 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 	fiber_internal_runtime_require_current_context();
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 2u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_arm_cm7_r0p1_yield_request();
 }
 
@@ -175,13 +175,13 @@ fiber_port_capture_scheduler_cpu_state(FiberPortSchedulerCpuState *state)
 {
 	FIBER_REQUIRE(state != 0, 'C');
 	fiber_portCOMPILER_BARRIER();
-	state->primask = __get_PRIMASK();
-	state->control = __get_CONTROL();
+	state->primask = fiber_port_cpu_read_primask();
+	state->control = fiber_port_cpu_read_control();
 #if FIBER_PORT_HAS_BASEPRI
 	state->basepri = fiber_port_basepri_read();
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
-	state->faultmask = __get_FAULTMASK();
+	state->faultmask = fiber_port_cpu_read_faultmask();
 #endif
 	fiber_portCOMPILER_BARRIER();
 }
@@ -191,13 +191,13 @@ fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before
 {
 	FIBER_REQUIRE(before != 0, 'C');
 	fiber_portCOMPILER_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == before->faultmask, 't');
 #endif
 	fiber_portCOMPILER_BARRIER();
 }
@@ -289,6 +289,8 @@ void fiber_port_start_first_context(
 			"movs  r0, #108                         \n" /* 'l': first-start CPU state rejected */
 			"bl    fiber_panic                      \n"
 			"b     9b                               \n"
+			/* Native LTO may merge .text; keep pseudo-LDR literals in range. */
+			".ltorg                                 \n"
 			:
 			: [pendsvclr] "i" (fiber_portNVIC_PENDSVCLEAR_BIT)
 			: "memory","cc"
@@ -405,6 +407,7 @@ void SVC_Handler(void)
 			"movs  r0, #106                         \n" /* 'j' */
 			"bl    fiber_panic                      \n"
 			"b     95b                              \n"
+			".ltorg                                 \n" /* unreachable local literal pool */
 			:
 			:
 			: "memory","cc"
@@ -568,6 +571,7 @@ void PendSV_Handler(void)
 			"movs  r0, #100                         \n" /* 'd' */
 			"bl    fiber_panic                      \n"
 			"b     92b                              \n"
+			".ltorg                                 \n" /* unreachable local literal pool */
 			:
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),

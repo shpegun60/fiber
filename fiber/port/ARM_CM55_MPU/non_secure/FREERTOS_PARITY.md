@@ -1,5 +1,31 @@
 # ARM_CM55_MPU Non-secure FreeRTOS Parity Ledger
 
+## Protected Startup MSP Policy
+
+This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
+uses the validated initial MSP; preserve-current startup is not implemented.
+The dictionary explicitly rejects `0` instead of silently ignoring it. Default
+startup instructions, frames and context/cohort identity are unchanged. The
+pinned FreeRTOS start also restores the initial MSP; no alternate preserve mode
+is imported. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
+and exact-diagnostic negative compiles; execution qualification stays separate.
+
+## Sensitive Inline Helpers
+
+Audit A27 adds canonical inline-sensitive/general-registers-only attributes to
+the local r9 reader, BASEPRI read/write and four vector-source helpers. These
+protect forced-inline code from hostile instrumentation without imposing the
+noinline/noipa boundary used by enclosing sensitive operations. No API, frame,
+MPU image, identity or normal-code behavior is intentionally changed.
+
+The maintained MPU constructor attribute runner covers this profile's applicable
+O2/Os, region-count and compiler-ABI variants. Normal instructions/relocations
+match its annotation-removal control; hostile constructors retain the exact
+dependency set, while compiled r9 annotation-removal mutants are rejected for
+instrumentation/coverage escape. Complete helper probes and the combined matrix
+are separate evidence. This does not assert hostile-flag closure of every
+runtime/CMSIS call graph.
+
 ## Status
 
 This is slice 5 of the explicit build-selected `ARM_CM55_MPU/non_secure`
@@ -184,3 +210,42 @@ The profile is build-selected only: it has no global selector route, optional
 MPU policy, or board validation claim. The next work is MPU isolation hardware
 validation or an explicitly requested optional configurable-region ABI; neither
 requires changing the frozen frame geometry or handler ownership.
+
+## Audit Corrections A02-A05
+
+The protected layout generation is 2: `0x00020008u` for eight MPU regions and
+`0x00020010u` for sixteen. Sizes, offsets, port IDs and both callable ABIs are
+unchanged. Cleanly rebuild all selected components and allocating consumers.
+
+The current-slot aperture must not overlap region 3 or any other enabled range.
+For example, place the slot at `0x30000000..0x30000020` and begin privileged RW
+SRAM at `0x30000020`. Contexts, MSP and protected data use the RW range. Startup
+must also zero the separate slot section before any common/runtime access;
+a BSS loop starting at the RW range does not initialize that earlier section.
+The aperture remains RO/XN for both privilege levels. Publication remains inside
+the PRIMASK-protected interval with the MPU disabled.
+
+Exception entry clears SPSEL. EXC_RETURN establishes Thread/PSP return.
+Fiber deliberately normalizes the saved scalar CONTROL to the canonical Thread
+value 3 by setting SPSEL after reading live Handler CONTROL 1. Initial templates
+and resumed images therefore have one representation. Unlike the pinned FreeRTOS
+raw Handler save, this normalization supports Fiber's stricter image checks.
+Post-write restore readback compares the written CONTROL value 3, not entry 1.
+
+Save preflight checks live PSP and its complete frame against sealed bounds,
+not against the historical image PSP. Restore accepts the exact owned post-yield
+SVC continuation in syscall flash, but rejects other syscall PCs.
+
+Focused offline regressions: `tools/test_v8_scalar_ntz_security.ps1` extracts and
+executes actual C validators with register/map stubs, checks actual ARM codegen,
+and links real CM33 handler/runtime archives with section GC and normal/LTO.
+These checks do not claim target exception return or MPU hardware execution.
+
+## A25: Architectural RBAR Shareability
+
+`FAP-ARMV8M-RBAR-SH` deliberately corrects the pinned reference dictionary:
+RBAR.SH Inner-shareable is 3, not reserved 1. The private encoder accepts raw
+0/2/3 and rejects 1. Existing standard mappings use Non-shareable 0; context
+layout, default MPU image and both callable ABIs are unchanged. Independent
+numeric SH/AP/XN tests, not equality with the copied reference macro, are the
+required regression oracle. See the global assembly-parity rationale.

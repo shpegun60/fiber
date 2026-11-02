@@ -29,8 +29,10 @@ ownership:
   reverse ABI v1; it permits MPU linker manifests to expose only current
   identity as read-only while preserving normal `.bss*` collection and startup
   zeroing for non-MPU builds;
-- every current mandatory port object retains a relocation to
-  `fiber_internal_runtime_port_abi_v1_anchor`, while port panic calls are strong
+- selected-port construction and one-shot startup each retain a cold-path read
+  of `fiber_internal_runtime_port_abi_v1_anchor`; this is a live-section
+  requirement, not a claim that every private object or unused ABI operation
+  retains it. Port panic calls are strong
   references to the canonical declaration and only the common fallback
   definition is weak;
 - every current selected port owns strong `SVC_Handler` and `PendSV_Handler`
@@ -254,6 +256,12 @@ port helper reachable after start reconciliation, from SVC/PendSV, or between a
 schedule-request precondition check and the architectural request. Those paths
 must not acquire function instrumentation, profiling callbacks, sanitizers,
 stack-protector calls, implicit FP/MVE use, or LTO-generated helper calls.
+The approved freestanding `memcpy`/`memset` dependencies in the reverse-symbol
+allowlist below are an explicit exception to the helper-call prohibition, not
+an exception to the register or instrumentation restrictions. Integration must
+provide and qualify integer-only, non-instrumented implementations and their
+reachable callees for the selected target. A general-registers-only caller
+does not establish those properties for an independently linked libc body.
 The public sensitive bundle includes `noipa`/no-clone/no-ICF protection, or the
 toolchain's verified equivalent, whenever available; `noinline` alone is not an
 LTO boundary.
@@ -290,6 +298,15 @@ The matrix first compiles common ABI functions and a scheduler-hook fixture
 under adversarial flags without counter-options, then compiles the complete CM7
 selected-port source group with the required counter-options placed last and
 audits generated objects for forbidden compiler-runtime references.
+
+The subsequent A32 attributes-only closure gate is deliberately stronger than
+this counterflag admission policy: it enables raw positive flags and checks
+the complete selected-port helper chain plus the sensitive common functions.
+Failures under raw flags do not invalidate a previously qualified build that
+obeys the required counter-options. Conversely, a counterflag PASS cannot be
+reported as an attributes-only PASS. The counter-option requirement remains
+in force until an explicit, independently qualified profile-policy change;
+focused repairs do not silently relax other profiles or Secure companions.
 
 The initial production freeze is limited to GNU Arm Embedded GCC. Every later
 compiler port requires independent attribute mappings, generated-code audits,
@@ -811,9 +828,17 @@ port:
 3. The common runtime defines one strong anchor, one current-context slot, and
    one strong definition of each non-overridable reverse function. It also
    provides exactly one effective weak-or-application-strong `fiber_panic()`.
-4. A guaranteed always-linked mandatory ABI object, independently of the
-   handler object, retains the relocation to
-   `fiber_internal_runtime_port_abi_v1_anchor`. Both mismatch directions are
+4. The consumed selected-port construction and one-shot startup paths,
+   independently of handler extraction, retain a relocation to
+   `fiber_internal_runtime_port_abi_v1_anchor` in a live section. Object-level
+   undefined-symbol presence alone is insufficient under section GC or LTO.
+   A constructor-only fixture must link the actual public `fiber_init()` and
+   constructor without keeping any startup or handler section live. It must
+   reject a v2-only common provider specifically on the missing v1 anchor,
+   with direct objects and a static archive at O2/Os, normal and LTO. A compiled
+   constructor-retain-removal control must reproduce the previously accepted
+   mismatch. Normal lifecycle startup retains its independent guard; no
+   per-switch anchor read is required. Both mismatch directions are
    negative-link tests: a v1 port with a v2-only common fixture, and a v2-only
    port fixture with a v1 common runtime. Both must fail before handler
    extraction is considered.
@@ -1035,9 +1060,9 @@ selected port is linked.
 For every selected port, the matrix must prove:
 
 - exactly one definition of each of the eight generic ABI functions;
-- one retained relocation from an always-linked mandatory port object to the
-  matching bidirectional runtime ABI anchor, with both version-mismatch
-  directions failing to link;
+- live-section relocations from selected-port construction and one-shot
+  startup to the matching bidirectional runtime ABI anchor, including the
+  constructor-only GC/LTO proof above and both version-mismatch directions;
 - one exact selected-profile/context ABI definition in an always-linked
   mandatory port identity object, with matching relocations from every other
   independently compiled mandatory port object and from the build-owned

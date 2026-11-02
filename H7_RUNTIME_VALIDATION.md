@@ -1,5 +1,40 @@
 # STM32H7 Runtime Validation Checklist
 
+## CM7 Transitive-Closure Follow-Up
+
+The later A32/A33 source repair protects the complete CM7 helper chain from
+raw compiler instrumentation and localizes naked literal pools for merged
+native-LTO `.text`. It does not change save/restore instruction order or frame
+layout, but C code generation and literal placement change; whole-binary
+identity with earlier receipts is not claimed.
+
+Generated Debug and Release make rebuilds pass. A fresh offline ELF audit
+confirms strong handlers, slots 11/14 with their Thumb bits, one exact CM7
+context cohort, one storage cohort and both retained expectation pointers.
+Evidence: `%TEMP%/fiber-cm7-postfix-h7-ea403b72083c4110baed3e5ede8e0193/elf-proof.json`.
+Cube regeneration and board execution were NOT_RUN. The software-compiler
+probe and maintained literal-pool rejection control are recorded separately in
+`PORT_ARCHITECTURE_AUDIT.md`; the H7 hardware claim remains pending.
+
+## Inline-Attribute Integration Follow-Up
+
+The generated Debug and Release make builds were force-rebuilt after the
+canonical forced-inline sensitive bundle and shared geometry annotations.
+Both pass. Their `.text` bytes are identical to the preceding A26/C3FP H7
+receipt; the final ELF audit confirms strong SVC/PendSV handlers, vector slots
+11/14, one CM7 private cohort and storage cohort, and both read-only expectation
+pointers. Evidence is retained at
+`%TEMP%/fiber-inline-h7-5e927bcc666e496c8214544a4aa5c7bd/elf-proof.json`,
+with build logs, before/after ELFs, maps and extracted sections. Only generated
+make files were used; Cube regeneration and board execution were NOT_RUN.
+This does not reactivate the pending H7 hardware claim.
+
+The subsequent shared EXC_RETURN/helper follow-up was rebuilt and audited again
+in both generated configurations. `.text`, handlers, vector targets and cohort
+expectations remain unchanged. The newer receipt is
+`%TEMP%/fiber-inline-helpers-h7-7f01d658d1bd4e69afbbe88172fa7c2c/elf-proof.json`.
+It has the same NOT_RUN boundaries for Cube regeneration and hardware.
+
 This checklist is the hardware gate for claiming that the v2 scheduler-driven
 ARMv7E-M path is validated on STM32H7 / Cortex-M7.
 
@@ -61,7 +96,7 @@ Before a board run:
   exactly one `fiber_port_context_cohort_armv7em_*` definition before treating
   the board run as a current checkpoint.
 
-The current STM32H7 host application satisfies that build prerequisite for
+The recorded pre-audit STM32H7 host application satisfied that build prerequisite for
 both CubeIDE Debug and Release configurations. Its managed-build manifest uses
 the concrete `ARM_CM7/r0p1` private include path and explicit build-selected
 CM7 defines, compiles the expectation source outside the port source group, and
@@ -73,6 +108,23 @@ strong selected-port SVC/PendSV handlers, and matching vector slots 11/14. Each
 separately compiled expectation object has one undefined reference to that
 exact cohort symbol. These are build and ELF facts only; they do not replace
 any hardware item in this checklist.
+
+After the 2026-11-01 audit repairs, the public header also retains each caller's
+storage identity in that expectation section. Its size is no longer fixed at
+four bytes. Keep all contributions and verify the exact CM7 context identity
+and matching public-storage identity after a clean embedding rebuild. The CM7
+raw-stack/canary address checks also changed, so previous hardware receipts do
+not qualify this repair checkpoint. The public five-operation API and frozen
+eight-operation forward ABI remain unchanged.
+
+On 2026-11-01 both existing generated H7 Debug and Release makefiles were
+force-rebuilt (`make -B all`) against the repair working tree. Both links pass.
+Their final ELFs each have strong SVC/PendSV definitions, matching Thumb vector
+slots 11/14, one exact CM7 private cohort, and
+`fiber_port_storage_cohort_arm_cm7_r0p1_v1_r0`. Each read-only expectation section
+is now eight bytes and contains pointers to both matching identities. This is a
+check of the existing generated builds, not a CubeMX regeneration proof or a
+hardware run. No board was programmed.
 
 ## Startup Exception Setup
 
@@ -554,3 +606,48 @@ the selected `ARM_CM7/r0p1` sources, exception setup validation, feature policy
 gates, stack layout, scheduler hook semantics, or startup code, the STM32H7
 validation label must be downgraded until this checklist passes again on
 hardware.
+
+## 2026-11-01 Foreign-Port Manifest Check
+
+The external H7 Boot `.cproject` Debug and Release source entries were missing
+exclusions for `ARM_CM55`, `ARM_CM55_MPU`, `ARM_CM55F_MPU`, and
+`ARM_CM55_MVEF_MPU`. Those four folder exclusions are now present in both
+configurations. A structured XML comparison proves that no other project
+setting changed, and a source-folder check finds no foreign `.c` profile left
+eligible beside the selected CM7 group. This external file is not tracked in
+the Fiber repository.
+
+The existing generated Debug/Release Make builds were force-rebuilt. Their
+final ELFs retain one exact CM7 cohort, one public storage cohort, eight-byte
+read-only expectations pointing to both, and strong SVC/PendSV handlers with
+matching vector slots 11/14. Text/data/BSS are respectively 20320/12/8452 and
+18040/12/8452 bytes. This checks the existing generated builds and final ELF,
+not a CubeIDE/CubeMX regeneration or a board run.
+
+Before/after manifests with hashes, both ELFs, vector/expectation dumps and
+the ELF receipt are preserved at
+`%TEMP%/fiber-c55s-h7-manifest-ac07334621b340d1ab36c7052943de95`.
+No new H7 hardware claim follows from this integration check.
+
+### C3FP Constructor Staging Exclusion
+
+Before adding the staged CM33 scalar-FP MPU constructor, both external H7
+source entries also exclude `fiber/fiber/port/ARM_CM33F_MPU`. Structured XML
+comparison against the preserved manifest above proves that only these two
+exclusion tokens changed; CM7 remains eligible. The exact before/after files
+and hashes are retained at
+`%TEMP%/fiber-c3fp-h7-manifest-efb764fb3b0b4e149946694139c9eaf1`.
+This receipt is XML-only: no new generated Make rebuild, Cube regeneration,
+ELF audit or board run is claimed for this additional exclusion.
+
+The subsequent generated Debug/Release Make targets were force-rebuilt without
+Cube regeneration. Both passed the final ELF audit again: unique strong
+handlers, slots 11/14, one CM7 private cohort, one public storage cohort and
+eight-byte read-only expectations pointing to both. Each `.text` section is
+byte-identical to its retained pre-rebuild ELF; no whole-ELF identity claim is
+made for debug metadata. Text/data/BSS remain 20320/12/8452 and
+18040/12/8452 bytes. Logs, before/after ELFs, maps, section dumps, hashes and
+the receipt are retained at
+`%TEMP%/fiber-a26-c3fp-h7-5222c6cf6cb64dd5ae02ab117d948616`.
+This does not qualify Cube-generated manifests after a future regeneration or
+the active VTOR/exception behavior on hardware.

@@ -78,23 +78,27 @@ static const uintptr_t FIBER_STACK_MASK =
 		(uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u;
 static const uintptr_t FIBER_WORD_MASK = (uintptr_t)sizeof(uintptr_t) - 1u;
 
-__STATIC_FORCEINLINE uintptr_t fiber_stack_align_down(const uintptr_t x)
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_stack_align_down(const uintptr_t x)
 {
 	return x & ~FIBER_STACK_MASK;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_stack_align_up(const uintptr_t x)
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_stack_align_up(const uintptr_t x)
 {
 	FIBER_REQUIRE(x <= (UINTPTR_MAX - FIBER_STACK_MASK), 'O');
 	return (x + FIBER_STACK_MASK) & ~FIBER_STACK_MASK;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_word_align_down(const uintptr_t x)
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_word_align_down(const uintptr_t x)
 {
 	return x & ~FIBER_WORD_MASK;
 }
 
-__STATIC_FORCEINLINE uintptr_t fiber_word_align_up(const uintptr_t x)
+__STATIC_FORCEINLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uintptr_t fiber_word_align_up(const uintptr_t x)
 {
 	FIBER_REQUIRE(x <= (UINTPTR_MAX - FIBER_WORD_MASK), 'O');
 	return (x + FIBER_WORD_MASK) & ~FIBER_WORD_MASK;

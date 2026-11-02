@@ -142,7 +142,6 @@ uint8_t fiber_port_probe_implemented_priority_mask(void)
 	volatile uint8_t *const first_user_priority =
 			(volatile uint8_t *)(uintptr_t)0xE000E400u;
 	const uint32_t primask = fiber_port_primask_save_disable();
-	FIBER_REQUIRE(primask == 0u, 'p');
 	const uint8_t original = *first_user_priority;
 
 	*first_user_priority = 0xFFu;
@@ -355,22 +354,25 @@ const uint32_t *fiber_port_running_svc_core_frame(FiberContext *current,
 	}
 	FIBER_REQUIRE(raw_frame <= UINTPTR_MAX - fp_extension -
 			FIBER_PORT_EXC_BASE_BYTES, 'O');
-	const uintptr_t core_frame = raw_frame + fp_extension;
-	const uintptr_t frame_end = core_frame + FIBER_PORT_EXC_BASE_BYTES;
+	/* The basic core frame starts at PSP; low FP state follows it. */
+	const uintptr_t frame_end = raw_frame + fp_extension +
+			FIBER_PORT_EXC_BASE_BYTES;
 	FIBER_REQUIRE(fiber_port_range_contains(current->boot.stack_base,
 				current->boot.stack_top, raw_frame, frame_end), 'P');
 #if FIBER_STACK_CANARY
 	FIBER_REQUIRE(*(const volatile uint32_t *)(uintptr_t)current->boot.begin ==
 			FIBER_INTERNAL_STACK_CANARY_VALUE, 'c');
 #endif
-	const FiberPortProtectedBasicContext *const image =
-			&current->protected_context.basic;
-	FIBER_REQUIRE(current->protected_context_cursor == &image->r4, 'P');
-	FIBER_REQUIRE(image->cursor_limit == 0u, 'P');
-	FIBER_REQUIRE(image->psplim == (uint32_t)current->boot.stack_base, 'L');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
-	return (const uint32_t *)core_frame;
+	/* Restore resets the cursor to word zero in either union representation.
+	 * Basic-view special words alias FP values after an extended restore. */
+	FIBER_REQUIRE(current->protected_context_cursor ==
+			&current->protected_context.words[0], 'P');
+	FIBER_REQUIRE(current->runtime_flags == 0u, 'F');
+	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)current->boot.stack_base, 'L');
+	/* Exception entry cleared SPSEL; EXC_RETURN proves Thread/PSP origin.
+	 * Handler FPCA is not the interrupted Thread's frame identity. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 1u, 'l');
+	return (const uint32_t *)raw_frame;
 }
 
 static FIBER_CM55_MVEF_MPU_SVC
@@ -628,7 +630,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 		core_frame = hardware_frame;
 	} else {
-		fiber_port_fpu_require_ready();
+		fiber_port_fpu_require_configured();
 		core_frame = fiber_port_running_svc_core_frame(current,
 				hardware_frame, exc_return);
 		fiber_port_mpu_validate_active_context(current);

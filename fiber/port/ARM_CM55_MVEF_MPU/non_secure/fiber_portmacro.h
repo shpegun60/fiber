@@ -1,12 +1,12 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M55 MVE-FP MPU Non-secure dictionary, implementation slices 1-3.
+ * Exact Cortex-M55 MVE-FP MPU Non-secure dictionary, implementation slices 1-4.
  * This is the FreeRTOS ARM_CM55_NTZ FPU/MPU/MVE/no-TrustZone/no-PAC
  * protected profile with an explicit 8- or 16-region manifest. It freezes the
  * overlapping basic/extended protected image, construction, strict SVC,
- * protected PendSV mechanics, and linker policy. The frozen forward runtime
- * ABI arrives in a later composition slice.
+ * protected PendSV mechanics, linker policy and the complete frozen forward
+ * runtime ABI.
  */
 #ifndef FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORTMACRO_H_
@@ -21,6 +21,12 @@
 
 #include "../../fiber_port_select.h"
 #include "../../fiber_settings.h"
+
+/* This protected SVC contract validates its frame against the initial MSP. */
+#if !FIBER_REWIND_MSP
+# error "[fiber]: ARM_CM55_MVEF_MPU requires FIBER_REWIND_MSP=1 for protected first start"
+#endif
+
 #include "../../fiber_compiler.h"
 
 #if !FIBER_PORT_BUILD_SELECTED
@@ -121,7 +127,9 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM55_MVEF_MPU runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+/* Complete explicit build-selected group, not global auto-selection or a
+ * hardware-support declaration. */
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 #include "fiber_port_types.h"
 
@@ -222,10 +230,9 @@
 /*
  * ARMv8-M has no MPU access encoding for privileged-RW plus
  * unprivileged-RO.  The current-context aperture therefore uses an exact
- * read-only/XN overlay while a protected switch updates the common slot only
- * while MPU_CTRL is disabled.  It is stored in every per-context image so it
- * overrides global privileged SRAM by region-number priority without consuming
- * a fifth immutable global region.
+ * read-only/XN region disjoint from privileged RW SRAM. A protected switch
+ * updates the common slot only while MPU_CTRL is disabled. The aperture is
+ * stored in every per-context image without consuming a fifth global region.
  */
 #define fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER 5u
 #define fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER 6u
@@ -255,7 +262,8 @@
 #define fiber_portMPU_RBAR_ACCESS_MASK (3u << 1u)
 #define fiber_portMPU_RBAR_SHAREABILITY_MASK (3u << 3u)
 #define fiber_portMPU_REGION_NON_SHAREABLE (0u << 3u)
-#define fiber_portMPU_REGION_INNER_SHAREABLE (1u << 3u)
+/* Arm RBAR.SH: 0=Non-shareable, 2=Outer, 3=Inner; 1 is reserved. */
+#define fiber_portMPU_REGION_INNER_SHAREABLE (3u << 3u)
 #define fiber_portMPU_REGION_OUTER_SHAREABLE (2u << 3u)
 #define fiber_portMPU_REGION_PRIVILEGED_READ_WRITE (0u << 1u)
 #define fiber_portMPU_REGION_READ_WRITE (1u << 1u)
@@ -295,6 +303,7 @@ extern "C" {
 
 /* Preserve r9 because an integration may use it as the platform/static-base
  * register even though the pinned FreeRTOS debug seed uses a marker value. */
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 {
 	uint32_t value;
@@ -302,6 +311,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 	return value;
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;
@@ -310,6 +320,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 	return value;
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 {
 	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0"
@@ -318,23 +329,27 @@ fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 	fiber_portINST_SYNC_BARRIER();
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 {
 	return (uintptr_t)fiber_portSCB_VTOR_REG &
 		~((uintptr_t)fiber_portVECTOR_ALIGNMENT - 1u);
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
 {
 	return *(const volatile uint32_t *)(fiber_port_vectors_base_addr() +
 			((uintptr_t)index * sizeof(uint32_t)));
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 {
 	return fiber_port_read_vector_slot(0u);
@@ -425,13 +440,13 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 #endif
 
 #if FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS == 8
-# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010008u
+# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00020008u
 # define FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET 40u
 # define FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET 256u
 # define FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET 260u
 # define FIBER_PORT_CM55_MVEF_MPU_CONTEXT_SIZE 352u
 #else
-# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010010u
+# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00020010u
 # define FIBER_PORT_CM55_MVEF_MPU_PROTECTED_CONTEXT_OFFSET 104u
 # define FIBER_PORT_CM55_MVEF_MPU_RUNTIME_FLAGS_OFFSET 320u
 # define FIBER_PORT_CM55_MVEF_MPU_BOOT_OFFSET 324u
@@ -559,8 +574,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM55_MVEF_MPU requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM55_MVEF_MPU requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55_MVEF_MPU remains outside global runtime auto-selection");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM55_MVEF_MPU complete build-selected runtime must advertise availability");
 FIBER_STATIC_ASSERT(fiber_portSVC_START == 70u,
 		"[fiber]: ARM_CM55_MVEF_MPU first-start SVC changed");
 FIBER_STATIC_ASSERT(fiber_portSVC_YIELD == 71u,

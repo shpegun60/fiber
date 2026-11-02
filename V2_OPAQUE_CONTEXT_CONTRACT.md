@@ -16,9 +16,10 @@ It supersedes every older v2 statement that requires one shared, common-known
 and boot ownership phase is implemented: `fiber_api_types.h`, the single
 `fiber_port_selected.h` facade, and per-port `fiber_port_types.h`,
 `fiber_port_boot_types.h`, `fiber_port_boot.h`, and `fiber_port_boot.c` files
-now exist. Every current port deliberately preserves an ABI-compatible
-`sp + FiberPortBoot` physical layout, while `fiber_types.h` is only a
-compatibility facade.
+now exist. The initial ownership migration preserved the then-existing
+`sp + FiberPortBoot` layout. Later protected MPU profiles own privileged
+register images, save cursors and MPU descriptors instead; no common code may
+assume the initial layout. `fiber_types.h` remains only a compatibility facade.
 
 `fiber_core.c`, `fiber_runtime_state.c`, and the default `fiber_panic.c` now
 use only `FiberContext *` and the callable selected-port ABI. They compile
@@ -454,13 +455,25 @@ initial frame, initialize metadata, seal the context, or write a canary.
 
 Before `fiber_port_context_validate_restore()` reads `ctx->sp` or any boot
 field, it must validate the context pointer itself: non-NULL, alignment, and
-overflow-free `sizeof(*ctx)` extent. `fiber_init()` always applies the
-integration RAM/code plausibility policy to context storage, supplied stack, and
-entry. `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` additionally applies RAM
-plausibility to an incoming runtime context before dereference and to its
-declared stack after structural boot validation. `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1`
-is an explicit bring-up opt-out that enables weak accept-any fallbacks; it is
-not a production claim.
+overflow-free `sizeof(*ctx)` extent. `fiber_init()` always applies the selected
+port's address policy to context storage, supplied stack and entry. Hook-based
+profiles call integration RAM/code callbacks. Protected MPU profiles instead
+require exact linker-owned privilege/code/RAM roles and reconstruct the required
+region permissions; callbacks are not a mandatory dependency of those ports.
+These mechanisms validate address ownership but do not discover physical memory
+or implement arbitrary application callback policy for one another.
+
+For hook-based profiles, `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` additionally
+applies RAM plausibility before dereferencing an incoming runtime context and
+to its declared stack after structural validation.
+`FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any fallbacks
+only in profiles providing those hooks. Neither setting disables protected MPU
+map/isolation, metadata or frame checks.
+
+The following saved-SP/MSP-plan details describe stack-frame profiles with those
+private fields. Protected profiles express the same save/restore ownership
+through their privileged context image; they need not invent `ctx->sp` or a
+per-context MSP plan merely to match the older layout.
 
 The selected Thread-mode schedule path validates only Thread mode, runtime
 current-context ownership, and applicable interrupt-mask preconditions before
@@ -592,7 +605,7 @@ until both mismatch classes are tested. At minimum, one build-owned expectation
 object compiled through the selected public type header must retain the exact
 context-layout relocation so section GC or LTO cannot erase the proof.
 
-The context guard is also the selected-profile object-cohort guard. Its symbol
+The exact context guard is the selected-profile private-object-cohort guard. Its symbol
 identity covers the exact selected directory, compiler CPU/FPU/ABI settings,
 privilege/security role, saved-state and behavior-affecting feature settings,
 errata policy, expected companion ABI, and context ABI generation. One
@@ -604,6 +617,28 @@ exception, FPU, validator, or assembly object from linking silently with a newer
 source group merely because the eight generic function names still match. This
 does not replace the runtime ABI anchor, the handler extraction anchor, or a
 cross-image gateway check; each proves a different relationship.
+
+Caller-owned storage has a separate type-only link identity. The public selected
+facade, reached by `fiber_core.h`, automatically emits one retained relocation
+per translation unit to the selected public storage generation and region count.
+The mandatory port identity object defines that storage symbol as well as the
+exact private cohort. Neither identity is an additional callable public operation.
+Private type-inspection objects do not emit a consumer relocation automatically.
+Direct concrete-type allocators must explicitly include
+`fiber_port_storage_cohort_expectation.h` after their selected type header.
+
+All contributions use the existing
+`.fiber_port_context_cohort_expectation` input section. The linker must retain
+every contribution with `KEEP`; its output size is a pointer-size multiple, not
+necessarily one pointer. The build-owned exact expectation remains independent
+and mandatory: the public storage identity does not describe CPU/FPU policy or
+replace the complete-archive expectation. Matching and stale C/C++ allocating
+consumers are checked separately in normal/LTO and section-GC links.
+
+Pre-guard objects carry no relocation and must be clean-rebuilt. Bare concrete
+type users which omit the explicit expectation header are outside this stale-
+consumer proof. Unextracted archive members are outside the linked program.
+See `tools/CONSUMER_COHORT_TEST.md` for the integration and negative fixtures.
 
 ## Optional Port Configuration
 

@@ -9,6 +9,7 @@
 #define FIBER_PORT_ARM_CM55_SECURE_FIBER_SECURE_GATEWAY_ABI_H_
 
 #include <stdint.h>
+#include "../../../fiber_api_attributes.h"
 
 #include "mcu_core.h"
 #include "fiber_secure_gateway_contract.h"
@@ -74,8 +75,8 @@
 #ifndef fiber_secure_gatewayNON_SECURE_CALLABLE
 # if defined(__GNUC__) || defined(__clang__)
 #  define fiber_secure_gatewayNON_SECURE_CALLABLE \
-	__attribute__((cmse_nonsecure_entry)) __attribute__((used)) \
-	__attribute__((noinline))
+	__attribute__((cmse_nonsecure_entry)) \
+	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 # else
 #  error "[fiber]: ARM_CM55 Secure gateway currently requires GCC/Clang CMSE attributes"
 # endif

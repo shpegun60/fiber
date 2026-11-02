@@ -6,10 +6,21 @@
  * intentionally has no free or detach operation.
  */
 
+/* Constrain every pool declaration/definition, including static helpers, on
+ * the qualified GCC path. Do this before the header's target attributes are
+ * formed, and restore options below so textual includers inherit no ceiling.
+ * Baseline Mainline does not require the optional Cortex-M33 DSP extension.
+ * Higher input-object attributes remain unsupported even if code is bounded. */
+#if defined(__GNUC__) && !defined(__clang__)
+# pragma GCC push_options
+# pragma GCC target("arch=armv8-m.main")
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include "fiber_secure_context_pool.h"
+#include "fiber_secure_context_cohort.h"
 
 #if !defined(__GNUC__) && !defined(__clang__)
 # error "[fiber]: ARM_CM33 SecureContext pool requires GCC/Clang attributes"
@@ -58,7 +69,18 @@ _Static_assert(_Alignof(FiberSecureContextStackStorage) >=
 		FIBER_ARM_CM33_SECURE_CONTEXT_STACK_ALIGNMENT_BYTES,
 		"[fiber]: ARM_CM33 SecureContext storage lost stack alignment");
 
-static __attribute__((noreturn, noinline))
+/* Visible C symbol for ordinary archive/LTO extraction and the separate
+ * build-owned generation assertion. No private pool state is touched. */
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((externally_visible))
+#endif
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_pool_c33s_v1_cohort_provider(void)
+{
+	FIBER_C33S_PRIVATE_COHORT_DEFINE();
+}
+
+static FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_secure_context_pool_fail_closed(void)
 {
 	__builtin_trap();
@@ -66,7 +88,8 @@ void fiber_secure_context_pool_fail_closed(void)
 	}
 }
 
-static void fiber_secure_context_pool_clear_record(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_pool_clear_record(
 		FiberSecureContextRecord * const record)
 {
 	record->current_stack_pointer = 0u;
@@ -77,7 +100,8 @@ static void fiber_secure_context_pool_clear_record(
 	record->allocation_state = fiber_secure_contextSTATE_FREE;
 }
 
-static void fiber_secure_context_pool_clear_stack(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_pool_clear_stack(
 		uint8_t * const stack_limit)
 {
 	uint32_t index;
@@ -92,7 +116,8 @@ static void fiber_secure_context_pool_clear_stack(
 	}
 }
 
-static uint32_t fiber_secure_context_pool_record_is_free(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_pool_record_is_free(
 		const FiberSecureContextRecord * const record)
 {
 	return (record->current_stack_pointer == 0u) &&
@@ -103,28 +128,45 @@ static uint32_t fiber_secure_context_pool_record_is_free(
 			(record->allocation_state == fiber_secure_contextSTATE_FREE);
 }
 
-static void fiber_secure_context_pool_write_stack_seal(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_pool_write_stack_seal(
 		uint8_t * const stack_limit,
 		const uint32_t stack_bytes)
 {
-	uint32_t * const seal = (uint32_t *)(void *)(stack_limit + stack_bytes);
+	const uint32_t seal_word = FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE;
+	const unsigned char * const seal_bytes =
+			(const unsigned char *)(const void *)&seal_word;
+	uint32_t index;
 
-	seal[0] = FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE;
-	seal[1] = FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE;
+	/* Character access preserves the native word representation without
+	 * treating the declared byte-array storage as uint32_t objects. */
+	for (index = 0u;
+			index < FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_BYTES; ++index) {
+		stack_limit[stack_bytes + index] = seal_bytes[index % sizeof(seal_word)];
+	}
 }
 
-static uint32_t fiber_secure_context_pool_stack_seal_is_valid(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_pool_stack_seal_is_valid(
 		const uint8_t * const stack_limit,
 		const uint32_t stack_bytes)
 {
-	const uint32_t * const seal =
-			(const uint32_t *)(const void *)(stack_limit + stack_bytes);
+	const uint32_t seal_word = FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE;
+	const unsigned char * const seal_bytes =
+			(const unsigned char *)(const void *)&seal_word;
+	uint32_t index;
 
-	return (seal[0] == FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE) &&
-			(seal[1] == FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_VALUE);
+	for (index = 0u;
+			index < FIBER_ARM_CM33_SECURE_CONTEXT_STACK_SEAL_BYTES; ++index) {
+		if (stack_limit[stack_bytes + index] != seal_bytes[index % sizeof(seal_word)]) {
+			return 0u;
+		}
+	}
+	return 1u;
 }
 
-static uint32_t fiber_secure_context_pool_record_is_valid(
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_pool_record_is_valid(
 		const uint32_t index)
 {
 	const FiberSecureContextRecord * const record =
@@ -272,3 +314,7 @@ FiberSecureContextRecord *fiber_secure_context_pool_lookup_owned(
 
 	return record;
 }
+
+#if defined(__GNUC__) && !defined(__clang__)
+# pragma GCC pop_options
+#endif

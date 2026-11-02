@@ -121,6 +121,15 @@
 # endif
 #endif
 
+/* Forced-inline helpers need the compiler protections without the noinline /
+ * noipa function-boundary contract. Their enclosing sensitive operation owns
+ * that boundary; disabling instrumentation only on the caller is insufficient. */
+#ifndef FIBER_API_ATTR_INLINE_SENSITIVE
+# define FIBER_API_ATTR_INLINE_SENSITIVE \
+		FIBER_API_NOINSTR FIBER_API_NOSSP FIBER_API_NOSAN \
+		FIBER_API_NOPROF FIBER_API_NOCOVERAGE
+#endif
+
 #ifndef FIBER_API_ATTR_SENSITIVE
 # define FIBER_API_ATTR_SENSITIVE \
 		FIBER_API_NOINLINE FIBER_API_NOIPA FIBER_API_NOCLONE \

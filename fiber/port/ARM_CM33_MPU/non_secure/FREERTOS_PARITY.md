@@ -1,5 +1,31 @@
 # ARM_CM33_MPU Non-secure FreeRTOS Parity Ledger
 
+## Protected Startup MSP Policy
+
+This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
+uses the validated initial MSP; preserve-current startup is not implemented.
+The dictionary explicitly rejects `0` instead of silently ignoring it. Default
+startup instructions, frames and context/cohort identity are unchanged. The
+pinned FreeRTOS start also restores the initial MSP; no alternate preserve mode
+is imported. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
+and exact-diagnostic negative compiles; execution qualification stays separate.
+
+## Sensitive Inline Helpers
+
+Audit A27 adds canonical inline-sensitive/general-registers-only attributes to
+the local r9 reader, BASEPRI read/write and four vector-source helpers. These
+protect forced-inline code from hostile instrumentation without imposing the
+noinline/noipa boundary used by enclosing sensitive operations. No API, frame,
+MPU image, identity or normal-code behavior is intentionally changed.
+
+The maintained MPU constructor attribute runner covers this profile's applicable
+O2/Os, region-count and compiler-ABI variants. Normal instructions/relocations
+match its annotation-removal control; hostile constructors retain the exact
+dependency set, while compiled r9 annotation-removal mutants are rejected for
+instrumentation/coverage escape. Complete helper probes and the combined matrix
+are separate evidence. This does not assert hostile-flag closure of every
+runtime/CMSIS call graph.
+
 ## Status
 
 Slices 1-5 complete the explicit build-selected `ARM_CM33_MPU/non_secure`
@@ -155,9 +181,10 @@ for the four-pair 8-region cohort.
 
 The global in-memory image has exactly four pairs, indexed by hardware region
 numbers `0..3`. The common `fiber_internal_runtime_current_context_slot` lies
-at the start of an exact 32-byte aperture inside privileged SRAM. Each selected
-context owns the same `RNR 5` read-only/XN pair, which overlays global region 3
-by ARMv8-M priority. This makes `fiber_current()` readable from unprivileged
+at the start of an exact 32-byte aperture disjoint from privileged RW SRAM.
+Each selected context owns the same `RNR 5` read-only/XN pair. Armv8-M forbids
+overlapping enabled regions; region-number priority cannot implement an overlay.
+This makes `fiber_current()` readable from unprivileged
 Thread mode without an SVC round trip. The slot is written only while
 `MPU_CTRL == 0` and PRIMASK protects the existing context-image replacement
 interval.
@@ -177,7 +204,7 @@ requires:
 
 ```text
 FiberContext              fully contained in privileged SRAM
-common current slot       exactly one 32-byte aperture in privileged SRAM
+common current slot       exactly one disjoint 32-byte RO/XN SRAM aperture
 raw task stack            fully contained in unprivileged RAM
 task entry                Thumb address in unprivileged flash only
 task return continuation  selected-port symbol in syscall flash only
@@ -217,9 +244,9 @@ image[3]  privileged SRAM, privileged read-write and XN
 ```
 
 `fiber_port_linker_contract.ld` is an application-owned assertion fragment.
-It requires twelve exact boundaries for those four global regions, a contained
+It requires twelve exact boundaries for those four global regions, a disjoint
 32-byte current-slot aperture, and unprivileged RAM. It rejects missing ranges,
-non-32-byte MPU boundaries, a slot outside privileged SRAM, and every overlap
+non-32-byte MPU boundaries, a slot overlapping any fixed mapping, and every overlap
 among the fixed code/RAM regions. It never chooses STM32 addresses itself. It
 also requires protected code, unprivileged Thread helpers, syscall veneers,
 protected data, and the current-slot output section to stay within their
@@ -313,3 +340,42 @@ TrustZone SecureContext companion or TF-M integration
 MVE, PAC, and BTI cohorts
 global auto/profile selection, if a product defines that policy explicitly
 ```
+
+## Audit Corrections A02-A05
+
+The protected layout generation is 2: `0x00020008u` for eight MPU regions and
+`0x00020010u` for sixteen. Sizes, offsets, port IDs and both callable ABIs are
+unchanged. Cleanly rebuild all selected components and allocating consumers.
+
+The current-slot aperture must not overlap region 3 or any other enabled range.
+For example, place the slot at `0x30000000..0x30000020` and begin privileged RW
+SRAM at `0x30000020`. Contexts, MSP and protected data use the RW range. Startup
+must also zero the separate slot section before any common/runtime access;
+a BSS loop starting at the RW range does not initialize that earlier section.
+The aperture remains RO/XN for both privilege levels. Publication remains inside
+the PRIMASK-protected interval with the MPU disabled.
+
+Exception entry clears SPSEL. EXC_RETURN establishes Thread/PSP return.
+Fiber deliberately normalizes the saved scalar CONTROL to the canonical Thread
+value 3 by setting SPSEL after reading live Handler CONTROL 1. Initial templates
+and resumed images therefore have one representation. Unlike the pinned FreeRTOS
+raw Handler save, this normalization supports Fiber's stricter image checks.
+Post-write restore readback compares the written CONTROL value 3, not entry 1.
+
+Save preflight checks live PSP and its complete frame against sealed bounds,
+not against the historical image PSP. Restore accepts the exact owned post-yield
+SVC continuation in syscall flash, but rejects other syscall PCs.
+
+Focused offline regressions: `tools/test_v8_scalar_ntz_security.ps1` extracts and
+executes actual C validators with register/map stubs, checks actual ARM codegen,
+and links real CM33 handler/runtime archives with section GC and normal/LTO.
+These checks do not claim target exception return or MPU hardware execution.
+
+## A25: Architectural RBAR Shareability
+
+`FAP-ARMV8M-RBAR-SH` deliberately corrects the pinned reference dictionary:
+RBAR.SH Inner-shareable is 3, not reserved 1. The private encoder accepts raw
+0/2/3 and rejects 1. Existing standard mappings use Non-shareable 0; context
+layout, default MPU image and both callable ABIs are unchanged. Independent
+numeric SH/AP/XN tests, not equality with the copied reference macro, are the
+required regression oracle. See the global assembly-parity rationale.

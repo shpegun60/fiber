@@ -106,6 +106,9 @@
 #define fiber_portINITIAL_XPSR 0x01000000u
 #define fiber_portSTART_ADDRESS_MASK 0xFFFFFFFEu
 #define fiber_portINITIAL_EXC_RETURN 0xFFFFFFBCu
+#define fiber_portSECURE_ORIGIN_EXC_RETURN 0xFFFFFFFCu
+#define fiber_portSECURE_HEADER_WORDS 3u
+#define fiber_portSECURE_HEADER_BYTES (fiber_portSECURE_HEADER_WORDS * 4u)
 #define fiber_portSVC_ORIGIN_EXC_RETURN 0xFFFFFFB8u
 #define fiber_portNO_SECURE_CONTEXT 0u
 #define fiber_portSECURE_CONTEXT_SLOT_WORDS 1u
@@ -183,7 +186,7 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 /* ASCII "C33S" distinguishes this companion profile from the NTZ C33N
  * profile even when their ordinary Non-secure register sets look similar. */
 #define FIBER_PORT_CONTEXT_ABI_PORT_ID 0x43333353u
-#define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010001u
+#define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00020001u
 #define FIBER_PORT_CONTEXT_FEATURE_PSPLIM_SLOT 0x00000002u
 #define FIBER_PORT_CONTEXT_FEATURE_SECURE_CONTEXT_SLOT 0x00000008u
 #define FIBER_PORT_CONTEXT_FEATURE_RUNS_NONSECURE 0x00000080u
@@ -343,6 +346,12 @@ FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 11u,
 		"[fiber]: ARM_CM33 software frame must contain eleven words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 2u,
 		"[fiber]: ARM_CM33 EXC_RETURN must follow SecureContext and PSPLIM");
+FIBER_STATIC_ASSERT(fiber_portSECURE_HEADER_WORDS == 3u &&
+		fiber_portSECURE_HEADER_BYTES == 12u,
+		"[fiber]: ARM_CM33 Secure-origin header geometry changed");
+FIBER_STATIC_ASSERT((fiber_portINITIAL_EXC_RETURN ^
+		fiber_portSECURE_ORIGIN_EXC_RETURN) == 0x40u,
+		"[fiber]: ARM_CM33 origin encodings may differ only in S bit");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x8Au,
 		"[fiber]: ARM_CM33 context feature identity changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_INITIAL_CONTEXT_BYTES == 76u,

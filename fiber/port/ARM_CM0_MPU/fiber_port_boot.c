@@ -633,8 +633,9 @@ void fiber_port_context_validate_initial_restore(const FiberContext *ctx)
 			ctx->boot.stack_top, 'P');
 	FIBER_REQUIRE(image->r4 == 0u && image->r5 == 0u &&
 			image->r6 == 0u && image->r7 == 0u, 'x');
-	FIBER_REQUIRE(image->r8 == 0u && image->r9 == fiber_port_read_r9() &&
-			image->r10 == 0u &&
+	/* r9 is a general callee-saved register, not a cross-frame invariant.
+	 * The constructor checked its sampled seed before returning. */
+	FIBER_REQUIRE(image->r8 == 0u && image->r10 == 0u &&
 			image->r11 == 0u, 'x');
 	FIBER_REQUIRE(image->r0 == (uint32_t)(uintptr_t)ctx->boot.arg, 'P');
 	FIBER_REQUIRE(image->r1 == 0u && image->r2 == 0u &&
@@ -769,6 +770,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	const uintptr_t raw_stack_end = (uintptr_t)stack_end;
 	const uintptr_t entry_address = (uintptr_t)entry;
 	const uint32_t initial_r9 = fiber_port_read_r9();
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	const uint32_t initial_return_address =
 			((uint32_t)(uintptr_t)&fiber_port_unprivileged_task_return) | 1u;
 	FIBER_REQUIRE(raw_stack_end > raw_stack_start, 'N');

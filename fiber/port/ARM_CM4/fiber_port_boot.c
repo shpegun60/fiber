@@ -19,6 +19,7 @@
 
 #include "fiber_port_private.h"
 #include "../../fiber_platform_policy.h"
+#include "../../fiber_runtime_port_abi.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
 #if FIBER_REWIND_MSP
@@ -145,6 +146,11 @@ static FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_stack_address_map_on_switch(
 		const FiberContext *const ctx)
 {
+#if FIBER_STACK_CANARY
+	/* The canary lives below stack_base, inside the raw allocation. */
+	FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)ctx->boot.begin,
+			(uintptr_t)ctx->boot.end) != 0, 'P');
+#endif
 	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
 			ctx->boot.stack_top) != 0, 'P');
 }
@@ -359,6 +365,10 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 		FIBER_REQUIRE(end    != NULL, 'T');
 		FIBER_REQUIRE(entry  != NULL, 'E');
 		FIBER_REQUIRE((uintptr_t)end > (uintptr_t)begin, 'N'); /* non-empty raw range */
+#if FIBER_STACK_CANARY
+		FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)begin,
+				(uintptr_t)end) != 0, 'P');
+#endif
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -454,6 +464,10 @@ void fiber_port_boot_check(const FiberPortBoot* const ctx)
 	FIBER_REQUIRE(ctx->end   != NULL, 'T');
 	FIBER_REQUIRE(ctx->entry != NULL, 'E');
 	FIBER_REQUIRE((uintptr_t)ctx->end > (uintptr_t)ctx->begin, 'N');
+#if FIBER_STACK_CANARY
+	FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)ctx->begin,
+			(uintptr_t)ctx->end) != 0, 'P');
+#endif
 
 	FIBER_REQUIRE(ctx->stack_base > 0u, 'b');
 	FIBER_REQUIRE(ctx->stack_top  > 0u, 't');
@@ -554,6 +568,7 @@ void fiber_port_context_init(FiberContext *const ctx, void *const stack_begin,
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 #endif
 	fiber_port_init_context_frame(ctx);
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(((uintptr_t)ctx->sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');

@@ -1,5 +1,15 @@
 # ARM_CM4_MPU FreeRTOS Parity Record
 
+## Protected Startup MSP Policy
+
+This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
+uses the validated initial MSP; preserve-current startup is not implemented.
+The dictionary explicitly rejects `0` instead of silently ignoring it. Default
+startup instructions, frames and context/cohort identity are unchanged. The
+pinned FreeRTOS start also restores the initial MSP; no alternate preserve mode
+is imported. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
+and exact-diagnostic negative compiles; execution qualification stays separate.
+
 Paired generated-object evidence for SVC dispatch, protected FP context copy,
 MPU replacement, and PendSV restore is mandatory under
 `../../../FREERTOS_ASM_PARITY.md`; this ledger supplies the exhaustive policy

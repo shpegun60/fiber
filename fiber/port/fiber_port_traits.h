@@ -8,6 +8,7 @@
 #define FIBER_PORT_FIBER_PORT_TRAITS_H_
 
 #include "fiber_static_assert.h"
+#include "../fiber_api_attributes.h"
 
 #ifndef FIBER_PORT_NAME
 # error "[fiber]: selected port must define FIBER_PORT_NAME"
@@ -362,6 +363,7 @@ FIBER_STATIC_ASSERT(FIBER_PORT_SAVED_SP_MOD8 < 8u,
  * FP-frame selector. Reject every reserved encoding before naked assembly
  * reaches BX LR.
  */
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 __STATIC_FORCEINLINE uint32_t fiber_port_exc_return_is_valid(uint32_t value)
 {
 	const uint32_t basic = ((uint32_t)FIBER_PORT_INITIAL_EXC_RETURN | 0x10u);

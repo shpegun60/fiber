@@ -263,6 +263,7 @@ void fiber_port_context_init(FiberContext *const ctx,
 			FIBER_INTERNAL_STACK_CANARY_VALUE;
 #endif
 	fiber_port_init_context_frame(ctx);
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 
 	FIBER_REQUIRE((uintptr_t)ctx->sp ==
 			(ctx->boot.stack_top -

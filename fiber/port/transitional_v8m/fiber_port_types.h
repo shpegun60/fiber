@@ -23,4 +23,9 @@ struct FiberContext {
 } /* extern "C" */
 #endif
 
+#define FIBER_PORT_STORAGE_COHORT_PORT transitional_v8m
+#define FIBER_PORT_STORAGE_COHORT_REVISION 1
+#define FIBER_PORT_STORAGE_COHORT_REGIONS 0
+#include "../fiber_port_storage_cohort.h"
+
 #endif /* FIBER_PORT_TRANSITIONAL_V8M_FIBER_PORT_TYPES_H_ */

@@ -14,17 +14,26 @@ PendSV performs Secure save/unload, scheduler selection, lazy allocation, and
 owned Secure load. This is compile/assembly/CMSE/ELF/LTO evidence only, not a
 hardware support claim.
 
-`ARM_CM55/non_secure` currently provides only the staged `C55S` M55
-Non-secure type/trait foundation: its eleven-word SecureContext-shaped frame,
-pre-start request field, and scalar ARMv8.1-M CMSE-level-1 manifest. Its
-paired `ARM_CM55/secure` Slice-2/3 artifact exposes eight immutable,
-C55S-named v1 NSC identity/capacity veneers plus an explicit Secure-only static
-capacity reservation. Matching Secure/Non-secure CMSE linkage, retained pool
-geometry, and foreign/v2/missing-import rejection are compile-covered. It
-still has no runtime source, public attachment API, pool initialization,
-stateful gateway, SVC or PendSV handler, or SecureContext hardware claim. It
-must not be treated as an alternative build flag for the complete CM33 profile;
-later lifecycle and runtime mechanics need their own exact C55S evidence.
+`ARM_CM55/non_secure` provides the staged `C55S` M55 Non-secure foundation:
+its eleven-word SecureContext-shaped frame, pre-start request field, scalar
+ARMv8.1-M CMSE-level-1 manifest, sealed constructor
+(`fiber_port_context_init`), and optional selected-port pre-start attachment
+(`fiber_port_secure_context_attach(ctx, bytes)`). Attachment records and reseals
+a size request while the optional common configuration lifecycle is open; it
+does not initialize, allocate, load or save Secure state. The portable five-call
+API is unchanged, and unattached contexts require no attachment step. Its
+paired `ARM_CM55/secure` artifact exposes eight immutable C55S-named v1 NSC
+identity/capacity queries, guarded one-shot CPU/pool initialization, and
+allocation/load/save operations: twelve companion entries in total, backed by
+an explicit Secure-private static pool. These are staged backend primitives,
+not new portable user calls or a complete SecureContext runtime. The independent
+maintained constructor/attachment gate passes 892 emulated launches with actual
+reference construction and real SG query entries; failure doubles are labelled.
+There
+is still no Non-secure runtime provider, SVC or PendSV handler, global selector
+route or SecureContext hardware claim. It must not be treated as an alternative
+build flag for the complete CM33 profile; later Non-secure runtime integration
+needs its own exact C55S evidence.
 
 The paths and API names below target the active v2 selected-port architecture.
 If implementation follows the post-port-freeze separation in

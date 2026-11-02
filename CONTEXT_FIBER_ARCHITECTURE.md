@@ -84,8 +84,17 @@ service adapters
   lwIP sys_arch, drivers, timers and application services
 ```
 
-Dependencies point only downward. A lower layer must not include, call, or
-inspect a higher layer.
+Dependencies on concrete higher-layer implementations are forbidden. A lower
+layer must not include their headers or inspect their representation. Upcalls
+are permitted only through the frozen CPU-neutral port-to-Context service ABI
+and the registered Context-to-consumer dispatcher contract. Neither boundary
+permits knowledge of Fiber/Task types, lifecycle representation, scheduler
+policy, or queues.
+
+These are two distinct mechanisms: the reverse port ABI provides fixed
+Context-engine services, while `ContextDispatchFn` is the registered consumer
+callback. The selected port must not call a Fiber/Task implementation directly
+or acquire another reverse dependency outside those contracts.
 
 ## Context Engine Ownership
 

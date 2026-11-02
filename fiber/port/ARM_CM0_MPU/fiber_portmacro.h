@@ -22,6 +22,12 @@
 
 #include "../fiber_port_select.h"
 #include "../fiber_settings.h"
+
+/* This protected SVC contract validates its frame against the initial MSP. */
+#if !FIBER_REWIND_MSP
+# error "[fiber]: ARM_CM0_MPU requires FIBER_REWIND_MSP=1 for protected first start"
+#endif
+
 #include "../fiber_compiler.h"
 #include "fiber_port_types.h"
 
@@ -132,6 +138,9 @@
 #define fiber_portVECTOR_INDEX_SVC 11u
 #define fiber_portVECTOR_INDEX_PENDSV 14u
 #define fiber_portVECTOR_ALIGNMENT 128u
+/* ARMv6-M implements 16 core and at most 32 external exception vectors. */
+#define fiber_portVECTOR_STORAGE_WORDS (16u + 32u)
+#define fiber_portVECTOR_STORAGE_BYTES (fiber_portVECTOR_STORAGE_WORDS * 4u)
 #define fiber_portEXC_RETURN_THREAD_MSP 0xFFFFFFF9u
 #define fiber_portXPSR_IPSR_MASK 0x000001FFu
 #define fiber_portXPSR_STACK_ALIGN_BIT (1u << 9u)
@@ -427,14 +436,18 @@ fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 /* On an ARMv6-M implementation without VTOR, address zero is the active
  * architecture/remapped vector base, not a C null object. Keep that fact out
  * of GCC's null-array analysis while retaining a volatile hardware read. */
+fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot_at(uintptr_t base,
+		uint32_t index)
+{
+	const uintptr_t address = base + ((uintptr_t)index * sizeof(uint32_t));
+	uint32_t value;
+	fiber_portASM volatile("ldr %0, [%1]" : "=r"(value) : "r"(address) : "memory");
+	return value;
+}
+
 fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
 {
-	uintptr_t base = fiber_port_vectors_base_addr();
-#if !FIBER_PORT_HAS_VTOR
-	fiber_portASM volatile("" : "+r"(base) :: "memory");
-#endif
-	return *(const volatile uint32_t *)(base +
-			((uintptr_t)index * sizeof(uint32_t)));
+	return fiber_port_read_vector_slot_at(fiber_port_vectors_base_addr(), index);
 }
 
 FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
@@ -455,7 +468,8 @@ FIBER_STATIC_ASSERT(fiber_portEXC_RETURN_THREAD_MSP == 0xFFFFFFF9u &&
 		"[fiber]: ARM_CM0_MPU exception-return encodings changed");
 FIBER_STATIC_ASSERT(fiber_portVECTOR_INDEX_SVC == 11u &&
 		fiber_portVECTOR_INDEX_PENDSV == 14u &&
-		fiber_portVECTOR_ALIGNMENT == 128u,
+		fiber_portVECTOR_ALIGNMENT == 128u &&
+		fiber_portVECTOR_STORAGE_BYTES == 192u,
 		"[fiber]: ARM_CM0_MPU exception-vector facts changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_PORT_ID != 0x434D3030u,
 		"[fiber]: ARM_CM0_MPU must not reuse privileged ARM_CM0 identity");

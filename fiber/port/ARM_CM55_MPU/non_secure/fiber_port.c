@@ -298,7 +298,6 @@ void fiber_port_validate_running_context_frame(const FiberContext *current,
 			'O');
 	const uintptr_t frame_end = frame_start + FIBER_PORT_EXC_BASE_BYTES;
 	FIBER_REQUIRE(frame_start == (uintptr_t)__get_PSP(), 'P');
-	FIBER_REQUIRE(image->psp == (uint32_t)frame_start, 'P');
 	FIBER_REQUIRE((frame_start &
 			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'A');
 	FIBER_REQUIRE(fiber_port_range_contains(current->boot.stack_base,
@@ -497,15 +496,22 @@ void fiber_port_validate_saved_hardware_frame(const FiberContext *ctx,
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_STACK_ALIGN_BIT) == 0u,
 			'a');
-	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+	const int yield_continuation = (uintptr_t)stacked_pc ==
+			fiber_port_code_address(
+					(uintptr_t)fiber_port_svc_yield_return_site);
+	const int in_application = fiber_port_code_address_is_in_range(
 			layout->unprivileged_flash_start,
-			layout->unprivileged_flash_end, (uintptr_t)stacked_pc), 'c');
+			layout->unprivileged_flash_end, (uintptr_t)stacked_pc);
+	const int in_syscall = fiber_port_code_address_is_in_range(
+			layout->unprivileged_syscalls_start,
+			layout->unprivileged_syscalls_end, (uintptr_t)stacked_pc);
+	/* SVC 71 can tail-chain directly to PendSV, preserving this exact PC. */
+	FIBER_REQUIRE((in_application != 0) ||
+			((yield_continuation != 0) && (in_syscall != 0)), 'c');
 	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
 			layout->privileged_flash_start,
 			layout->privileged_flash_end, (uintptr_t)stacked_pc), 'c');
-	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
-			layout->unprivileged_syscalls_start,
-			layout->unprivileged_syscalls_end, (uintptr_t)stacked_pc), 'c');
+	FIBER_REQUIRE((in_syscall == 0) || (yield_continuation != 0), 'c');
 }
 
 FIBER_CM55_MPU_PRIVILEGED
@@ -551,8 +557,8 @@ void fiber_port_pendsv_validate_save_current(FiberContext *current,
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE(__get_CONTROL() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Exception entry cleared SPSEL; its token proves Thread/PSP origin. */
+	FIBER_REQUIRE(__get_CONTROL() == 1u, 'l');
 	fiber_port_validate_running_context_frame(current, hardware_frame);
 	fiber_port_mpu_validate_active_context(current);
 }
@@ -694,8 +700,8 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE(__get_CONTROL() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Exception entry cleared SPSEL; its token proves Thread/PSP origin. */
+	FIBER_REQUIRE(__get_CONTROL() == 1u, 'l');
 
 	FiberPortMpuSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
@@ -715,8 +721,8 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE(__get_CONTROL() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Exception entry cleared SPSEL; its token proves Thread/PSP origin. */
+	FIBER_REQUIRE(__get_CONTROL() == 1u, 'l');
 	fiber_port_context_validate_restore(next);
 	fiber_port_require_mpu_geometry();
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
@@ -847,8 +853,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 		FIBER_REQUIRE(__get_CONTROL() == 0u, 'l');
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 	} else if (exc_return == fiber_portINITIAL_EXC_RETURN) {
-		FIBER_REQUIRE(__get_CONTROL() ==
-				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+		FIBER_REQUIRE(__get_CONTROL() == 1u, 'l');
 		fiber_port_validate_running_context_frame(current, hardware_frame);
 		fiber_port_mpu_validate_active_context(current);
 	} else {
@@ -1200,6 +1205,8 @@ void PendSV_Handler(void)
 			"stmia r1!, {r4-r11}                                  \n"
 			"mrs   r3, psplim                                     \n"
 			"mrs   r4, control                                    \n"
+			/* Canonical stored CONTROL describes Thread/PSP, not Handler SPSEL. */
+			"orr   r4, r4, #2                                     \n"
 			"stmia r1!, {r0, r3, r4, lr}                          \n"
 			"str   r1, [r2, #0]                                   \n"
 

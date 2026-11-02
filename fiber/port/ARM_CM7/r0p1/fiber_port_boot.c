@@ -21,10 +21,12 @@
 
 #include "fiber_port_private.h"
 #include "../../../fiber_platform_policy.h"
+#include "../../../fiber_runtime_port_abi.h"
 
-static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
 #if FIBER_REWIND_MSP
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uintptr_t fiber_port_fallback_initial_msp_checked(void);
 #endif
 
@@ -32,18 +34,18 @@ uintptr_t fiber_port_fallback_initial_msp_checked(void);
 /* Optional permissive defaults for bring-up only.                             */
 /* -------------------------------------------------------------------------- 	*/
 #if FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS
-FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+FIBER_WEAK FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 int fiber_addr_plausible_ram(uintptr_t start, uintptr_t end) {
 	(void)start; (void)end; return 1; /* accept any RAM range by default */
 }
 
-FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+FIBER_WEAK FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 int fiber_addr_plausible_code(uintptr_t addr) {
 	(void)addr; return 1;             /* accept any code address by default */
 }
 #endif
 
-FIBER_WEAK FIBER_GENERAL_REGS_ONLY
+FIBER_WEAK FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uintptr_t fiber_fallback_initial_msp(void) {
 	return (uintptr_t)0;              /* default: no usable fallback */
 }
@@ -58,14 +60,15 @@ typedef struct FiberPortStartMspPlan {
 
 static FiberPortStartMspPlan fiber_port_start_msp_plan;
 
-static void fiber_port_prepare_start_msp_plan(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_prepare_start_msp_plan(void)
 {
 	FIBER_REQUIRE(fiber_port_start_msp_plan.prepared == 0u, 'M');
 
 	uintptr_t top;
 #if FIBER_REWIND_MSP
 	uint32_t first = fiber_port_read_initial_msp();
-	__ISB();
+	fiber_portINST_SYNC_BARRIER();
 	uint32_t second = fiber_port_read_initial_msp();
 
 	if ((first == 0u) || (first != second)) {
@@ -77,7 +80,7 @@ static void fiber_port_prepare_start_msp_plan(void)
 	FIBER_REQUIRE(first == second, 'V');
 	top = fiber_stack_align_down((uintptr_t)first);
 #else
-	top = fiber_stack_align_down((uintptr_t)__get_MSP());
+	top = fiber_stack_align_down((uintptr_t)fiber_port_cpu_read_msp());
 #endif
 
 	FIBER_REQUIRE(top != 0u, 'M');
@@ -89,12 +92,12 @@ static void fiber_port_prepare_start_msp_plan(void)
 	}
 
 	fiber_port_start_msp_plan.top = top;
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 	fiber_port_start_msp_plan.prepared = 1u;
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 }
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
@@ -114,7 +117,7 @@ void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)
 
 #if FIBER_REWIND_MSP
 	uint32_t first = fiber_port_read_initial_msp();
-	__ISB();
+	fiber_portINST_SYNC_BARRIER();
 	uint32_t second = fiber_port_read_initial_msp();
 	if ((first == 0u) || (first != second)) {
 		const uintptr_t fallback = fiber_port_fallback_initial_msp_checked();
@@ -127,7 +130,7 @@ void fiber_port_validate_start_msp_for_boot(const FiberPortBoot *const ctx)
 #endif
 }
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_context_pointer(const FiberContext *const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'N');
@@ -143,10 +146,15 @@ void fiber_port_validate_context_pointer(const FiberContext *const ctx)
 }
 
 #if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_stack_address_map_on_switch(
 		const FiberContext *const ctx)
 {
+#if FIBER_STACK_CANARY
+	/* The canary lives below stack_base, inside the raw allocation. */
+	FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)ctx->boot.begin,
+			(uintptr_t)ctx->boot.end) != 0, 'P');
+#endif
 	FIBER_REQUIRE(fiber_addr_plausible_ram(ctx->boot.stack_base,
 			ctx->boot.stack_top) != 0, 'P');
 }
@@ -156,7 +164,8 @@ void fiber_port_validate_stack_address_map_on_switch(
 /* Use read-then-write (W1C) to avoid leftovers from a previous session.      */
 /* -------------------------------------------------------------------------- */
 #if FIBER_CLEAR_STICKY_FAULT_STATUS_ON_START
-static inline void fiber_clear_sticky_faults(void)
+static inline FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_clear_sticky_faults(void)
 {
 #if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
 	/* CFSR: Configurable Fault Status Register (W1C). */
@@ -177,7 +186,7 @@ static inline void fiber_clear_sticky_faults(void)
 	SCB->DFSR = 0x1Fu;                 		/* clear all standard DFSR bits if masks are missing */
 # endif
 
-	{ __DSB(); __ISB(); }                  	/* serialize side effects of status clears */
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }                  	/* serialize side effects of status clears */
 #else
 	(void)0;                            	/* v6-M may lack these regs: nothing to do */
 #endif
@@ -214,7 +223,7 @@ void fiber_port_runtime_prepare(void)
 			;
 	SCB->SHCSR |= required_fault_enables;
 
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	FIBER_REQUIRE((SCB->SHCSR & required_fault_enables) ==
 			required_fault_enables, 'F');
 #endif
@@ -222,19 +231,19 @@ void fiber_port_runtime_prepare(void)
 	/* Keep exception frames 8-byte aligned as per ARM ABI. */
 #ifdef SCB_CCR_STKALIGN_Msk
 	SCB->CCR |= SCB_CCR_STKALIGN_Msk;
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	FIBER_REQUIRE((SCB->CCR & SCB_CCR_STKALIGN_Msk) != 0u, 'A');
 #endif
 
 	/* Optionally trap unaligned accesses and division-by-zero to surface UB early. */
 #if defined(SCB_CCR_UNALIGN_TRP_Msk) && FIBER_ENABLE_UNALIGNED_TRAP
 	SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	FIBER_REQUIRE((SCB->CCR & SCB_CCR_UNALIGN_TRP_Msk) != 0u, 'A');
 #endif
 #if defined(SCB_CCR_DIV_0_TRP_Msk) && FIBER_ENABLE_DIV0_TRAP
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	FIBER_REQUIRE((SCB->CCR & SCB_CCR_DIV_0_TRP_Msk) != 0u, 'D');
 #endif
 
@@ -248,7 +257,7 @@ uintptr_t fiber_port_boot_prepare_msp_for_start(const FiberPortBoot* const ctx)
 	FIBER_REQUIRE(ctx != NULL, 'n');
 	fiber_port_boot_check(ctx);
 	fiber_port_validate_start_msp_for_boot(ctx);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 #if FIBER_REWIND_MSP
 	return fiber_port_start_msp_plan.top;
@@ -257,7 +266,7 @@ uintptr_t fiber_port_boot_prepare_msp_for_start(const FiberPortBoot* const ctx)
 #endif
 }
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 {
 	h ^= (uint8_t)(v);
@@ -271,7 +280,7 @@ uint32_t fiber_boot_hash32_accum(uint32_t h, uint32_t v)
 	return h;
 }
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *c)
 {
 	/* Hash invariant fields only. Do not include sealed or hash itself. */
@@ -297,7 +306,7 @@ uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *c)
 	return h;
 }
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'n');
@@ -337,7 +346,7 @@ void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx)
 			'q');
 }
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_check(const FiberPortBoot *ctx)
 {
 	fiber_port_boot_record_fast_check(ctx);
@@ -355,12 +364,16 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 	 * Contract checks (raw inputs)                                		  *
 	 * ------------------------------------------------------------------ */
 	{
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+		{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 		FIBER_REQUIRE(begin  != NULL, 'B');
 		FIBER_REQUIRE(end    != NULL, 'T');
 		FIBER_REQUIRE(entry  != NULL, 'E');
 		FIBER_REQUIRE((uintptr_t)end > (uintptr_t)begin, 'N'); /* non-empty raw range */
+#if FIBER_STACK_CANARY
+		FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)begin,
+				(uintptr_t)end) != 0, 'P');
+#endif
 	}
 
 	/* ------------------------------------------------------------------ *
@@ -374,7 +387,7 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 		/* Write derived fields */
 		ctx.entry = entry;
 		ctx.arg   = arg;
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+		{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 	}
 
 	/* Normalize and compute PSP bounds */
@@ -415,7 +428,7 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 		ctx.stack_base = base_aligned;
 		ctx.stack_top  = top_aligned;
 		ctx.avail      = avail;
-		{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+		{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 	}
 
 	/* Seal with metadata (magic/version/canaries/hash) */
@@ -435,7 +448,7 @@ FiberPortBoot fiber_port_boot_create(void* const begin, void* const end, const e
 	ctx.hash   = fiber_port_boot_record_compute_hash(&ctx);
 	ctx.sealed = 1u;
 
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 	fiber_port_boot_check(&ctx);
 	return ctx;
@@ -456,6 +469,10 @@ void fiber_port_boot_check(const FiberPortBoot* const ctx)
 	FIBER_REQUIRE(ctx->end   != NULL, 'T');
 	FIBER_REQUIRE(ctx->entry != NULL, 'E');
 	FIBER_REQUIRE((uintptr_t)ctx->end > (uintptr_t)ctx->begin, 'N');
+#if FIBER_STACK_CANARY
+	FIBER_REQUIRE(fiber_addr_plausible_ram((uintptr_t)ctx->begin,
+			(uintptr_t)ctx->end) != 0, 'P');
+#endif
 
 	FIBER_REQUIRE(ctx->stack_base > 0u, 'b');
 	FIBER_REQUIRE(ctx->stack_top  > 0u, 't');
@@ -514,10 +531,10 @@ static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx)
 /* -------------------------------------------------------------------------- */
 void fiber_port_require_start_environment(void)
 {
-	const uint32_t ctl0 = __get_CONTROL();
+	const uint32_t ctl0 = fiber_port_cpu_read_control();
 
 	/* Must be Thread mode (not Handler). */
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'I');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'I');
 
 	/* Must be privileged and using MSP in Thread mode. */
 	FIBER_REQUIRE((ctl0 & 1u) == 0u, 'p'); /* nPRIV==0 => privileged */
@@ -534,7 +551,7 @@ void fiber_port_context_init(FiberContext *const ctx,
 		void *const arg)
 {
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(stack_begin != NULL, 'B');
@@ -558,7 +575,7 @@ void fiber_port_context_init(FiberContext *const ctx,
 	FIBER_REQUIRE(fiber_addr_plausible_code(entry_addr & ~(uintptr_t)1u) != 0, 'c');
 
 	ctx->boot = fiber_port_boot_create(stack_begin, stack_end, entry, arg);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 	FIBER_REQUIRE((ctx->boot.stack_top &
 			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'a');
@@ -567,21 +584,22 @@ void fiber_port_context_init(FiberContext *const ctx,
 #if FIBER_STACK_CANARY
 	const uintptr_t canary_cell = fiber_word_align_up((uintptr_t)ctx->boot.begin);
 	((volatile uint32_t *)canary_cell)[0] = FIBER_INTERNAL_STACK_CANARY_VALUE;
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 #endif
 
 	fiber_port_init_context_frame(ctx);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 	FIBER_REQUIRE(((uintptr_t)ctx->sp & 7u) ==
 			(uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE((uintptr_t)ctx->sp <=
 			ctx->boot.stack_top - (uintptr_t)FIBER_EXC_BASE_BYTES, 'S');
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 }
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_stack_canary(const FiberContext *const ctx)
 {
 #if FIBER_STACK_CANARY
@@ -612,42 +630,42 @@ typedef struct FiberPortValidationCpuState {
 #endif
 } FiberPortValidationCpuState;
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_capture_validation_cpu_state(FiberPortValidationCpuState *const state)
 {
 	FIBER_REQUIRE(state != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	state->primask = __get_PRIMASK();
-	state->control = __get_CONTROL();
+	state->primask = fiber_port_cpu_read_primask();
+	state->control = fiber_port_cpu_read_control();
 #if FIBER_PORT_HAS_BASEPRI
 	state->basepri = fiber_port_basepri_read();
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
-	state->faultmask = __get_FAULTMASK();
+	state->faultmask = fiber_port_cpu_read_faultmask();
 #endif
 	fiber_portCOMPILER_BARRIER();
 }
 
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_validation_cpu_state(
 		const FiberPortValidationCpuState *const before)
 {
 	FIBER_REQUIRE(before != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == before->faultmask, 't');
 #endif
 	fiber_portCOMPILER_BARRIER();
 }
 #endif
 
 #if FIBER_REWIND_MSP
-static FIBER_GENERAL_REGS_ONLY
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uintptr_t fiber_port_fallback_initial_msp_checked(void)
 {
 	FiberPortValidationCpuState cpu_state;
@@ -658,7 +676,7 @@ uintptr_t fiber_port_fallback_initial_msp_checked(void)
 }
 #endif
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_save_current(const FiberContext *ctx)
 {
 #if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
@@ -680,7 +698,7 @@ void fiber_port_context_validate_save_current(const FiberContext *ctx)
 
 	/* ctx->sp names the last saved frame and is stale while this fiber runs.
 	 * Validate the live PSP instead, before PendSV assembly reads boot fields. */
-	const uintptr_t psp = (uintptr_t)__get_PSP();
+	const uintptr_t psp = (uintptr_t)fiber_port_cpu_read_psp();
 	FIBER_REQUIRE((psp & ((uintptr_t)sizeof(uint32_t) - 1u)) == 0u, 'A');
 	FIBER_REQUIRE(psp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(psp <= ctx->boot.stack_top, 'T');
@@ -690,7 +708,7 @@ void fiber_port_context_validate_save_current(const FiberContext *ctx)
 #endif
 }
 
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_restore(FiberContext *ctx)
 {
 #if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
@@ -765,7 +783,7 @@ uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)
 
 #if FIBER_PORT_USES_PSPLIM_REGISTER
 	fiber_port_psplim_config((uint32_t)ctx->boot.stack_base);
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 	FIBER_REQUIRE(fiber_port_psplim_read() == (uint32_t)ctx->boot.stack_base, 'L');
 #endif
 
@@ -775,13 +793,13 @@ uintptr_t fiber_port_context_prepare_first_start(FiberContext *const ctx)
 
 void fiber_port_require_start_interrupt_state(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 #endif
 }
 

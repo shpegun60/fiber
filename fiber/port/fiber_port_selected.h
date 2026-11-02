@@ -38,4 +38,8 @@
 # include "transitional_v8m/fiber_port_types.h"
 #endif
 
+/* Bind caller-owned storage without adding private-runtime dependencies to the
+ * concrete type headers, layout probes, or standalone Secure gateway queries. */
+#include "fiber_port_storage_cohort_expectation.h"
+
 #endif /* FIBER_FIBER_PORT_SELECTED_H_ */

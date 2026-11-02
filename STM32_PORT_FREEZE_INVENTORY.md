@@ -21,6 +21,29 @@ matrix result:         PASS
 assembly parity:       PASS at -O2 and -Os
 ```
 
+These recorded PASS labels are the pre-correction validation snapshot reviewed
+in `PORT_ARCHITECTURE_AUDIT.md`. That snapshot coexisted with A01-A21; it is not
+evidence of correct target execution. A refreshed full-matrix result must be
+reported separately from focused correction tests and hardware evidence.
+
+The 2026-11-01 A01-A21 repair tree subsequently passed the complete refreshed
+matrix, including the maintained audit regressions and all original checks.
+`PORT_ARCHITECTURE_AUDIT.md` records that working-tree qualification and its
+hash-backed source/evidence snapshot. This closes those software findings, not
+the remaining profile inventory, global optimization/CI gate, or board proof.
+
+The later A22-A24/C55S private-pool checkpoint also passed the full matrix with
+explicit QEMU execution. Its separate snapshot in `PORT_ARCHITECTURE_AUDIT.md`
+supersedes earlier software receipts for the affected sources, without
+transferring their PASS to later edits or claiming complete handler execution.
+
+The later unchanged 559-input checkpoint combines private companion binding,
+ISA admission and staged startup/attachment evidence. A29 then exposed a
+constructor-only reverse-ABI GC gap not covered by that checkpoint. Its cold
+constructor repair and new link controls require their own fresh aggregate
+receipt before the working tree is software-qualified again. See the exact
+status and source archives in `PORT_ARCHITECTURE_AUDIT.md`.
+
 This inventory snapshot accompanies the exact build-selected CM55 scalar,
 scalar-FP, MVE-FP, no-feature MPU, scalar-FP MPU, and MVE-FP MPU runtimes. It
 does not claim M55 MPU hardware isolation, TrustZone, TF-M, PAC/BTI, or hardware
@@ -53,7 +76,7 @@ architecture errata
 
 ## Concrete Profiles Already Present
 
-Eighteen complete runtime parity profiles currently have selected-port source
+Twenty-one recorded complete runtime profiles currently have selected-port source
 groups and pinned FreeRTOS parity ledgers:
 
 | Fiber profile | Main covered mechanics | Current claim |
@@ -67,7 +90,7 @@ groups and pinned FreeRTOS parity ledgers:
 | `ARM_CM4_MPU` | M4F/M7F protected FP context, MPU replacement, M7 errata policy | compile/assembly/ELF validated |
 | `ARM_CM23_NTZ/non_secure` | exact non-MPU Baseline NTZ frame and ignored PSPLIM slot | compile/assembly/ELF validated; reference-portability profile |
 | `ARM_CM33_NTZ/non_secure` | exact non-MPU/no-FPU Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
-| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | no-MPU/no-FPU TrustZone companion frame, exact construction, sealed attach, twelve versioned identity/init/allocation/save/load veneers, static Secure pool, all eight forward operations, and strong SVC/PendSV | compile/assembly/cohort/CMSE/vector/LTO validated only; no hardware claim |
+| `ARM_CM33/non_secure` plus `ARM_CM33/secure` | no-MPU/no-FPU TrustZone companion frame, exact construction, sealed attach, twelve versioned identity/init/allocation/save/load veneers, static Secure pool, all eight forward operations, and strong SVC/PendSV | compile/assembly/cohort/CMSE/vector/LTO validated only; exact private Secure-object binding and ISA admission now have separate focused and 559-input combined evidence; no hardware claim |
 | `ARM_CM33_TFM/non_secure` | exact no-MPU/no-FPU NTZ CPU frame plus TF-M v2.0.0 initialization and cooperative mutex adapter; no fiber SecureContext | compile/assembly/archive/ELF validated only; TF-M/PSA/hardware integration pending |
 | `ARM_CM33_MPU/non_secure` | no-FPU protected Mainline MPU frame, direct current-slot aperture, protected SVC/PendSV | compile/assembly/ELF validated; hardware isolation pending |
 | `ARM_CM33F_NTZ/non_secure` | exact non-MPU FP Mainline NTZ frame with PSPLIM | compile/assembly/ELF validated |
@@ -77,15 +100,36 @@ groups and pinned FreeRTOS parity ledgers:
 | `ARM_CM55_MPU/non_secure` | no-FPU C55M protected frame, 8/16-region image, public SVC-71 yield, and protected PendSV | compile/assembly/archive/ELF/vector/cohort validated; hardware isolation pending |
 | `ARM_CM55F_MPU/non_secure` | scalar-FP MPU C55P protected frame, 8/16-region image, public SVC-71 yield, and protected FP PendSV | compile/assembly/archive/ELF/vector/cohort validated; hardware isolation pending |
 | `ARM_CM55_MVEF_MPU/non_secure` | MVE-FP MPU C55W 54-word protected frame, public SVC-71 yield, protected `s16-s31`/copied-low-FP PendSV, 8/16-region image, and no VPR software slot | compile/assembly/archive/ELF/vector/cohort validated; hardware isolation pending |
+| `ARM_CM33F_MPU/non_secure` | scalar-FP MPU C3FP 54-word protected frame, explicit 8/16-region manifests, protected first selection and SVC/PendSV, complete eight-operation provider | complete-group and post-selectable six-gate software qualification; r8 QEMU execution, r16 compile/link only; separate current-code parity receipts; no hardware claim |
+| `ARM_CM55_TFM/non_secure` | scalar M55 NTZ CPU frame plus separate TF-M initializer/cooperative mutex adapter, complete eight-operation provider | post-selectable target/host/actual-M55 dual-r9/object-role qualification plus separate assembly parity; actual TF-M Secure-image/PSA and hardware integration pending |
 
 `ARM_CM55/non_secure` is a deliberately staged `C55S` TrustZone SecureContext
-layout dictionary, not a nineteenth complete runtime profile. It freezes the
+layout dictionary, not another complete runtime profile. It freezes the
 eleven-word Non-secure frame and scalar M55/CMSE manifest. The paired
-`ARM_CM55/secure` Slice-2/3 artifact provides eight immutable cohort-named
+`ARM_CM55/secure` Slice-2/4 artifact provides eight immutable cohort-named
 identity/capacity NSC veneers and a manifest-budgeted, retained Secure-only
-pool with real CMSE import/negative-link and section-placement proof; no port
-runtime, SecureContext lifecycle, handler, archive/vector runtime, or hardware
-evidence exists yet.
+pool with real CMSE import/negative-link and section-placement proof. Slice 4
+adds private one-shot pool memory initialization, static allocation, and owned
+lookup without changing those NSC exports. Slice 5 adds a ninth, guarded
+one-shot NSC CPU/pool initializer; the existing eight query names and pool
+layout are unchanged. Slice 6 adds guarded NSC allocation/load/save, making
+twelve imports with the same context identity/layout and pool geometry. Its
+new execution/negative qualification is separate from the preceding 467-input
+initializer checkpoint. Slice 8 adds sealed NS construction and pre-start
+attachment, separately qualified by the maintained 892-launch gate and the
+559-input combined checkpoint. Port runtime, handlers and archive/vector
+runtime proof remain pending. No hardware claim
+or complete C55S runtime follows from these staged artifacts.
+
+The CM33 scalar-FP MPU profile is now the twentieth recorded complete runtime,
+documented in `ARM_CM33F_MPU/non_secure/FREERTOS_PARITY.md`. Its C3FP identity
+covers the 54-word protected FP image and explicit 8/16-region manifests.
+Post-selectable manifest, constructor, first-start codegen/execution, running
+component and actual common-runtime gates pass separately. The complete-group
+gate records 9,349 checks and 161 AN505 executions; sixteen-region images remain
+compile/link-only. It remains explicitly build-selected, without a global auto
+route. The maintained immutable pinned-reference parity has its own receipt;
+fresh combined-tree and final all-optimization qualification remain required.
 
 The current matrix pairs every complete runtime source group against the pinned
 FreeRTOS reference where applicable and separately tests the paired CM33
@@ -165,8 +209,12 @@ linker-derived global images. Strong SVC first start and PendSV preflight/save/
 select/replace/restore are complete. SVC 71 is the public unprivileged
 `fiber_schedule()` veneer and only pends the selected PendSV.
 
-The common current slot is a 32-byte aperture inside privileged SRAM. Every
-selected context maps it as RNR5 read-only/XN for both privilege levels, because
+The common current slot is a separate 32-byte SRAM aperture, mapped as RNR5
+read-only/XN for both privilege levels. Its enabled MPU range is disjoint from
+the privileged-RW SRAM mapping and every other enabled region; Armv8-M must not
+use an overlapping higher-priority overlay. The physical SRAM allocation remains
+board-owned. The linker gives the slot its own section, and startup must zero
+that section separately from ordinary privileged SRAM before runtime use.
 ARMv8-M cannot encode privileged-RW plus unprivileged-RO. The port publishes
 the next pointer only in the existing PRIMASK-protected MPU-disabled replacement
 interval. This intentionally reserves RNR5: 8-region builds keep two, and
@@ -196,6 +244,18 @@ Secure-RAM placement, and normal/LTO manifests. Independent handler and
 attachment bundle anchors prove ordinary one-pass archive extraction despite
 naked-asm helper calls, and lazy handles are capacity-checked before frame
 publication. This is complete software evidence, not a hardware support claim.
+
+The A17 owner regression compiles the entire three-source Secure companion,
+including every reachable pool helper, with canonical sensitive/general-register
+annotations and mandatory build counterflags. It checks adversarial `-O0`,
+`-O2`, `-Os`, `-O2 -flto`, and `-Os -flto` linked CMSE images for forbidden
+dependencies and call-graph edges. The profiling, stack-check, and trace-pc
+probes also use `-fno-profile`, `-fno-stack-check`, and
+`-fno-sanitize-coverage=trace-pc` after their enabling options. An intentionally
+contaminated object only qualifies the detector; it is not executed and does not
+establish a runtime defect outside supported counterflags. This is codegen/link
+evidence only. `tools/test_owner_guards.ps1` also replays the five production
+Secure parity checks against the pin at actual `-O2` and `-Os`.
 
 A fiber without an attached SecureContext must retain the ordinary Non-secure
 switch path. A fiber with an attachment must save and load the matching Secure
@@ -390,6 +450,12 @@ CM23 NTZ profile remains useful assembly and ABI evidence but does not create an
 STM32 hardware claim.
 
 ## Recommended Execution Order
+
+The source-group and exact-manifest reconciliation is maintained in
+[`STM32_PROFILE_BACKLOG.md`](STM32_PROFILE_BACKLOG.md). It distinguishes the
+twenty-one recorded runtime profiles from staged C55S and lists missing FP, MPU,
+SecureContext, Secure-only, and TF-M cohorts without treating directory reuse
+as implementation or silently excluding unresolved feature combinations.
 
 ```text
 ARM_CM55 feature cohorts/STM32N6

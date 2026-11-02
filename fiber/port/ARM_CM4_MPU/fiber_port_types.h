@@ -109,4 +109,14 @@ struct __attribute__((aligned(8))) FiberContext {
 } /* extern "C" */
 #endif
 
+#define FIBER_PORT_STORAGE_COHORT_PORT arm_cm4_mpu
+#define FIBER_PORT_STORAGE_COHORT_REVISION 1
+#if defined(FIBER_PORT_CM4_MPU_TOTAL_REGIONS) && \
+		(FIBER_PORT_CM4_MPU_TOTAL_REGIONS == 8)
+# define FIBER_PORT_STORAGE_COHORT_REGIONS 8
+#else
+# define FIBER_PORT_STORAGE_COHORT_REGIONS 16
+#endif
+#include "../fiber_port_storage_cohort.h"
+
 #endif /* FIBER_PORT_ARM_CM4_MPU_FIBER_PORT_TYPES_H_ */

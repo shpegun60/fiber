@@ -20,6 +20,12 @@
 
 #include "../../fiber_port_select.h"
 #include "../../fiber_settings.h"
+
+/* This protected SVC contract validates its frame against the initial MSP. */
+#if !FIBER_REWIND_MSP
+# error "[fiber]: ARM_CM33_MPU requires FIBER_REWIND_MSP=1 for protected first start"
+#endif
+
 #include "../../fiber_compiler.h"
 
 #if !FIBER_PORT_BUILD_SELECTED
@@ -189,11 +195,11 @@
 #define fiber_portMPU_STACK_REGION_NUMBER 4u
 /*
  * ARMv8-M has no MPU access encoding for privileged-RW plus
- * unprivileged-RO.  The current-context aperture therefore uses an exact
- * read-only/XN overlay while a protected switch updates the common slot only
- * while MPU_CTRL is disabled.  It is stored in every per-context image so it
- * overrides global privileged SRAM by region-number priority without consuming
- * a fifth immutable global region.
+ * unprivileged-RO. The current-context aperture is therefore read-only/XN for
+ * both privilege levels and disjoint from every other enabled region.
+ * A protected switch updates the slot only while MPU_CTRL is disabled.
+ * Each per-context image supplies this mapping without a fifth global region.
+ * Startup must zero the separate slot section, not only privileged RW BSS.
  */
 #define fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER 5u
 #define fiber_portMPU_FIRST_CONFIGURABLE_REGION_NUMBER 6u
@@ -223,7 +229,8 @@
 #define fiber_portMPU_RBAR_ACCESS_MASK (3u << 1u)
 #define fiber_portMPU_RBAR_SHAREABILITY_MASK (3u << 3u)
 #define fiber_portMPU_REGION_NON_SHAREABLE (0u << 3u)
-#define fiber_portMPU_REGION_INNER_SHAREABLE (1u << 3u)
+/* Arm RBAR.SH: 0=Non-shareable, 2=Outer, 3=Inner; 1 is reserved. */
+#define fiber_portMPU_REGION_INNER_SHAREABLE (3u << 3u)
 #define fiber_portMPU_REGION_OUTER_SHAREABLE (2u << 3u)
 #define fiber_portMPU_REGION_PRIVILEGED_READ_WRITE (0u << 1u)
 #define fiber_portMPU_REGION_READ_WRITE (1u << 1u)
@@ -258,6 +265,7 @@ extern "C" {
 
 /* Preserve r9 because an integration may use it as the platform/static-base
  * register even though the pinned FreeRTOS debug seed uses a marker value. */
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 {
 	uint32_t value;
@@ -265,6 +273,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 	return value;
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;
@@ -273,6 +282,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 	return value;
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 {
 	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0"
@@ -281,23 +291,27 @@ fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 	fiber_portINST_SYNC_BARRIER();
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 {
 	return (uintptr_t)fiber_portSCB_VTOR_REG &
 		~((uintptr_t)fiber_portVECTOR_ALIGNMENT - 1u);
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
 {
 	return *(const volatile uint32_t *)(fiber_port_vectors_base_addr() +
 			((uintptr_t)index * sizeof(uint32_t)));
 }
 
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 {
 	return fiber_port_read_vector_slot(0u);
@@ -380,13 +394,13 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 #endif
 
 #if FIBER_PORT_CM33_MPU_TOTAL_REGIONS == 8
-# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010008u
+# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00020008u
 # define FIBER_PORT_CM33_MPU_PROTECTED_CONTEXT_OFFSET 40u
 # define FIBER_PORT_CM33_MPU_RUNTIME_FLAGS_OFFSET 124u
 # define FIBER_PORT_CM33_MPU_BOOT_OFFSET 128u
 # define FIBER_PORT_CM33_MPU_CONTEXT_SIZE 216u
 #else
-# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00010010u
+# define FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION 0x00020010u
 # define FIBER_PORT_CM33_MPU_PROTECTED_CONTEXT_OFFSET 104u
 # define FIBER_PORT_CM33_MPU_RUNTIME_FLAGS_OFFSET 188u
 # define FIBER_PORT_CM33_MPU_BOOT_OFFSET 192u

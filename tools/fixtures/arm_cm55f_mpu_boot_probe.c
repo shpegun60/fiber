@@ -1,4 +1,10 @@
 #include "fiber_port_boot.h"
+#include "fiber/fiber_runtime_port_abi.h"
+
+/* Test-only current-v1 provider, not a common runtime implementation. */
+_Static_assert(FIBER_RUNTIME_PORT_ABI_VERSION == 1u,
+		"fixture provides reverse ABI v1 only");
+const unsigned char fiber_internal_runtime_port_abi_v1_anchor = 1u;
 
 FIBER_STATIC_ASSERT(fiber_portMPU_CONTEXT_STACK_INDEX == 0u,
 		"ARM_CM55F_MPU stack pair must remain context index zero");

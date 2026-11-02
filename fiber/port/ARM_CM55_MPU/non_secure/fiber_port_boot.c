@@ -1,6 +1,7 @@
 /* ARM_CM55_MPU/non_secure sealed construction and linker-owned MPU image. */
 
 #include "fiber_port_boot.h"
+#include "../../../fiber_runtime_port_abi.h"
 
 #define FIBER_CM55_MPU_BOOT \
 	FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY \
@@ -244,14 +245,23 @@ void fiber_port_mpu_linker_layout_check(
 	FIBER_REQUIRE((layout->current_context_slot_end -
 			layout->current_context_slot_start) ==
 			fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES, 'L');
-	FIBER_REQUIRE(fiber_port_range_contains(layout->privileged_sram_start,
-				layout->privileged_sram_end,
-				layout->current_context_slot_start,
-				layout->current_context_slot_end), 'L');
-	/* RNR 5 overlays the global privileged-SRAM mapping. It is read-only for
-	 * both privilege levels because ARMv8.1-M has no privileged-RW plus
-	 * unprivileged-RO AP encoding; the protected switch updates this slot only
-	 * while MPU_CTRL is disabled. */
+	/* Armv8-M forbids multiple matching regions, even with distinct RNRs.
+	 * The RO/XN slot is separate from every permanent mapping and task RAM.
+	 * It is written only while MPU_CTRL is disabled. */
+	const uintptr_t other_ranges[][2] = {
+		{layout->privileged_flash_start, layout->privileged_flash_end},
+		{layout->unprivileged_flash_start, layout->unprivileged_flash_end},
+		{layout->unprivileged_syscalls_start,
+			layout->unprivileged_syscalls_end},
+		{layout->privileged_sram_start, layout->privileged_sram_end},
+		{layout->unprivileged_ram_start, layout->unprivileged_ram_end}
+	};
+	for (uint32_t index = 0u;
+			index < sizeof(other_ranges) / sizeof(other_ranges[0]); ++index) {
+		fiber_port_require_disjoint(layout->current_context_slot_start,
+				layout->current_context_slot_end,
+				other_ranges[index][0], other_ranges[index][1]);
+	}
 	fiber_port_mpu_encode_exact_region(layout->current_context_slot_start,
 			layout->current_context_slot_end,
 			fiber_portMPU_CURRENT_CONTEXT_REGION_NUMBER,
@@ -260,9 +270,9 @@ void fiber_port_mpu_linker_layout_check(
 			fiber_portMPU_REGION_EXECUTE_NEVER,
 			fiber_portMPU_RLAR_ATTR_INDEX0, &encoded);
 
-	/* ARMv8.1-M region priority makes overlapping global mappings ambiguous for
-	 * this fixed policy. Unlike the FreeRTOS generic task API, this base Fiber
-	 * profile has no privileged task stack escape hatch. */
+	/* Armv8.1-M faults on multiple matching enabled regions; all mappings must
+	 * be disjoint. Startup must zero the separate current-slot section as well
+	 * as privileged RW BSS. This base profile has no privileged stack mapping. */
 	fiber_port_require_disjoint(layout->privileged_flash_start,
 			layout->privileged_flash_end, layout->unprivileged_flash_start,
 			layout->unprivileged_flash_end);
@@ -633,6 +643,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	const uintptr_t raw_stack_end = (uintptr_t)stack_end;
 	const uintptr_t entry_address = (uintptr_t)entry;
 	const uint32_t initial_r9 = fiber_port_read_r9();
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	const uint32_t return_address =
 			((uint32_t)(uintptr_t)&fiber_port_unprivileged_task_return) | 1u;
 

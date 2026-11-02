@@ -12,6 +12,9 @@
 #include "fiber_compiler.h"
 #include "fiber_port_select.h"
 
+/* Public storage identity has no scheduler/CPU policy dependencies. */
+#include "fiber_port_storage_cohort.h"
+
 /* GCC whole-program LTO may otherwise internalize the exact identity after
  * resolving its retained references. The definition must remain link-visible
  * so an application-owned expectation can reject a stale complete archive. */
@@ -272,6 +275,7 @@ extern const unsigned char FIBER_PORT_CONTEXT_COHORT_SYMBOL;
 #endif
 
 #define FIBER_PORT_CONTEXT_COHORT_DEFINE() \
+	FIBER_PORT_STORAGE_COHORT_DEFINE(); \
 	FIBER_USED FIBER_PORT_CONTEXT_COHORT_EXTERNALLY_VISIBLE \
 		const unsigned char \
 		FIBER_PORT_CONTEXT_COHORT_SYMBOL = 1u

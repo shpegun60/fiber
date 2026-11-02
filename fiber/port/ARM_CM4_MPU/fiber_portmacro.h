@@ -21,6 +21,12 @@
 
 #include "../fiber_port_select.h"
 #include "../fiber_settings.h"
+
+/* This protected SVC contract validates its frame against the initial MSP. */
+#if !FIBER_REWIND_MSP
+# error "[fiber]: ARM_CM4_MPU requires FIBER_REWIND_MSP=1 for protected first start"
+#endif
+
 #include "../fiber_compiler.h"
 #include "../../fiber_panic.h"
 #include "fiber_port_types.h"

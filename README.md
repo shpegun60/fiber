@@ -2,6 +2,10 @@
 
 Small cooperative fiber switcher for STM32/Cortex-M projects.
 
+FreeRTOS provenance and retained third-party notices are recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); they do not assign a license
+to independently authored Fiber code.
+
 The context switch is requested from Thread mode with `fiber_schedule()` and is
 performed by PendSV through an application-provided scheduler hook. The
 selected port owns strong `PendSV_Handler()` and `SVC_Handler()` definitions;
@@ -17,10 +21,12 @@ completes `FiberContext` through one selected public type-only port header, and
 `FiberEntryFn` is the named entry type with `entry_t` kept as a compatible
 alias. Each current port owns its `FiberPortBoot` record, hash implementation,
 stack geometry, restore
-validation, and first-start preparation. The current physical layout remains
-`sp + FiberPortBoot` for compatibility, but `fiber_core.c` and the common
-scheduler bridge use only callable port ABI functions and do not dereference
-that layout. A future port may therefore change its boot record or use a
+validation, and first-start preparation. Classic unprotected profiles use a
+saved stack pointer and port boot record; protected MPU profiles instead own
+their privileged register image, save cursor and region descriptors.
+`fiber_core.c` and the common scheduler bridge use only callable port ABI
+functions and do not dereference either layout. A future port may change its
+boot record or use a
 hardware-backed integrity implementation without changing the common core.
 See `V2_OPAQUE_CONTEXT_CONTRACT.md` for the frozen boundary and migration
 sequence. See `V2_RUNTIME_PORT_BOUNDARY_CONTRACT.md` for the active CPU-neutral
@@ -119,6 +125,22 @@ Auto/profile selection deliberately remains on `transitional_v8m`, and this
 profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
+`ARM_CM33F_MPU/non_secure` now supplies a complete explicit build-selected
+scalar-FP protected runtime (`C3FP`), including all eight forward operations,
+protected SVC/PendSV and 8/16-region manifests. Its post-selectable six-gate
+replay passes, including 161 complete-runtime AN505 executions. Sixteen-region
+images remain compile/link-only; pinned-reference assembly parity is a separate
+receipt and board qualification remains pending. The implementation inventory
+records its complete runtime separately from board claims or a fresh
+all-profile freeze. See its `FREERTOS_PARITY.md` and `STM32_PROFILE_BACKLOG.md`.
+
+`ARM_CM55_TFM/non_secure` also passes its post-selectable complete-group
+consumer gate: exact per-object dependencies, sixteen target ELFs, actual M55
+dual-r9 execution and source-derived mutex tests. This raises the recorded
+implementation inventory to twenty-one runtimes. The TF-M initializer/mutex
+boundary is typed and tested; no actual TF-M Secure checkout or PSA execution
+has been qualified. No automatic selection or hardware claim follows.
+
 `ARM_CM33_NTZ/non_secure` slices 1-4 freeze the corresponding Cortex-M33
 Mainline NTZ non-MPU/no-FPU layout, construct its sealed initial context, and
 implement a paranoid FreeRTOS-derived SVC first start plus the exact
@@ -143,16 +165,37 @@ M55 hardware remains unvalidated. See
 `fiber/port/ARM_CM55_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55/non_secure` is a staged `C55S` TrustZone SecureContext foundation,
-not a runnable M55 port. It freezes only the scalar Non-secure eleven-word
+not a runnable M55 port. It freezes the scalar Non-secure eleven-word
 `[SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]` layout, the pre-start
 `secure_stack_bytes` request, and the Cortex-M55 ARMv8.1-M CMSE-level-1
-manifest. The paired `ARM_CM55/secure` Slice-2/3 artifact exports eight
-C55S-named v1 identity/capacity NSC veneers and reserves an explicit Secure-only
-static pool; matching CMSE linkage, pool placement, invalid capacity, and
-missing/v2/foreign import failure are covered. It deliberately exports no
-runtime ABI, SVC/PendSV handler, attachment API, initializer, allocator, or
-stateful Secure gateway. The later Secure lifecycle and runtime remain separate
-identity-matched slices. See
+manifest. The paired `ARM_CM55/secure` artifact retains the eight C55S-named
+v1 identity/capacity queries and an explicit Secure-only static pool. Slice 5
+adds guarded one-shot NSC CPU/pool initialization. Slice 6 adds three NSC
+allocation/load/save operations, making twelve imports without changing the
+context identity/layout, pool geometry or portable API. New operations enforce
+immediate NS origin, owned exception admission, READY and exact CONTROL=2;
+PSPLIM/PSP effects and saved PSP publication have ordered readbacks.
+The 467-input combined software checkpoint qualifies the preceding initializer
+slice. Focused transfer parity passes at O2/Os, and the new two-image lifecycle
+runner passes 148 scenarios at O2/Os with and without LTO. Independent oracle
+review and the later 481-input combined matrix also pass; these qualify the
+staged primitives, not a complete C55S profile. Slice 8 now adds sealed
+Non-secure construction (`fiber_port_context_init`) and optional pre-start
+`fiber_port_secure_context_attach(ctx, bytes)` through the selected-port API.
+Attachment records and reseals a size request while the optional common
+configuration lifecycle is open; it does not initialize, allocate, load or save
+Secure state. Its independent maintained constructor/attachment gate passes
+892 emulated launches across O0/O2/Os, optimized LTO and hostile builds, with
+actual-reference construction and separately identified query-failure doubles.
+The later first-start component owns SVC #70, a reserved-MSP plan and guarded
+Secure initialization/allocation/load. Its separate two-image AN547 suite
+passed 568 launches and 5740 checks across ten build modes, including compiled
+source mutants; the immutable receipt is in `PORT_ARCHITECTURE_AUDIT.md`.
+This qualifies first start, not ordinary Secure-origin/Non-secure-origin
+switching or the complete eight-operation runtime. That running component is
+under implementation and qualification. There is still no global selector
+route or hardware-support claim. The portable five-call API is unchanged,
+and unattached contexts require no attachment step. See
 `fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55F_NTZ/non_secure` is the complete build-selected scalar-FP M55
@@ -208,7 +251,7 @@ selector route, optional heterogeneous MPU API, TrustZone/SecureContext or
 TF-M companion, PAC/BTI policy, or hardware-support claim.
 See `fiber/port/ARM_CM55_MVEF_MPU/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55_MVEF_NTZ/non_secure` is a distinct, non-selectable M55 MVE-FP
+`ARM_CM55_MVEF_NTZ/non_secure` is a distinct, explicitly build-selected M55 MVE-FP
 runtime cohort, not an option on the scalar-FP port. Its `C55V` identity
 requires `-march=armv8.1-m.main+mve.fp`, records the pinned FreeRTOS
 `configENABLE_FPU=1`, `configENABLE_MVE=1` frame geometry, and owns sealed
@@ -238,7 +281,7 @@ external cohort expectation, stale 8/16-region archive rejection, and
 duplicate-handler failure are proven. It deliberately has no global
 auto-selector route, optional heterogeneous-MPU API, or hardware-support claim.
 M55-only `RLAR.PXN` is retained for a later configurable-region API; scalar,
-scalar-FP, and MVE-FP ports remain independent non-MPU profiles.
+scalar-FP, and MVE-FP MPU ports remain independent selected profiles.
 
 `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the separate FP-capable cohort,
 implement port-owned FPU setup/readback, strict first-start SVC, and a complete
@@ -335,12 +378,21 @@ M55 scalar NTZ full build-selected runtime source group:
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
 
-M55 TrustZone SecureContext staged type/trait foundation (not a runtime source
-group):
+M55 TrustZone SecureContext staged construction/first-start components (not a
+complete runtime source group):
                fiber/port/ARM_CM55/non_secure/fiber_port_types.h
                fiber/port/ARM_CM55/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM55/non_secure/fiber_portmacro.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_boot.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_boot.c
+               fiber/port/ARM_CM55/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_runtime.c
+               fiber/port/ARM_CM55/non_secure/fiber_port_svc.c
+               fiber/port/ARM_CM55/non_secure/fiber_port_first_start_contract.ld
                fiber/port/ARM_CM55/non_secure/fiber_port_secure_gateway_abi.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_secure_context_gateway_abi.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_secure_context_abi.h
+               fiber/port/ARM_CM55/non_secure/fiber_port_secure_context.c
                fiber/port/ARM_CM55/secure/fiber_secure_gateway_contract.h
                fiber/port/ARM_CM55/secure/fiber_secure_gateway_abi.h
                fiber/port/ARM_CM55/secure/fiber_secure_gateway.c
@@ -349,6 +401,8 @@ group):
                fiber/port/ARM_CM55/secure/fiber_secure_context_gateway.c
                fiber/port/ARM_CM55/secure/fiber_secure_context_pool.h
                fiber/port/ARM_CM55/secure/fiber_secure_context_pool.c
+               fiber/port/ARM_CM55/secure/fiber_secure_context_cohort.h
+               fiber/port/ARM_CM55/secure/fiber_secure_context_cohort_contract.ld
 
 M55 MVE-FP complete build-selected runtime source group (not globally
 selectable):
@@ -375,6 +429,7 @@ M33 TF-M v2.0.0 full build-selected Non-secure source group:
                fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm_os_wrapper.c
 
 M33 TrustZone companion-aware full build-selected runtime and Secure companion:
+               fiber/fiber_runtime_context_configuration.c
                fiber/port/ARM_CM33/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33/non_secure/fiber_portmacro.h
@@ -395,6 +450,7 @@ M33 TrustZone companion-aware full build-selected runtime and Secure companion:
                fiber/port/ARM_CM33/secure/fiber_secure_context_gateway.c
                fiber/port/ARM_CM33/secure/fiber_secure_context_pool.h
                fiber/port/ARM_CM33/secure/fiber_secure_context_pool.c
+               fiber/port/ARM_CM33/secure/fiber_secure_context_cohort_contract.ld
                fiber/port/ARM_CM33/secure/FREERTOS_PARITY.md
 
 M33F NTZ full build-selected FPU runtime source group:
@@ -406,6 +462,22 @@ M33F NTZ full build-selected FPU runtime source group:
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot.c
 ```
+
+The CM33 SecureContext attachment source requires the optional common
+`fiber/fiber_runtime_context_configuration.c` module in the Non-secure image.
+It supplies `fiber_internal_runtime_require_context_configuration_open()` and
+`fiber_internal_runtime_context_configuration_abi_v1_anchor`; omitting it leaves
+the attachment call's guard and retained ABI anchor unresolved. This is an
+internal link dependency, not another user call or a requirement for profiles
+without a context-mutating extension.
+
+For the CM33 Secure image, include
+`fiber/port/ARM_CM33/secure/fiber_secure_context_cohort_contract.ld` at top level
+in the primary board linker script, or pass it after that script as a secondary
+`-T`. Its generation assertion does not extract archive members; ordinary
+gateway query/startup references must pull in the provider. Clean-rebuild
+pre-guard Secure objects. Follow the Secure `FREERTOS_PARITY.md` linker recipe
+for board-owned NSC placement, especially when using a secondary `-T`.
 
 The CM33 TF-M target defines `FIBER_PORT_BUILD_SELECTED=1` and
 `FIBER_PORT_ARMV8M_MAINLINE=1`, places its `non_secure` directory first on the
@@ -452,11 +524,19 @@ expectation plus `KEEP`, the latter whole-archive compatibility check is not
 active. This guard does not identify arbitrary source revisions that preserve
 the same declared exact cohort identity.
 
-The current STM32H7 host application tree, which lives outside this repository,
-implements this rule in both CubeIDE Debug and Release manifests. Both final
-ELFs have one exact CM7 cohort, one four-byte read-only expectation section,
+The recorded pre-audit STM32H7 host integration, which lives outside this
+repository, implemented this rule in both CubeIDE Debug and Release manifests.
+Those final ELFs had one exact CM7 cohort, one four-byte read-only expectation section,
 strong selected-port SVC/PendSV handlers, and vector slots 11/14 resolving to
 those handlers. This is integration evidence, not a hardware runtime claim.
+
+Audit A16 adds a transparent caller-storage expectation through the public
+facade. Keep every input contribution in the same section: its final size is
+now a multiple of four bytes, not a fixed four bytes. The build-owned exact
+expectation remains mandatory. Direct concrete-type allocators have the explicit
+header contract in `tools/CONSUMER_COHORT_TEST.md`; ordinary `fiber_core.h` users
+need no additional call or include. Clean-rebuild objects compiled before this
+guard, and re-audit the embedding ELF after integrating these repairs.
 
 Do not add every port source directory to a production target. The compile
 matrix deliberately compiles selector-guarded alternatives to audit selection,
@@ -515,8 +595,8 @@ portable tier. The compile matrix requires that it directly include only
 exactly the five public API symbols, and link unchanged against every selected
 build profile without an optional feature header.
 
-The conservative default also requires the integration to define both selected
-general-registers-only address-map hooks:
+For hook-based profiles, the conservative default also requires the integration
+to define both selected general-registers-only address-map hooks:
 
 ```c
 int fiber_addr_plausible_ram(uintptr_t begin, uintptr_t end);
@@ -532,6 +612,12 @@ checks runtime context/stack addresses and every saved stacked PC. Hook
 implementations must not use FP/MVE, allocate, block, or call fiber APIs.
 Defining `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any
 defaults for constrained bring-up only; it is not a production safety setting.
+
+Protected MPU profiles instead require exact linker-owned roles for privileged
+context storage, unprivileged stack RAM and permitted entry/syscall code.
+Those mandatory map/isolation checks do not depend on the address-hook policy
+settings; setting them to zero or allowing permissive hooks cannot bypass the
+protected map. Adding such a profile does not add callbacks to the portable API.
 
 `FiberContext` objects and their PSP stack buffers require persistent storage.
 Use static, global, or application-owned storage that outlives every context
@@ -831,12 +917,14 @@ call graph. The matrix audits both layers under adversarial compiler flags.
 - stack alignment, EXC_RETURN, FPCA handling, and canary encoding are
   selected-port/runtime facts, not user settings
 
-For full linker-map validation set both
+For hook-based switch-time map/integrity validation set both
 `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH` and
 `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH` to `1`. A production integration may
 set both to `0` only after `fiber_init()` has established immutable trusted
 metadata; the mandatory structural, canary, PSP, saved-frame, EXC_RETURN, xPSR,
-and Thumb-PC checks remain active.
+and Thumb-PC checks remain active. Protected MPU ports retain their mandatory
+linker-map, permission and seal checks independently of these hook-policy
+settings; these values are not a way to disable isolation.
 
 `FIBER_VALIDATE_SCHEDULED_CONTEXT` and `FIBER_VALIDATE_CURRENT` were removed.
 Defining either obsolete switch is a compile error because current ownership
@@ -953,11 +1041,14 @@ production TrustZone or Non-secure support.
 Cortex-M23, no-FPU Cortex-M33, and FPU Cortex-M33F each have an exact
 build-selected Non-secure non-MPU runtime profile with
 compile/generated-assembly/ELF evidence but no hardware validation.
-Cortex-M55/STM32N6, MVE, TrustZone/SecureContext companion, TF-M, and PAC/BTI
-scenarios remain unsupported until their distinct FreeRTOS-style context
-mechanics are implemented and hardware-validated. Cortex-M85 is now announced
-STM32V8 scope rather than a permanently non-STM32 reference row; it remains
-unsupported and may be explicitly deferred while STM32V8 is preannouncement.
+Concrete M55 scalar, scalar-FP, MVE-FP and MPU runtimes, plus the scalar M33
+SecureContext and TF-M runtimes, have separately scoped software evidence as
+listed above. That evidence is not hardware qualification. M55 SecureContext,
+M33 scalar-FP MPU activation and M55 TF-M are staged work; their component
+results must not be substituted for complete-runtime results. Other FP/MPU,
+security-role and PAC/BTI combinations remain pending or unresolved in
+`STM32_PROFILE_BACKLOG.md`. Cortex-M85 retains the conditional scope in
+`STM32_PORT_FREEZE_INVENTORY.md`; no complete Fiber M85 runtime is claimed.
 `FIBER_PORT_USES_PSPLIM_REGISTER`
 separates PSPLIM register access from the broader architecture profile so M23
 security-domain variants cannot accidentally write a missing or wrong-bank
@@ -968,11 +1059,16 @@ provides a reliable initial MSP source.
 
 ## Validation
 
-Run the compile-only Cortex-M matrix after changing target gates or assembly:
+Run the Cortex-M software matrix after changing target gates or assembly:
 
 ```powershell
 .\tools\compile_matrix.ps1
 ```
+
+The audit regression gate additionally requires host GCC and Python with the
+two pinned emulator packages. Setup, individual runners, evidence levels, and
+future CI prerequisites are documented in `tools/PORT_AUDIT_TESTS.md`. Ordinary
+library applications do not depend on these test tools.
 
 This compiles and relocatable-links every selected profile and verifies exactly
 one definition of each port ABI symbol. It covers selector and build-selected

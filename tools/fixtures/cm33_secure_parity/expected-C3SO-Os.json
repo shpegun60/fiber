@@ -1,0 +1,259 @@
+{
+  "Fiber": {
+    "Dependencies": [
+      "fiber_internal_runtime_current_context_slot",
+      "fiber_internal_runtime_port_abi_v1_anchor",
+      "fiber_internal_runtime_publish_current_context",
+      "fiber_internal_runtime_require_current_context",
+      "fiber_internal_runtime_select_scheduler_candidate",
+      "fiber_internal_task_return",
+      "fiber_panic",
+      "fiber_port_boot_record_check",
+      "fiber_port_context_prepare_first_start",
+      "fiber_port_context_validate_restore",
+      "fiber_port_context_validate_save_current",
+      "fiber_port_require_start_environment",
+      "fiber_port_require_start_interrupt_state",
+      "fiber_port_runtime_prepare"
+    ],
+    "Functions": {
+      "fiber_port_primask_save_disable": {
+        "Instructions": 5,
+        "Sha256": "39E2A5781CD048E6E3246747E52DEEC82A2D8D077A6975566466FDB04EF90744"
+      },
+      "fiber_port_primask_restore": {
+        "Instructions": 12,
+        "Sha256": "F311FB15F073D5CD6FF389898D878C4B62BB10567A09C6A6A5F0C7E5AF4749A6"
+      },
+      "fiber_port_validate_svc_vector": {
+        "Instructions": 14,
+        "Sha256": "CF391CB2DABE9740C365532F1D9049CBEDEEE2747F3B7C6F49612B28F1996700"
+      },
+      "fiber_port_validate_pendsv_vector": {
+        "Instructions": 14,
+        "Sha256": "37E1870305D216D66CE5170B84477A7A1B8FBA96586D76D83B815E7204C57795"
+      },
+      "fiber_port_probe_implemented_priority_mask": {
+        "Instructions": 22,
+        "Sha256": "FFE94A25EA68FC2C04D7E5A1893D038CE13C18740760C772B6B645CD54A2E1D9"
+      },
+      "fiber_port_count_implemented_priority_bits": {
+        "Instructions": 9,
+        "Sha256": "A088DE636FBA0C09B0A4DE566F17A1E2DCC6A4274DEAEE4CAA587717B32CE264"
+      },
+      "fiber_port_validate_basepri_priority_policy": {
+        "Instructions": 18,
+        "Sha256": "12EAB19108D8662ED9A6820F0CAE3ADDD2582DF59981342A789E9F648C47848C"
+      },
+      "fiber_port_validate_exception_start_configuration": {
+        "Instructions": 17,
+        "Sha256": "3E9D69AB229BCF1C30530B034A13CD3AD6AC5499D84CB13D8F62A34AC87781F6"
+      },
+      "fiber_port_prepare_exception_start": {
+        "Instructions": 22,
+        "Sha256": "BA041C1164D681DBDE96173A0C964405A5B50A491C47DF294BD209EB6751148A"
+      },
+      "fiber_port_capture_scheduler_cpu_state": {
+        "Instructions": 15,
+        "Sha256": "67CCF12CA690FBAFE47960D6F63F7FC62E2EC0F4C7839F56EC05E59DEC232396"
+      },
+      "fiber_port_validate_scheduler_cpu_state": {
+        "Instructions": 35,
+        "Sha256": "A7265E2DA675A6EC4489CC08F9B278794FC620DC91F7D6D0FD1085E74518F6DF"
+      },
+      "SVC_Handler": {
+        "Instructions": 98,
+        "Sha256": "748B72B8FA8160E46CADB7E8FD1E49B6690610EC20C7F0AD431AAD8853C27622"
+      },
+      "PendSV_Handler": {
+        "Instructions": 115,
+        "Sha256": "D2C75CF62E9749049590BA3E582757F71B2EA97DE55245998B4180A22E998698"
+      },
+      "fiber_port_scheduler_pick_next_from_pendsv": {
+        "Instructions": 49,
+        "Sha256": "F96BCAD0AF77E28D33CC6BAD01B0F0CCE4FB526443590748D6D27B34AE6F272F"
+      },
+      "fiber_port_init_context_frame": {
+        "Instructions": 35,
+        "Sha256": "E9A762694C7CBAD3A08A37C1B4774C06FF0F62BC5815703AD2C9755389E6CCB3"
+      },
+      "fiber_port_runtime_memory_barrier": {
+        "Instructions": 2,
+        "Sha256": "85ADD4E6B93221AE1D033359438A7465A7EDDF3B08663D260435CBDAD4D0FA1A"
+      },
+      "fiber_port_panic_wait": {
+        "Instructions": 4,
+        "Sha256": "E8D08F5470D55510F743EDA8D88056EA7598CA0DA375F355CEB037FB424829EB"
+      },
+      "fiber_port_require_scheduler_configuration_environment": {
+        "Instructions": 6,
+        "Sha256": "387684E9D3ECFE2CC36643AAC6F2D6E40E7B0128939BD9C61F8023B1CFBCCE6D"
+      },
+      "fiber_port_runtime_schedule": {
+        "Instructions": 30,
+        "Sha256": "E55B7627E298BFFB9BB6850C80363FBBC215F91B967F53B3CE6DE2BE2261BC65"
+      },
+      "fiber_port_runtime_prepare_start": {
+        "Instructions": 12,
+        "Sha256": "1669C86B638F0706006B18C9AF575915AC99AD6277512139E5BC963755F2E47F"
+      },
+      "fiber_port_scheduler_pick_first_from_start": {
+        "Instructions": 30,
+        "Sha256": "B9D0FDD91D6ECFB98D5F87EBE85F7DEDA002636155C9F21E82587BA3B7A5D8AB"
+      },
+      "fiber_port_runtime_select_first": {
+        "Instructions": 1,
+        "Sha256": "77689CDBB6199D2CB73A53D95155C40D25D9A05C15E98974423E35A937344AFD"
+      },
+      "fiber_port_start_first_context": {
+        "Instructions": 42,
+        "Sha256": "60535674BD257AA2C5C00CBDA75B6ADD71ECFE1FEF034122E4D87C53EF568E88"
+      },
+      "fiber_port_runtime_start_first": {
+        "Instructions": 15,
+        "Sha256": "A27AE5DFF6B2343D02B0CDA0EA492B00B77D635EF99201931995216494E78564"
+      }
+    }
+  },
+  "Boot": {
+    "Dependencies": [
+      "fiber_addr_plausible_code",
+      "fiber_addr_plausible_ram",
+      "fiber_internal_runtime_port_abi_v1_anchor",
+      "fiber_internal_task_return",
+      "fiber_panic",
+      "fiber_port_context_cohort_armv8m_mainline_p0x4333534Fu_l0x00010001u_f0_e0_h1_j1_v1_d1_r1_z8u_y0_w2_g4_u00010000_i0_o0xFFFFFFFDu_c0_s1_x0_m0_a0_b0_t1_n0_k0_q0",
+      "fiber_port_init_context_frame",
+      "memcpy"
+    ],
+    "Functions": {
+      "fiber_port_hash32_accum": {
+        "Instructions": 13,
+        "Sha256": "37E8C769F23E17E73B7DB9AD574310ED891E2C757B1AE14028051A952CE6E7D5"
+      },
+      "fiber_port_validate_stack_canary": {
+        "Instructions": 23,
+        "Sha256": "CA272EAABBDD10115926D1B5D11DC21920C6AB2C6C3DD1AA48BFCA50F69A3099"
+      },
+      "fiber_port_validate_context_pointer": {
+        "Instructions": 13,
+        "Sha256": "334D1951EF4DEC2FA6C9E2C08E11C038090A2F983BAADF2D33A5810A1023A52F"
+      },
+      "fiber_port_boot_record_compute_hash": {
+        "Instructions": 41,
+        "Sha256": "88D578CDF3E743D60C4EF79852E0DDF6FC2FF25725625F2C4F80C93861B8891E"
+      },
+      "fiber_port_boot_record_fast_check": {
+        "Instructions": 93,
+        "Sha256": "67328F1444B8F0AC562A22A169D2C5CAD255F0E8059CF71F9501C14E46A1B57D"
+      },
+      "fiber_port_boot_record_check": {
+        "Instructions": 11,
+        "Sha256": "50145E850438505586155D1A3B2306911382044B4B1F3BA6CD8CF976A2833A0B"
+      },
+      "fiber_port_boot_check": {
+        "Instructions": 60,
+        "Sha256": "C131B954471DD3736B2AF4D2314B9B238E27A139C3A3F3C62937730BA1A3F639"
+      },
+      "fiber_port_boot_create": {
+        "Instructions": 144,
+        "Sha256": "058B6FE4AB229FAA9C7F2E38CB786277E74DBAB3E6E9687F3E884AAE12BBA9DB"
+      },
+      "fiber_port_context_init": {
+        "Instructions": 185,
+        "Sha256": "7E5EDB7AB0CD315CCBF4CFAA99CCAEDEAE1E327DBD8EA4C950FDE41DCFCEA8D5"
+      },
+      "fiber_port_context_validate_save_current": {
+        "Instructions": 28,
+        "Sha256": "F28B4E6C420AA59A000E7721A511E38FD2F76BD5D6EA76A1D7FBB7A0D5EC5080"
+      },
+      "fiber_port_context_validate_restore": {
+        "Instructions": 54,
+        "Sha256": "9AA146560226C7A16C0878A7F634448D57722F282281E1F257F7DF11099E5E9F"
+      },
+      "fiber_port_context_prepare_first_start": {
+        "Instructions": 57,
+        "Sha256": "6BED6597EED4E184E1C53E945B2155E07184939B7F2150D332D1D4A8ABEB0746"
+      },
+      "fiber_port_require_start_environment": {
+        "Instructions": 15,
+        "Sha256": "BA5F1BAF8050C73766E6F8CAE20384990441329C09B56FFB594C58EB0F4D76A3"
+      },
+      "fiber_port_require_start_interrupt_state": {
+        "Instructions": 18,
+        "Sha256": "CBABEEBA041B75B08ABFAC03A94891FE619A4EFD35B6DB234349B6E3C2385FF5"
+      },
+      "fiber_port_runtime_prepare": {
+        "Instructions": 36,
+        "Sha256": "522FF4DC9C704AA5E6415AA20473944D71C31C1D76BC0BFCBAC6FDD4780CFF28"
+      }
+    }
+  },
+  "Reference": {
+    "Dependencies": [
+      "pxCurrentTCB",
+      "vPortSVCHandler_C",
+      "vTaskSwitchContext"
+    ],
+    "Functions": {
+      "vRestoreContextOfFirstTask": {
+        "Instructions": 14,
+        "Sha256": "9F523A2837E6D50A4FB1F27F87469BE4A553B72375BFFDE8EAB1A5566F66F9E1"
+      },
+      "xIsPrivileged": {
+        "Instructions": 6,
+        "Sha256": "6B5CF6753EDED64C742E6A672C2B8C34639E29904E015F22B01F19B08FB209EF"
+      },
+      "vRaisePrivilege": {
+        "Instructions": 4,
+        "Sha256": "CADF50069F57B9AB5A353C5B2A7F0A288B94C6EAC89B60D9F11DD63E58BB3E1A"
+      },
+      "vResetPrivilege": {
+        "Instructions": 4,
+        "Sha256": "21759EF6E44D8A9E31413098C175929873633E3A7DEF6D4150A9BA4AC2897C54"
+      },
+      "vStartFirstTask": {
+        "Instructions": 10,
+        "Sha256": "BE90ADBC0954A464DE2770ED58F56D5072641DDC2A94F009119C1E9BB2C5DD7C"
+      },
+      "ulSetInterruptMask": {
+        "Instructions": 6,
+        "Sha256": "159C33A4FA758C3BCE7E2A4544F15FD23BE126631877C7D1C2938504C473E379"
+      },
+      "vClearInterruptMask": {
+        "Instructions": 4,
+        "Sha256": "898ABB3456B4ECE8FB73E0F87A00E886F2F80C4C686A6FF1A5FA254D48CBBAE0"
+      },
+      "PendSV_Handler": {
+        "Instructions": 21,
+        "Sha256": "B995C33AC9C7CED44810551B19A67EE7AC417E5F849B96D52CBC41F1F2761294"
+      },
+      "SVC_Handler": {
+        "Instructions": 6,
+        "Sha256": "26ADC8C515D08229E39D53E5C29CC0AEF0013D3BA2ECBCC24B19C71F760AA631"
+      }
+    }
+  },
+  "ReferenceConstructor": {
+    "Dependencies": [
+      "PendSV_Handler",
+      "SVC_Handler",
+      "ulSetInterruptMask",
+      "vClearInterruptMask",
+      "vRestoreContextOfFirstTask",
+      "vStartFirstTask",
+      "vTaskSwitchContext",
+      "xTaskIncrementTick"
+    ],
+    "Functions": {
+      "pxPortInitialiseStack": {
+        "Instructions": 28,
+        "Sha256": "47CAFEE4400DEE7446FF3C6FD62E060A58616C7DFB254F19776CF95394D0CA5B"
+      },
+      "vPortSVCHandler_C": {
+        "Instructions": 6,
+        "Sha256": "0940EED51286C01E1B271AE4D3A485CFA2B5A5A25CDFE46DFF00610AC4513BF5"
+      }
+    }
+  }
+}

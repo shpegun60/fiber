@@ -18,7 +18,7 @@ enum {
 		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_top),
 	fiber_portOFFSET_STACKED_XPSR = 7u * sizeof(uint32_t),
 	fiber_portOFFSET_EXTENDED_STACKED_XPSR =
-		FIBER_PORT_EXC_FP_EXT_BYTES + fiber_portOFFSET_STACKED_XPSR
+		fiber_portOFFSET_STACKED_XPSR
 };
 
 FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE < 4096u,
@@ -29,7 +29,7 @@ FIBER_STATIC_ASSERT((fiber_portOFF_STACK_BASE & 3u) == 0u,
 		"[fiber]: ARM_CM55F_NTZ stack-base offset must be word aligned");
 FIBER_STATIC_ASSERT((fiber_portOFF_STACK_TOP & 3u) == 0u,
 		"[fiber]: ARM_CM55F_NTZ stack-top offset must be word aligned");
-FIBER_STATIC_ASSERT(fiber_portOFFSET_EXTENDED_STACKED_XPSR == 100u,
+FIBER_STATIC_ASSERT(fiber_portOFFSET_EXTENDED_STACKED_XPSR == 28u,
 		"[fiber]: ARM_CM55F_NTZ extended xPSR offset changed");
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -117,7 +117,8 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(current != NULL, 'C');
 	FIBER_REQUIRE(__get_IPSR() == 14u, 'j');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* Exception entry clears SPSEL; EXC_RETURN owns Thread/PSP identity. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			(uint32_t)FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
@@ -268,7 +269,7 @@ void PendSV_Handler(void)
 			/* The scheduler must not leak masking or Thread stack selection. */
 			"mrs   r1, control                      \n"
 			"and   r1, r1, #3                       \n"
-			"cmp   r1, #2                           \n"
+			"cmp   r1, #0                           \n"
 			"bne   96f                              \n"
 			"mrs   r1, primask                      \n"
 			"cmp   r1, #0                           \n"

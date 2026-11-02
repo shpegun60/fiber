@@ -149,7 +149,7 @@ user/build option      -> FIBER_XXX
 | `portASSERT_IF_INTERRUPT_PRIORITY_INVALID()` | CM7 r0p1 selected-port priority setup and runtime readback validation | Adapted. The selected exception source validates implemented priority bits, grouping, SVC/PendSV priorities, vector routing, and the M7 revision gate. ISR-callable scheduler APIs remain intentionally excluded. |
 | `portNOP()` | none | Excluded. |
 | `portINLINE` / `portFORCE_INLINE` | `fiber_portFORCE_INLINE` | Reimplemented locally in `fiber_portmacro.h`; no CMSIS inline macro dependency. |
-| `xPortIsInsideInterrupt()` | `fiber_arm_cm7_r0p1_is_inside_interrupt()` and direct `__get_IPSR()` guards | Reimplemented. |
+| `xPortIsInsideInterrupt()` | `fiber_arm_cm7_r0p1_is_inside_interrupt()` and annotated `fiber_port_cpu_read_ipsr()` guards | Reimplemented; no unannotated CMSIS inline call in the sensitive chain. |
 | `vPortRaiseBASEPRI()` | `fiber_arm_cm7_r0p1_basepri_write(FIBER_PORT_SCHEDULER_BASEPRI)` | Adapted and hardened. The M7 r0p1 path preserves previous `PRIMASK` instead of unconditionally enabling interrupts. |
 | `ulPortRaiseBASEPRI()` | `fiber_portASM_ENTER_SCHEDULER_CRITICAL` | Adapted. The PendSV path snapshots previous BASEPRI on the handler stack. |
 | `vPortSetBASEPRI(value)` | `fiber_arm_cm7_r0p1_basepri_write(value)` and `fiber_portASM_WRITE_BASEPRI_R*_SYNC` | Adapted and hardened. |
@@ -223,8 +223,9 @@ Fiber intentionally differs from FreeRTOS in these places:
 ```text
 FreeRTOS: internal scheduler owns all tasks.
 Fiber: user scheduler hook owns task selection, so every returned context is
-       validated before restore. The just-saved current context is validated
-       before the user hook runs as well. CPU mask and CONTROL registers are
+       validated before restore. Current is preflighted once before assembly
+       reads its boot fields and saves it, not fully revalidated after save.
+       CPU mask and CONTROL registers are
        snapshotted around the untrusted hook and must be unchanged on return.
 
 FreeRTOS: r0p1 BASEPRI workaround disables IRQs and then enables them.
@@ -266,6 +267,45 @@ Fiber: restore validation and CM7 PendSV preserve that geometry explicitly;
        the low-FP extension contributes to frame extent but never to the
        stacked PC/xPSR offset. The compile matrix freezes this invariant.
 ```
+
+## Sensitive Compiler Closure Follow-Up
+
+The A32 audit reproduces hidden `__cyg_profile_func_enter/exit` calls inside
+the formerly sensitive schedule path under raw `-finstrument-functions`.
+Caller attributes do not protect unannotated inline callees. The selected
+port now annotates its complete non-inline helper chain with the canonical
+sensitive/general-registers-only bundle and its inline helpers with the
+inline-sensitive/general-registers-only bundle.
+
+The following CPU operations are port-local raw primitives rather than calls
+to unannotated CMSIS functions: IPSR, CONTROL, PRIMASK, FAULTMASK, PSP and MSP
+reads; WFE; DSB/ISB/compiler barriers; and NVIC priority byte reads/writes.
+Their register/byte-address semantics match the former CMSIS operations for
+the selected CM7 profile. Priority indexing also fails closed outside the
+implemented Cortex-M interrupt-number extent. CMSIS register declarations and
+capability constants remain legitimate dependencies.
+
+A focused post-repair compiler replay covers 160 combinations: five
+optimizations (`O0/Og/O2/Os/O3`), soft/no-FP and hard-FP, ordinary/native-LTO
+lowering, and eight raw compiler-flag families. All 480 translation-unit
+compiles and eighty native group lowerings pass; 320 inspected native outputs
+contain no instrumentation, SSP, coverage, sanitizer or profiling symbols.
+This is focused CM7 evidence, not the later maintained all-profile closure
+gate or hardware qualification.
+
+The A33 follow-up bounds pseudo-LDR literal pools with one `.ltorg` at each
+unreachable naked-block tail. Native LTO can merge `.text` and otherwise place
+the pool beyond instruction range. The instructions, transfer order and frame
+layout are unchanged, but literal placement and complete binary bytes are not
+claimed identical. The maintained strong-handler ELF gate accepts normal/LTO
+archives and vectors, then compiles a pool-removal control that must reproduce
+the exact assembler range failure, not a missing-helper link failure.
+
+Fresh classic guard execution (84 ARM ELFs, 842 checks), H7 Debug/Release
+offline rebuilds, and strong-handler/vector/cohort ELF audits pass. Board
+execution and a fresh independent whole-provider reference comparison remain
+separate requirements. Exact local receipts and preserved source hashes are
+recorded in `PORT_ARCHITECTURE_AUDIT.md`.
 
 ## Current Status
 

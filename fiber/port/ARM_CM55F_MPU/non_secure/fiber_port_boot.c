@@ -1,6 +1,7 @@
 /* ARM_CM55F_MPU/non_secure sealed construction and linker-owned MPU image. */
 
 #include "fiber_port_boot.h"
+#include "../../../fiber_runtime_port_abi.h"
 
 /* The SVC/runtime object defines the exact selected-port cohort. Construction
  * keeps a retained relocation so a stale boot object cannot join that runtime. */
@@ -303,12 +304,10 @@ void fiber_port_mpu_linker_layout_check(
 	FIBER_REQUIRE((layout->current_context_slot_end -
 			layout->current_context_slot_start) ==
 			fiber_portMPU_CURRENT_CONTEXT_APERTURE_BYTES, 'L');
-	FIBER_REQUIRE(fiber_port_range_contains(layout->privileged_sram_start,
-				layout->privileged_sram_end,
-				layout->current_context_slot_start,
-				layout->current_context_slot_end), 'L');
-	/* RNR 5 overlays the global privileged-SRAM mapping. It is read-only for
-	 * both privilege levels because ARMv8.1-M has no privileged-RW plus
+	FIBER_REQUIRE(layout->current_context_slot_end ==
+			layout->privileged_sram_start, 'L');
+	/* RNR 5 is a disjoint aperture immediately below privileged RW SRAM.
+	 * It is read-only for both privilege levels: ARMv8.1-M has no privileged-RW plus
 	 * unprivileged-RO AP encoding; the protected switch updates this slot only
 	 * while MPU_CTRL is disabled. */
 	fiber_port_mpu_encode_exact_region(layout->current_context_slot_start,
@@ -319,9 +318,20 @@ void fiber_port_mpu_linker_layout_check(
 			fiber_portMPU_REGION_EXECUTE_NEVER,
 			fiber_portMPU_RLAR_ATTR_INDEX0, &encoded);
 
-	/* ARMv8.1-M region priority makes overlapping global mappings ambiguous for
-	 * this fixed policy. Unlike the FreeRTOS generic task API, this base Fiber
-	 * profile has no privileged task stack escape hatch. */
+	/* ARMv8.1-M faults on multiple matching regions. Unlike the FreeRTOS task API,
+	 * this base Fiber profile has no privileged task stack escape hatch. */
+	fiber_port_require_disjoint(layout->current_context_slot_start,
+			layout->current_context_slot_end, layout->privileged_flash_start,
+			layout->privileged_flash_end);
+	fiber_port_require_disjoint(layout->current_context_slot_start,
+			layout->current_context_slot_end, layout->unprivileged_flash_start,
+			layout->unprivileged_flash_end);
+	fiber_port_require_disjoint(layout->current_context_slot_start,
+			layout->current_context_slot_end, layout->unprivileged_syscalls_start,
+			layout->unprivileged_syscalls_end);
+	fiber_port_require_disjoint(layout->current_context_slot_start,
+			layout->current_context_slot_end, layout->unprivileged_ram_start,
+			layout->unprivileged_ram_end);
 	fiber_port_require_disjoint(layout->privileged_flash_start,
 			layout->privileged_flash_end, layout->unprivileged_flash_start,
 			layout->unprivileged_flash_end);
@@ -715,6 +725,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	const uintptr_t raw_stack_end = (uintptr_t)stack_end;
 	const uintptr_t entry_address = (uintptr_t)entry;
 	const uint32_t initial_r9 = fiber_port_read_r9();
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	const uint32_t return_address =
 			((uint32_t)(uintptr_t)&fiber_port_unprivileged_task_return) | 1u;
 

@@ -6,7 +6,9 @@ __fiber_mpu_unprivileged_flash_start__ = 0x08010000;
 __fiber_mpu_unprivileged_flash_end__ = 0x08020000;
 __fiber_mpu_unprivileged_syscalls_start__ = 0x08020000;
 __fiber_mpu_unprivileged_syscalls_end__ = 0x08021000;
-__fiber_mpu_privileged_sram_start__ = 0x30000000;
+/* Armv8-M forbids overlapping enabled regions. The adjacent RO current slot
+ * has its own mapping and must be zeroed separately by real startup code. */
+__fiber_mpu_privileged_sram_start__ = 0x30000020;
 __fiber_mpu_privileged_sram_end__ = 0x30010000;
 __fiber_mpu_current_context_slot_start__ = 0x30000000;
 __fiber_mpu_current_context_slot_end__ = 0x30000020;

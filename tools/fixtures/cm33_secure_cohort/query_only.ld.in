@@ -1,0 +1,12 @@
+/* Fixture-only isolation: discard sibling NSC bodies before ordinary GC.
+ * CMSE automatically roots extracted NSC entries, even without -u flags.
+ * Keep the selected production body untouched, including under LTO.
+ */
+SECTIONS
+{
+    /DISCARD/ :
+    {
+@DISCARDED_NSC_SECTIONS@
+    }
+}
+INCLUDE "@IMAGE_LAYOUT@"

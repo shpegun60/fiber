@@ -8,6 +8,15 @@
 const unsigned char fiber_port_arm_cm33_secure_context_handler_bundle_v1_anchor
 		__attribute__((used)) = 1u;
 
+/* Extraction alone cannot bind this component's hard-coded masks to the
+ * selected runtime. Retain both identities from the one-shot start path. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_arm_cm33_secure_context_handler_component_v1_anchor(void)
+{
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
+	FIBER_PORT_CONTEXT_COHORT_RETAIN();
+}
+
 enum {
 	fiber_portSVC_OFF_STACK_BASE =
 		offsetof(FiberContext, boot) + offsetof(FiberPortBoot, stack_base),
@@ -155,8 +164,8 @@ void SVC_Handler(void)
 			"cmp   r12, r2                          \n"
 			"bne   95f                              \n"
 
-			/* EXC_RETURN selects Non-secure Thread/PSP. CONTROL is seeded and
-			 * read back as an independent privileged-PSP policy check. */
+			/* EXC_RETURN selects Non-secure Thread/PSP. On Armv8-M, MRS
+			 * reads the written SPSEL even though Handler code uses MSP. */
 			"movs  r2, #2                           \n"
 			"msr   control, r2                      \n"
 			"isb                                    \n"
@@ -216,12 +225,15 @@ void PendSV_Handler(void)
 	fiber_portASM volatile(
 			".syntax unified                         \n"
 
-			/* Exact Non-secure Thread/PSP PendSV provenance. */
+			/* Exact scalar Thread/PSP provenance. The S bit selects whether
+			 * hardware stacked the interrupted frame in Secure memory. */
 			"mrs   r3, ipsr                         \n"
 			"cmp   r3, #14                          \n"
 			"bne   91f                              \n"
 			"mvn   r3, #67                          \n" /* 0xFFFFFFBC */
-			"cmp   lr, r3                           \n"
+			"eor   r3, r3, lr                       \n"
+			"bic   r3, r3, #0x40                    \n"
+			"cmp   r3, #0                           \n"
 			"bne   91f                              \n"
 			"tst   lr, #4                           \n"
 			"beq   91f                              \n"
@@ -248,11 +260,23 @@ void PendSV_Handler(void)
 			"cmp   r0, r2                           \n"
 			"blo   92f                              \n"
 			"mov   r3, r0                           \n"
+			"tst   lr, #0x40                        \n"
+			"bne   80f                              \n"
 			"subs  r3, #%c[swbytes]                 \n"
 			"bcc   92f                              \n"
+			"b     81f                              \n"
+			"80:                                    \n"
+			"subs  r3, #%c[securebytes]             \n"
+			"bcc   92f                              \n"
+			"81:                                    \n"
 			"cmp   r3, r2                           \n"
 			"blo   92f                              \n"
 			"ldr   r2, [r1, %c[offtop]]             \n"
+			"cmp   r0, r2                           \n"
+			"bhi   92f                              \n"
+			/* Secure-origin has no NS hardware frame to inspect. */
+			"tst   lr, #0x40                        \n"
+			"bne   83f                              \n"
 			"subs  r2, #%c[hwbase]                  \n"
 			"bcc   92f                              \n"
 			"cmp   r0, r2                           \n"
@@ -269,17 +293,21 @@ void PendSV_Handler(void)
 			/* Save and unload the active Secure stack before selection. */
 			"push  {r0, r1, r2, lr}                 \n"
 			"mov   r0, r1                           \n"
+			"mov   r1, lr                           \n"
 			"bl    fiber_port_secure_context_save_current_from_pendsv \n"
 			"mov   r3, r0                           \n"
 			"pop   {r0, r1, r2, lr}                 \n"
 
 			/* FreeRTOS ARM_CM33 SecureContext frame, low to high:
-			 * handle, PSPLIM, EXC_RETURN, r4-r11. */
+			 * handle, PSPLIM, EXC_RETURN, then r4-r11 only for NS origin. */
 			"ldr   r2, [r1, %c[offsb]]              \n"
 			"mrs   r12, psplim                      \n"
 			"cmp   r12, r2                          \n"
 			"bne   93f                              \n"
+			"tst   lr, #0x40                        \n"
+			"bne   84f                              \n"
 			"stmdb r0!, {r4-r11}                    \n"
+			"84:                                    \n"
 			"mov   r2, r3                           \n"
 			"mrs   r3, psplim                       \n"
 			"stmdb r0!, {r2, r3, lr}                \n"
@@ -307,7 +335,9 @@ void PendSV_Handler(void)
 			"bne   97f                              \n"
 			"ldmia r2!, {r0, r3, lr}                \n"
 			"mvn   r12, #67                         \n" /* 0xFFFFFFBC */
-			"cmp   lr, r12                          \n"
+			"eor   r12, r12, lr                     \n"
+			"bic   r12, r12, #0x40                  \n"
+			"cmp   r12, #0                          \n"
 			"bne   94f                              \n"
 			"msr   psplim, r3                       \n"
 			"dsb                                    \n"
@@ -324,7 +354,10 @@ void PendSV_Handler(void)
 			"bl    fiber_port_secure_context_load_next_from_pendsv \n"
 			"pop   {r1-r3, lr}                      \n"
 
+			"tst   lr, #0x40                        \n"
+			"bne   85f                              \n"
 			"ldmia r2!, {r4-r11}                    \n"
+			"85:                                    \n"
 			"msr   psp, r2                          \n"
 			"isb                                    \n"
 			"mrs   r1, psp                          \n"
@@ -337,7 +370,7 @@ void PendSV_Handler(void)
 			"bne   95f                              \n"
 			"mrs   r1, control                      \n"
 			"and   r1, r1, #3                       \n"
-			"cmp   r1, #2                           \n"
+			"cmp   r1, #0                           \n"
 			"bne   96f                              \n"
 			"mrs   r1, primask                      \n"
 			"cmp   r1, #0                           \n"
@@ -386,6 +419,7 @@ void PendSV_Handler(void)
 			:
 			: [sched_basepri] "i" (FIBER_PORT_SCHEDULER_BASEPRI),
 			  [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
+			  [securebytes] "I" (fiber_portSECURE_HEADER_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),
 			  [alignpad] "I" (FIBER_PORT_EXCEPTION_ALIGNMENT_PAD_BYTES),
 			  [xpsr] "I" (fiber_portSVC_OFFSET_STACKED_XPSR),

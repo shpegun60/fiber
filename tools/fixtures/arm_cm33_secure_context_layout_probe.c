@@ -20,6 +20,12 @@ FIBER_STATIC_ASSERT(FIBER_PORT_MAX_SAVED_CONTEXT_BYTES == 80u,
 		"[fiber]: ARM_CM33 maximum context geometry changed");
 FIBER_STATIC_ASSERT(FIBER_PORT_SAVED_SP_MOD8 == 4u,
 		"[fiber]: ARM_CM33 saved SP alignment changed");
+FIBER_STATIC_ASSERT(fiber_portSECURE_HEADER_BYTES == 12u,
+		"[fiber]: ARM_CM33 Secure-origin header must contain three words");
+FIBER_STATIC_ASSERT(fiber_portSECURE_ORIGIN_EXC_RETURN == 0xFFFFFFFCu,
+		"[fiber]: ARM_CM33 Secure-origin exception encoding changed");
+FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_LAYOUT_VERSION == 0x00020001u,
+		"[fiber]: ARM_CM33 dual-origin frame requires generation 2");
 FIBER_STATIC_ASSERT(FIBER_PORT_CONTEXT_ABI_FEATURE_MASK == 0x8Au,
 		"[fiber]: ARM_CM33 context feature identity changed");
 FIBER_STATIC_ASSERT(sizeof(FiberPortBoot) == 76u,

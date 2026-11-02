@@ -267,6 +267,7 @@ void fiber_port_context_init(FiberContext *const ctx,
 			FIBER_INTERNAL_STACK_CANARY_VALUE;
 #endif
 	fiber_port_init_context_frame(ctx);
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 
 	FIBER_REQUIRE((uintptr_t)ctx->sp ==
 			(ctx->boot.stack_top -
@@ -357,7 +358,8 @@ void fiber_port_validate_validation_cpu_state(
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
 	FIBER_REQUIRE(fiber_portCPACR_REG == before->cpacr, 'e');
 	FIBER_REQUIRE(fiber_portFPCCR_REG == before->fpccr, 'E');
-	fiber_port_fpu_require_ready();
+	/* Save preflight may precede the VSTM that completes lazy preservation. */
+	fiber_port_fpu_require_configured();
 	fiber_portCOMPILER_BARRIER();
 }
 #endif

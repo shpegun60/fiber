@@ -60,8 +60,9 @@ ASSERT((__fiber_mpu_unprivileged_ram_end__ >
 /* The common current slot is one pointer inside an exact 32-byte MPU aperture.
  * Each active context maps this range through RNR 5 as read-only/XN so an
  * unprivileged fiber can call fiber_current(). The normal privileged-SRAM
- * mapping contains the aperture; the higher-numbered context region overrides
- * it while the MPU is active. The startup BSS path must still zero all 32 bytes. */
+ * mapping starts at the aperture's exclusive end: Armv8-M faults on overlapping
+ * regions. Startup must zero this separate section as well as privileged BSS;
+ * the privileged-SRAM start symbol is not the start of that combined zero range. */
 ASSERT((__fiber_mpu_current_context_slot_end__ -
 	__fiber_mpu_current_context_slot_start__) == 32,
 	"[fiber]: ARM_CM55_MVEF_MPU current-slot aperture must be exactly 32 bytes")
@@ -72,11 +73,29 @@ ASSERT(ADDR(.fiber_current_context_slot) ==
 	"[fiber]: ARM_CM55_MVEF_MPU current-slot output section starts incorrectly")
 ASSERT(SIZEOF(.fiber_current_context_slot) == 32,
 	"[fiber]: ARM_CM55_MVEF_MPU current-slot output section must be one 32-byte aperture")
-ASSERT((__fiber_mpu_current_context_slot_start__ >=
-	__fiber_mpu_privileged_sram_start__) &&
-	(__fiber_mpu_current_context_slot_end__ <=
-	__fiber_mpu_privileged_sram_end__),
-	"[fiber]: ARM_CM55_MVEF_MPU current slot must remain in privileged SRAM")
+ASSERT(__fiber_mpu_current_context_slot_end__ ==
+	__fiber_mpu_privileged_sram_start__,
+	"[fiber]: ARM_CM55_MVEF_MPU current slot must end at privileged RW SRAM start")
+ASSERT((__fiber_mpu_current_context_slot_end__ <=
+	__fiber_mpu_privileged_flash_start__) ||
+	(__fiber_mpu_privileged_flash_end__ <=
+	__fiber_mpu_current_context_slot_start__),
+	"[fiber]: ARM_CM55_MVEF_MPU current slot and privileged flash overlap")
+ASSERT((__fiber_mpu_current_context_slot_end__ <=
+	__fiber_mpu_unprivileged_flash_start__) ||
+	(__fiber_mpu_unprivileged_flash_end__ <=
+	__fiber_mpu_current_context_slot_start__),
+	"[fiber]: ARM_CM55_MVEF_MPU current slot and unprivileged flash overlap")
+ASSERT((__fiber_mpu_current_context_slot_end__ <=
+	__fiber_mpu_unprivileged_syscalls_start__) ||
+	(__fiber_mpu_unprivileged_syscalls_end__ <=
+	__fiber_mpu_current_context_slot_start__),
+	"[fiber]: ARM_CM55_MVEF_MPU current slot and syscall flash overlap")
+ASSERT((__fiber_mpu_current_context_slot_end__ <=
+	__fiber_mpu_unprivileged_ram_start__) ||
+	(__fiber_mpu_unprivileged_ram_end__ <=
+	__fiber_mpu_current_context_slot_start__),
+	"[fiber]: ARM_CM55_MVEF_MPU current slot and unprivileged RAM overlap")
 
 /* These selected-port output sections are owned by the application linker
  * script. Requiring their placement makes the source-level section attributes
@@ -106,9 +125,8 @@ ASSERT((ADDR(.fiber_port_privileged_data) >=
 	 __fiber_mpu_privileged_sram_end__),
 	"[fiber]: ARM_CM55_MVEF_MPU protected data escaped privileged SRAM")
 
-/* The four global ARMv8.1-M MPU regions have fixed roles and no overlap. The
- * current-slot aperture is intentionally the only contained subrange and is
- * overlaid by every active per-context RNR 5 image. */
+/* All enabled ARMv8.1-M MPU regions must be disjoint, including the per-context
+ * current-slot aperture. */
 ASSERT((__fiber_mpu_privileged_flash_end__ <=
 	__fiber_mpu_unprivileged_flash_start__) ||
 	(__fiber_mpu_unprivileged_flash_end__ <=

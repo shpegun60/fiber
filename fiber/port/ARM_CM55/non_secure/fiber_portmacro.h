@@ -1,9 +1,10 @@
 /*
  * Exact Cortex-M55 TrustZone Non-secure selected-port dictionary.
  *
- * Slice 1 freezes the no-MPU, no-FPU, no-MVE frame and companion boundary.
- * It is not a runtime port: SVC/PendSV, Secure gateway, pool, and attachment
- * mechanics remain absent until their dedicated follow-up slices.
+ * The no-MPU, no-FPU, no-MVE frame, sealed construction, and pre-start
+ * attachment, first SVC, PendSV and forward runtime adapters are present.
+ * Complete-group qualification is pending; the Secure companion is a separate
+ * image and this profile remains runtime-selectable zero until that gate passes.
  */
 #ifndef FIBER_PORT_ARM_CM55_NON_SECURE_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM55_NON_SECURE_FIBER_PORTMACRO_H_
@@ -21,6 +22,20 @@
 #include "../../fiber_compiler.h"
 #include "fiber_port_types.h"
 
+#ifndef fiber_portFORCE_INLINE
+# define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+#endif
+#ifndef fiber_portASM
+# define fiber_portASM __asm
+#endif
+
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
+
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM55 is build-selected only"
 #endif
@@ -29,8 +44,9 @@
 # error "[fiber]: ARM_CM55 requires the ARMv8.1-M Mainline architecture result"
 #endif
 
-/* GCC emits __ARM_ARCH_8M_MAIN__ for the scalar soft-float M55 target.
- * CMSIS __CORTEX_M == 55 closes the M33-versus-M55 distinction. */
+/* GCC emits __ARM_ARCH_8M_MAIN__ for scalar soft-float M55 and M33 alike.
+ * CMSIS __CORTEX_M == 55 is the selected manifest contract, not proof of a
+ * literal compiler CPU spelling. Object/final-image ISA admission is separate. */
 #if !defined(__ARM_ARCH_8M_MAIN__) && !defined(__ARM_ARCH_8_1M_MAIN__)
 # error "[fiber]: ARM_CM55 requires an ARMv8.1-M Mainline compiler target"
 #endif
@@ -96,6 +112,11 @@
 # error "[fiber]: ARM_CM55 runtime-selectable state must not be predefined"
 #endif
 #define FIBER_PORT_RUNTIME_SELECTABLE 0
+
+#ifdef FIBER_SVC_START_NUMBER
+# error "[fiber]: ARM_CM55 first-start SVC number must not be predefined"
+#endif
+#define FIBER_SVC_START_NUMBER 70u
 
 /* Pinned FreeRTOS ARM_CM55/non_secure no-MPU/no-FPU/no-MVE SecureContext
  * frame: [SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]. */
@@ -216,7 +237,7 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM55 requires 32-bit size_t");
 FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55 Slice 1 must not claim a runtime");
+		"[fiber]: ARM_CM55 staged components must not claim a runtime");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 11u,
 		"[fiber]: ARM_CM55 software frame must contain eleven words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 2u,
@@ -247,6 +268,34 @@ FIBER_STATIC_ASSERT(fiber_portSVC_ORIGIN_EXC_RETURN == 0xFFFFFFB8u,
 FIBER_STATIC_ASSERT((fiber_portINITIAL_EXC_RETURN & ~4u) ==
 		fiber_portSVC_ORIGIN_EXC_RETURN,
 		"[fiber]: ARM_CM55 SVC/PSP EXC_RETURN relationship changed");
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_read_r9(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mov %0, r9" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_initial_xpsr(void)
+{
+	return fiber_portINITIAL_XPSR;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_stacked_pc(const uintptr_t entry)
+{
+	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_basepri_read(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, basepri" : "=r"(value) :: "memory");
+	return value;
+}
 
 #include "../../fiber_port_traits.h"
 #include "../../fiber_port_context_cohort.h"

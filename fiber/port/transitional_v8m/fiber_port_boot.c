@@ -18,6 +18,7 @@
 
 #include "fiber_port_private.h"
 #include "../../fiber_platform_policy.h"
+#include "../../fiber_runtime_port_abi.h"
 
 static void fiber_port_boot_simple_check(const FiberPortBoot* const ctx);
 #if FIBER_REWIND_MSP
@@ -553,6 +554,7 @@ void fiber_port_context_init(FiberContext *const ctx, void *const stack_begin,
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 #endif
 	fiber_port_init_context_frame(ctx);
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
 	FIBER_REQUIRE(((uintptr_t)ctx->sp & 7u) == (uintptr_t)FIBER_PORT_SAVED_SP_MOD8, 'A');
 	FIBER_REQUIRE((uintptr_t)ctx->sp >= ctx->boot.stack_base, 'U');

@@ -1,5 +1,23 @@
 # Fiber Decision Log
 
+## 2026-11-01: Bind Secure Companion Private Objects Independently
+
+- Each Secure companion owns an exact private object-cohort key and a pure
+  sensitive C extraction helper. This is not a portable, public or NSC API.
+- Numeric keys bind independently compiled gateways to the pool's profile, ABI,
+  record revision, geometry and seal semantics. Constant expressions are
+  evaluated rather than pasted from arbitrary macro spelling.
+- A generation assertion rejects pre-guard providers. It neither selects a pool
+  nor imposes external exact capacity on a coherent alternate guarded archive.
+  Board NSC placement remains board-owned.
+- Prove each immutable query's own retention without sibling CMSE roots masking
+  removal. Preserve stale-object, expression, archive, GC/LTO and exact-failure
+  controls separately from runtime execution evidence.
+- Nominal profile keys cannot establish compiler ISA. Constrain private build
+  manifests and inspect ELF attributes; never claim to infer every flag spelling.
+- Keep C55S and C33S qualification distinct. Their transfer frames, generic
+  eight-operation ABI, public API and deferred Context extraction are unchanged.
+
 ## 2026-08-31: Add ARM_CM55 SecureContext Capacity Foundation
 
 `ARM_CM55/secure` slice 3 adds a Secure-only, manifest-budgeted static
@@ -3551,3 +3569,254 @@ Known limits:
 - Matrix evidence includes an exact undefined-symbol allowlist, privileged-text
   section proof, a positive synthetic linker manifest, a missing-boundary
   negative link, selector isolation, and absence of SVC/PendSV symbols.
+
+## 2026-11-01: Repair port audit findings without widening common ABI
+
+- `PORT_ARCHITECTURE_AUDIT.md` retains the historical audit at `5c34785` and
+  records source/build corrections A01-A21. Architecture, consumer, owner, and
+  implementation review lanes agree that the static-lifetime single-core
+  boundary remains suitable; common runtime and the five/eight-operation
+  public/forward surfaces do not need a redesign for these fixes.
+- Handler-mode CONTROL is not Thread-mode CONTROL. Scalar MPU saved images
+  explicitly normalize SPSEL; FP MPU images preserve actual Handler state and
+  compare the complete written CONTROL low-bit policy during restore. Armv8-M
+  exception entry clears SPSEL in the targeted bank, but privileged Handler
+  writes can set it. Entry-state checks must not be reused as post-MSR readback
+  expectations. Secure gateway entry is not exception entry; the existing
+  Secure initializer's write-2/read-2 contract remains valid. Runtime lazy-FP
+  policy checks remain distinct from first-start readiness checks.
+- Armv8-M current-slot MPU mappings are disjoint from privileged RW, not an
+  Armv7-M-style overlapping overlay. The slot is RO/XN at both privilege levels;
+  publication happens only in the protected MPU-off interval. Integration must
+  zero the separate slot section during startup.
+- CM33 MPU and all three M55 MPU profiles advance private context generation
+  and public storage revision to 2 (eight/sixteen-region identities remain
+  distinct). Every component and allocating consumer requires a clean rebuild.
+- Public type selection emits a retained caller-storage expectation without a
+  new runtime call or CMSIS dependency. Direct concrete-type allocators include
+  the expectation header explicitly. Pre-guard objects are outside that link
+  proof. Existing linker KEEP must retain all expectation contributions; the
+  output section is not restricted to one pointer.
+- The clean pinned FreeRTOS reference is checked in full before comparison.
+  Reference-drift fixtures operate on a disposable copy, not the live checkout.
+  Secure sensitive-code evidence uses mandatory build counterflags and audits
+  the complete reachable companion call graph, including final LTO code.
+- Five maintained audit runners supplement the actual FreeRTOS O2/Os comparison,
+  ABI/cohort/ELF/archive negatives, GC, and LTO. `tools/PORT_AUDIT_TESTS.md`
+  documents their dependencies and exact evidence boundaries. Executed Thumb
+  guard code and host state tests are not hardware MPU/FP/exception qualification.
+- This repair does not complete staged C55S, introduce preemptive/ISR scheduling,
+  add SMP or dynamic reclamation, or perform the later Context/Fiber/C++ split.
+  Finish the remaining profile inventory, then the separately planned global
+  O0/Og/O3/final-LTO and CI gates. H7 and other hardware claims require fresh
+  board evidence; previous snapshots do not qualify this changed tree.
+
+## 2026-11-01: Stage C55S private lifecycle and close Secure follow-ups
+
+- C55S slice 4 adds only Secure-private memory initialization, static allocation
+  and owned lookup. The exact NOLOAD image budget remains unchanged; a separate
+  four-byte normal-BSS marker enforces one-shot initialization. No new NSC
+  operation, public call, generic forward operation, or complete runtime is
+  implied. CPU initialization and stateful NSC save/load remain later slices.
+- The private allocator validates the complete pool before publishing a free
+  slot. READY publication, partially initialized storage, metadata, seal and
+  later-record corruption receive maintained executable regressions and
+  guard-removal mutation tests. The reference heap/free policy is intentionally
+  replaced by bounded static lifetime, not silently omitted.
+- CM33 static seals use character object-representation access. Stateful CM33
+  gateways check the immediate Non-secure caller inside the actual NSC entry,
+  separately from IPSR and the Non-secure port's owned call-site validation.
+  These are A22/A23; strict-aliasing execution does not itself prove all C
+  object-model properties or full TrustZone isolation.
+- A24 corrects seven privileged Armv8-M first-SVC post-write checks from 0 to
+  the written CONTROL 2. Entry checks remain 0; the classic Armv7-M rule is
+  different. Generated-code parity alone previously accepted this defect.
+  Source/generated regressions now require the actual post-write value and
+  reject the obsolete comparison, alongside the independent QEMU architecture
+  transition proof.
+- C55S default-M55 QEMU execution and counterflag-qualified Unicorn execution
+  are different evidence cohorts. Neither is board qualification. Normal
+  matrix runs never provision tools, and an absent explicit QEMU root yields
+  NOT_RUN rather than an execution claim.
+- The planned CM33 scalar-FP MPU reference ledger is documentation only until
+  its independent type/manifest, CPU and proof slices are implemented. Complete
+  the remaining profiles and freeze gates before the mechanical clean
+  CPU/Context extraction required by `CONTEXT_FIBER_ARCHITECTURE.md`.
+
+## 2026-11-01: Correct A25 MPU shareability without changing layout identity
+
+- A25 corrects the reference-copied Inner-shareable RBAR.SH dictionary from
+  reserved `1u << 3u` to architectural `3u << 3u` in CM33 MPU, the three M55 MPU
+  profiles, and the staged CM33F MPU dictionary. Arm and the independent local
+  CMSIS dictionary define Non-shareable 0, Outer-shareable 2, Inner-shareable 3,
+  and reserved 1. This is the intentional `FAP-ARMV8M-RBAR-SH` divergence; the
+  pinned FreeRTOS checkout remains unchanged.
+- All currently constructed standard global, task-stack, and current-context
+  aperture mappings use Non-shareable 0; unused configurable task regions are
+  disabled. Complete context validators reconstruct those exact defaults and
+  compare full RBAR/RLAR pairs, rather than accepting arbitrary valid SH values.
+  Active-image validators likewise rebuild the fixed global image. The latent
+  dictionary correction changes no supported descriptor image or saved frame.
+- No frame/layout generation, public storage revision, or context-cohort bump
+  is needed for A25. Sizes, offsets, seal format, standard descriptor bytes,
+  and the public five-operation/generic eight-operation callable ABIs remain
+  unchanged. This decision does not undo earlier identity bumps for actual
+  layout or mapping-policy changes.
+- The trapping exact encoder is static, but its
+  `fiber_port_mpu_try_encode_exact_region()` entry has external linkage through
+  the private port header. Its accepted raw SH set changes from 0/1/2 to 0/2/3;
+  that is an intentional argument-validation fix, not a new public
+  heterogeneous-region configuration API or a function-signature change.
+- Regression oracles must use independent numeric SH/AP/XN combinations,
+  verify rejected calls preserve the output, and reject a stale Inner=1
+  mutant. Equality with the copied reference constant cannot prove architectural
+  correctness. Host or generated-code evidence is not hardware MPU execution.
+- CM33F MPU currently adds staged type/manifest headers, not runtime C or
+  handlers. This correction adds no complete runtime; the count remains 19.
+- The prior A22-A24/C55S PASS qualifies its preserved source snapshot only.
+  It predates A25 and the staged CM33F headers and is not a PASS for the current
+  tree. A fresh combined qualification is required before recording that claim.
+
+## 2026-11-01: Reject incompatible Secure fault routing before PRIS
+
+- A26 adds an explicit CM33 Secure startup precondition: BFHFNMINS must be 0
+  before the gateway commits INITIALIZING or sets PRIS. Arm defines both bits
+  set as UNPREDICTABLE; post-write readback cannot validate such an operation.
+- Reject the input with return 0 and no gateway, AIRCR, stack-register or pool
+  mutation. Do not silently clear platform-owned fault routing. Valid-input
+  startup order, masks, callable ABI and storage identity are unchanged.
+- The pinned reference remains unchanged. Additional actual two-image and
+  before-write mutant evidence is required; the preserved A25 PASS predates
+  the new guard and is not final software freeze evidence.
+
+## 2026-11-01: Distinguish address policy from callback implementation
+
+- Context construction always validates selected-port address ownership before
+  relying on the supplied memory. Integration-hook profiles implement that
+  policy with RAM/code callbacks. Protected MPU profiles instead require exact
+  linker-defined privilege/code/RAM roles and region permissions.
+- Protected MPU maps are not arbitrary application callback policy, and linker
+  symbols are trusted platform inputs rather than physical-memory discovery.
+  Do not add redundant callback dependencies to those ports solely to satisfy
+  a blanket wording left from the original hook-based profiles.
+- Address-hook settings neither add callbacks to protected ports nor disable
+  their mandatory map, isolation, metadata or frame checks. Clarify settings,
+  README and opaque-context prose without changing generated runtime code.
+- The pure CPU/Context extraction still follows the required port/software
+  freeze. Five public operations and the eight-operation forward ABI remain
+  unchanged while these selected-port slices are completed and qualified.
+
+## 2026-11-01: Protect sensitive inline source and proof interpreters
+
+- Forced-inline helpers use a separate canonical compiler-protection bundle;
+  they must not inherit noinline/noipa from enclosing sensitive boundaries.
+  Constructor and helper probes must compile hostile flags without merely
+  suppressing the flags that exposed the leak. Normal generated instructions
+  and relocations are compared with compiled annotation-removal controls.
+- Python assertion-based proofs must explicitly reject optimized execution,
+  including optimized compiled imports in an ordinary interpreter. Version
+  checks use explicit failures. Negative diagnostic controls accept the sole
+  expected line and reject traceback counterfeits; nonzero status alone is not
+  evidence of the intended rejection.
+- The C55S next slice is one guarded NSC Secure CPU/pool initializer, not a
+  private prepare/finish lifecycle split. It preserves the reference CPU/pool
+  ordering and adds caller, commit, A26 routing and readback guards. Original
+  eight query exports remain; the ninth initialization symbol rejects an old
+  query-only provider at link time. No common ABI, pool layout or complete
+  runtime is added by that selected-companion slice.
+
+## 2026-11-01: Stage C55S guarded allocation and register lifecycle
+
+- Extend the existing nine-entry companion by exactly three C55S-named v1 NSC
+  functions for allocation, load and save. This is additive callable surface,
+  not a context-layout, pool-geometry or common-ABI revision. New consumers
+  must reject a stale nine-entry provider at link time.
+- Preserve the pinned scalar/non-MPU load/save ordering. Do not add a CONTROL
+  stack word, FP lazy-stacking trigger, free/reuse API or hidden recovery latch.
+  Admission is immediate NS origin, exact allowed exception, READY and the
+  cohort's exact CONTROL=2 invariant; that read does not discover physical
+  MPU/FPU availability or prove the absence of previous lazy state.
+- Save verifies the exact newly stored PSP after a barrier and owned relookup,
+  not only record pointer identity. Load/save register effects have ordered
+  readbacks. A failed partial update is terminal to the trusted caller: no
+  retry, context selection or Thread resume. Zero is not a recovery protocol.
+- Keep backend imports separate from portable user calls. NS construction,
+  attachment, complete runtime and strong handlers remain later work. Retain
+  the nineteen-runtime count and require fresh maintained execution, generated
+  assembly and combined qualification for these new sources.
+
+## 2026-11-02: Bind construction independently to runtime ABI v1
+
+- Runtime ABI versioning applies to the whole bidirectional contract, but an
+  object-level undefined symbol is not proof that its section survives GC.
+  A public-init-only consumer must reject an incompatible common provider
+  even when every start/handler section is discarded.
+- Each current selected constructor performs the existing cold volatile v1
+  anchor read after capturing the incoming r9 seed. One-shot start keeps its
+  independent read. Do not add per-switch reads or change frame/cohort identity
+  for this repair; no callable signature or context representation changes.
+- Maintain actual-source direct/archive and normal/LTO links with exact
+  missing-anchor negatives and test-local compiled guard-removal controls.
+  Do not require opaque precompiled control archives or a machine-specific
+  compiler executable hash for the maintained gate. Preserve historical
+  binary evidence outside the source tree separately.
+- Standalone fixtures provide the explicit readonly v1 marker when they model
+  common runtime. They must not disable retention or link unrelated runtime
+  state merely to hide an incomplete provider. Focused and aggregate receipts
+  remain separate; this decision alone is not a qualification result.
+
+## 2026-11-02: Separate ordinary and reserved-r9 qualification
+
+- Preserve the 2026-07-17 platform-register contract. Under ordinary AAPCS,
+  r9 may be a callee-saved variable register; a nested C activation may hold
+  its own temporary there while restoring the caller's value on return.
+  Initial-frame r9 need not equal an arbitrary outer public-entry register.
+- Under an integration ABI reserving r9 as a persistent static base, require
+  the exact platform seed through initial construction and first restore.
+  The whole common/port/hook/LTO cohort must respect the same reservation.
+  A dedicated `-ffixed-r9` test is intentional; ordinary-ABI tests still run
+  without it. This follows the platform-specific distinction in
+  [AAPCS32 section 6.1.1](https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#611core-registers).
+- Explicit constructor-captured seed arguments and immediate slot-consistency
+  assertions must not be compared with a later live r9 from another C frame.
+  An early C statement, sensitive attributes or noipa alone cannot recover an
+  outer register already borrowed by the caller or constructor prologue.
+- Maintain O2/Os, LTO and hostile tests in both modes: ordinary caller-register
+  preservation plus frame/switch integrity, and reserved exact initial/first
+  restore seed. Keep compiled seed-corruption and caller-preservation controls.
+  Preserve stronger-oracle failed receipts with their original results rather
+  than either concealing them or calling them reserved-ABI runtime failures.
+- Do not add naked CPU-specific common/public wrappers, new public parameters
+  or a ninth forward operation solely to satisfy the stronger ordinary-ABI
+  seed assumption. Actual reserved-ABI failures would require separate repair.
+
+## 2026-11-02: Preserve The Audit-Repair Worktree As A Checkpoint
+
+- Save the accumulated architecture audit, confirmed runtime/protection repairs,
+  storage and reverse-ABI guards, maintained execution/parity tools and their
+  per-profile evidence. This is a development checkpoint, not the final software
+  freeze or a hardware validation claim.
+- Preserve the five-operation public interface and eight-operation forward ABI.
+  Staged C55S, C3SO, C5SO, C3FS and C3FT remain runtime-selectable zero. Their
+  component/manifest evidence must not be promoted to whole-runtime acceptance.
+- The A32 transitive attributes-only compiler audit is stronger than the existing
+  required counter-option integration policy. CM7, C5TF and C3FP repairs have
+  focused or profile replay evidence; global raw-flag closure is still open.
+  The draft global closure runner is deliberately excluded from this checkpoint.
+- Preserve the failing constructor-r9 exploratory receipt: no measured ABI
+  failures were observed, but four CM0 operand builds still need diagnosis.
+  Do not call this a globally passing R9 or all-optimization checkpoint.
+- Final current-tree qualification, remaining feature tuples, full optimization
+  coverage, reproducible hosted CI and the later mechanical CPU/Context split
+  remain work. Prior immutable receipts qualify only their recorded inputs.
+- The owner authorizes periodic commit/push checkpoints. Coordinate a write
+  barrier across agents, exclude generated artifacts and incomplete drafts,
+  validate the staged snapshot, and verify the remote SHA after each push.
+- Checkpoint validation passes eleven static ABI/architecture gates, PowerShell
+  and Python parsing, and the refreshed constructor reverse-ABI gate: 32
+  production links, eight compiled guard-removal controls and 285 checks, with
+  zero input drift. Native-LTO fixture memory functions are explicitly retained;
+  an earlier missing-libc failure is preserved, not accepted as an ABI-negative
+  result. The constructor source inventory now includes all 27 current groups.
+  EOF-only formatting removes excess blank lines without changing C tokens;
+  older per-profile byte receipts remain tied to their original exact inputs.

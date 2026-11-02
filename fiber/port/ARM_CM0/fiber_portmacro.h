@@ -273,8 +273,11 @@ fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 
 fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 {
-	const uint32_t *const vectors = fiber_port_vectors_base_ptr();
-	return vectors[0];
+	const uintptr_t base = fiber_port_vectors_base_addr();
+	uint32_t value;
+	/* Address zero is an architectural vector source, not a C null object. */
+	fiber_portASM volatile("ldr %0, [%1]" : "=r"(value) : "r"(base) : "memory");
+	return value;
 }
 
 fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)

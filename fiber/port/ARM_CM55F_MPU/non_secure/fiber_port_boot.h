@@ -16,8 +16,8 @@ enum {
 };
 
 /* Every boundary is linker-owned. The common current slot has a dedicated
- * 32-byte aperture contained in privileged SRAM. RNR 5 in every active
- * context image overlays that aperture as read-only/XN, so unprivileged
+ * 32-byte aperture immediately below, and disjoint from, privileged RW SRAM.
+ * RNR 5 maps it read-only/XN in every active context, so unprivileged
  * fiber_current() can read it without adding a fifth immutable global region. */
 typedef struct FiberPortMpuMemoryLayout {
 	uintptr_t privileged_flash_start;

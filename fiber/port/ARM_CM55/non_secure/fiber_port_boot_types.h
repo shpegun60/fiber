@@ -15,8 +15,8 @@ typedef struct FiberPortBoot {
 	size_t avail;
 	entry_t entry;
 	void *arg;
-	/* Slice 1 reserves this immutable request only. A later selected-port
-	 * attachment operation will seal a nonzero size before first start; the
+	/* Zero-default immutable request. The staged pre-start attachment operation
+	 * seals a nonzero size without allocating or loading Secure state; the
 	 * opaque SecureContext handle belongs to software-frame word zero. */
 	uint32_t secure_stack_bytes;
 	uint32_t abi_port_id;

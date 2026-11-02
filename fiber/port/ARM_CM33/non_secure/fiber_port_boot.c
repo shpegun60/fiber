@@ -326,6 +326,7 @@ void fiber_port_context_init(FiberContext *const ctx,
 			FIBER_INTERNAL_STACK_CANARY_VALUE;
 #endif
 	fiber_port_init_context_frame(ctx);
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 
 	FIBER_REQUIRE((uintptr_t)ctx->sp ==
 			(ctx->boot.stack_top -
@@ -535,7 +536,9 @@ void fiber_port_context_validate_restore(FiberContext *const ctx)
 	FIBER_REQUIRE(sp >= ctx->boot.stack_base, 'U');
 	FIBER_REQUIRE(sp < ctx->boot.stack_top, 'T');
 	const uintptr_t available = ctx->boot.stack_top - sp;
-	FIBER_REQUIRE(available >= (uintptr_t)FIBER_PORT_INITIAL_CONTEXT_BYTES,
+	/* Both representations start with the complete three-word special header.
+	 * A Secure-origin save has no Non-secure hardware or r4-r11 frame. */
+	FIBER_REQUIRE(available >= (uintptr_t)fiber_portSECURE_HEADER_BYTES,
 			'X');
 
 	const uint32_t *const words = (const uint32_t *)sp;
@@ -545,7 +548,17 @@ void fiber_port_context_validate_restore(FiberContext *const ctx)
 	}
 	FIBER_REQUIRE(words[1] == (uint32_t)ctx->boot.stack_base, 'L');
 	const uint32_t exc_return = words[FIBER_PORT_EXC_RETURN_WORD_INDEX];
-	FIBER_REQUIRE(fiber_port_exc_return_is_valid(exc_return) != 0u, 'x');
+	FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN ||
+			exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN, 'x');
+	if (exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN) {
+		FIBER_REQUIRE(ctx->boot.secure_stack_bytes != 0u &&
+				secure_handle != fiber_portNO_SECURE_CONTEXT, 'D');
+#if FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
+		fiber_port_validate_validation_cpu_state(&cpu_state);
+#endif
+		return;
+	}
+	FIBER_REQUIRE(available >= (uintptr_t)FIBER_PORT_INITIAL_CONTEXT_BYTES, 'X');
 	const uint32_t stacked_pc =
 			words[FIBER_PORT_SOFTWARE_FRAME_WORDS + 6u];
 	const uint32_t stacked_xpsr =

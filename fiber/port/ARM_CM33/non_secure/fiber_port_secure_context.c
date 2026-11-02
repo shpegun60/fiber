@@ -20,6 +20,7 @@ typedef struct FiberPortAttachmentCpuState {
 	uint32_t faultmask;
 	uint32_t control;
 	uint32_t psplim;
+	uint32_t psp;
 } FiberPortAttachmentCpuState;
 
 /* FreeRTOS calls this xSecureContext. Fiber keeps the same one-live-context
@@ -38,6 +39,7 @@ void fiber_port_capture_attachment_cpu_state(
 	state->faultmask = __get_FAULTMASK();
 	state->control = __get_CONTROL();
 	state->psplim = __get_PSPLIM();
+	state->psp = __get_PSP();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -53,6 +55,7 @@ void fiber_port_validate_attachment_cpu_state(
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 'f');
 	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
 	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
+	FIBER_REQUIRE(__get_PSP() == before->psp, 'P');
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -209,16 +212,24 @@ void fiber_port_secure_context_prepare_first_start(FiberContext *const ctx)
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_secure_context_save_current_from_pendsv(
-		FiberContext *const current)
+		FiberContext *const current, const uint32_t exc_return)
 {
 	FIBER_REQUIRE(__get_IPSR() ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER, 'j');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(current != NULL, 'C');
+	FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN ||
+			exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN, 'x');
 	const uint32_t handle = fiber_port_current_secure_context_handle;
+	if (exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN) {
+		/* Hardware owns the Secure frame; a real owned Secure stack must exist. */
+		FIBER_REQUIRE(current->boot.secure_stack_bytes != 0u &&
+				handle != fiber_portNO_SECURE_CONTEXT, 'D');
+	}
 	if (current->boot.secure_stack_bytes == 0u) {
 		FIBER_REQUIRE(handle == fiber_portNO_SECURE_CONTEXT, 'D');
 	} else {
@@ -250,7 +261,8 @@ uint32_t fiber_port_secure_context_prepare_next_from_pendsv(
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(next != NULL, 'C');
 	FIBER_REQUIRE(next->sp != NULL, 'P');
 	FIBER_REQUIRE(fiber_port_current_secure_context_handle ==
@@ -290,7 +302,8 @@ void fiber_port_secure_context_load_next_from_pendsv(
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(next != NULL, 'C');
 	FIBER_REQUIRE(next->sp != NULL, 'P');
 	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)next->boot.stack_base, 'L');

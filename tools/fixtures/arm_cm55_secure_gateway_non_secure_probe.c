@@ -15,7 +15,14 @@ void Reset_Handler(void)
 			fiber_secure_context_gateway_c55s_v1_abi_version() ^
 			fiber_secure_context_gateway_c55s_v1_stack_alignment() ^
 			fiber_secure_context_gateway_c55s_v1_max_stack_bytes() ^
-			fiber_secure_context_gateway_c55s_v1_max_contexts();
+			fiber_secure_context_gateway_c55s_v1_max_contexts() ^
+			fiber_secure_context_gateway_c55s_v1_initialize() ^
+			fiber_secure_context_gateway_c55s_v1_allocate(
+					64u, (uintptr_t)0x20000040u) ^
+			fiber_secure_context_gateway_c55s_v1_load(
+					1u, (uintptr_t)0x20000040u) ^
+			fiber_secure_context_gateway_c55s_v1_save(
+					1u, (uintptr_t)0x20000040u);
 
 	for (;;) {
 		__asm volatile ("wfe");

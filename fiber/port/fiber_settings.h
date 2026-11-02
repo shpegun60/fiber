@@ -70,8 +70,10 @@
  * Main SP
  * ---------------------------------------------------------------------------*/
 
-/* Optionally rewind MSP to the initial top-of-stack from the vector table.
- * On M0/M0+, set this to 0 unless the platform has a reliable initial MSP source. */
+/* Rewind to the validated initial MSP. Preserve-current (0) is available only
+ * where the selected port implements it. Current protected MPU profiles require
+ * 1 because first-SVC provenance uses the initial MSP; they reject 0 explicitly.
+ * On unprotected M0/M0+, 0 requires no initial-MSP vector source. */
 #ifndef FIBER_REWIND_MSP
 # define FIBER_REWIND_MSP 1
 #endif
@@ -86,22 +88,25 @@
 # define FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH 1
 #endif
 
-/* Address-map hooks always validate context storage, stack ranges, and entry
+/* Hook-based ports always validate context storage, stack ranges, and entry
  * code during fiber_init(). Set this to 1 for a validation build that also
  * invokes the RAM hooks before every save/restore and the code hook for every
  * stacked PC. The default keeps these integration hooks out of the switch hot
  * path; structural metadata, canary, PSP, saved-frame, EXC_RETURN, xPSR, and
- * Thumb-PC checks remain mandatory either way.
+ * Thumb-PC checks remain mandatory either way. Protected MPU profiles instead
+ * use their mandatory linker-owned role maps; this hook policy neither adds
+ * callbacks to those ports nor disables their isolation/map checks.
  */
 #ifndef FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH
 # define FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH 0
 #endif
 
-/* Address-map hooks validate context storage, stacks, MSP snapshots, entry
- * points, and optional dynamic switch-time addresses. The safe default requires
- * an integration-specific RAM and code map during initialization. Set 1 only
+/* In hook-based ports, address-map hooks validate context storage, stacks, MSP
+ * snapshots, entry points, and optional dynamic switch-time addresses. The safe
+ * default requires an integration-specific RAM and code map during init. Set 1 only
  * for constrained bring-up where the selected weak accept-any defaults are an
- * explicit and temporary trade-off. */
+ * explicit and temporary trade-off. Protected MPU linker-map checks have no
+ * permissive fallback and are unaffected by this setting. */
 #ifndef FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS
 # define FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS 0
 #endif

@@ -28,4 +28,9 @@ struct FiberContext {
 } /* extern "C" */
 #endif
 
+#define FIBER_PORT_STORAGE_COHORT_PORT arm_cm23_ntz
+#define FIBER_PORT_STORAGE_COHORT_REVISION 1
+#define FIBER_PORT_STORAGE_COHORT_REGIONS 0
+#include "../../fiber_port_storage_cohort.h"
+
 #endif /* FIBER_PORT_ARM_CM23_NTZ_FIBER_PORT_TYPES_H_ */

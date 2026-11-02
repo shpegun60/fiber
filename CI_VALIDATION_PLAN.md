@@ -21,6 +21,10 @@ CMSIS Core source revision or immutable archive checksum
 FreeRTOS Kernel commit and consumed portable-file SHA-256 values
 CI workflow revision
 host runner image
+host GCC package/version for source-derived architectural-state tests
+Python version and pinned emulator/ELF-reader package versions
+QEMU binary/package/shared-library identity and maintained machine manifest
+WSL distribution/userland identity for the current architectural-test wrappers
 ```
 
 The current locally proven baseline is:
@@ -49,6 +53,31 @@ The existing FreeRTOS parity script also verifies the SHA-256 identity of every
 consumed portable source/header, so a modified checkout at the expected commit
 fails closed.
 
+The audit gate additionally checks the complete tracked reference content and
+rejects tracked, untracked, or ignored worktree drift before compiling. Host
+test prerequisites and the maintained audit runners are described in
+`tools/PORT_AUDIT_TESTS.md`. Install the pinned packages from
+`tools/fixtures/classic_audit/requirements.txt` in the runner environment; do
+not silently skip executable guard checks when a prerequisite is absent.
+
+The executed CONTROL and Secure gateway/pool gates use an explicitly prepared
+isolated QEMU prefix, supplied through `FIBER_CONTROL_QEMU_ROOT` or the matrix's
+`-ControlQemuRoot` argument. Current local qualification uses QEMU 8.2.2 package
+`1:8.2.2+ds-0ubuntu1.18` on x86-64 Ubuntu 24.04 WSL with M3/AN385, M33/AN505,
+and M55/AN547 machines. Preserve the binary, package and resolved-library hashes;
+the optional local provisioning recipe's current APT candidate is not a CI pin.
+Normal tests never provision packages. Acceptance CI must provide the qualified
+environment and execute these gates, not accept the explicit `NOT_RUN` status
+as architectural coverage. The current wrappers require WSL; availability on a
+future hosted runner must be qualified rather than assumed.
+
+Acceptance invocation must also pass `-RequireArchitectureExecution` to the
+matrix. This fails before compiler discovery or output creation if the QEMU
+prefix is absent or if `-SettingsOnly` requests an incomplete cohort. It does
+not provision or certify the supplied prefix: each executed runner still
+validates its actual environment and must pass. The default developer invocation
+continues to report missing QEMU gates as `NOT_RUN`, not execution evidence.
+
 ## Pull-Request Gate
 
 Every pull request and every push to the protected integration branch runs the
@@ -62,6 +91,13 @@ ABI and exact-cohort links
 section-GC and stale-object/archive rejection
 negative configuration and duplicate-symbol links
 sensitive generated-code checks
+executable classic ARM guard checks in the qualified emulator
+source-derived architectural-state regressions with explicit hardware stubs
+stale C/C++ allocating-consumer storage rejection
+reference-drift and complete Secure-companion adversarial-code negatives
+executed CONTROL entry/write/return and banked SG distinctions
+executed CM33 immediate-caller/seal guards with isolated guard-removal mutants
+private C55S pool lifecycle and compiler-variant evidence with explicit limits
 ```
 
 The initial runner is Windows because the current scripts resolve
@@ -116,9 +152,12 @@ release proof.
 
 Before adding the workflow:
 
-1. Add an explicit deterministic build-output parameter to
-   `tools/compile_matrix.ps1`; `-KeepBuild` with a random temporary directory is
-   insufficient for reliable artifact upload.
+1. Use the implemented explicit `-BuildRoot` output parameter of
+   `tools/compile_matrix.ps1`. The path must not already exist, even when empty:
+   stale outputs must never satisfy a later run. An explicit output is always
+   kept; automatic temporary outputs are also kept on failure. Successful
+   automatic runs are removed only without `-KeepBuild` and only after the exact
+   owned temporary directory and absence of reparse points are checked.
 2. Add the final all-optimization cohort defined in
    `FREERTOS_ASM_PARITY.md`.
 3. Make every result identify the exact cohort and optimization mode.
@@ -130,3 +169,14 @@ Before adding the workflow:
 Toolchain compatibility testing with newer compiler releases may be added as a
 non-blocking job. It does not replace the pinned acceptance toolchain until an
 explicit compiler-baseline update is reviewed and recorded.
+
+The filesystem-only `tools/test_matrix_artifacts.ps1` gate covers exact output
+admission, stale-directory/file rejection, preserved explicit outputs, owned
+temporary cleanup and root/nested/junction cleanup rejection. This preparation
+does not mean that a hosted workflow or the final optimization matrix exists.
+For CI, choose an absent job-specific path under the artifact staging root and
+upload that directory plus the externally captured console log on failure.
+The configuration-only `tools/test_matrix_execution_policy.ps1` gate executes
+the actual matrix admission function and covers required/missing QEMU,
+settings-subset rejection, and unchanged optional developer use. Its PASS is
+not architectural execution or hosted CI evidence.

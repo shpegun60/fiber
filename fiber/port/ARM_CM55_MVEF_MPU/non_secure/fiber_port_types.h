@@ -41,8 +41,11 @@ typedef struct FiberPortMpuRegionRegisters {
 	uint32_t rlar;
 } FiberPortMpuRegionRegisters;
 
-/* This is the FreeRTOS basic ulContext view. It is valid only before the
- * first extended FP save. cursor_limit is a one-past save cursor target. */
+/* This is the FreeRTOS basic ulContext view when the current saved cursor is
+ * basic, regardless of prior saves. cursor_limit (word 20) is a one-past save
+ * cursor target, not a guard: it aliases S4 after an extended save. The trailing
+ * extended.cursor_limit (word 53) is always outside either payload and guards
+ * both saved forms. Initial construction additionally zeros the basic cursor. */
 typedef struct FiberPortProtectedBasicContext {
 	uint32_t r4;
 	uint32_t r5;
@@ -121,5 +124,15 @@ struct __attribute__((aligned(8))) FiberContext {
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+
+#define FIBER_PORT_STORAGE_COHORT_PORT arm_cm55_mvef_mpu
+#define FIBER_PORT_STORAGE_COHORT_REVISION 2
+#if defined(FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS) && \
+		(FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS == 8)
+# define FIBER_PORT_STORAGE_COHORT_REGIONS 8
+#else
+# define FIBER_PORT_STORAGE_COHORT_REGIONS 16
+#endif
+#include "../../fiber_port_storage_cohort.h"
 
 #endif /* FIBER_PORT_ARM_CM55_MVEF_MPU_NON_SECURE_FIBER_PORT_TYPES_H_ */

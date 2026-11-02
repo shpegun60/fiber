@@ -23,7 +23,7 @@ FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_ram(uintptr_t start, uintptr_t end);
 FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_code(uintptr_t addr);
-FIBER_GENERAL_REGS_ONLY uintptr_t FIBER_WEAK
+FIBER_GENERAL_REGS_ONLY uintptr_t
 fiber_fallback_initial_msp(void);
 
 FiberPortBoot fiber_port_boot_create(void *begin, void *end, entry_t entry, void *arg);

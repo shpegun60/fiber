@@ -1,5 +1,31 @@
 # ARM_CM55F_MPU Non-secure FreeRTOS Parity Ledger
 
+## Protected Startup MSP Policy
+
+This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
+uses the validated initial MSP; preserve-current startup is not implemented.
+The dictionary explicitly rejects `0` instead of silently ignoring it. Default
+startup instructions, frames and context/cohort identity are unchanged. The
+pinned FreeRTOS start also restores the initial MSP; no alternate preserve mode
+is imported. `tools/test_mpu_start_policy.ps1` maintains positive/default-byte
+and exact-diagnostic negative compiles; execution qualification stays separate.
+
+## Sensitive Inline Helpers
+
+Audit A27 adds canonical inline-sensitive/general-registers-only attributes to
+the local r9 reader, BASEPRI read/write and four vector-source helpers. These
+protect forced-inline code from hostile instrumentation without imposing the
+noinline/noipa boundary used by enclosing sensitive operations. No API, frame,
+MPU image, identity or normal-code behavior is intentionally changed.
+
+The maintained MPU constructor attribute runner covers this profile's applicable
+O2/Os, region-count and compiler-ABI variants. Normal instructions/relocations
+match its annotation-removal control; hostile constructors retain the exact
+dependency set, while compiled r9 annotation-removal mutants are rejected for
+instrumentation/coverage escape. Complete helper probes and the combined matrix
+are separate evidence. This does not assert hostile-flag closure of every
+runtime/CMSIS call graph.
+
 ## Slices 1-4 Scope
 
 This ledger covers all four implementation slices of the explicit
@@ -269,3 +295,68 @@ The remaining work must not change this frozen layout:
 This profile has compile/assembly/archive/ELF evidence for its complete
 build-selected runtime. It has no global auto-selection or hardware-support
 claim.
+
+## Audit Corrections (A01-A04, A06-A08, A12)
+
+The corrected cohort is layout version 0x00020008 (8 MPU regions) or
+0x00020010 (16 regions). Sizes, offsets, the overlapping 54-word image, and the
+pinned FreeRTOS protected save/restore instruction backbone are unchanged.
+The version change records saved-CONTROL semantics, not an ABI operation change.
+Synthetic first start still uses CONTROL=3. Runtime PendSV saves actual Handler
+CONTROL; EXC_RETURN identifies Thread/PSP and basic/extended frame state rather
+than live Handler SPSEL or FPCA. Post-write restore readback checks all written
+CONTROL bits; exception-entry state must not be confused with permanent RAZ.
+
+The current slot is a separate, exactly 32-byte RO/XN region immediately below
+privileged RW SRAM, not an Armv7-style overlay. For example, slot
+0x30000000..0x30000020 pairs with privileged RW SRAM beginning at 0x30000020.
+Startup must zero both the slot section and privileged BSS, even though the
+mapped privileged-SRAM range excludes the slot. Publication remains restricted
+to the existing MPU-disabled critical window.
+
+Runtime SVC permits configured lazy preservation before FP materialization,
+decodes the core frame at raw PSP with low FP state after it, and validates the
+running cursor/live PSPLIM without reading an inactive basic union view.
+PendSV proves the minimum core extent before reading xPSR. Restore permits the
+exact owned yield continuation, not arbitrary syscall PCs.
+
+The maintained source-derived host regression is
+`tools/test_m55_fp_mpu_state.ps1`. Host register/MPU models and generated-code
+checks are not target execution or electrical/hardware qualification.
+
+## A25: Architectural RBAR Shareability
+
+`FAP-ARMV8M-RBAR-SH` deliberately corrects the pinned reference dictionary:
+RBAR.SH Inner-shareable is 3, not reserved 1. The private encoder accepts raw
+0/2/3 and rejects 1. Existing standard mappings use Non-shareable 0; context
+layout, default MPU image and both callable ABIs are unchanged. Independent
+numeric SH/AP/XN tests, not equality with the copied reference macro, are the
+required regression oracle. See the global assembly-parity rationale.
+
+## Saved-Image Cursor Guard
+
+The pinned `ARM_CM55_NTZ/non_secure/portasm.c` MPU/FPU save selects its
+payload from EXC_RETURN.FType: 20 words for basic, 53 for extended. Neither
+save writes trailing word 53. Basic cursor word 20 aliases extended S4 and
+can retain that nonzero payload when a basic image is subsequently supplied.
+Both saved forms therefore validate permanent trailing word 53, while the
+cursor address still classifies the active representation. No FP payload is
+required to be zero or erased. Initial-construction checks remain stricter.
+No assembly, layout, cohort revision, or callable ABI changes are involved.
+
+`tools/test_m55_fp_mpu_state.ps1` compiles actual validator bodies and a bounded
+translation of the actual PendSV save instructions. Its same-context test
+starts with a cold basic representation, supplies an extended frame with
+nonzero S4, then supplies a basic frame without clearing the protected image.
+It proves preservation, rejects corrupt word 53 in both forms and invalid
+cursors, and kills the old word-20 guard and separate guard-removal mutants.
+Actual ARM compilation/disassembly checks the unchanged save block under
+hard-float and the classifier's numeric word-53 load offsets under hard/softfp
+for 8/16 regions and `-O2`/`-Os`; host cases also cover `-O0` and both lazy
+policies.
+
+This is saved-representation qualification, not execution of exception/FPCA
+teardown and not a claim that the five public operations can cause extended
+to basic transition. Cessation of FP instructions does not clear FPCA, and
+unprivileged MSR CONTROL cannot be used to clear it. Host-supplied frame tokens
+are explicit test inputs, not an architectural reachability oracle.

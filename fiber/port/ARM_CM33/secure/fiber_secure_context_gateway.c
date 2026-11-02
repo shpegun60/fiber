@@ -1,19 +1,24 @@
 /* Stateful ARM_CM33 SecureContext NSC gateway backed by the private pool. */
 
+#include <arm_cmse.h>
+
 #include "fiber_secure_context_gateway_abi.h"
 #include "fiber_secure_context_pool.h"
+#include "fiber_secure_context_cohort.h"
 
 #define fiber_secure_contextSCB_AIRCR \
 	(*((volatile uint32_t *)0xE000ED0Cu))
 #define fiber_secure_contextAIRCR_VECTKEY_MASK (0xFFFFu << 16u)
 #define fiber_secure_contextAIRCR_VECTKEY_WRITE (0x05FAu << 16u)
 #define fiber_secure_contextAIRCR_PRIS_MASK (1u << 14u)
+#define fiber_secure_contextAIRCR_BFHFNMINS_MASK (1u << 13u)
 #define fiber_secure_contextGATEWAY_INITIALIZING 0x53434742u
 #define fiber_secure_contextGATEWAY_READY 0x53434752u
 
 static volatile uint32_t fiber_secure_context_gateway_state;
 
-static uint32_t fiber_secure_context_gateway_is_runtime_exception(void)
+static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_gateway_is_runtime_exception(void)
 {
 	const uint32_t exception_number = __get_IPSR();
 
@@ -30,21 +35,25 @@ _Static_assert(FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_STACK_ALIGNMENT ==
 
 uint32_t fiber_secure_context_gateway_v1_abi_version(void)
 {
+	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	return FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_ABI_VERSION;
 }
 
 uint32_t fiber_secure_context_gateway_v1_stack_alignment(void)
 {
+	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	return FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_STACK_ALIGNMENT;
 }
 
 uint32_t fiber_secure_context_gateway_v1_max_stack_bytes(void)
 {
+	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	return FIBER_ARM_CM33_SECURE_CONTEXT_MAX_STACK_BYTES;
 }
 
 uint32_t fiber_secure_context_gateway_v1_max_contexts(void)
 {
+	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	return FIBER_ARM_CM33_SECURE_CONTEXT_MAX_COUNT;
 }
 
@@ -54,15 +63,24 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 	uint32_t aircr_expected;
 	uint32_t aircr_after;
 
-	/* FreeRTOS accepts any Handler mode. The Fiber first-start contract owns
-	 * one exact Non-secure SVCall and rejects runtime reinitialization. Enter
+	/* Check the incoming NSC caller here, before a helper can replace LR.
+	 * IPSR restricts the exception number, not the owning Non-secure call site.
+	 * The Non-secure port separately owns that first-start site. Enter
 	 * an irreversible intermediate state before the first destructive write,
 	 * so a partial failure cannot retry initialization. */
-	if ((__get_IPSR() !=
+	if ((cmse_nonsecure_caller() == 0) || (__get_IPSR() !=
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER) ||
 			(fiber_secure_context_gateway_state != 0u)) {
 		return 0u;
 	}
+	/* PRIS=1 with BFHFNMINS=1 is architecturally UNPREDICTABLE.
+	 * Fault routing belongs to the platform; reject it before commitment
+	 * rather than silently changing that policy. */
+	aircr_before = fiber_secure_contextSCB_AIRCR;
+	if ((aircr_before & fiber_secure_contextAIRCR_BFHFNMINS_MASK) != 0u) {
+		return 0u;
+	}
+	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	fiber_secure_context_gateway_state =
 			fiber_secure_contextGATEWAY_INITIALIZING;
 	__DSB();
@@ -74,7 +92,6 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 
 	/* Match SecureInit_DePrioritizeNSExceptions(), then prove that only PRIS
 	 * changed. VECTKEYSTAT is excluded from readback comparison. */
-	aircr_before = fiber_secure_contextSCB_AIRCR;
 	aircr_expected =
 			(aircr_before & ~(fiber_secure_contextAIRCR_VECTKEY_MASK |
 				fiber_secure_contextAIRCR_PRIS_MASK)) |
@@ -119,10 +136,10 @@ uint32_t fiber_secure_context_gateway_v1_allocate(
 		const uint32_t secure_stack_bytes,
 		const uintptr_t owner_token)
 {
-	/* FreeRTOS accepts any Handler mode. Fiber narrows that boundary to exact
-	 * Non-secure first-start SVCall or lazy-activation PendSV, a completed
-	 * one-shot initialization, and no loaded Secure stack. */
-	if ((fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
+	/* Caller state and exception number are independent gates. The Non-secure
+	 * port separately validates its first-start or lazy-activation call site. */
+	if ((cmse_nonsecure_caller() == 0) ||
+			(fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||
 			(__get_PSPLIM() != 0u) || (__get_PSP() != 0u)) {
@@ -141,7 +158,8 @@ uint32_t fiber_secure_context_gateway_v1_load(
 	uintptr_t stack_pointer;
 	uintptr_t stack_limit;
 
-	if ((fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
+	if ((cmse_nonsecure_caller() == 0) ||
+			(fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||
 			(owner_token == 0u) || (__get_PSPLIM() != 0u) ||
@@ -189,7 +207,7 @@ uint32_t fiber_secure_context_gateway_v1_save(
 	FiberSecureContextRecord *record;
 	uintptr_t stack_pointer;
 
-	if ((__get_IPSR() !=
+	if ((cmse_nonsecure_caller() == 0) || (__get_IPSR() !=
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||

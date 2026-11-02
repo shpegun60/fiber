@@ -105,7 +105,9 @@ uint32_t fiber_port_context_saved_form(const FiberContext *ctx)
 	FIBER_REQUIRE(ctx != NULL, 'N');
 	const FiberPortProtectedContext *const image = &ctx->protected_context;
 	if (ctx->protected_context_cursor == &image->basic.cursor_limit) {
-		FIBER_REQUIRE(image->basic.cursor_limit == 0u, 'P');
+		/* Word 20 is a basic one-past cursor, but aliases extended S4.
+		 * Only word 53 remains outside the payload of both saved forms. */
+		FIBER_REQUIRE(image->extended.cursor_limit == 0u, 'P');
 		return 0u;
 	}
 	if (ctx->protected_context_cursor == &image->extended.cursor_limit) {
@@ -147,13 +149,15 @@ void fiber_port_validate_saved_hardware_frame(const FiberContext *ctx,
 	FIBER_REQUIRE((stacked_pc & 1u) == 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_THUMB_BIT) != 0u, 'x');
 	FIBER_REQUIRE((stacked_xpsr & fiber_portXPSR_IPSR_MASK) == 0u, 'x');
-	FIBER_REQUIRE(fiber_port_code_address_is_in_range(
+	const int yield_continuation = (uintptr_t)stacked_pc ==
+			fiber_port_code_address((uintptr_t)fiber_port_svc_yield_return_site);
+	FIBER_REQUIRE(yield_continuation || fiber_port_code_address_is_in_range(
 			layout->unprivileged_flash_start, layout->unprivileged_flash_end,
 			(uintptr_t)stacked_pc), 'c');
 	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
 			layout->privileged_flash_start, layout->privileged_flash_end,
 			(uintptr_t)stacked_pc), 'c');
-	FIBER_REQUIRE(!fiber_port_code_address_is_in_range(
+	FIBER_REQUIRE(yield_continuation || !fiber_port_code_address_is_in_range(
 			layout->unprivileged_syscalls_start,
 			layout->unprivileged_syscalls_end, (uintptr_t)stacked_pc), 'c');
 }
@@ -188,13 +192,14 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 
 	FIBER_REQUIRE(ctx->runtime_flags == 0u, 'F');
 	FIBER_REQUIRE(psplim == (uint32_t)ctx->boot.stack_base, 'L');
-	FIBER_REQUIRE((control & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'q');
+	/* Initial construction seeds Thread SPSEL; PendSV saves actual Handler
+	 * CONTROL. FPCA can change during FP preservation, independently of the
+	 * interrupted frame identified by EXC_RETURN. Only defined bits and nPRIV
+	 * are invariant across both protected representations. */
+	FIBER_REQUIRE((control & ~6u) == 1u, 'q');
 	if (extended != 0u) {
-		FIBER_REQUIRE((control & 4u) != 0u, 'q');
 		FIBER_REQUIRE(exc_return == fiber_portEXTENDED_EXC_RETURN, 'x');
 	} else {
-		FIBER_REQUIRE((control & 4u) == 0u, 'q');
 		FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN, 'x');
 	}
 
@@ -229,26 +234,23 @@ void fiber_port_validate_running_context_frame(const FiberContext *current,
 			&current->protected_context;
 	FIBER_REQUIRE(current->protected_context_cursor == &image->words[0], 'P');
 	FIBER_REQUIRE(current->runtime_flags == 0u, 'F');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 1u, 'l');
 	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)current->boot.stack_base, 'L');
-	if (exc_return == fiber_portINITIAL_EXC_RETURN) {
-		FIBER_REQUIRE((__get_CONTROL() & 4u) == 0u, 'l');
-	} else if (exc_return == fiber_portEXTENDED_EXC_RETURN) {
-		FIBER_REQUIRE((__get_CONTROL() & 4u) != 0u, 'l');
-	} else {
-		fiber_panic('l');
-		FIBER_API_UNREACHABLE();
-	}
+	FIBER_REQUIRE((exc_return == fiber_portINITIAL_EXC_RETURN) ||
+			(exc_return == fiber_portEXTENDED_EXC_RETURN), 'l');
 
 	const uintptr_t raw_frame = (uintptr_t)hardware_frame;
 	FIBER_REQUIRE((raw_frame &
 			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'A');
 	FIBER_REQUIRE(raw_frame == (uintptr_t)__get_PSP(), 'P');
-	/* Unlike the ordinary PSP-resident scalar-FP port, FreeRTOS MPU PendSV
-	 * treats PSP as the copied basic frame and places s0-s15/FPSCR after it.
-	 * Its `add r2, r2, #0x20` / `vldmia r2, {s0-s16}` sequence is the frozen
-	 * layout proof. Do not apply the non-MPU extended-frame offset here. */
+	/* Establish the minimum readable frame before inspecting xPSR. */
+	FIBER_REQUIRE(raw_frame <= UINTPTR_MAX - FIBER_PORT_EXC_BASE_BYTES, 'O');
+	FIBER_REQUIRE(fiber_port_range_contains(current->boot.stack_base,
+				current->boot.stack_top, raw_frame,
+				raw_frame + FIBER_PORT_EXC_BASE_BYTES), 'P');
+	/* Both basic and extended architectural frames start with the core frame
+	 * at raw PSP. The pinned FreeRTOS protected copy reaches low FP state at
+	 * PSP+32 with `add r2, r2, #0x20` / `vldmia r2, {s0-s16}`. */
 	const uint32_t *const core_frame = (const uint32_t *)raw_frame;
 	const uint32_t stacked_xpsr = core_frame[7];
 	uintptr_t frame_bytes = (uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
@@ -476,8 +478,7 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 1u, 'l');
 	fiber_port_fpu_require_configured();
 
 	FiberPortMpuSchedulerCpuState cpu_state;
@@ -498,15 +499,13 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 1u, 'l');
 	fiber_port_context_validate_restore(next);
 	fiber_port_fpu_require_configured();
 	fiber_port_require_mpu_geometry();
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
 
-	/* The published pointer changes only while the selected current-slot MPU
-	 * aperture is temporarily covered by the privileged global SRAM image. */
+	/* The slot is RO at both privilege levels. Publish only with MPU disabled. */
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portMPU_CTRL_REG = 0u;
 	fiber_portDATA_SYNC_BARRIER();
@@ -630,6 +629,8 @@ void PendSV_Handler(void)
 			"msr   control, r4                                    \n"
 			"isb                                                   \n"
 			"mrs   r5, control                                    \n"
+			/* Armv8-M permits privileged Handler writes to CONTROL.SPSEL.
+			 * Compare the complete written value, not the exception-entry value. */
 			"and   r5, r5, #7                                     \n"
 			"cmp   r5, r4                                         \n"
 			"bne   90f                                            \n"

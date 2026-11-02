@@ -14,10 +14,10 @@ store or interpret its MSP plan.
 | Setting | Default | Purpose |
 | --- | ---: | --- |
 | `FIBER_FPU_LAZY` | `0` | `0` selects deterministic eager FP stacking; `1` enables lazy `LSPEN` behavior on an FPU port. |
-| `FIBER_REWIND_MSP` | `1` | Restore MSP from the validated initial vector value before first SVC. Set `0` only when the integration intentionally preserves current MSP. The selected port creates this plan once at `fiber_start()`, never per context. |
+| `FIBER_REWIND_MSP` | `1` | Restore MSP from the validated initial vector value before first SVC. `0` preserves current MSP only on ports implementing that policy. The current protected MPU profiles require `1` and reject `0`: their first-SVC provenance contract uses the initial MSP. The selected port owns startup policy, never common code or individual contexts. |
 | `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH` | `1` | Recompute the sealed boot-record hash on every restore. Set `0` only as a measured performance opt-out; structural, canary, frame, and ownership checks remain mandatory. |
-| `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH` | `0` | `fiber_init()` always checks context, stack, and entry addresses. Set `1` to also run RAM map hooks for context/stack and the code map hook for each saved PC during every switch. |
-| `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS` | `0` | Require integration-defined RAM and code plausibility hooks. Set `1` only for constrained bring-up to enable the selected weak accept-any fallback. |
+| `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH` | `0` | Hook-based ports check context, stack and entry at init; set `1` to also run RAM/code hooks during switches. Protected MPU ports use mandatory linker-owned role maps instead. |
+| `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS` | `0` | In hook-based ports, require integration-defined RAM/code hooks. Set `1` only for constrained bring-up to enable the weak accept-any fallback. This never relaxes protected MPU map checks. |
 | `FIBER_STACK_CANARY` | `1` | Validate the runtime-owned low-stack canary before every restore. |
 | `FIBER_STACK_REDZONE_BYTES` | `32` | Reserve a selected-port-aligned low-stack region below the PSP lower bound. |
 
@@ -31,13 +31,21 @@ relocatable link, and selected-port ABI symbol audit with
 ## Safety Baseline
 
 The defaults use eager FP stacking, a runtime-owned startup MSP plan,
-integration-specific address-map hooks during initialization, a low-stack
+integration-specific address validation during initialization, a low-stack
 canary, an aligned red zone, and a full immutable boot-record hash before every
 restore. They intentionally leave switch-time address-map hooks disabled:
 runtime structural and frame checks remain mandatory, while application linker
 map checks and their validation CPU-state snapshots are not paid on every
 cooperative switch. A rare MSP fallback hook remains locally guarded if a
 selected port needs it after an unstable vector-table read.
+
+The selected port owns the address-validation mechanism. Hook-based profiles
+call the integration callbacks. Protected MPU profiles require exact
+linker-defined privilege/code/RAM roles instead, without callback dependencies.
+Their mandatory map, isolation and seal checks remain active independently of
+the hook-policy settings. Both mechanisms validate addresses before relying on
+them; an integration-provided linker map or hook implementation is trusted
+platform input, not a hardware memory-discovery service.
 
 A conservative validation build sets both
 `FIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH=1` and

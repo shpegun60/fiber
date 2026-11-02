@@ -1,10 +1,10 @@
 /*
  * fiber_portmacro.h
  *
- * Exact Cortex-M55 MVE-FP NTZ Non-secure dictionary, implementation slices 1-2.
+ * Exact Cortex-M55 MVE-FP NTZ Non-secure dictionary, implementation slices 1-3.
  * This header freezes the non-MPU MVE-FP context identity and frame bounds
- * from the pinned FreeRTOS ARM_CM55_NTZ port. Sealed construction and strict
- * SVC first start exist; PendSV remains intentionally absent.
+ * from the pinned FreeRTOS ARM_CM55_NTZ port. Sealed construction, strict
+ * SVC first start, PendSV and the complete forward runtime ABI are implemented.
  */
 #ifndef FIBER_PORT_ARM_CM55_MVEF_NTZ_FIBER_PORTMACRO_H_
 #define FIBER_PORT_ARM_CM55_MVEF_NTZ_FIBER_PORTMACRO_H_
@@ -120,10 +120,12 @@
 #ifdef FIBER_PORT_RUNTIME_SELECTABLE
 # error "[fiber]: ARM_CM55_MVEF_NTZ runtime-selectable state must not be predefined"
 #endif
-#define FIBER_PORT_RUNTIME_SELECTABLE 0
+/* Complete explicit build-selected group, not global auto-selection or a
+ * hardware-support declaration. */
+#define FIBER_PORT_RUNTIME_SELECTABLE 1
 
 /* Pinned FreeRTOS ARM_CM55_NTZ non-MPU MVE-FP frame dictionary. New tasks start
- * with a basic hardware frame. The eventual PendSV saves s16-s31 only when
+ * with a basic hardware frame. PendSV saves s16-s31 only when
  * EXC_RETURN bit 4 is clear; the pinned MVE path adds no VPR software slot. */
 #define fiber_portSTACK_GROWTH (-1)
 #define fiber_portBYTE_ALIGNMENT 8u
@@ -364,8 +366,8 @@ FIBER_STATIC_ASSERT(sizeof(void *) == 4u,
 		"[fiber]: ARM_CM55_MVEF_NTZ requires 32-bit pointers");
 FIBER_STATIC_ASSERT(sizeof(size_t) == 4u,
 		"[fiber]: ARM_CM55_MVEF_NTZ requires 32-bit size_t");
-FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 0,
-		"[fiber]: ARM_CM55_MVEF_NTZ staged profile must remain non-selectable");
+FIBER_STATIC_ASSERT(FIBER_PORT_RUNTIME_SELECTABLE == 1,
+		"[fiber]: ARM_CM55_MVEF_NTZ complete build-selected runtime must advertise availability");
 FIBER_STATIC_ASSERT(FIBER_PORT_SOFTWARE_FRAME_WORDS == 10u,
 		"[fiber]: ARM_CM55_MVEF_NTZ core software frame must contain ten words");
 FIBER_STATIC_ASSERT(FIBER_PORT_EXC_RETURN_WORD_INDEX == 1u,

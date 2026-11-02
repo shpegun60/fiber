@@ -276,6 +276,7 @@ void fiber_port_runtime_prepare_start(void)
 {
 	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
+	fiber_port_arm_cm33_secure_context_handler_component_v1_anchor();
 	(void)*(volatile const unsigned char *)
 			&fiber_port_arm_cm33_secure_context_handler_bundle_v1_anchor;
 	(void)*(volatile const unsigned char *)
@@ -294,6 +295,7 @@ typedef struct FiberPortSchedulerCpuState {
 	uint32_t basepri;
 	uint32_t faultmask;
 	uint32_t psplim;
+	uint32_t psp;
 } FiberPortSchedulerCpuState;
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -307,6 +309,7 @@ void fiber_port_capture_scheduler_cpu_state(
 	state->basepri = fiber_port_basepri_read();
 	state->faultmask = __get_FAULTMASK();
 	state->psplim = __get_PSPLIM();
+	state->psp = __get_PSP();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -321,6 +324,7 @@ void fiber_port_validate_scheduler_cpu_state(
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
 	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
+	FIBER_REQUIRE(__get_PSP() == before->psp, 'P');
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -354,7 +358,9 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(current != NULL, 'C');
 	FIBER_REQUIRE(__get_IPSR() == 14u, 'j');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* Exception entry cleared NS SPSEL; no same-bank CONTROL write precedes
+	 * this check. EXC_RETURN owns the interrupted Thread/PSP identity. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			(uint32_t)FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');

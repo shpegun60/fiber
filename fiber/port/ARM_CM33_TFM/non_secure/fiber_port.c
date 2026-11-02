@@ -353,7 +353,8 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(current != NULL, 'C');
 	FIBER_REQUIRE(__get_IPSR() == 14u, 'j');
 	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
+	/* Exception entry clears SPSEL; EXC_RETURN owns Thread/PSP identity. */
+	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			(uint32_t)FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
@@ -668,7 +669,7 @@ void PendSV_Handler(void)
 			/* The scheduler may not leak privileged CPU state. */
 			"mrs   r1, control                      \n"
 			"and   r1, r1, #3                       \n"
-			"cmp   r1, #2                           \n"
+			"cmp   r1, #0                           \n"
 			"bne   96f                              \n"
 			"mrs   r1, primask                      \n"
 			"cmp   r1, #0                           \n"

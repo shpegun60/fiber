@@ -5,7 +5,15 @@ param(
     [string]$BuildRoot,
     [ValidateSet("-O2", "-Os")]
     [string]$Optimization = "-O2",
-    [switch]$KeepBuild
+    [switch]$ReferenceIdentityOnly,
+    [switch]$Cm33fRunningOnly,
+    [switch]$Cm55TfmOnly,
+    [switch]$Cm33SecureContextOnly,
+    [switch]$Cm33SecureOnly,
+    [switch]$Cm55SecureOnly,
+    [switch]$KeepBuild,
+    [string]$Python = "python",
+    [string]$PythonModules = $env:FIBER_CLASSIC_AUDIT_PYTHONPATH
 )
 
 $ErrorActionPreference = "Stop"
@@ -144,6 +152,50 @@ function Assert-AbsentPatterns {
     }
 }
 
+function Get-BackwardLoopContaining {
+    param([string]$Body, [string]$OperationPattern, [string]$Label)
+
+    # Inspect real branch addresses, including M55 low-overhead LE loops. A
+    # byte-access fingerprint outside the loop is not evidence of a full scrub.
+    $instructions = @([regex]::Matches($Body,
+        '(?m)^[ \t]*(?<address>[0-9a-f]+):[ \t]+[0-9a-f]{4}(?:[ \t]+[0-9a-f]{4})?[ \t]+(?<opcode>[a-z][a-z0-9.]+)[ \t]*(?<operands>[^\r\n]*)$') |
+        ForEach-Object {
+            [pscustomobject]@{
+                Address = [Convert]::ToUInt32($_.Groups['address'].Value, 16)
+                Opcode = $_.Groups['opcode'].Value
+                Operands = $_.Groups['operands'].Value
+                Text = $_.Value
+            }
+        })
+    foreach ($instruction in $instructions) {
+        if ($instruction.Opcode -notmatch '^(?:b(?:ne|eq|cc|cs|hi|ls)?(?:\.[nw])?|le)$') {
+            continue
+        }
+        $target = [regex]::Match($instruction.Operands,
+            '^(?:lr,\s*)?(?<address>[0-9a-f]+)\s+<')
+        if (-not $target.Success) { continue }
+        $address = [Convert]::ToUInt32($target.Groups['address'].Value, 16)
+        if ($address -ge $instruction.Address) { continue }
+        $loopInstructions = @($instructions | Where-Object {
+            ($_.Address -ge $address) -and
+            ($_.Address -le $instruction.Address)
+        })
+        # Size optimization may place the common trap before the scrub. A
+        # backward branch to that noreturn call is an exit, not a loop edge.
+        if (($loopInstructions[0].Opcode -match '^bl') -and
+                ($loopInstructions[0].Operands -match '<fiber_secure_context_pool_fail_closed>')) {
+            continue
+        }
+        $loop = ($loopInstructions | ForEach-Object { $_.Text }) -join "`n"
+        if ([regex]::IsMatch($loop, $OperationPattern)) {
+            return [pscustomobject]@{
+                Start = $address; End = $instruction.Address; Body = $loop
+            }
+        }
+    }
+    throw "$Label lost a backward loop containing $OperationPattern`n$Body"
+}
+
 function Write-CmsisMainHeader {
     param(
         [string]$Directory,
@@ -203,6 +255,36 @@ function Invoke-Compile {
     }
 }
 
+function Add-BoundCallRelocationTargets {
+    param([string]$Disassembly)
+
+    # In a function-sections object, a BL placeholder can name the enclosing
+    # function. Only the immediately following relocation at the same byte
+    # offset establishes its real target. Replace only that operand's symbolic
+    # target; leave the instruction bytes and authoritative relocation intact.
+    # Never attach the relocation to an unrelated predecessor.
+    $pattern = '(?m)^(?<prefix>[ \t]*(?<address>[0-9a-fA-F]+):[ \t]+' +
+        '[0-9a-fA-F]{4}(?:[ \t]+[0-9a-fA-F]{4})?[ \t]+' +
+        '(?<opcode>bl(?:\.w)?|b\.w)[ \t]+)' +
+        '(?<destination>[0-9a-fA-F]+)[ \t]+<[^>]+>[^\r\n]*' +
+        '(?<newline>\r?\n)(?<relocation>[ \t]*(?<relAddress>[0-9a-fA-F]+):[ \t]+' +
+        '(?<kind>R_ARM_THM_CALL|R_ARM_THM_JUMP24)[ \t]+' +
+        '(?<target>[A-Za-z_.$][A-Za-z0-9_.$]*(?:[+-]0x[0-9a-fA-F]+)?)[ \t]*\r?$)'
+    return [regex]::Replace($Disassembly, $pattern, {
+        param($match)
+        $sameOffset = [Convert]::ToUInt64($match.Groups['address'].Value, 16) -eq
+            [Convert]::ToUInt64($match.Groups['relAddress'].Value, 16)
+        $sameOpcode = (($match.Groups['kind'].Value -eq 'R_ARM_THM_CALL') -and
+                ($match.Groups['opcode'].Value -match '^bl')) -or
+            (($match.Groups['kind'].Value -eq 'R_ARM_THM_JUMP24') -and
+                ($match.Groups['opcode'].Value -eq 'b.w'))
+        if (-not ($sameOffset -and $sameOpcode)) { return $match.Value }
+        return $match.Groups['prefix'].Value + $match.Groups['destination'].Value +
+            ' <' + $match.Groups['target'].Value + '>' + $match.Groups['newline'].Value +
+            $match.Groups['relocation'].Value
+    })
+}
+
 function Get-ObjectDisassembly {
     param(
         [string]$Objdump,
@@ -213,7 +295,7 @@ function Get-ObjectDisassembly {
     if ($LASTEXITCODE -ne 0) {
         throw "objdump failed: $ObjectPath"
     }
-    return $result
+    return Add-BoundCallRelocationTargets -Disassembly $result
 }
 
 function Assert-ReferenceIdentity {
@@ -222,12 +304,55 @@ function Assert-ReferenceIdentity {
         [hashtable]$ExpectedFiles
     )
 
-    $commit = ((& git -C $KernelRoot rev-parse HEAD) -join "").Trim()
+    $commit = ((& git --no-optional-locks -C $KernelRoot rev-parse HEAD) -join "").Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "Cannot read pinned FreeRTOS commit"
     }
     if ($commit -ne $ExpectedFreeRtosCommit) {
         throw "FreeRTOS reference drifted: expected $ExpectedFreeRtosCommit, got $commit"
+    }
+
+    # Reject additions too: an untracked or ignored header beside a pinned
+    # source can shadow the intended dependency without changing HEAD. Disable
+    # optional index refresh writes; validation must never mutate the reference.
+    $status = @(& git --no-optional-locks -c core.fsmonitor=false -C $KernelRoot `
+        status --porcelain=v1 --untracked-files=all --ignored=matching)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot inspect pinned FreeRTOS worktree"
+    }
+    if ($status.Count -ne 0) {
+        throw "Pinned FreeRTOS worktree is not clean (tracked/untracked/ignored):`n$($status -join "`n")"
+    }
+
+    # Hash every tracked regular file, not just the historical SHA256 subset.
+    # This also catches consumed-header changes hidden by assume-unchanged,
+    # skip-worktree, or cached file metadata. Git applies the pinned checkout's
+    # text normalization, so a normal Windows CRLF checkout remains valid.
+    # hash-object without -w is read-only. The two non-consumed third-party
+    # submodule entries are not regular files and are not compiled by this tool.
+    $tree = @(& git --no-optional-locks -C $KernelRoot ls-tree -r HEAD)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot enumerate pinned FreeRTOS tree"
+    }
+    $tracked = @($tree | ForEach-Object {
+        if ($_ -match '^100(?:644|755) blob (?<hash>[0-9a-f]{40})\t(?<path>.+)$') {
+            [pscustomobject]@{ Hash = $Matches['hash']; Path = $Matches['path'] }
+        } elseif ($_ -notmatch '^160000 commit [0-9a-f]{40}\t') {
+            throw "Unsupported pinned FreeRTOS tree entry: $_"
+        }
+    })
+    if ($tracked.Count -eq 0) {
+        throw "Pinned FreeRTOS tree contains no regular files"
+    }
+    $actualHashes = @($tracked | ForEach-Object { $_.Path } |
+        & git --no-optional-locks -C $KernelRoot hash-object --stdin-paths)
+    if (($LASTEXITCODE -ne 0) -or ($actualHashes.Count -ne $tracked.Count)) {
+        throw "Cannot hash all pinned FreeRTOS files"
+    }
+    for ($index = 0; $index -lt $tracked.Count; ++$index) {
+        if ($actualHashes[$index] -ne $tracked[$index].Hash) {
+            throw "Pinned FreeRTOS tracked content drifted: $($tracked[$index].Path)"
+        }
     }
 
     foreach ($relativePath in $ExpectedFiles.Keys) {
@@ -296,8 +421,17 @@ function Assert-ProductionPortCoverage {
             throw "Staged runtime profile has no selected port macro header: $profile"
         }
         $macroText = Get-Content -LiteralPath $macro -Raw
-        if ($macroText -notmatch '(?m)^\s*#define\s+FIBER_PORT_RUNTIME_SELECTABLE\s+0\s*$') {
-            throw "Staged runtime profile must remain non-selectable until complete parity: $profile"
+        $definitions = @($PortDefinitions | Where-Object {
+            $_.ProfileDir -eq $profile -and ($null -ne $_.PSObject.Properties['Staged']) -and $_.Staged -eq 1
+        })
+        $metadataFlag = 0
+        if ($definitions.Count -ne 1) { throw "Staged profile must have one exact definition: $profile" }
+        if ($null -ne $definitions[0].PSObject.Properties['PendingSelectableMetadata']) {
+            if ($definitions[0].PendingSelectableMetadata -ne 1) { throw "Invalid pending selectable metadata: $profile" }
+            $metadataFlag = 1
+        }
+        if ($macroText -notmatch ('(?m)^\s*#define\s+FIBER_PORT_RUNTIME_SELECTABLE\s+'+$metadataFlag+'\s*$')) {
+            throw "Staged runtime profile metadata must remain exactly $metadataFlag until qualification: $profile"
         }
     }
 
@@ -361,6 +495,1905 @@ function Assert-MechanismParity {
         $PortName, $Mechanism, $ReferenceSymbol, $FiberSymbol)
 }
 
+function Get-C55SGatewayFunctionSpan {
+    param([string]$Source, [string]$Name)
+    $start = [regex]::Match($Source, '(?m)^uint32_t ' + [regex]::Escape($Name) + '\(')
+    if (-not $start.Success) { throw "C55S gateway function anchor changed: $Name" }
+    $next = [regex]::Match($Source.Substring($start.Index + $start.Length),
+        '(?m)^uint32_t fiber_secure_context_gateway_c55s_v1_\w+\(')
+    $end = $Source.Length
+    if ($next.Success) { $end = $start.Index + $start.Length + $next.Index }
+    return [pscustomobject]@{Start=$start.Index; Length=$end-$start.Index;
+        Text=$Source.Substring($start.Index, $end-$start.Index)}
+}
+
+function Test-C55SInitMechanisms {
+    param([object]$PriorityPair, [object]$CpuPair)
+
+    $assertInputs = {
+        foreach ($pair in @($PriorityPair, $CpuPair)) {
+            foreach ($inputFile in $pair.InitSourceHashes) {
+                if ((Get-FileHash -LiteralPath $inputFile.Path -Algorithm SHA256).Hash -ne $inputFile.Sha256) {
+                    throw "C55SINIT input changed during qualification: $($inputFile.Path)"
+                }
+            }
+        }
+    }
+    & $assertInputs
+    foreach ($id in @("FAP-C55SINIT-PRIORITY", "FAP-C55SINIT-CPU", "FAP-C55SINIT-GATES", "FAP-CMSE-M55", "FAP-C55S-PRIVATE-COHORT")) {
+        if ($ledger.IndexOf($id, [StringComparison]::Ordinal) -lt 0) {
+            throw "C55SINIT missing intentional-difference ledger entry: $id"
+        }
+    }
+    $directory = Join-Path $BuildRoot "C55SINIT"
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $profile = Join-Path $RepoRoot "fiber\port\ARM_CM55\secure"
+    $source = Join-Path $profile "fiber_secure_context_gateway.c"
+    $commandsPath = Join-Path $directory "commands.jsonl"
+    $runCommand = {
+        param([string]$Program, [string[]]$Arguments)
+        ConvertTo-Json -InputObject (@($Program) + $Arguments) -Compress |
+            Add-Content -LiteralPath $commandsPath -Encoding ASCII
+        & $Program @Arguments
+        if ($LASTEXITCODE -ne 0) { throw "C55SINIT command failed: $Program" }
+    }
+    $linker = Join-Path $directory "body.ld"
+    @'
+SECTIONS {
+ .fiber_c55s_private_cohort 0x0802F000 : { *(.rodata.fiber_c55s_private_cohort) }
+ .text 0x08000000 : { *(.text*) *(.rodata*) }
+ .ARM.extab : { *(.ARM.extab*) }
+ .ARM.exidx : { *(.ARM.exidx*) }
+ .gnu.sgstubs 0x08030000 : ALIGN(32) { *(.gnu.sgstubs*) }
+ .data 0x30000000 : { *(.data*) }
+ .bss 0x30001000 (NOLOAD) : { *(.bss*) *(COMMON) }
+ .fiber_secure_context_pool 0x30002000 (NOLOAD) : { *(.fiber_secure_context_pool) }
+ /DISCARD/ : { *(.comment*) *(.note*) }
+}
+'@ | Set-Content -LiteralPath $linker -Encoding ASCII
+    $stub = Join-Path $directory "pool_boundary.c"
+    @'
+#include <stdint.h>
+#include "fiber/fiber_api_attributes.h"
+/* Explicit boundary stub: pool lifecycle is qualified by C55SPOOL, not here. */
+volatile uint32_t c55sinit_pool_result = 1u;
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_pool_boot_initialize(void)
+{
+    return c55sinit_pool_result;
+}
+'@ | Set-Content -LiteralPath $stub -Encoding ASCII
+    $stubObject = Join-Path $directory "pool_boundary.o"
+    & $runCommand $compiler @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft",
+        "-std=gnu11", $Optimization, "-ffreestanding", "-fno-builtin", "-ffunction-sections",
+        "-fdata-sections", "-I$RepoRoot", "-c", $stub, "-o", $stubObject)
+    $boundaryProvider = Join-Path $directory 'cohort_boundary_provider.c'
+    @'
+#include "fiber_secure_context_cohort.h"
+/* Fixture-only provider for modeled pool boundaries, not archive extraction
+ * or production pool qualification. Use the actual selected header/key ABI. */
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_pool_c55s_v1_cohort_provider(void)
+{
+    FIBER_C55S_PRIVATE_COHORT_DEFINE();
+}
+'@ | Set-Content $boundaryProvider -Encoding ASCII
+    $boundaryProviderObject = Join-Path $directory 'cohort-boundary-provider.o'
+    $providerArguments = @($PriorityPair.FiberArguments)
+    for ($i=0; $i -lt $providerArguments.Count; ++$i) {
+        if ($providerArguments[$i] -eq $source) { $providerArguments[$i] = $boundaryProvider }
+        if ($providerArguments[$i] -eq '-o') { $providerArguments[$i+1] = $boundaryProviderObject }
+    }
+    & $runCommand $compiler $providerArguments
+    $linkBody = {
+        param([string]$Object, [string]$Name, [string]$Entry, [switch]$WithPool, [string]$PoolObject)
+        if ($Entry -eq 'fiber_secure_context_gateway_c55s_v1_initialize') {
+            $isolated = Join-Path $directory "$Name-init-only.o"
+            $strip = @('allocate', 'load', 'save') | ForEach-Object {
+                "--remove-section=.text.fiber_secure_context_gateway_c55s_v1_$_"
+            }
+            & $runCommand (Join-Path (Split-Path $compiler) 'arm-none-eabi-objcopy.exe') `
+                ($strip + @('--strip-symbol=fiber_secure_context_pool_allocate',
+                    '--strip-symbol=fiber_secure_context_pool_lookup_owned', $Object, $isolated))
+            $Object = $isolated
+        }
+        $elf = Join-Path $directory "$Name.elf"
+        $arguments = @("-mcpu=cortex-m55", "-mthumb", "-mcmse", "-mfloat-abi=soft", "-nostdlib",
+            "-Wl,--gc-sections", "-Wl,-e,__acle_se_$Entry", "-Wl,-T,$linker",
+            "-Wl,--section-start=.gnu.sgstubs=0x08030000",
+            "-Wl,-Map,$(Join-Path $directory "$Name.map")", $Object)
+        if ($Entry -eq 'fiber_secure_context_gateway_c55s_v1_initialize') {
+            $arguments += "-Wl,-T,$(Join-Path $profile 'fiber_secure_context_cohort_contract.ld')"
+            $arguments += @('initialize','abi_version','stack_alignment','max_stack_bytes','max_contexts') |
+                ForEach-Object { "-Wl,--undefined=__acle_se_fiber_secure_context_gateway_c55s_v1_$_" }
+        }
+        if ($WithPool) { $arguments += @($stubObject,$boundaryProviderObject) }
+        if ($PoolObject) { $arguments += $PoolObject }
+        & $runCommand $compiler ($arguments + @("-o", $elf))
+        Get-ObjectDisassembly -Objdump $objdump -ObjectPath $elf |
+            Set-Content -LiteralPath "$elf.disasm" -Encoding ASCII
+        return $elf
+    }
+    $fiberElf = & $linkBody $PriorityPair.FiberPath "fiber" "fiber_secure_context_gateway_c55s_v1_initialize" -WithPool
+    $priorityElf = & $linkBody $PriorityPair.ReferencePath "reference-priority" "SecureInit_DePrioritizeNSExceptions"
+    # CMSE exports are linker roots even under GC. Remove unrelated entry
+    # sections, not their dependencies via fake malloc/save/load providers.
+    $isolatedReference = Join-Path $directory "reference-init-only.o"
+    $objcopy = Join-Path (Split-Path $compiler) "arm-none-eabi-objcopy.exe"
+    $remove = @("SecureContext_AllocateContext", "SecureContext_FreeContext", "SecureContext_LoadContext", "SecureContext_SaveContext")
+    $copyArgs = @($remove | ForEach-Object { "--remove-section=.text.$_" })
+    & $runCommand $objcopy ($copyArgs + @($CpuPair.ReferencePath, $isolatedReference))
+    $cpuElf = & $linkBody $isolatedReference "reference-cpu" "SecureContext_Init"
+    $hostileObject = Join-Path $directory "hostile.o"
+    $hostileArguments = @($PriorityPair.FiberArguments)
+    for ($index = 0; $index -lt $hostileArguments.Count; ++$index) {
+        if ($hostileArguments[$index] -eq '-o') { $hostileArguments[$index + 1] = $hostileObject }
+    }
+    $hostileArguments += @("-finstrument-functions", "-fstack-protector-all",
+        "-fprofile-arcs", "-ftest-coverage", "-fsanitize=undefined")
+    & $runCommand $compiler $hostileArguments
+    Get-ObjectDisassembly -Objdump $objdump -ObjectPath $hostileObject |
+        Set-Content -LiteralPath "$hostileObject.disasm" -Encoding ASCII
+    $hostileElf = & $linkBody $hostileObject "hostile" "fiber_secure_context_gateway_c55s_v1_initialize" -WithPool
+    # A separate static link covers the real transitive initializer callgraph.
+    # It is not executed on Unicorn's M33 engine (M55 loop/CPU semantics differ).
+    $realPools = @{}
+    $realLinks = @{}
+    foreach ($variant in @('normal', 'hostile')) {
+        $realPools[$variant] = Join-Path $directory "actual-pool-$variant.o"
+        $poolArguments = @($PriorityPair.FiberArguments)
+        for ($index = 0; $index -lt $poolArguments.Count; ++$index) {
+            if ($poolArguments[$index] -eq $source) {
+                $poolArguments[$index] = Join-Path $profile 'fiber_secure_context_pool.c'
+            }
+            if ($poolArguments[$index] -eq '-o') { $poolArguments[$index + 1] = $realPools[$variant] }
+        }
+        if ($variant -eq 'hostile') {
+            $poolArguments += @('-finstrument-functions', '-fstack-protector-all',
+                '-fprofile-arcs', '-ftest-coverage', '-fsanitize=undefined')
+        }
+        & $runCommand $compiler $poolArguments
+        $gatewayObject = $PriorityPair.FiberPath
+        if ($variant -eq 'hostile') { $gatewayObject = $hostileObject }
+        $realLinks[$variant] = & $linkBody $gatewayObject "actual-callgraph-$variant" `
+            "fiber_secure_context_gateway_c55s_v1_initialize" -PoolObject $realPools[$variant]
+    }
+
+    # Each mutant is compiled from a mechanically altered production source.
+    # No production file is modified, and no handwritten replacement init is used.
+    $mutations = @(
+        @{Name="origin"; Find='__builtin_arm_cmse_nonsecure_caller\(\) == 0'; Replacement='0u'},
+        @{Name="svc11"; Find='FIBER_ARM_CM55_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER'; Replacement='14u'},
+        @{Name="bfhfnmins"; Find='\(aircr_before & fiber_secure_contextAIRCR_BFHFNMINS_MASK\) != 0u'; Replacement='0u'},
+        @{Name="aircr-preservation"; Find='aircr_before & ~\(fiber_secure_contextAIRCR_VECTKEY_MASK'; Replacement='aircr_before & ~(0x80u | fiber_secure_contextAIRCR_VECTKEY_MASK'},
+        @{Name="aircr-readback"; Find='(?s)if \(\(\(aircr_after & fiber_secure_contextAIRCR_PRIS_MASK\).*?\n\t\}'; Replacement='/* deliberate missing AIRCR readback guard */'},
+        @{Name="psplim-readback"; Find='stack_limit != 0u'; Replacement='0u'},
+        @{Name="psp-readback"; Find='stack_pointer != 0u'; Replacement='0u'},
+        @{Name="control-readback"; Find='control_after != 2u'; Replacement='0u'},
+        @{Name="pool-success"; Find='fiber_secure_context_pool_boot_initialize\(\) != 1u'; Replacement='fiber_secure_context_pool_boot_initialize() == 0xFFFFFFFFu'},
+        @{Name="initial-latch-readback"; Find='fiber_secure_context_gateway_state !=\s*fiber_secure_contextGATEWAY_INITIALIZING'; Replacement='0u'},
+        @{Name="ready-latch-readback"; Find='fiber_secure_context_gateway_state !=\s*fiber_secure_contextGATEWAY_READY'; Replacement='0u'},
+        @{Name="stack-order"; Find='msr psplim, %0\\n\\tmsr psp, %0'; Replacement='msr psp, %0\n\tmsr psplim, %0'},
+        @{Name="control-two"; Find='"r" \(2u\)'; Replacement='"r" (3u)'},
+        @{Name="barriers"; Find='fiber_secure_contextBARRIERS\(\);'; Replacement=''; Multiple=$true},
+        # VMOV s0,r0 encoding deliberately bypasses the soft-float assembler
+        # rejection. The code-generation guard must inspect the emitted opcode.
+        @{Name="fp-data"; Find='uint32_t aircr_after;'; Replacement='uint32_t aircr_after; __asm volatile (".inst.w 0xee000a10" ::: "memory");'}
+    )
+    $original = (Get-Content -LiteralPath $source -Raw).Replace("`r`n", "`n")
+    $initSpan = Get-C55SGatewayFunctionSpan -Source $original -Name 'fiber_secure_context_gateway_c55s_v1_initialize'
+    $mutants = @()
+    foreach ($mutation in $mutations) {
+        $matches = [regex]::Matches($initSpan.Text, $mutation.Find)
+        if ($matches.Count -eq 0 -or
+                ((-not $mutation.ContainsKey('Multiple')) -and ($matches.Count -ne 1))) {
+            throw "C55SINIT mutant anchor changed: $($mutation.Name)"
+        }
+        $changed = $original.Substring(0, $initSpan.Start) +
+            [regex]::Replace($initSpan.Text, $mutation.Find, $mutation.Replacement) +
+            $original.Substring($initSpan.Start + $initSpan.Length)
+        $mutantSource = Join-Path $directory ("mutant-" + $mutation.Name + ".c")
+        Set-Content -LiteralPath $mutantSource -Value $changed -Encoding ASCII
+        $object = Join-Path $directory ("mutant-" + $mutation.Name + ".o")
+        $arguments = @($PriorityPair.FiberArguments)
+        for ($index = 0; $index -lt $arguments.Count; ++$index) {
+            if ($arguments[$index] -eq $source) { $arguments[$index] = $mutantSource }
+            if ($arguments[$index] -eq '-o') { $arguments[$index + 1] = $object }
+        }
+        & $runCommand $compiler $arguments
+        $elf = & $linkBody $object ("mutant-" + $mutation.Name) "fiber_secure_context_gateway_c55s_v1_initialize" -WithPool
+        $mutants += [ordered]@{Name=$mutation.Name; Elf=$elf; Source=$mutantSource}
+    }
+    $manifest = Join-Path $directory "inputs.json"
+    [ordered]@{Fiber=$fiberElf; Priority=$priorityElf; Cpu=$cpuElf; Hostile=$hostileObject; HostileElf=$hostileElf;
+        ActualPools=$realPools; ActualLinks=$realLinks;
+        FiberIsolated=(Join-Path $directory 'fiber-init-only.o');
+        HostileIsolated=(Join-Path $directory 'hostile-init-only.o');
+        BoundaryProvider=$boundaryProviderObject;
+        Object=$PriorityPair.FiberPath; ReferenceOriginal=$CpuPair.ReferencePath; ReferenceIsolated=$isolatedReference;
+        Mutants=$mutants; Optimization=$Optimization} |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifest -Encoding ASCII
+    $proof = Join-Path $directory "trace_init.py"
+    @'
+"""Generated ARM integer/control mechanism traces, not M55/CMSE architecture.
+
+Unicorn M33 runs ordinary emitted instructions. Explicit hooks supply banked
+CPU-register/PPB readbacks and account for compiler CMSE hygiene. SG, exception
+entry/return, CONTROL effects, FP context state and MPU enforcement are NOT
+qualified here; the independent M55 QEMU runner owns architectural execution.
+"""
+import sys
+if sys.flags.optimize or not __debug__:
+    raise SystemExit('C55SINIT requires Python optimization disabled')
+import importlib.metadata as metadata
+for package, expected in (('unicorn', '2.1.4'), ('pyelftools', '0.33')):
+    if metadata.version(package) != expected:
+        raise SystemExit('C55SINIT requires ' + package + '==' + expected)
+import json, re, struct
+from pathlib import Path
+from elftools.elf.elffile import ELFFile
+from unicorn import (Uc, UcError, UC_ARCH_ARM, UC_MODE_THUMB, UC_MODE_MCLASS,
+                     UC_HOOK_CODE, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE,
+                     UC_HOOK_MEM_INVALID, UC_MEM_WRITE)
+from unicorn import arm_const as arm
+
+class ProofFailure(RuntimeError):
+    def __init__(self, code, detail=''):
+        self.code=code
+        super().__init__(code + (': ' + detail if detail else ''))
+
+def check(condition, message, detail=''):
+    if not condition:
+        raise ProofFailure(message,detail)
+
+def hygiene(op,args):
+    return ((op == 'vstr' and args == 'FPCXTNS, [sp, #-4]!') or
+            (op == 'vldr' and args == 'FPCXTNS, [sp], #4') or
+            (op == 'vscclrm' and args == '{s0-s15, VPR}'))
+
+def body_name(name):
+    return '__acle_se_' + name
+
+COHORT_HELPER='fiber_secure_context_pool_c55s_v1_cohort_provider'
+# Independent numeric oracle for this maintained N=3, S=256 probe. The key
+# schema has twelve uint32 facts, each encoded as two decimal halfwords.
+COHORT_FACTS=(('p',0x43353553),('l',0x00010001),('f',0x8A),('i',1),('c',1),
+              ('r',1),('n',3),('b',256),('a',8),('w',2),('s',8),('v',0xFEF5EDA5))
+COHORT_KEY='fiber_secure_context_cohort_c55s_g1'+''.join(
+    '_'+tag+'_'+str(value>>16)+'_'+str(value&0xFFFF) for tag,value in COHORT_FACTS)
+COHORT_IMPORTS={COHORT_HELPER,COHORT_KEY}
+
+class Image:
+    def __init__(self, path):
+        self.path = Path(path)
+        with self.path.open('rb') as stream:
+            elf = ELFFile(stream)
+            self.symbols = {s.name: dict(value=s['st_value'], size=s['st_size'],
+                kind=s['st_info']['type'], bind=s['st_info']['bind'], section=s['st_shndx'])
+                for s in elf.get_section_by_name('.symtab').iter_symbols()}
+            self.loads = [(s['p_vaddr'], s.data()) for s in elf.iter_segments()
+                          if s['p_type'] == 'PT_LOAD' and s['p_filesz']]
+        self.instructions = {}
+        self.encoding = {}
+        disassembly = Path(str(path) + '.disasm').read_text()
+        for match in re.finditer(r'(?m)^[ \t]*([0-9a-f]+):[ \t]+((?:[0-9a-f]{4}[ \t]+){1,2})([a-z][a-z0-9.]*)[ \t]*([^\r\n]*)', disassembly):
+            address, encoded, opcode, operands = match.groups()
+            self.instructions[int(address,16)] = (len(encoded.split())*2, opcode, operands.split('@')[0].strip())
+            self.encoding[int(address,16)] = tuple(int(word,16) for word in encoded.split())
+
+    def address(self, name):
+        return self.symbols[name]['value'] & ~1
+
+def dependencies(path):
+    with Path(path).open('rb') as stream:
+        elf = ELFFile(stream)
+        return {s.name for s in elf.get_section_by_name('.symtab').iter_symbols()
+                if s.name and s['st_shndx'] == 'SHN_UNDEF' and s['st_info']['bind'] != 'STB_LOCAL'}
+
+def static_callgraph(path,whole_pool=False):
+    image=Image(path)
+    calls=0
+    # GNU ld gives __acle_se_ aliases zero size. Objdump -d's executable
+    # sections include every retained body/helper, not only sized symbols.
+    for address,(_,op,args) in image.instructions.items():
+        check(not op.startswith('v') or hygiene(op,args),'static FP data instruction',op+' '+args)
+        check(op not in ('blx','blxns'),'static indirect helper call',args)
+        if op in ('bl','bl.w'):
+            target=int(args.split()[0],16)
+            permitted={image.address('fiber_secure_context_pool_boot_initialize')}
+            permitted.add(image.address(COHORT_HELPER))
+            if 'fiber_secure_context_gateway_fail_closed' in image.symbols:
+                permitted.add(image.address('fiber_secure_context_gateway_fail_closed'))
+            if whole_pool:
+                permitted.update(s['value'] & ~1 for name,s in image.symbols.items()
+                    if name.startswith('fiber_secure_context_') and s['kind'] == 'STT_FUNC')
+            check(target in permitted,'static unexpected helper call',args)
+            calls+=1
+    check(calls > 0,'static pool call missing')
+    return calls
+
+def cmse_template(image,name,value_return):
+    start=image.address(body_name(name))
+    end=min(s['value'] & ~1 for s in image.symbols.values()
+            if s['kind'] == 'STT_FUNC' and (s['value'] & ~1) > start)
+    body=[(a,op,args) for a,(_,op,args) in sorted(image.instructions.items()) if start <= a < end]
+    selected=[(a,op,args) for a,op,args in body if op.startswith('v') or op in ('clrm','bxns')]
+    check(selected and selected[0][1:] == ('vstr','FPCXTNS, [sp, #-4]!'),'CMSE template prologue changed')
+    mask=0x900E if value_return else 0x900F
+    clear='{r1, r2, r3, ip, APSR}' if value_return else '{r0, r1, r2, r3, ip, APSR}'
+    expected=[('vstr','FPCXTNS, [sp, #-4]!',(0xED6D,0xCF81)),
+              ('vscclrm','{s0-s15, VPR}',(0xEC9F,0x0A10)),
+              ('clrm',clear,(0xE89F,mask)),
+              ('vldr','FPCXTNS, [sp], #4',(0xECFD,0xCF81)),
+              ('bxns','lr',(0x4774,))]
+    actual=[(op,args,image.encoding[a]) for a,op,args in selected[:5]]
+    check(actual == expected,'CMSE template sequence changed',name)
+    tail=[a for a,_,_ in selected[1:5]]
+    check(all(tail[i]+image.instructions[tail[i]][0] == tail[i+1] for i in range(3)),
+          'CMSE template epilogue not contiguous')
+    extra=[(op,args,image.encoding[a]) for a,op,args in selected[5:]]
+    if selected[0][0] != start:
+        # GCC -O2 shrink-wraps FPCXTNS save/restore past the immediate Secure
+        # caller rejection. That exact no-save path still scrubs and BXNS-returns.
+        check(value_return and len(body) >= 3 and body[0][1:] == ('tst.w','lr, #1') and
+              image.encoding[start] == (0xF01E,0x0F01) and
+              body[1][0] == start+4 and body[1][1] == 'bne.n' and
+              selected[0][0] == start+6 and extra == expected[1:3]+expected[4:],
+              'CMSE origin rejection shrink-wrap changed')
+        reject=int(body[1][2].split()[0],16)
+        check(image.instructions.get(reject) == (2,'movs','r0, #0') and
+              image.encoding[reject] == (0x2000,) and selected[5][0] == reject+2,
+              'CMSE origin rejection target changed')
+        short=[a for a,_,_ in selected[5:]]
+        check(all(short[i]+image.instructions[short[i]][0] == short[i+1] for i in range(2)),
+              'CMSE origin rejection scrub not contiguous')
+    else:
+        check(not extra,'CMSE unexpected security epilogue')
+    return dict(Canonical=actual,PrologueOffset=selected[0][0]-start,OriginRejectEpilogue=extra)
+
+def check_cmse_templates(inputs):
+    priority=cmse_template(Image(inputs['Priority']),'SecureInit_DePrioritizeNSExceptions',False)
+    context=cmse_template(Image(inputs['Cpu']),'SecureContext_Init',False)
+    check(priority == context,'pinned CM55 security templates disagree')
+    measured={}
+    for label,path in [('Fiber',inputs['Fiber']),('Hostile',inputs['HostileElf'])]+[
+            ('ActualPool-'+label,path) for label,path in inputs['ActualLinks'].items()]:
+        actual=cmse_template(Image(path),INIT,True)
+        # The only security-template difference is retaining the u32 result in
+        # r0. Compare the remaining opcode/operand/encoding tuples directly.
+        actual_core=actual['Canonical']
+        pinned_core=priority['Canonical']
+        check(actual_core[:2]+actual_core[3:] == pinned_core[:2]+pinned_core[3:],
+              'Fiber/pinned CMSE template mismatch',label)
+        measured[label]=actual
+    # Decoded-instruction classifier controls, distinct from compiled C guard
+    # mutants. Removing or weakening security cleanup must not pass as "no FP".
+    controls={}
+    for control in ('missing-prologue','missing-scrub','wrong-fp-bank','clear-result'):
+        image=Image(inputs['Fiber'])
+        start=image.address(body_name(INIT))
+        end=min(s['value'] & ~1 for s in image.symbols.values()
+                if s['kind'] == 'STT_FUNC' and (s['value'] & ~1) > start)
+        targets={}
+        for address,(_,op,_) in sorted(image.instructions.items()):
+            if start <= address < end and op in ('vstr','vscclrm','vldr','clrm'):
+                targets.setdefault(op,address)
+        if control == 'missing-prologue':
+            image.instructions[targets['vstr']]=(4,'nop.w','')
+        elif control == 'missing-scrub':
+            image.instructions[targets['vscclrm']]=(4,'nop.w','')
+        elif control == 'wrong-fp-bank':
+            image.instructions[targets['vldr']]=(4,'vldr','FPCXTS, [sp], #4')
+        else:
+            image.instructions[targets['clrm']]=(4,'clrm','{r0, r1, r2, r3, ip, APSR}')
+        expected='CMSE template prologue changed' if control == 'missing-prologue' else 'CMSE template sequence changed'
+        try:
+            cmse_template(image,INIT,True)
+        except ProofFailure as exc:
+            check(exc.code == expected,'CMSE classifier control rejected for unintended reason',control+': '+str(exc))
+            controls[control]=exc.code
+        else:
+            raise RuntimeError('CMSE classifier control survived: '+control)
+    return dict(PinnedPriority=priority,PinnedContext=context,Fiber=measured,ClassifierControls=controls)
+
+def reference_identity(original,isolated,name='SecureContext_Init'):
+    images=[]
+    for path in (original,isolated):
+        with Path(path).open('rb') as stream:
+            elf=ELFFile(stream)
+            section=elf.get_section_by_name('.text.'+name)
+            check(section is not None,'missing actual pinned init section')
+            reloc=elf.get_section_by_name('.rel.text.'+name)
+            relocations=[]
+            if reloc is not None:
+                symbols=elf.get_section(reloc['sh_link'])
+                relocations=[(r['r_offset'],r['r_info_type'],symbols.get_symbol(r['r_info_sym']).name)
+                    for r in reloc.iter_relocations()]
+            images.append((section.data(),relocations))
+    check(images[0] == images[1],'isolated reference init bytes/relocations changed')
+
+def function_relocations(path,name):
+    with Path(path).open('rb') as stream:
+        elf=ELFFile(stream)
+        check(elf.get_section_by_name('.text.'+name) is not None,'missing cohort consumer function',name)
+        reloc=elf.get_section_by_name('.rel.text.'+name)
+        if reloc is None: return []
+        symbols=elf.get_section(reloc['sh_link'])
+        return [(r['r_info_type'],symbols.get_symbol(r['r_info_sym']).name) for r in reloc.iter_relocations()]
+
+def cohort_definition(path):
+    image=Image(path)
+    keys={name for name in image.symbols if name.startswith('fiber_secure_context_cohort_c55s_g1_')}
+    check(keys=={COHORT_KEY},'private cohort key differs from numeric oracle',str(keys))
+    key,helper=image.symbols[COHORT_KEY],image.symbols[COHORT_HELPER]
+    check(key['kind']=='STT_OBJECT' and key['bind']=='STB_GLOBAL' and key['size']==1,'private cohort key provider identity')
+    check(helper['kind']=='STT_FUNC' and helper['bind']=='STB_GLOBAL','private cohort C provider identity')
+    check(body_name(COHORT_HELPER) not in image.symbols,'private cohort helper became NSC')
+    with Path(path).open('rb') as stream:
+        elf=ELFFile(stream)
+        section=elf.get_section(key['section'])
+        offset=key['value']-section['sh_addr']
+        check(section['sh_flags']&2 and not section['sh_flags']&5 and section.data()[offset:offset+1]==b'\x01',
+              'private cohort key not one read-only allocated byte')
+    start=image.address(COHORT_HELPER)
+    instructions=[(op,args) for a,(_,op,args) in image.instructions.items() if start<=a<start+helper['size']]
+    check(instructions==[('bx','lr')],'private cohort provider acquired runtime operations',str(instructions))
+    return COHORT_KEY
+
+AIRCR, INITIALIZING, READY = 0xE000ED0C, 0x53434742, 0x53434752
+REGS = {f'r{i}':getattr(arm,f'UC_ARM_REG_R{i}') for i in range(13)}
+REGS.update(sp=arm.UC_ARM_REG_SP, lr=arm.UC_ARM_REG_LR, ip=arm.UC_ARM_REG_R12)
+COUNTS = {'calls':0, 'mutants':0, 'hygiene_instructions':0}
+
+class Machine:
+    stop = 0x0803FFF0
+    def __init__(self, path, ipsr=11, nonsecure=True, aircr=0xFA050080, fault=None, pool=1):
+        self.image, self.ipsr, self.nonsecure = Image(path), ipsr, nonsecure
+        self.uc = Uc(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS)
+        self.uc.ctl_set_cpu_model(arm.UC_CPU_ARM_CORTEX_M33)
+        for address, size in ((0x08000000,0x40000),(0x30000000,0x20000),(0xE000E000,0x2000)):
+            self.uc.mem_map(address,size)
+        for address, data in self.image.loads:
+            self.uc.mem_write(address,data)
+        self.cpu = dict(PSPLIM=0x30018000,PSP=0x30019000,CONTROL=0)
+        self.aircr, self.fault, self.pending, self.trace = aircr, fault, [], []
+        self.state = self.image.symbols.get('fiber_secure_context_gateway_state',{}).get('value',0)
+        self.record = self.image.symbols.get('xSecureContexts',{}).get('value',0)
+        self.pool = self.image.symbols.get('fiber_secure_context_pool_boot_initialize',{}).get('value',0) & ~1
+        self.cohort_provider=self.image.symbols.get(COHORT_HELPER,{}).get('value',0) & ~1
+        self.cohort_key=self.image.symbols.get(COHORT_KEY,{}).get('value',0)
+        self.put(AIRCR,aircr)
+        if 'c55sinit_pool_result' in self.image.symbols:
+            self.put(self.image.address('c55sinit_pool_result'),pool)
+        self.uc.hook_add(UC_HOOK_CODE,self.code)
+        self.uc.hook_add(UC_HOOK_MEM_READ | UC_HOOK_MEM_WRITE,self.memory)
+        self.uc.hook_add(UC_HOOK_MEM_INVALID,self.invalid)
+
+    def put(self,address,value):
+        self.uc.mem_write(address,struct.pack('<I',value & 0xFFFFFFFF))
+    def get(self,address):
+        return struct.unpack('<I',self.uc.mem_read(address,4))[0]
+    def invalid(self,uc,kind,address,size,value,data):
+        raise RuntimeError(f'invalid generated-code access {address:#x}')
+    def skip(self,address,size):
+        self.uc.reg_write(arm.UC_ARM_REG_PC,(address+size)|1)
+    def code(self,uc,address,size,data):
+        for target,value in self.pending:
+            self.put(target,value)
+        self.pending=[]
+        if address == self.pool and self.pool:
+            self.trace.append(('pool',))
+        if address == self.cohort_provider and self.cohort_provider:
+            self.trace.append(('cohort-provider',))
+        if address == self.stop:
+            self.returned=True
+            uc.emu_stop()
+            return
+        check(address in self.image.instructions,f'unknown instruction at {address:#x}')
+        length,op,args=self.image.instructions[address]
+        if op == 'udf':
+            symbol=self.image.symbols.get('fiber_secure_context_gateway_fail_closed',{})
+            start=symbol.get('value',0) & ~1
+            check(start <= address < start+symbol.get('size',0),'unexpected UDF location')
+            check(self.fault in ('INITIALIZING','READY'),'unexpected fail-closed trap')
+            self.trapped=True
+            uc.emu_stop()
+        elif op == 'mrs':
+            dest,register=[x.strip() for x in args.split(',')]
+            value=self.ipsr if register == 'IPSR' else self.cpu.get(register)
+            check(value is not None,'unexpected banked register read '+register)
+            if self.fault == register:
+                value=0 if register == 'CONTROL' else 8
+            self.trace.append(('read',register,value))
+            uc.reg_write(REGS[dest],value)
+            self.skip(address,length)
+        elif op == 'msr':
+            register,src=[x.strip() for x in args.split(',')]
+            check(register in self.cpu,'unexpected banked register write '+register)
+            value=uc.reg_read(REGS[src])
+            self.cpu[register]=value
+            self.trace.append(('write',register,value))
+            self.skip(address,length)
+        elif op in ('dsb','isb'):
+            self.trace.append((op,))
+        elif op.startswith('v'):
+            # Only these exact compiler-generated NSC hygiene forms may be
+            # modeled. Never permit FP arithmetic, user FP state or helper FP.
+            check(hygiene(op,args), 'FP data instruction '+op+' '+args)
+            sp=uc.reg_read(arm.UC_ARM_REG_SP)
+            if op == 'vstr':
+                uc.reg_write(arm.UC_ARM_REG_SP,sp-4)
+                self.put(sp-4,0)
+            elif op == 'vldr':
+                uc.reg_write(arm.UC_ARM_REG_SP,sp+4)
+            COUNTS['hygiene_instructions']+=1
+            self.skip(address,length)
+        elif op == 'clrm':
+            check(args in ('{r0, r1, r2, r3, ip, APSR}','{r1, r2, r3, ip, APSR}'),
+                  'unexpected CMSE register-clear form',args)
+            self.skip(address,length)
+        elif op == 'bxns':
+            check(args == 'lr','unexpected NSC return operand')
+            self.returned=True
+            uc.emu_stop()
+        elif op in ('sg','blx','blxns'):
+            raise RuntimeError('unexpected SG/indirect call in C-body trace')
+
+    def memory(self,uc,kind,address,size,value,data):
+        if address == self.cohort_key and self.cohort_key:
+            check(kind != UC_MEM_WRITE and size==1,'private cohort key access changed')
+            self.trace.append(('cohort-read',bytes(uc.mem_read(address,1))[0]))
+        elif address == AIRCR:
+            check(size == 4,'nonword AIRCR access')
+            if kind == UC_MEM_WRITE:
+                self.trace.append(('aircr-write',value))
+                self.aircr=0xFA050000 | (value & 0xFFFF)
+                if self.fault == 'AIRCR-PRIS': self.aircr &= ~0x4000
+                if self.fault == 'AIRCR-preserve': self.aircr ^= 0x80
+                self.pending.append((address,self.aircr))
+            else:
+                self.trace.append(('aircr-read',self.get(address)))
+        elif address >= 0xE0000000:
+            raise RuntimeError(f'unexpected PPB access {address:#x}')
+        elif address == self.state and self.state:
+            if kind == UC_MEM_WRITE:
+                self.trace.append(('state-write',value))
+            else:
+                value=self.get(address)
+                self.trace.append(('state-read',value))
+                if (self.fault == 'INITIALIZING' and value == INITIALIZING) or (self.fault == 'READY' and value == READY):
+                    self.put(address,0)
+                    self.pending.append((address,value))
+        elif self.record and self.record <= address < self.record+48 and kind == UC_MEM_WRITE:
+            self.trace.append(('record-write',address-self.record,size,value))
+
+    def call(self,name):
+        COUNTS['calls']+=1
+        self.trace=[]
+        self.returned=self.trapped=False
+        self.uc.reg_write(arm.UC_ARM_REG_CONTROL,0)
+        self.uc.reg_write(arm.UC_ARM_REG_MSP,0x3001F000)
+        self.uc.reg_write(arm.UC_ARM_REG_SP,0x3001F000)
+        preserved={REGS[f'r{i}']:0xCA110000+i for i in range(4,12)}
+        for register,value in preserved.items():
+            self.uc.reg_write(register,value)
+        self.uc.reg_write(arm.UC_ARM_REG_LR,self.stop | (0 if self.nonsecure else 1))
+        try:
+            self.uc.emu_start(self.image.address(body_name(name))|1,self.stop+2,count=100000)
+        except UcError as exc:
+            pc=self.uc.reg_read(arm.UC_ARM_REG_PC)
+            raise RuntimeError(f'generated instruction unsupported at {pc:#x}: '+str(exc)) from exc
+        check(self.returned or self.trapped,'generated C body did not finish')
+        if self.returned:
+            check(self.uc.reg_read(arm.UC_ARM_REG_SP) == 0x3001F000,'generated C body lost stack balance')
+            check(all(self.uc.reg_read(r) == v for r,v in preserved.items()),'generated C body lost callee registers')
+        return self.uc.reg_read(arm.UC_ARM_REG_R0)
+
+def ordered(trace,events):
+    cursor=0
+    for event in events:
+        while cursor < len(trace) and trace[cursor] != event:
+            cursor+=1
+        check(cursor < len(trace),'missing ordered generated event '+str(event),str(trace))
+        cursor+=1
+
+INIT='fiber_secure_context_gateway_c55s_v1_initialize'
+def effects(trace):
+    return [x for x in trace if x[0] in ('state-write','aircr-write','write','pool','record-write')]
+
+def cohort_events(trace):
+    return [x for x in trace if x[0] in ('cohort-provider','cohort-read')]
+
+def rejected_before_cohort(machine,diagnostic):
+    check(machine.call(INIT) == 0 and not effects(machine.trace),diagnostic)
+    check(not cohort_events(machine.trace),'rejected init reached private cohort',diagnostic)
+
+def check_fiber(path):
+    for low in [0,0x80,0xFFFF & ~0x2000] + [1<<i for i in range(16) if i != 13]:
+        m=Machine(path,aircr=0xFA050000|low)
+        result=m.call(INIT)
+        check(result == 1 and not m.trapped,'valid init rejected')
+        expected=0x05FA0000 | low | 0x4000
+        check(effects(m.trace) == [('state-write',INITIALIZING),('aircr-write',expected),
+            ('write','PSPLIM',0),('write','PSP',0),('pool',),('write','CONTROL',2),('state-write',READY)],
+            'numeric write preservation/order mismatch',str(effects(m.trace)))
+        ordered(m.trace,[('state-write',INITIALIZING),('dsb',),('isb',),('state-read',INITIALIZING),
+            ('aircr-write',expected),('dsb',),('isb',),('aircr-read',0xFA050000|(low|0x4000)),
+            ('write','PSPLIM',0),('write','PSP',0),('dsb',),('isb',),('read','PSPLIM',0),('read','PSP',0),
+            ('pool',),('write','CONTROL',2),('isb',),('read','CONTROL',2),
+            ('state-write',READY),('dsb',),('isb',),('state-read',READY)])
+        ordered(m.trace,[('cohort-provider',),('cohort-read',1),('state-write',INITIALIZING)])
+        rejected_before_cohort(m,'repeat init made effects')
+    for exception in (0,1,3,14,15,16):
+        m=Machine(path,ipsr=exception)
+        rejected_before_cohort(m,'invalid SVC origin accepted')
+    m=Machine(path,nonsecure=False)
+    rejected_before_cohort(m,'Secure-origin call accepted')
+    for marker in (INITIALIZING,READY,1,0xFFFFFFFF):
+        m=Machine(path)
+        m.put(m.state,marker)
+        rejected_before_cohort(m,'existing marker accepted')
+    m=Machine(path,aircr=0xFA052080)
+    rejected_before_cohort(m,'A26 BFHFNMINS precommit rejection lost')
+    for fault in ('AIRCR-PRIS','AIRCR-preserve','PSPLIM','PSP','CONTROL','INITIALIZING','READY'):
+        m=Machine(path,fault=fault)
+        result=m.call(INIT)
+        check((m.trapped if fault in ('INITIALIZING','READY') else result == 0 and not m.trapped),
+              'readback fault accepted '+fault)
+        if not m.trapped:
+            check(m.get(m.state) == INITIALIZING,'failure lost sticky commitment')
+            rejected_before_cohort(m,'failure retry made effects')
+    for pool in (0,2,0xFFFFFFFF):
+        m=Machine(path,pool=pool)
+        check(m.call(INIT) == 0 and m.get(m.state) == INITIALIZING,'pool failure accepted')
+        check(not any(x[0] == 'write' and x[1] == 'CONTROL' for x in m.trace),'pool failure wrote CONTROL')
+
+def check_reference(priority,cpu):
+    for low in [0,0x80] + [1<<i for i in range(16) if i != 13]:
+        m=Machine(priority,aircr=0xFA050000|low)
+        m.call('SecureInit_DePrioritizeNSExceptions')
+        check([x for x in m.trace if x[0] == 'aircr-write'] == [('aircr-write',0x05FA0000|low|0x4000)],
+            'pinned priority preservation/key mechanism changed')
+    m=Machine(priority,ipsr=0)
+    m.call('SecureInit_DePrioritizeNSExceptions')
+    check(not effects(m.trace),'pinned priority Thread gate changed')
+    m=Machine(cpu)
+    record=m.image.address('xSecureContexts')
+    m.uc.mem_write(record,b'\xA5'*48)
+    m.call('SecureContext_Init')
+    check([x for x in m.trace if x[0] == 'write'] == [('write','PSPLIM',0),('write','PSP',0),('write','CONTROL',2)],
+          'pinned stack/control order or values changed')
+    check(bytes(m.uc.mem_read(record,48)) == b'\0'*48,'pinned three-record clear changed')
+    clears=[(i,event) for i,event in enumerate(m.trace) if event[0] == 'record-write']
+    check(sorted(offset for _,(_,start,size,_) in clears for offset in range(start,start+size)) == list(range(48))
+          and all(event[3] == 0 for _,event in clears),'pinned record clear write coverage changed')
+    check(m.trace.index(('write','PSP',0)) < min(i for i,_ in clears) <= max(i for i,_ in clears)
+          < m.trace.index(('write','CONTROL',2)),'pinned memory/CPU initialization order changed')
+    m.call('SecureContext_Init')
+    check(not effects(m.trace),'pinned one-shot marker lost')
+    m=Machine(cpu,ipsr=0)
+    m.call('SecureContext_Init')
+    check(not effects(m.trace),'pinned init Thread gate changed')
+
+def main():
+    manifest=Path(sys.argv[1])
+    inputs=json.loads(manifest.read_text(encoding='utf-8-sig'))
+    reference_identity(inputs['ReferenceOriginal'],inputs['ReferenceIsolated'])
+    reference_identity(inputs['Object'],inputs['FiberIsolated'],INIT)
+    reference_identity(inputs['Hostile'],inputs['HostileIsolated'],INIT)
+    reference_identity(inputs['BoundaryProvider'],inputs['ActualPools']['normal'],COHORT_HELPER)
+    reference_identity(inputs['BoundaryProvider'],inputs['ActualPools']['hostile'],COHORT_HELPER)
+    check(dependencies(inputs['Object']) == {'fiber_secure_context_pool_boot_initialize',
+        'fiber_secure_context_pool_allocate','fiber_secure_context_pool_lookup_owned'}|COHORT_IMPORTS,'C55SINIT hidden helper dependency')
+    check(dependencies(inputs['FiberIsolated']) == {'fiber_secure_context_pool_boot_initialize'}|COHORT_IMPORTS,
+          'C55SINIT isolated initializer helper dependency')
+    check(dependencies(inputs['Hostile']) == dependencies(inputs['Object']),'C55SINIT canonical sensitive callgraph instrumentation leak')
+    callgraph={name:static_callgraph(inputs[name]) for name in ('Fiber','HostileElf')}
+    for variant,path in inputs['ActualPools'].items():
+        check(not dependencies(path),'actual pool helper/instrumentation dependency',variant)
+        callgraph['ActualPool-'+variant]=static_callgraph(inputs['ActualLinks'][variant],whole_pool=True)
+        cohort_definition(inputs['ActualLinks'][variant])
+    cohort_definition(inputs['Fiber'])
+    for name in (INIT,'fiber_secure_context_gateway_c55s_v1_abi_version',
+                 'fiber_secure_context_gateway_c55s_v1_stack_alignment',
+                 'fiber_secure_context_gateway_c55s_v1_max_stack_bytes','fiber_secure_context_gateway_c55s_v1_max_contexts'):
+        for path in (inputs['Object'],inputs['FiberIsolated'],inputs['Hostile'],inputs['HostileIsolated']):
+            relocations=function_relocations(path,name)
+            check(relocations.count((10,COHORT_HELPER))==1 and relocations.count((2,COHORT_KEY))==1,
+                  'missing exact private cohort call/key relocations',name)
+    cmse=check_cmse_templates(inputs)
+    check_reference(inputs['Priority'],inputs['Cpu'])
+    check_fiber(inputs['Fiber'])
+    expected_kills={
+        'origin':'Secure-origin call accepted', 'svc11':'valid init rejected',
+        'bfhfnmins':'A26 BFHFNMINS precommit rejection lost',
+        'aircr-preservation':'numeric write preservation/order mismatch',
+        'aircr-readback':'readback fault accepted AIRCR-PRIS',
+        'psplim-readback':'readback fault accepted PSPLIM',
+        'psp-readback':'readback fault accepted PSP',
+        'control-readback':'readback fault accepted CONTROL',
+        'pool-success':'pool failure accepted',
+        'initial-latch-readback':"missing ordered generated event ('state-read', 1396918082)",
+        'ready-latch-readback':"missing ordered generated event ('state-read', 1396918098)",
+        'stack-order':'numeric write preservation/order mismatch',
+        'control-two':'valid init rejected',
+        'barriers':"missing ordered generated event ('dsb',)",
+        'fp-data':'FP data instruction vmov s0, r0'}
+    check({m['Name'] for m in inputs['Mutants']} == set(expected_kills),'mutant inventory changed')
+    killed=[]
+    for mutant in inputs['Mutants']:
+        try:
+            check_fiber(mutant['Elf'])
+        except ProofFailure as exc:
+            check(exc.code == expected_kills[mutant['Name']],
+                  'mutant rejected for unintended reason',mutant['Name']+': '+str(exc))
+            killed.append(dict(Name=mutant['Name'],Diagnostic=str(exc)))
+        else:
+            raise RuntimeError('C55SINIT guard mutant survived: '+mutant['Name'])
+    COUNTS['mutants']=len(killed)
+    result=dict(COUNTS,Optimization=inputs['Optimization'],Killed=killed,StaticCallgraphCalls=callgraph,CMSE=cmse,
+        PrivateCohort=dict(Key=COHORT_KEY,Facts=COHORT_FACTS,BoundaryProvider=inputs['BoundaryProvider'],
+                           ActualProviders=inputs['ActualPools'],ColdConsumers=5),
+        Scope='Actual emitted ordinary ARM instructions with explicit banked-register, AIRCR and CMSE-hygiene hooks; not M55 architectural CPU/SG/FP qualification. Pool boundary stub, not pool-memory proof.')
+    (manifest.parent/'trace-result.json').write_text(json.dumps(result,indent=2)+'\n')
+    print('PASS C55SINIT generated mechanisms: '+str(COUNTS['calls'])+' traces, '+str(len(killed))+
+          ' compiled mutants killed, '+str(len(cmse['ClassifierControls']))+' CMSE classifier controls')
+
+if __name__ == '__main__':
+    main()
+'@ | Set-Content -LiteralPath $proof -Encoding ASCII
+    $oldPath = $env:PYTHONPATH
+    try {
+        $modules = $PythonModules
+        if (-not $modules) {
+            $cached = Join-Path ([IO.Path]::GetTempPath()) "fiber-classic-audit-python"
+            if (Test-Path -LiteralPath $cached) { $modules = $cached }
+        }
+        if ($modules) { $env:PYTHONPATH = $modules + [IO.Path]::PathSeparator + $oldPath }
+        & $runCommand $Python @($proof, $manifest)
+    }
+    finally { $env:PYTHONPATH = $oldPath }
+    & $assertInputs
+    [ordered]@{Optimization=$Optimization; Sources=$PriorityPair.InitSourceHashes;
+        Compiler=[ordered]@{Path=$compiler; Sha256=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash};
+        Artifacts=@(Get-ChildItem -LiteralPath @($directory, (Split-Path $PriorityPair.FiberPath),
+            (Split-Path $CpuPair.ReferencePath)) -File | Where-Object { $_.Name -ne 'artifacts.json' } | ForEach-Object {
+            [ordered]@{Path=$_.FullName; Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
+        })} | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $directory "artifacts.json") -Encoding ASCII
+}
+
+function Test-C55STransferMechanisms {
+    param([object]$Pair)
+    $initDirectory = Join-Path $BuildRoot 'C55SINIT'
+    $upstreamPath = Join-Path $initDirectory 'artifacts.json'
+    $upstream = Get-Content $upstreamPath -Raw | ConvertFrom-Json
+    $assertInputs = {
+        foreach ($inputFile in @($Pair.InitSourceHashes)+@($upstream.Artifacts)) {
+            if ((Get-FileHash -LiteralPath $inputFile.Path -Algorithm SHA256).Hash -ne $inputFile.Sha256) {
+                throw "C55STRANSFER input changed during qualification: $($inputFile.Path)"
+            }
+        }
+    }
+    & $assertInputs
+    foreach ($id in @('FAP-C55STRANSFER-ALLOCATE','FAP-C55STRANSFER-LOAD',
+            'FAP-C55STRANSFER-SAVE','FAP-C55STRANSFER-GATES','FAP-CMSE-M55')) {
+        if ($ledger.IndexOf($id, [StringComparison]::Ordinal) -lt 0) { throw "Missing ledger ID: $id" }
+    }
+    $directory = Join-Path $BuildRoot 'C55STRANSFER'
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $profile = Join-Path $RepoRoot 'fiber\port\ARM_CM55\secure'
+    $source = Join-Path $profile 'fiber_secure_context_gateway.c'
+    $run = {
+        param([string]$Program, [string[]]$Arguments)
+        ConvertTo-Json -InputObject (@($Program)+$Arguments) -Compress |
+            Add-Content (Join-Path $directory 'commands.jsonl') -Encoding ASCII
+        & $Program @Arguments
+        if ($LASTEXITCODE -ne 0) { throw "C55STRANSFER command failed: $Program" }
+    }
+    $compileFiber = {
+        param([string]$SourcePath, [string]$Name, [switch]$Hostile)
+        $object = Join-Path $directory "$Name.o"
+        $arguments = @($Pair.FiberArguments)
+        for ($i=0; $i -lt $arguments.Count; ++$i) {
+            if ($arguments[$i] -eq $source) { $arguments[$i] = $SourcePath }
+            if ($arguments[$i] -eq '-o') { $arguments[$i+1] = $object }
+        }
+        if ($Hostile) { $arguments += @('-finstrument-functions','-fstack-protector-all',
+            '-fprofile-arcs','-ftest-coverage','-fsanitize=undefined') }
+        & $run $compiler $arguments
+        Get-ObjectDisassembly -Objdump $objdump -ObjectPath $object |
+            Set-Content "$object.disasm" -Encoding ASCII
+        return $object
+    }
+    $link = {
+        param([string[]]$Objects, [string]$Name, [string]$Entry, [switch]$WithIdentity)
+        $elf = Join-Path $directory "$Name.elf"
+        $cohortArguments = @()
+        if ($Entry.StartsWith('fiber_secure_')) {
+            $cohortArguments += "-Wl,-T,$(Join-Path $profile 'fiber_secure_context_cohort_contract.ld')"
+            # Explicit NSC roots, never an artificial root for the private
+            # provider/key. Direct-object links do not prove archive extraction.
+            $roots = @('initialize','abi_version','stack_alignment','max_stack_bytes',
+                'max_contexts','allocate','load','save') | ForEach-Object { 'fiber_secure_context_gateway_c55s_v1_'+$_ }
+            if ($WithIdentity) {
+                $roots += @('abi_version','context_port_id','context_layout_version','context_feature_mask') |
+                    ForEach-Object { 'fiber_secure_gateway_c55s_v1_'+$_ }
+            }
+            $cohortArguments += $roots | ForEach-Object { "-Wl,--undefined=__acle_se_$_" }
+        }
+        & $run $compiler (@('-mcpu=cortex-m55','-mthumb','-mcmse','-mfloat-abi=soft',
+            '-nostdlib','-Wl,--gc-sections',"-Wl,-e,__acle_se_$Entry",
+            "-Wl,-T,$(Join-Path $initDirectory 'body.ld')",'-Wl,--section-start=.gnu.sgstubs=0x08030000',
+            "-Wl,-Map,$(Join-Path $directory "$Name.map")")+$cohortArguments+$Objects+@('-o',$elf))
+        Get-ObjectDisassembly -Objdump $objdump -ObjectPath $elf |
+            Set-Content "$elf.disasm" -Encoding ASCII
+        return $elf
+    }
+    # Explicit gateway boundary fixture, not an alternative pool implementation.
+    # The actual pool is linked/scanned separately and has its own behavior suite.
+    $boundary = Join-Path $directory 'pool_boundary.c'
+    @'
+#include "fiber_secure_context_pool.h"
+FiberSecureContextRecord c55stransfer_records[3];
+volatile uint32_t c55stransfer_alloc_result = 2u;
+volatile uint32_t c55stransfer_lookup_fail_at;
+volatile uint32_t c55stransfer_lookup_calls;
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_pool_boot_initialize(void) { return 1u; }
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberSecureContextHandle fiber_secure_context_pool_allocate(uint32_t bytes, uintptr_t owner)
+{ (void)bytes; (void)owner; return c55stransfer_alloc_result; }
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+FiberSecureContextRecord *fiber_secure_context_pool_lookup_owned(FiberSecureContextHandle handle, uintptr_t owner)
+{
+    ++c55stransfer_lookup_calls;
+    if (c55stransfer_lookup_calls == c55stransfer_lookup_fail_at || handle == 0u || handle > 3u || owner == 0u)
+        return 0;
+    FiberSecureContextRecord *record = &c55stransfer_records[handle-1u];
+    return record->owner_token == owner ? record : 0;
+}
+'@ | Set-Content $boundary -Encoding ASCII
+    $boundaryObject = & $compileFiber $boundary 'pool-boundary'
+    $cohortBoundaryObject = Join-Path $initDirectory 'cohort-boundary-provider.o'
+    $fiberElf = & $link @($Pair.FiberPath,$boundaryObject,$cohortBoundaryObject) 'fiber' 'fiber_secure_context_gateway_c55s_v1_allocate'
+    $actual = @{}
+    $identities = @{}
+    foreach ($variant in @('normal','hostile')) {
+        $gateway = $Pair.FiberPath
+        $pool = Join-Path $initDirectory "actual-pool-$variant.o"
+        if ($variant -eq 'hostile') { $gateway = Join-Path $initDirectory 'hostile.o' }
+        $identity = & $compileFiber (Join-Path $profile 'fiber_secure_gateway.c') "identity-$variant" -Hostile:($variant -eq 'hostile')
+        $identities[$variant] = $identity
+        $actual[$variant] = & $link @($gateway,$pool,$identity) "actual-$variant" 'fiber_secure_context_gateway_c55s_v1_allocate' -WithIdentity
+    }
+    $referencePort = Join-Path $directory 'reference-port.o'
+    $referenceArguments = @($Pair.ReferenceArguments)
+    for ($i=0; $i -lt $referenceArguments.Count; ++$i) {
+        if ($referenceArguments[$i] -eq '-c') {
+            $referenceArguments[$i+1] = Join-Path $kernel 'portable\GCC\ARM_CM55\secure\secure_context_port.c'
+        }
+        if ($referenceArguments[$i] -eq '-o') { $referenceArguments[$i+1] = $referencePort }
+    }
+    & $run $compiler $referenceArguments
+    Get-ObjectDisassembly -Objdump $objdump -ObjectPath $referencePort |
+        Set-Content "$referencePort.disasm" -Encoding ASCII
+    $referenceObject = Join-Path $directory 'reference-without-free.o'
+    & $run (Join-Path (Split-Path $compiler) 'arm-none-eabi-objcopy.exe') @(
+        '--remove-section=.text.SecureContext_FreeContext',$Pair.ReferencePath,$referenceObject)
+    $heap = Join-Path $directory 'reference_heap_boundary.c'
+    @'
+#include <stdint.h>
+#include <stddef.h>
+/* Actual pinned allocation runs; only its allocator result is controlled. */
+volatile uintptr_t c55stransfer_heap_result = 0x30008000u;
+void *pvPortMalloc(size_t bytes) { (void)bytes; return (void *)c55stransfer_heap_result; }
+'@ | Set-Content $heap -Encoding ASCII
+    $heapObject = & $compileFiber $heap 'reference-heap-boundary'
+    $referenceElf = & $link @($referenceObject,$referencePort,$heapObject) 'reference' 'SecureContext_AllocateContext'
+    $original = (Get-Content $source -Raw).Replace("`r`n","`n")
+    $mutations = @()
+    foreach ($operation in @('allocate','load','save')) {
+        $mutations += @{Name="$operation-origin"; Operation=$operation; Find='__builtin_arm_cmse_nonsecure_caller\(\) == 0'; Replacement='0u'}
+        $mutations += @{Name="$operation-ready"; Operation=$operation; Find='fiber_secure_context_gateway_state !=\s*fiber_secure_contextGATEWAY_READY'; Replacement='0u'}
+        $mutations += @{Name="$operation-control"; Operation=$operation; Find='control != 2u'; Replacement='0u'}
+        $mutations += @{Name="$operation-handler"; Operation=$operation; Find='FIBER_ARM_CM55_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER'; Replacement='15u'}
+    }
+    $mutations += @(
+        @{Name='allocate-limit'; Operation='allocate'; Find='stack_limit != 0u'; Replacement='0u'},
+        @{Name='allocate-pointer'; Operation='allocate'; Find='stack_pointer != 0u'; Replacement='0u'},
+        @{Name='load-limit-admission'; Operation='load'; Find='stack_limit != 0u'; Replacement='0u'},
+        @{Name='load-pointer-admission'; Operation='load'; Find='stack_pointer != 0u'; Replacement='0u'},
+        @{Name='load-owner'; Operation='load'; Find='owner_token == 0u'; Replacement='0u'},
+        @{Name='load-lookup'; Operation='load'; Find='\(FiberSecureContextHandle\)handle, owner_token'; Replacement='(FiberSecureContextHandle)handle, 0u'},
+        @{Name='load-limit-readback'; Operation='load'; Find='limit_after != stack_limit'; Replacement='0u'; Multiple=$true},
+        @{Name='load-pointer-readback'; Operation='load'; Find='pointer_after != stack_pointer'; Replacement='0u'},
+        @{Name='save-owner'; Operation='save'; Find='owner_token == 0u'; Replacement='0u'},
+        @{Name='save-limit-admission'; Operation='save'; Find='stack_limit != record->stack_limit'; Replacement='0u'},
+        @{Name='save-align'; Operation='save'; Find='(?s)\(stack_pointer &\s*\(FIBER_ARM_CM55_SECURE_CONTEXT_GATEWAY_STACK_ALIGNMENT - 1u\)\) !=\s*0u'; Replacement='0u'},
+        @{Name='save-lower'; Operation='save'; Find='stack_pointer < record->stack_limit'; Replacement='0u'},
+        @{Name='save-upper'; Operation='save'; Find='stack_pointer > record->stack_top'; Replacement='0u'},
+        @{Name='save-lookup-readback'; Operation='save'; Find='(?s)fiber_secure_context_pool_lookup_owned\(\s*\(FiberSecureContextHandle\)handle, owner_token\) != record'; Replacement='0u'},
+        @{Name='save-publication-readback'; Operation='save'; Find='(?s)\(\(volatile FiberSecureContextRecord \*\)record\)->current_stack_pointer !=\s*stack_pointer'; Replacement='0u'},
+        @{Name='save-limit-readback'; Operation='save'; Find='limit_after != 0u'; Replacement='0u'; Multiple=$true},
+        @{Name='save-pointer-readback'; Operation='save'; Find='pointer_after != 0u'; Replacement='0u'},
+        @{Name='load-barriers'; Operation='load'; Find='fiber_secure_contextBARRIERS\(\);'; Replacement=''; Multiple=$true},
+        @{Name='save-barriers'; Operation='save'; Find='fiber_secure_contextBARRIERS\(\);'; Replacement=''; Multiple=$true},
+        @{Name='load-order'; Operation='load'; Remove='__asm volatile \("msr psp, %0" :: "r" \(stack_pointer\) : "memory"\);';
+          Find='__asm volatile \("msr psplim, %0" :: "r" \(stack_limit\) : "memory"\);';
+          Replacement='__asm volatile ("msr psp, %0" :: "r" (stack_pointer) : "memory"); __asm volatile ("msr psplim, %0" :: "r" (stack_limit) : "memory");'},
+        @{Name='save-order'; Operation='save'; Remove='__asm volatile \("msr psplim, %0" :: "r" \(0u\) : "memory"\);';
+          Find='\(\(volatile FiberSecureContextRecord \*\)record\)->current_stack_pointer =';
+          Replacement='__asm volatile ("msr psplim, %0" :: "r" (0u) : "memory"); ((volatile FiberSecureContextRecord *)record)->current_stack_pointer ='},
+        @{Name='save-publication'; Operation='save'; Find='(?s)\(\(volatile FiberSecureContextRecord \*\)record\)->current_stack_pointer =\s*stack_pointer;'; Replacement='/* removed PSP publication */'},
+        @{Name='allocate-control-write'; Operation='allocate'; Find='uint32_t control;';
+          Replacement='uint32_t control; __asm volatile ("msr control, %0" :: "r" (2u) : "memory");'},
+        @{Name='allocate-fp-data'; Operation='allocate'; Find='uint32_t control;'; Replacement='uint32_t control; __asm volatile (".inst.w 0xee000a10" ::: "memory");'}
+    )
+    $mutants = @()
+    foreach ($mutation in $mutations) {
+        $span = Get-C55SGatewayFunctionSpan $original ('fiber_secure_context_gateway_c55s_v1_'+$mutation.Operation)
+        $functionText = $span.Text
+        if ($mutation.ContainsKey('Remove')) {
+            if ([regex]::Matches($functionText,$mutation.Remove).Count -ne 1) {
+                throw "C55STRANSFER movement anchor changed: $($mutation.Name)"
+            }
+            $functionText = [regex]::Replace($functionText,$mutation.Remove,'')
+        }
+        $matches = [regex]::Matches($functionText,$mutation.Find)
+        if ($matches.Count -eq 0 -or (-not $mutation.ContainsKey('Multiple') -and $matches.Count -ne 1)) {
+            throw "C55STRANSFER mutant anchor changed: $($mutation.Name)"
+        }
+        $changed = $original.Substring(0,$span.Start)+[regex]::Replace($functionText,$mutation.Find,$mutation.Replacement)+
+            $original.Substring($span.Start+$span.Length)
+        $mutantSource = Join-Path $directory ("mutant-"+$mutation.Name+'.c')
+        Set-Content $mutantSource $changed -Encoding ASCII
+        $object = & $compileFiber $mutantSource ("mutant-"+$mutation.Name)
+        $elf = & $link @($object,$boundaryObject,$cohortBoundaryObject) ("mutant-"+$mutation.Name) 'fiber_secure_context_gateway_c55s_v1_allocate'
+        $mutants += [ordered]@{Name=$mutation.Name;Operation=$mutation.Operation;Elf=$elf}
+    }
+    $manifest = Join-Path $directory 'inputs.json'
+    [ordered]@{Fiber=$fiberElf;Actual=$actual;IdentityObjects=$identities;BoundaryProvider=$cohortBoundaryObject;
+        Reference=$referenceElf;ReferenceOriginal=$Pair.ReferencePath;
+        ReferenceIsolated=$referenceObject;ReferencePort=$referencePort;GatewayObject=$Pair.FiberPath;
+        HostileObject=(Join-Path $initDirectory 'hostile.o');Mutants=$mutants;Optimization=$Optimization;
+        InitProof=(Join-Path $initDirectory 'trace_init.py')} |
+        ConvertTo-Json -Depth 6 | Set-Content $manifest -Encoding ASCII
+    $proof = Join-Path $directory 'trace_transfer.py'
+    @'
+"""Actual ARM C bodies; explicit CPU/CMSE and pool/heap boundary doubles.
+Not physical M55 execution, real pool lifecycle or an NS runtime provider.
+"""
+import sys
+if sys.flags.optimize or not __debug__:
+    raise SystemExit('C55STRANSFER requires Python optimization disabled')
+import importlib.util, json, struct
+from pathlib import Path
+inputs=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8-sig'))
+spec=importlib.util.spec_from_file_location('c55s_init_proof',inputs['InitProof'])
+base=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(base)
+check,Failure,arm=base.check,base.ProofFailure,base.arm
+PREFIX='fiber_secure_context_gateway_c55s_v1_'
+OWNER,LIMIT,TOP,PSP=0x11223344,0x30008000,0x30008100,0x30008080
+RESULTS={'cases':0}
+
+def body(image,name):
+    start=image.address(base.body_name(name))
+    end=min(s['value'] & ~1 for s in image.symbols.values()
+        if s['kind'] == 'STT_FUNC' and (s['value'] & ~1) > start)
+    return [(a,length,op,args) for a,(length,op,args) in sorted(image.instructions.items()) if start <= a < end]
+
+def full_template(value_return=True):
+    clear='{r1, r2, r3, ip, APSR}' if value_return else '{r0, r1, r2, r3, ip, APSR}'
+    return [('vstr','FPCXTNS, [sp, #-4]!',(0xED6D,0xCF81)),
+        ('vscclrm','{s0-s15, VPR}',(0xEC9F,0x0A10)),
+        ('clrm',clear,(0xE89F,0x900E if value_return else 0x900F)),
+        ('vldr','FPCXTNS, [sp], #4',(0xECFD,0xCF81)),('bxns','lr',(0x4774,))]
+
+def static_template(image,name,value_return=True):
+    instructions=body(image,name)
+    selected=[(a,op,args) for a,_,op,args in instructions if op.startswith('v') or op in ('clrm','bxns')]
+    actual=[(op,args,image.encoding[a]) for a,op,args in selected]
+    full=full_template(value_return)
+    short=full[1:3]+full[4:]
+    check(actual in (full,full+short,short+full),'transfer CMSE template changed',name)
+    tails=([selected[:3],selected[4:8]] if actual==short+full else
+           [selected[1:5]]+([selected[5:]] if len(selected)>5 else []))
+    for tail in tails:
+        check(all(tail[i][0]+image.instructions[tail[i][0]][0] == tail[i+1][0] for i in range(len(tail)-1)),
+              'transfer CMSE epilogue is not contiguous',name)
+    check(not any(op == 'msr' and args.split(',')[0].strip() == 'CONTROL' for _,_,op,args in instructions),
+          'transfer wrote CONTROL',name)
+    return actual
+
+class Machine(base.Machine):
+    def __init__(self,path,operation='load',fault=None,**kwargs):
+        super().__init__(path,**kwargs)
+        self.operation,self.transfer_fault=operation,fault
+        self.cpu=dict(CONTROL=2,PSPLIM=LIMIT if operation=='save' else 0,PSP=PSP if operation=='save' else 0)
+        if self.state: self.put(self.state,base.READY)
+        self.records=self.image.symbols.get('c55stransfer_records',{}).get('value',0)
+        self.published=0
+        if self.records:
+            check(self.image.symbols['c55stransfer_records']['size'] == 72,'boundary record geometry changed')
+            for i in range(3):
+                self.uc.mem_write(self.records+24*i,struct.pack('<6I',TOP,LIMIT,TOP,OWNER,256,0xA110CA7E))
+        self.boundaries={}
+        for symbol,event in [('fiber_secure_context_pool_allocate','allocate'),
+                ('fiber_secure_context_pool_lookup_owned','lookup'),('pvPortMalloc','heap')]:
+            if symbol in self.image.symbols: self.boundaries[self.image.address(symbol)]=event
+        self.security=[]
+
+    def code(self,uc,address,size,data):
+        if address in self.boundaries:
+            event=self.boundaries[address]
+            self.trace.append((event,uc.reg_read(arm.UC_ARM_REG_R0),uc.reg_read(arm.UC_ARM_REG_R1)))
+        decoded=self.image.instructions.get(address)
+        if decoded:
+            _,op,args=decoded
+            if op.startswith('v') or op in ('clrm','bxns'):
+                self.security.append((op,args,self.image.encoding[address]))
+            if op == 'mrs':
+                register=args.split(',')[1].strip()
+                writes=[e for e in self.trace if e[0] == 'write']
+                fault=self.transfer_fault
+                corrupt=((fault=='limit-first' and register=='PSPLIM' and len(writes)==1) or
+                         (fault=='limit-final' and register=='PSPLIM' and len(writes)==2) or
+                         (fault=='pointer-final' and register=='PSP' and len(writes)==2))
+                if corrupt:
+                    old=self.cpu[register]
+                    self.cpu[register]=old^8
+                    super().code(uc,address,size,data)
+                    self.cpu[register]=old
+                    return
+        super().code(uc,address,size,data)
+
+    def memory(self,uc,kind,address,size,value,data):
+        if self.records and self.records <= address < self.records+72 and (address-self.records)%24 == 0:
+            if kind == base.UC_MEM_WRITE:
+                self.published=address
+                self.trace.append(('publish',address,value))
+            else:
+                visible=self.get(address)
+                if self.transfer_fault == 'saved-read' and address == self.published:
+                    self.put(address,visible^8)
+                    self.pending.append((address,visible))
+                    visible^=8
+                self.trace.append(('saved-read',address,visible))
+        super().memory(uc,kind,address,size,value,data)
+
+    def invoke(self,operation,args):
+        self.security=[]
+        for i,value in enumerate(args): self.uc.reg_write(base.REGS['r'+str(i)],value)
+        name=PREFIX+operation if self.records else 'SecureContext_'+operation.title()+'Context'
+        result=self.call(name)
+        expected=full_template(self.records != 0 or operation=='allocate')
+        check(self.security in (expected,expected[1:3]+expected[4:]),'executed transfer CMSE template changed',name)
+        return result
+
+def effects(trace):
+    return [e for e in trace if e[0] in ('allocate','lookup','write','publish','heap','record-write')]
+
+def case(path,operation,name,expected=0,cpu=None,handle=2,owner=OWNER,marker=base.READY,
+         ipsr=None,nonsecure=True,fault=None,pool_result=2,lookup_fail=0,expected_effects=None,order=None):
+    RESULTS['cases']+=1
+    m=Machine(path,operation,fault=fault,ipsr=(14 if operation=='save' else 11) if ipsr is None else ipsr,nonsecure=nonsecure)
+    if cpu: m.cpu.update(cpu)
+    m.put(m.state,marker)
+    m.put(m.image.address('c55stransfer_alloc_result'),pool_result)
+    m.put(m.image.address('c55stransfer_lookup_fail_at'),lookup_fail)
+    args=(64,owner) if operation=='allocate' else (handle,owner)
+    result=m.invoke(operation,args)
+    code=operation+':'+name
+    check(result==expected,code,str(m.trace))
+    if expected_effects is not None:
+        expected_events=expected_effects(m) if callable(expected_effects) else expected_effects
+        check(effects(m.trace)==expected_events,code+'-effects',str(m.trace))
+    if order is not None:
+        try: base.ordered(m.trace,order(m))
+        except Failure as exc: raise Failure(code+'-order',str(exc)) from exc
+    return m
+
+def expected_load(m): return [('lookup',2,OWNER),('write','PSPLIM',LIMIT),('write','PSP',TOP)]
+def expected_save(m): return [('lookup',2,OWNER),('publish',m.records+24,PSP),('lookup',2,OWNER),
+                              ('write','PSPLIM',0),('write','PSP',0)]
+def load_order(m): return [('lookup',2,OWNER),('write','PSPLIM',LIMIT),('dsb',),('isb',),('read','PSPLIM',LIMIT),
+                          ('write','PSP',TOP),('dsb',),('isb',),('read','PSP',TOP),('read','PSPLIM',LIMIT)]
+def save_order(m): return [('publish',m.records+24,PSP),('dsb',),('isb',),('lookup',2,OWNER),
+                          ('saved-read',m.records+24,PSP),('write','PSPLIM',0),('dsb',),('isb',),('read','PSPLIM',0),
+                          ('write','PSP',0),('dsb',),('isb',),('read','PSP',0),('read','PSPLIM',0)]
+
+def check_fiber(path,operation):
+    for exception in ((14,) if operation=='save' else (11,14)):
+        case(path,operation,'valid-'+str(exception),expected=2 if operation=='allocate' else 1,ipsr=exception,
+            expected_effects=([('allocate',64,OWNER)] if operation=='allocate' else expected_load if operation=='load' else expected_save),
+            order=load_order if operation=='load' else save_order if operation=='save' else None)
+    case(path,operation,'secure-origin',nonsecure=False,expected_effects=[])
+    for exception in (0,1,3,15,16)+( (11,) if operation=='save' else ()):
+        case(path,operation,'handler-'+str(exception),ipsr=exception,expected_effects=[])
+    for marker in (0,base.INITIALIZING,1,0xFFFFFFFF):
+        case(path,operation,'state-'+str(marker),marker=marker,expected_effects=[])
+    for control in (0,1,3,6,7,0x80000002):
+        case(path,operation,'control-'+str(control),cpu={'CONTROL':control},expected_effects=[])
+    if operation=='allocate':
+        case(path,operation,'loaded-limit',cpu={'PSPLIM':LIMIT},expected_effects=[])
+        case(path,operation,'loaded-pointer',cpu={'PSP':PSP},expected_effects=[])
+        for result in (0,1,3,0xFFFFFFFF):
+            case(path,operation,'pool-result-'+str(result),expected=result,pool_result=result,
+                 expected_effects=[('allocate',64,OWNER)])
+        return
+    case(path,operation,'zero-owner',handle=0,owner=0,cpu={'PSP':0,'PSPLIM':0},expected_effects=[])
+    case(path,operation,'zero-handle',expected=1,handle=0,cpu={'PSP':0,'PSPLIM':0},expected_effects=[])
+    for handle,owner in ((4,OWNER),(0xFFFFFFFF,OWNER),(1,OWNER+1)):
+        case(path,operation,'ownership-'+str(handle),handle=handle,owner=owner,
+             expected_effects=[('lookup',handle,owner)])
+    if operation=='load':
+        case(path,operation,'loaded-limit',cpu={'PSPLIM':LIMIT},expected_effects=[])
+        case(path,operation,'loaded-pointer',cpu={'PSP':PSP},expected_effects=[])
+        for fault in ('limit-first','limit-final','pointer-final'):
+            case(path,operation,fault,fault=fault,expected_effects=([('lookup',2,OWNER),('write','PSPLIM',LIMIT)] if
+                fault=='limit-first' else expected_load))
+    else:
+        for name,cpu in [('wrong-limit',{'PSPLIM':LIMIT+8}),('unaligned',{'PSP':PSP+1}),
+                         ('lower-bound',{'PSP':LIMIT-8}),('upper-bound',{'PSP':TOP+8})]:
+            case(path,operation,name,cpu=cpu,expected_effects=[('lookup',2,OWNER)])
+        for pointer in (LIMIT,TOP):
+            m=case(path,operation,'inclusive-'+str(pointer),expected=1,cpu={'PSP':pointer})
+            check(m.get(m.records+24)==pointer,'inclusive save publication changed')
+        case(path,operation,'zero-handle-loaded',handle=0,expected_effects=[])
+        for fault in ('limit-first','limit-final','pointer-final','saved-read'):
+            expected=lambda m: expected_save(m)[:3] if fault=='saved-read' else (
+                expected_save(m)[:4] if fault=='limit-first' else expected_save(m))
+            m=case(path,operation,fault,fault=fault,expected_effects=expected)
+            if fault=='saved-read': check(not any(e[0]=='write' for e in m.trace),'saved-read failure cleared CPU state')
+        m=case(path,operation,'lookup-readback',lookup_fail=2,expected_effects=lambda m: expected_save(m)[:3])
+        check(not any(e[0]=='write' for e in m.trace),'lookup revalidation failure cleared CPU state')
+
+def round_trip(path):
+    m=Machine(path,'allocate',ipsr=14)
+    RESULTS['cases']+=7
+    check(m.invoke('allocate',(64,OWNER))==2,'round-trip allocation forwarding changed')
+    check(m.invoke('load',(2,OWNER))==1 and m.cpu==dict(CONTROL=2,PSPLIM=LIMIT,PSP=TOP),'round-trip load changed')
+    check(m.invoke('load',(2,OWNER))==0 and not effects(m.trace),'loaded stack admitted another load')
+    m.cpu['PSP']=PSP  # Explicit modeled Secure Thread stack movement, not CPU execution.
+    check(m.invoke('save',(2,OWNER))==1 and m.get(m.records+24)==PSP,'round-trip save changed')
+    check(m.invoke('load',(2,OWNER))==1 and m.cpu['PSP']==PSP,'saved PSP was not reloaded')
+    check(m.invoke('save',(2,OWNER))==1 and m.cpu['PSPLIM']==0 and m.cpu['PSP']==0,'round-trip second clear changed')
+    check(m.invoke('save',(0,OWNER))==1 and not effects(m.trace),'unloaded zero-handle no-op changed')
+
+def reference_checks(path):
+    m=Machine(path,'allocate')
+    record=m.image.address('xSecureContexts')
+    for index in range(3):
+        m.put(m.image.address('c55stransfer_heap_result'),LIMIT+index*0x100)
+        owner=OWNER+index
+        check(m.invoke('allocate',(64,owner))==index+1,'pinned allocation index-plus-one changed')
+        check([e[:2] for e in m.trace if e[0]=='heap']==[('heap',72)],'pinned allocation/seal byte count changed')
+        check(struct.unpack('<4I',m.uc.mem_read(record+16*index,16))==
+              (LIMIT+index*0x100+64,LIMIT+index*0x100,LIMIT+index*0x100+64,owner),'pinned four-word publication changed')
+        check(bytes(m.uc.mem_read(LIMIT+index*0x100+64,8))==struct.pack('<2I',0xFEF5EDA5,0xFEF5EDA5),
+              'pinned seal representation changed')
+        check(m.invoke('allocate',(64,owner))==0 and not effects(m.trace),'pinned duplicate owner accepted')
+    check(m.invoke('allocate',(64,OWNER+3))==0 and not effects(m.trace),'pinned exhaustion changed')
+    for name,args,cpu,heap in [('thread',(64,OWNER),{'IPSR':0},LIMIT),('loaded',(64,OWNER),{'PSPLIM':LIMIT},LIMIT),
+                             ('overflow',(0xFFFFFFF8,OWNER),{},LIMIT),('heap-null',(64,OWNER),{},0)]:
+        n=Machine(path,'allocate',ipsr=cpu.pop('IPSR',11))
+        n.cpu.update(cpu)
+        n.put(n.image.address('c55stransfer_heap_result'),heap)
+        check(n.invoke('allocate',args)==0,'pinned allocation negative changed',name)
+        check(not any(e[0]=='write' for e in n.trace),'pinned allocation wrote CPU state')
+    for operation in ('load','save'):
+        for exception in (0,11,14):
+            n=Machine(path,operation,ipsr=exception)
+            n.uc.mem_write(n.image.address('xSecureContexts'),struct.pack('<4I',PSP,LIMIT,TOP,OWNER))
+            n.invoke(operation,(1,OWNER))
+            if exception==0:
+                check(not effects(n.trace),'pinned assembly Thread gate changed',operation)
+            elif operation=='load':
+                check(effects(n.trace)==[('write','PSPLIM',LIMIT),('write','PSP',PSP)],'pinned load order changed')
+            else:
+                check(effects(n.trace)==[('record-write',0,4,PSP),('write','PSPLIM',0),('write','PSP',0)],
+                      'pinned save publication/clear order changed')
+        for handle,owner in ((0,OWNER),(4,OWNER),(0xFFFFFFFF,OWNER),(1,OWNER+1)):
+            n=Machine(path,operation)
+            n.uc.mem_write(n.image.address('xSecureContexts'),struct.pack('<4I',PSP,LIMIT,TOP,OWNER))
+            n.invoke(operation,(handle,owner))
+            check(not effects(n.trace),'pinned handle/owner rejection changed',operation)
+
+def query_checks(path,identity_object):
+    # Execute the real provider and eight real cold entries, not the modeled
+    # allocator. Numeric results and tuple oracle do not come from the headers.
+    values={'fiber_secure_gateway_c55s_v1_abi_version':1,
+            'fiber_secure_gateway_c55s_v1_context_port_id':0x43353553,
+            'fiber_secure_gateway_c55s_v1_context_layout_version':0x00010001,
+            'fiber_secure_gateway_c55s_v1_context_feature_mask':0x8A,
+            PREFIX+'abi_version':1,PREFIX+'stack_alignment':8,
+            PREFIX+'max_stack_bytes':256,PREFIX+'max_contexts':3}
+    result={}
+    for name,value in values.items():
+        if name.startswith('fiber_secure_gateway_'):
+            relocations=base.function_relocations(identity_object,name)
+            check(relocations.count((10,base.COHORT_HELPER))==1 and
+                  relocations.count((2,base.COHORT_KEY))==1,
+                  'identity missing exact private cohort call/key relocations',name)
+        m=base.Machine(path,ipsr=0)
+        before=bytes(m.uc.mem_read(0x30000000,0x18000))
+        cpu=dict(m.cpu)
+        check(m.call(name)==value,'actual query result differs from numeric oracle',name)
+        check(m.trace==[('cohort-provider',),('cohort-read',1)],'query acquired state/CPU/pool effects',name)
+        check(m.cpu==cpu and bytes(m.uc.mem_read(0x30000000,0x18000))==before,
+              'query changed CPU/pool/BSS',name)
+        result[name]=dict(Value=value,Trace=m.trace,CMSE=base.cmse_template(m.image,name,True))
+    return result
+
+def main():
+    for operation in ('Allocate','Load','Save'):
+        base.reference_identity(inputs['ReferenceOriginal'],inputs['ReferenceIsolated'],'SecureContext_'+operation+'Context')
+    expected={'fiber_secure_context_pool_boot_initialize','fiber_secure_context_pool_allocate',
+              'fiber_secure_context_pool_lookup_owned'}|base.COHORT_IMPORTS
+    check(base.dependencies(inputs['GatewayObject'])==expected,'gateway dependency contract changed')
+    check(base.dependencies(inputs['HostileObject'])==expected,'gateway hostile instrumentation dependency')
+    for path in (inputs['GatewayObject'],inputs['HostileObject']):
+        for operation in ('allocate','load','save'):
+            relocations=base.function_relocations(path,PREFIX+operation)
+            check(not any(target==base.COHORT_HELPER or target.startswith('fiber_secure_context_cohort_')
+                          for _,target in relocations),'hot transfer acquired private cohort dependency',operation)
+    templates={}
+    queries={}
+    for variant,path in inputs['Actual'].items():
+        image=base.Image(path)
+        entries={name for name in image.symbols if name.startswith('__acle_se_')}
+        check(len(entries)==12,'C55S NSC export count changed',variant)
+        base.static_callgraph(path,whole_pool=True)
+        base.cohort_definition(path)
+        identity=inputs['IdentityObjects'][variant]
+        check(base.dependencies(identity)==base.COHORT_IMPORTS,'identity dependency contract changed',variant)
+        queries[variant]=query_checks(path,identity)
+        templates[variant]={operation:static_template(image,PREFIX+operation) for operation in ('allocate','load','save')}
+    reference=base.Image(inputs['Reference'])
+    templates['reference']={operation:static_template(reference,'SecureContext_'+operation.title()+'Context',operation=='allocate')
+        for operation in ('allocate','load','save')}
+    for name in ('SecureContext_LoadContextAsm','SecureContext_SaveContextAsm'):
+        start=reference.address(name)
+        size=reference.symbols[name]['size']
+        instructions=[v for a,v in reference.instructions.items() if start<=a<start+size]
+        check(not any(op.startswith('v') or (op=='msr' and args.split(',')[0].strip()=='CONTROL') for _,op,args in instructions),
+              'pinned no-MPU/no-FP helper branch changed',name)
+    reference_checks(inputs['Reference'])
+    for operation in ('allocate','load','save'): check_fiber(inputs['Fiber'],operation)
+    round_trip(inputs['Fiber'])
+    expected_kills={}
+    for op in ('allocate','load','save'):
+        expected_kills.update({op+'-origin':op+':secure-origin',op+'-ready':op+':state-0',op+'-control':op+':control-0',
+                              op+'-handler':op+':valid-14'})
+    expected_kills.update({'allocate-limit':'allocate:loaded-limit','allocate-pointer':'allocate:loaded-pointer',
+        'load-limit-admission':'load:loaded-limit','load-pointer-admission':'load:loaded-pointer','load-owner':'load:zero-owner',
+        'load-lookup':'load:valid-11','load-limit-readback':'load:limit-first','load-pointer-readback':'load:pointer-final',
+        'save-owner':'save:zero-owner','save-limit-admission':'save:wrong-limit','save-align':'save:unaligned',
+        'save-lower':'save:lower-bound','save-upper':'save:upper-bound','save-lookup-readback':'save:valid-14-effects',
+        'save-publication-readback':'save:valid-14-order','save-limit-readback':'save:limit-first',
+        'save-pointer-readback':'save:pointer-final','load-barriers':'load:valid-11-order','save-barriers':'save:valid-14-order',
+        'load-order':'load:valid-11-effects','save-order':'save:valid-14-effects','save-publication':'save:valid-14',
+        'allocate-control-write':'allocate:valid-11-effects',
+        'allocate-fp-data':'FP data instruction vmov s0, r0'})
+    check({m['Name'] for m in inputs['Mutants']}==set(expected_kills),'transfer mutant inventory changed')
+    killed=[]
+    for mutant in inputs['Mutants']:
+        try: check_fiber(mutant['Elf'],mutant['Operation'])
+        except Failure as exc:
+            check(exc.code==expected_kills[mutant['Name']],'transfer mutant rejected for unintended reason',mutant['Name']+': '+str(exc))
+            killed.append(dict(Name=mutant['Name'],Diagnostic=str(exc)))
+        else: raise RuntimeError('transfer mutant survived: '+mutant['Name'])
+    result=dict(RESULTS,ArmCalls=base.COUNTS['calls'],CompiledMutants=len(killed),Killed=killed,CMSE=templates,
+        PrivateCohort=dict(Key=base.COHORT_KEY,Facts=base.COHORT_FACTS,Queries=queries,
+                           QueryCalls=sum(len(value) for value in queries.values()),ColdConsumers=9),
+        Optimization=inputs['Optimization'],Scope=__doc__)
+    (Path(sys.argv[1]).parent/'trace-result.json').write_text(json.dumps(result,indent=2)+'\n')
+    print('PASS C55STRANSFER: '+str(RESULTS['cases'])+' gateway cases, '+str(base.COUNTS['calls'])+
+          ' ARM calls, '+str(len(killed))+' compiled mutants killed; 16 actual query calls, normal/hostile 12-export callgraphs')
+
+if __name__=='__main__': main()
+'@ | Set-Content $proof -Encoding ASCII
+    $oldPath = $env:PYTHONPATH
+    try {
+        $modules = $PythonModules
+        if (-not $modules) { $modules = Join-Path ([IO.Path]::GetTempPath()) 'fiber-classic-audit-python' }
+        $env:PYTHONPATH = $modules+[IO.Path]::PathSeparator+$oldPath
+        & $run $Python @($proof,$manifest)
+    }
+    finally { $env:PYTHONPATH = $oldPath }
+    & $assertInputs
+    [ordered]@{Optimization=$Optimization;Sources=$Pair.InitSourceHashes;
+        ReferenceCommit=$ExpectedFreeRtosCommit;
+        Compiler=[ordered]@{Path=$compiler;Sha256=(Get-FileHash $compiler -Algorithm SHA256).Hash};
+        UpstreamReceipt=[ordered]@{Path=$upstreamPath;Sha256=(Get-FileHash $upstreamPath -Algorithm SHA256).Hash};
+        Artifacts=@(Get-ChildItem $directory -File | Where-Object {$_.Name -ne 'artifacts.json'} | ForEach-Object {
+            [ordered]@{Path=$_.FullName;Sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash}
+        })} | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $directory 'artifacts.json') -Encoding ASCII
+}
+
+function Test-C33SCohortMechanisms {
+    param([object]$Pair,[object]$PriorityPair)
+    if ($ledger.IndexOf('FAP-C33S-PRIVATE-COHORT',[StringComparison]::Ordinal) -lt 0) {
+        throw 'Missing ledger ID: FAP-C33S-PRIVATE-COHORT'
+    }
+    $upstreamPath = Join-Path $BuildRoot 'C55SINIT\artifacts.json'
+    $upstream = Get-Content -LiteralPath $upstreamPath -Raw | ConvertFrom-Json
+    $assertInputs = {
+        foreach ($inputFile in @($Pair.InitSourceHashes)+@($PriorityPair.InitSourceHashes)+
+                @($upstream.Sources)+@($upstream.Artifacts)) {
+            if ((Get-FileHash -LiteralPath $inputFile.Path -Algorithm SHA256).Hash -ne $inputFile.Sha256) {
+                throw "C33SCOHORT input changed during qualification: $($inputFile.Path)"
+            }
+        }
+    }
+    & $assertInputs
+    $directory = Join-Path $BuildRoot 'C33SCOHORT'
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $profile = Join-Path $RepoRoot 'fiber\port\ARM_CM33\secure'
+    $source = Join-Path $profile 'fiber_secure_context_gateway.c'
+    $run = {
+        param([string]$Program,[string[]]$Arguments)
+        ConvertTo-Json -InputObject (@($Program)+$Arguments) -Compress |
+            Add-Content (Join-Path $directory 'commands.jsonl') -Encoding ASCII
+        & $Program @Arguments
+        if ($LASTEXITCODE -ne 0) { throw "C33SCOHORT command failed: $Program" }
+    }
+    $compile = {
+        param([string]$SourcePath,[string]$Name,[switch]$SupportedHostile)
+        $object = Join-Path $directory "$Name.o"
+        $arguments = @($Pair.FiberArguments)
+        for ($i=0; $i -lt $arguments.Count; ++$i) {
+            if ($arguments[$i] -eq $source) { $arguments[$i] = $SourcePath }
+            if ($arguments[$i] -eq '-o') { $arguments[$i+1] = $object }
+        }
+        if ($SupportedHostile) {
+            # CM33 uses CMSIS/CMSE inline wrappers. Its supported image contract
+            # requires these counterflags; this is not an attributes-alone test.
+            $arguments += @('-finstrument-functions','-fstack-protector-all','-fprofile-arcs',
+                '-ftest-coverage','-fsanitize=undefined','-fno-instrument-functions',
+                '-fno-stack-protector','-fno-profile-arcs','-fno-test-coverage','-fno-sanitize=all')
+        }
+        if ($arguments -notcontains '-mcmse') { throw 'C33S private pool requires -mcmse' }
+        & $run $compiler $arguments
+        Get-ObjectDisassembly -Objdump $objdump -ObjectPath $object |
+            Set-Content "$object.disasm" -Encoding ASCII
+        return $object
+    }
+    $contextNames = @('abi_version','stack_alignment','max_stack_bytes','max_contexts',
+        'initialize','allocate','load','save') | ForEach-Object { 'fiber_secure_context_gateway_v1_'+$_ }
+    $identityNames = @('abi_version','context_port_id','context_layout_version','context_feature_mask') |
+        ForEach-Object { 'fiber_secure_gateway_v1_'+$_ }
+    $exports = @($contextNames)+@($identityNames)
+    $linker = Join-Path $directory 'body.ld'
+    @'
+ENTRY(fiber_secure_context_gateway_v1_initialize)
+SECTIONS {
+ .text 0x08000000 : { *(.text*) }
+ .rodata : { *(.rodata*) }
+ .gnu.sgstubs 0x08030000 : { *(.gnu.sgstubs*) }
+ .data 0x30000000 : { *(.data*) }
+ .bss 0x30001000 (NOLOAD) : { *(.bss*) *(COMMON) }
+ .fiber_secure_context_pool 0x30002000 (NOLOAD) : { *(.fiber_secure_context_pool) }
+ /DISCARD/ : { *(.ARM.exidx*) *(.ARM.extab*) *(.comment*) *(.note*) }
+}
+'@ | Set-Content $linker -Encoding ASCII
+    $link = {
+        param([string[]]$Objects,[string]$Name,[string]$Entry,[switch]$Fiber)
+        $elf = Join-Path $directory "$Name.elf"
+        $arguments = @('-mcpu=cortex-m33','-mthumb','-mcmse','-mfloat-abi=soft','-nostdlib',
+            '-Wl,--gc-sections',"-Wl,-e,__acle_se_$Entry","-Wl,-T,$linker",
+            '-Wl,--section-start=.gnu.sgstubs=0x08030000',"-Wl,-Map,$directory/$Name.map")
+        if ($Fiber) {
+            $arguments += "-Wl,-T,$(Join-Path $profile 'fiber_secure_context_cohort_contract.ld')"
+            # Root actual NSC entries, never the private helper/key. These are
+            # direct-object mechanism links, not archive/LTO extraction proof.
+            $arguments += $exports | ForEach-Object { "-Wl,--undefined=__acle_se_$_" }
+        }
+        & $run $compiler ($arguments+$Objects+@('-o',$elf))
+        Get-ObjectDisassembly -Objdump $objdump -ObjectPath $elf |
+            Set-Content "$elf.disasm" -Encoding ASCII
+        return $elf
+    }
+    $variants = @{}
+    foreach ($variant in @('normal','supported-hostile')) {
+        $objects = @{}
+        foreach ($unit in @('gateway','identity','pool')) {
+            $file = switch ($unit) {
+                'gateway' { 'fiber_secure_context_gateway.c' }
+                'identity' { 'fiber_secure_gateway.c' }
+                'pool' { 'fiber_secure_context_pool.c' }
+            }
+            $objects[$unit] = & $compile (Join-Path $profile $file) "$variant-$unit" -SupportedHostile:($variant -ne 'normal')
+        }
+        $elf = & $link @($objects.gateway,$objects.identity,$objects.pool) $variant 'fiber_secure_context_gateway_v1_initialize' -Fiber
+        $variants[$variant] = [ordered]@{Objects=$objects;Elf=$elf}
+    }
+    $isolatedReference = Join-Path $directory 'reference-init-only.o'
+    $remove = @('SecureContext_AllocateContext','SecureContext_FreeContext','SecureContext_LoadContext','SecureContext_SaveContext') |
+        ForEach-Object { '--remove-section=.text.'+$_ }
+    & $run (Join-Path (Split-Path $compiler) 'arm-none-eabi-objcopy.exe') ($remove+@($Pair.ReferencePath,$isolatedReference))
+    $referenceCpu = & $link @($isolatedReference) 'reference-cpu' 'SecureContext_Init'
+    $referencePriority = & $link @($PriorityPair.ReferencePath) 'reference-priority' 'SecureInit_DePrioritizeNSExceptions'
+    $original = (Get-Content -LiteralPath $source -Raw).Replace("`r`n","`n")
+    $start = $original.IndexOf('uint32_t fiber_secure_context_gateway_v1_initialize(void)',[StringComparison]::Ordinal)
+    $end = $original.IndexOf('uint32_t fiber_secure_context_gateway_v1_allocate(',[StringComparison]::Ordinal)
+    if ($start -lt 0 -or $end -le $start) { throw 'C33S initializer mutation span changed' }
+    $body = $original.Substring($start,$end-$start)
+    $retain = 'FIBER_C33S_PRIVATE_COHORT_RETAIN();'
+    if ([regex]::Matches($body,[regex]::Escape($retain)).Count -ne 1) { throw 'C33S initializer RETAIN anchor changed' }
+    $mutants = @()
+    foreach ($name in @('missing-retain','helper-only','before-preflight','after-commit')) {
+        $changed = $body.Replace($retain,'')
+        switch ($name) {
+            'helper-only' { $changed = $body.Replace($retain,'fiber_secure_context_pool_c33s_v1_cohort_provider();') }
+            'before-preflight' {
+                $anchor = 'aircr_before = fiber_secure_contextSCB_AIRCR;'
+                if ([regex]::Matches($changed,[regex]::Escape($anchor)).Count -ne 1) { throw 'C33S preflight anchor changed' }
+                $changed = $changed.Replace($anchor,$anchor+"`n`t"+$retain)
+            }
+            'after-commit' {
+                $pattern = 'fiber_secure_context_gateway_state =\s*fiber_secure_contextGATEWAY_INITIALIZING;'
+                if ([regex]::Matches($changed,$pattern).Count -ne 1) { throw 'C33S commit anchor changed' }
+                $changed = [regex]::Replace($changed,$pattern,{param($m) $m.Value+"`n`t"+$retain})
+            }
+        }
+        $path = Join-Path $directory "mutant-$name.c"
+        ($original.Substring(0,$start)+$changed+$original.Substring($end)) | Set-Content $path -Encoding ASCII
+        $object = & $compile $path "mutant-$name"
+        $elf = & $link @($object,$variants.normal.Objects.identity,$variants.normal.Objects.pool) "mutant-$name" 'fiber_secure_context_gateway_v1_initialize' -Fiber
+        $mutants += [ordered]@{Name=$name;Object=$object;Elf=$elf}
+    }
+    $manifest = Join-Path $directory 'inputs.json'
+    [ordered]@{Variants=$variants;Mutants=$mutants;Optimization=$Optimization;Exports=$exports;
+        OriginalObject=$Pair.FiberPath;ReferenceOriginal=$Pair.ReferencePath;ReferenceIsolated=$isolatedReference;
+        ReferenceCpu=$referenceCpu;ReferencePriority=$referencePriority;
+        InitProof=(Join-Path $BuildRoot 'C55SINIT\trace_init.py')} |
+        ConvertTo-Json -Depth 7 | Set-Content $manifest -Encoding ASCII
+    $proof = Join-Path $directory 'trace_cohort.py'
+    @'
+"""Actual CM33 C bodies and real pool; explicit CPU/AIRCR/CMSE-return doubles.
+Not physical SG/exception/CONTROL qualification, archive/LTO or pool-fault proof.
+"""
+import sys
+if sys.flags.optimize or not __debug__:
+    raise SystemExit('C33SCOHORT requires Python optimization disabled')
+import importlib.util, json, struct
+from pathlib import Path
+inputs=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8-sig'))
+spec=importlib.util.spec_from_file_location('c33s_generic_arm_support',inputs['InitProof'])
+base=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(base)
+check,Failure,arm=base.check,base.ProofFailure,base.arm
+HELPER='fiber_secure_context_pool_c33s_v1_cohort_provider'
+FACTS=(('p',0x43333353),('l',0x00010001),('f',0x8A),('i',1),('c',1),('r',1),
+       ('n',3),('b',256),('a',8),('w',2),('s',8),('v',0xFEF5EDA5))
+KEY='fiber_secure_context_cohort_c33s_g1'+''.join('_'+tag+'_'+str(v>>16)+'_'+str(v&65535) for tag,v in FACTS)
+COHORT={HELPER,KEY}
+INIT='fiber_secure_context_gateway_v1_initialize'
+CAPACITY=['fiber_secure_context_gateway_v1_'+n for n in ('abi_version','stack_alignment','max_stack_bytes','max_contexts')]
+IDENTITY=['fiber_secure_gateway_v1_'+n for n in ('abi_version','context_port_id','context_layout_version','context_feature_mask')]
+GATEWAY={'fiber_secure_context_pool_boot_initialize','fiber_secure_context_pool_allocate','fiber_secure_context_pool_lookup_owned'}|COHORT
+PRIVATE={HELPER,'fiber_secure_context_pool_boot_initialize','fiber_secure_context_pool_allocate','fiber_secure_context_pool_lookup_owned',
+         'fiber_secure_context_pool_fail_closed','fiber_secure_context_pool_clear_record','fiber_secure_context_pool_clear_stack',
+         'fiber_secure_context_pool_record_is_free','fiber_secure_context_pool_write_stack_seal',
+         'fiber_secure_context_pool_stack_seal_is_valid','fiber_secure_context_pool_record_is_valid',
+         'fiber_secure_context_gateway_is_runtime_exception'}
+
+def retained(path,name):
+    rel=base.function_relocations(path,name)
+    check(rel.count((10,HELPER))==1 and rel.count((2,KEY))==1,'missing exact C33S call/key relocations',name)
+
+def definitions(path):
+    image=base.Image(path)
+    check({n for n in image.symbols if n.startswith('__acle_se_')}=={'__acle_se_'+n for n in inputs['Exports']},
+          'C33S twelve-entry surface changed')
+    check({n for n in image.symbols if n.startswith('fiber_secure_context_cohort_')}=={KEY},'C33S numeric cohort key mismatch')
+    key,helper=image.symbols[KEY],image.symbols[HELPER]
+    check(key['kind']=='STT_OBJECT' and key['bind']=='STB_GLOBAL' and key['size']==1,'C33S key not one strong byte')
+    check(helper['kind']=='STT_FUNC' and helper['bind']=='STB_GLOBAL' and '__acle_se_'+HELPER not in image.symbols,
+          'C33S ordinary C provider changed')
+    with Path(path).open('rb') as stream:
+        elf=base.ELFFile(stream)
+        section=elf.get_section(key['section'])
+        offset=key['value']-section['sh_addr']
+        check(section['sh_flags']&2 and not section['sh_flags']&5 and section.data()[offset:offset+1]==b'\x01',
+              'C33S key not allocated read-only value one')
+        pool=elf.get_section_by_name('.fiber_secure_context_pool')
+        check(pool['sh_type']=='SHT_NOBITS' and pool['sh_size']==872,'C33S retained pool geometry changed')
+    start=image.address(HELPER)
+    code=[(op,args) for a,(_,op,args) in sorted(image.instructions.items()) if start<=a<start+helper['size']]
+    check(code and code[0]==('bx','lr') and all(op=='nop' for op,_ in code[1:]),'C33S provider acquired runtime work',str(code))
+    allowed={s['value']&~1 for n,s in image.symbols.items() if n in PRIVATE and s['kind']=='STT_FUNC'}
+    calls=0
+    for _,op,args in image.instructions.values():
+        check(not op.startswith('v'),'C33S unexpected FP/MVE instruction',op+' '+args)
+        check(op not in ('blx','blxns'),'C33S indirect helper call')
+        if op in ('bl','bl.w'):
+            check(int(args.split()[0],16) in allowed,'C33S unexpected direct helper',args)
+            calls+=1
+    check(calls>=9,'C33S retained C calls missing')
+    return calls
+
+class Machine(base.Machine):
+    def __init__(self,path,control_read=None,**kwargs):
+        super().__init__(path,**kwargs)
+        self.cohort_provider=self.image.symbols.get(HELPER,{}).get('value',0)&~1
+        self.cohort_key=self.image.symbols.get(KEY,{}).get('value',0)
+        self.control_read=control_read
+    def code(self,uc,address,size,data):
+        decoded=self.image.instructions.get(address)
+        if decoded:
+            length,op,args=decoded
+            if op=='msr' and args=='CPSR_fs, lr':
+                check(self.image.encoding[address]==(0xF38E,0x8C00),'C33S CMSE flags encoding changed')
+                # Compiler return hygiene only, not a banked CONTROL write.
+                self.trace.append(('cmse-flags',))
+                self.skip(address,length)
+                return
+            if op=='mrs' and args.split(',')[1].strip()=='CONTROL' and self.control_read is not None:
+                uc.reg_write(base.REGS[args.split(',')[0].strip()],self.control_read)
+                self.trace.append(('read','CONTROL',self.control_read))
+                self.skip(address,length)
+                return
+        super().code(uc,address,size,data)
+
+def rejected(machine,name):
+    check(machine.call(INIT)==0 and not base.effects(machine.trace),'C33S init preflight rejection lost',name)
+    check(not base.cohort_events(machine.trace),'C33S rejected preflight reached cohort',name)
+
+def init_checks(path):
+    for low in (0,0x80,0xDFFF):
+        for control in (2,6,0x80000002):
+            m=Machine(path,aircr=0xFA050000|low,control_read=control)
+            check(m.call(INIT)==1,'C33S valid masked-CONTROL init rejected')
+            write=0x05FA0000|low|0x4000
+            check(base.effects(m.trace)==[('state-write',base.INITIALIZING),('aircr-write',write),
+                ('write','PSPLIM',0),('write','PSP',0),('pool',),('write','CONTROL',2),('state-write',base.READY)],
+                'C33S init write/order changed',str(m.trace))
+            check(base.cohort_events(m.trace)==[('cohort-provider',),('cohort-read',1)],'C33S init cohort event count changed')
+            try:
+                base.ordered(m.trace,[('aircr-read',0xFA050000|low),('cohort-provider',),('cohort-read',1),
+                    ('state-write',base.INITIALIZING),('dsb',),('isb',),('state-read',base.INITIALIZING),
+                    ('aircr-write',write),('dsb',),('isb',),('aircr-read',0xFA050000|(low|0x4000)),
+                    ('write','PSPLIM',0),('write','PSP',0),('dsb',),('isb',),('read','PSPLIM',0),('read','PSP',0),
+                    ('pool',),('write','CONTROL',2),('isb',),('read','CONTROL',control),
+                    ('state-write',base.READY),('dsb',),('isb',),('state-read',base.READY)])
+            except Failure as exc: raise Failure('C33S cohort/precommit order changed',str(exc)) from exc
+            rejected(m,'repeat')
+    for ipsr in (0,1,3,14,15,16): rejected(Machine(path,ipsr=ipsr),'IPSR-'+str(ipsr))
+    rejected(Machine(path,nonsecure=False),'Secure caller')
+    rejected(Machine(path,aircr=0xFA052080),'BFHFNMINS')
+    for marker in (base.INITIALIZING,base.READY,1,0xFFFFFFFF):
+        m=Machine(path)
+        m.put(m.state,marker)
+        rejected(m,'marker-'+str(marker))
+    for control in (0,1,3,0xFFFFFFFF):
+        m=Machine(path,control_read=control)
+        check(m.call(INIT)==0 and m.get(m.state)==base.INITIALIZING,'C33S masked CONTROL failure changed')
+        rejected(m,'partial failure retry')
+
+def query_checks(path):
+    for name,value in zip(IDENTITY+CAPACITY,(1,0x43333353,0x00010001,0x8A,1,8,256,3)):
+        m=Machine(path,ipsr=0)
+        before=bytes(m.uc.mem_read(0x30000000,0x18000))
+        cpu=dict(m.cpu)
+        check(m.call(name)==value,'C33S query numeric result changed',name)
+        check(m.trace==[('cohort-provider',),('cohort-read',1),('cmse-flags',)],'C33S query acquired extra effects',name)
+        check(m.cpu==cpu and bytes(m.uc.mem_read(0x30000000,0x18000))==before,'C33S query changed CPU/pool/BSS',name)
+
+def reference_checks():
+    base.reference_identity(inputs['ReferenceOriginal'],inputs['ReferenceIsolated'])
+    for low in (0,0x80,0xDFFF):
+        m=Machine(inputs['ReferencePriority'],aircr=0xFA050000|low)
+        m.call('SecureInit_DePrioritizeNSExceptions')
+        check([e for e in m.trace if e[0]=='aircr-write']==[('aircr-write',0x05FA0000|low|0x4000)],'pinned CM33 priority changed')
+    m=Machine(inputs['ReferenceCpu'])
+    # This existing reference profile retains the pinned default eight records,
+    # unlike Fiber's explicitly selected three. Only CPU/clear order is paired.
+    record=m.image.address('xSecureContexts')
+    check(m.image.symbols['xSecureContexts']['size']==128,'pinned CM33 default record geometry changed')
+    m.uc.mem_write(record,b'\xA5'*128)
+    m.call('SecureContext_Init')
+    check([e for e in m.trace if e[0]=='write']==[('write','PSPLIM',0),('write','PSP',0),('write','CONTROL',2)],
+          'pinned CM33 scalar init order changed')
+    check(bytes(m.uc.mem_read(record,128))==b'\0'*128,'pinned CM33 record clear changed')
+
+def main():
+    calls={}
+    for variant,item in inputs['Variants'].items():
+        objects=item['Objects']
+        check(base.dependencies(objects['gateway'])==GATEWAY,'C33S gateway exact dependencies changed',variant)
+        check(base.dependencies(objects['identity'])==COHORT,'C33S identity exact dependencies changed',variant)
+        check(not base.dependencies(objects['pool']),'C33S pool acquired helper dependency',variant)
+        for name in [INIT]+CAPACITY: retained(objects['gateway'],name)
+        for name in IDENTITY: retained(objects['identity'],name)
+        for op in ('allocate','load','save'):
+            rel=base.function_relocations(objects['gateway'],'fiber_secure_context_gateway_v1_'+op)
+            check(not any(n==HELPER or n.startswith('fiber_secure_context_cohort_') for _,n in rel),'C33S hot transfer acquired cohort',op)
+        calls[variant]=definitions(item['Elf'])
+        query_checks(item['Elf'])
+        init_checks(item['Elf'])
+    check(base.dependencies(inputs['OriginalObject'])==GATEWAY,'C33S pinned-pair gateway dependencies changed')
+    reference_checks()
+    expected={'missing-retain':'missing exact C33S call/key relocations','helper-only':'missing exact C33S call/key relocations',
+              'before-preflight':'C33S rejected preflight reached cohort','after-commit':'C33S cohort/precommit order changed'}
+    check({m['Name'] for m in inputs['Mutants']}==set(expected),'C33S mutant inventory changed')
+    killed=[]
+    for mutant in inputs['Mutants']:
+        try:
+            if mutant['Name'] in ('missing-retain','helper-only'): retained(mutant['Object'],INIT)
+            else: init_checks(mutant['Elf'])
+        except Failure as exc:
+            check(exc.code==expected[mutant['Name']],'C33S mutant failed for unintended reason',mutant['Name']+': '+str(exc))
+            killed.append(dict(Name=mutant['Name'],Diagnostic=str(exc)))
+        else: raise RuntimeError('C33S cohort mutant survived: '+mutant['Name'])
+    result=dict(Optimization=inputs['Optimization'],ArmCalls=base.COUNTS['calls'],ActualQueryCalls=16,
+        ColdConsumers=9,Key=KEY,Facts=FACTS,StaticCalls=calls,CompiledMutants=len(killed),Killed=killed,Scope=__doc__)
+    (Path(sys.argv[1]).parent/'trace-result.json').write_text(json.dumps(result,indent=2)+'\n')
+    print('PASS C33SCOHORT: 9 cold edges, 16 real query calls, '+str(base.COUNTS['calls'])+
+          ' ARM calls, 4 compiled mutants; actual pinned CM33 init, void pool, masked CONTROL')
+
+if __name__=='__main__': main()
+'@ | Set-Content $proof -Encoding ASCII
+    $oldPath = $env:PYTHONPATH
+    try {
+        $modules = $PythonModules
+        if (-not $modules) { $modules = Join-Path ([IO.Path]::GetTempPath()) 'fiber-classic-audit-python' }
+        $env:PYTHONPATH = $modules+[IO.Path]::PathSeparator+$oldPath
+        & $run $Python @($proof,$manifest)
+    } finally { $env:PYTHONPATH = $oldPath }
+    & $assertInputs
+    $evidenceDirectories = @($directory)+@('ALLOCATOR','DEPRIORITIZE','INITIALIZE','LOAD','SAVE' |
+        ForEach-Object { Join-Path $BuildRoot ('ARM_CM33_SECURE_CONTEXT_'+$_) })
+    [ordered]@{Optimization=$Optimization;Sources=$Pair.InitSourceHashes;ReferenceCommit=$ExpectedFreeRtosCommit;
+        Compiler=[ordered]@{Path=$compiler;Sha256=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash};
+        UpstreamReceipt=[ordered]@{Path=$upstreamPath;Sha256=(Get-FileHash -LiteralPath $upstreamPath -Algorithm SHA256).Hash};
+        Artifacts=@(Get-ChildItem -LiteralPath $evidenceDirectories -File |
+            Where-Object {$_.Name -ne 'artifacts.json'} | ForEach-Object {
+                [ordered]@{Path=$_.FullName;Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
+            })} | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $directory 'artifacts.json') -Encoding ASCII
+}
+
+function Assert-Cm33fMpuRunningParity {
+    $directory = Join-Path $BuildRoot 'C3FP-RUNNING'
+    if (Test-Path -LiteralPath $directory) {
+        throw "C3FP running evidence already exists; use a fresh -BuildRoot: $directory"
+    }
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $fixture = Join-Path $RepoRoot 'tools\fixtures\cm33f_mpu_running_parity'
+    $profile = Join-Path $RepoRoot 'fiber\port\ARM_CM33F_MPU\non_secure'
+    $source = Join-Path $profile 'fiber_port_pendsv.c'
+    $referenceDir = Join-Path $kernel 'portable\GCC\ARM_CM33_NTZ\non_secure'
+    $referenceSource = Join-Path $referenceDir 'portasm.c'
+    $checker = Join-Path $fixture 'check.py'
+    foreach ($path in @($source, $referenceSource, $checker, (Join-Path $fixture 'mutants.ps1'))) {
+        if (-not (Test-Path -LiteralPath $path)) { throw "Missing C3FP running parity input: $path" }
+    }
+    foreach ($id in @('FAP-C3FP-RUNNING-TRANSFER', 'FAP-C3FP-RUNNING-HARDENING', 'FAP-C3FP-RUNNING-STAGED')) {
+        if ($ledger -notmatch [regex]::Escape($id)) { throw "C3FP running difference missing from ledger: $id" }
+    }
+    . (Join-Path $fixture 'mutants.ps1')
+    $commands = Join-Path $directory 'commands.log'
+    function Invoke-C3fpProof {
+        param([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$AllowFailure)
+        Add-Content -LiteralPath $commands -Encoding ASCII -Value (ConvertTo-Json -Compress -InputObject (@($Program)+$Arguments))
+        $saved = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $lines = @(& $Program @Arguments 2>&1 | ForEach-Object { "$_" })
+            $code = $LASTEXITCODE
+        }
+        finally { $ErrorActionPreference = $saved }
+        $output = $lines -join "`n"
+        if ($Log) { Set-Content -LiteralPath $Log -Value $output -Encoding ASCII }
+        if ($output) { Add-Content -LiteralPath $commands -Value $output -Encoding ASCII }
+        if ($code -ne 0 -and -not $AllowFailure) {
+            throw "C3FP running command failed ($code); $commands`n$(($lines | Select-Object -Last 8) -join "`n")"
+        }
+        return [pscustomobject]@{ExitCode=$code; Output=$output}
+    }
+    function Write-C3fpJson {
+        param([string]$Path, [object]$Value)
+        ConvertTo-Json -Depth 12 -InputObject $Value | Set-Content -LiteralPath $Path -Encoding ASCII
+    }
+    function Test-C3fpExactRejection {
+        param([object]$Result, [string]$Expected)
+        return $Result.ExitCode -eq 1 -and $Result.Output -ceq $Expected
+    }
+    function Test-C3fpCodeRejection {
+        param([object]$Result, [string]$Code)
+        return $Result.ExitCode -eq 1 -and $Result.Output -cmatch ('^REJECT:'+ [regex]::Escape($Code) +':[^\r\n]+$')
+    }
+    $readelf = Join-Path $toolDir 'arm-none-eabi-readelf.exe'
+    $paths = @($PSCommandPath, $ledgerPath, $compiler, $objdump, $readelf)
+    foreach ($tool in @('cc1', 'as')) {
+        $query = Invoke-C3fpProof $compiler @("-print-prog-name=$tool")
+        $paths += (Resolve-Path -LiteralPath $query.Output.Trim()).Path
+    }
+    $query = Invoke-C3fpProof $compiler @('-print-file-name=include')
+    $compilerHeaders = (Resolve-Path -LiteralPath $query.Output.Trim()).Path
+    foreach ($root in @($compilerHeaders, (Join-Path (Split-Path $toolDir) 'arm-none-eabi\include'))) {
+        $paths += @(Get-ChildItem -LiteralPath $root -Recurse -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
+    }
+    foreach ($root in @($RepoRoot, (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber\port'),
+            $profile, $referenceDir, (Join-Path $kernel 'include'), $cmsis, $configDir, $fixture)) {
+        $paths += @(Get-ChildItem -LiteralPath $root -File | Where-Object {
+            $_.Extension -in @('.h', '.c', '.ld', '.py', '.ps1', '.md')
+        } | Select-Object -ExpandProperty FullName)
+    }
+    $sourceInputs = @($paths | Sort-Object -Unique | ForEach-Object {
+        [pscustomobject]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
+    })
+    $documentationDirectory = Join-Path $directory 'documentation'
+    New-Item -ItemType Directory -Path $documentationDirectory | Out-Null
+    $documentation = @()
+    $inputs = @($sourceInputs | ForEach-Object {
+        if ([IO.Path]::GetExtension($_.Path) -ne '.md') { $_; return }
+        # Documentation is historical evidence, not a live code dependency.
+        # Keep its origin, but make the receipt hash the exact retained bytes.
+        $snapshot = Join-Path $documentationDirectory ('{0:D3}-{1}' -f $documentation.Count, [IO.Path]::GetFileName($_.Path))
+        Copy-Item -LiteralPath $_.Path -Destination $snapshot
+        if ((Get-FileHash -LiteralPath $snapshot -Algorithm SHA256).Hash -ne $_.Sha256) {
+            throw "C3FP documentation changed while snapshotting: $($_.Path)"
+        }
+        $record = [pscustomobject]@{Path=$snapshot; Sha256=$_.Sha256; SourcePath=$_.Path; Role='DocumentationSnapshot'}
+        $documentation += $record
+        $record
+    })
+    Write-C3fpJson (Join-Path $directory 'documentation.json') $documentation
+    Write-C3fpJson (Join-Path $directory 'inputs.before.json') $inputs
+    $runs, $mutantReceipts, $controls = @(), @(), @()
+    $success = $false
+    try {
+        Invoke-C3fpProof $compiler @('--version') -Log (Join-Path $directory 'compiler.txt') | Out-Null
+        Invoke-C3fpProof $Python @('-B', '-c', 'import sys; print(sys.executable); print(sys.version)') `
+            -Log (Join-Path $directory 'python.txt') | Out-Null
+        $fiberText = Get-Content -LiteralPath $source -Raw
+        $svcText = Get-Content -LiteralPath (Join-Path $profile 'fiber_port_svc.c') -Raw
+        $referenceText = Get-Content -LiteralPath $referenceSource -Raw
+        foreach ($abi in @('hard', 'softfp')) {
+            foreach ($regions in @(8, 16)) {
+                $name = "$abi-r$regions"
+                $root = Join-Path $directory $name
+                New-Item -ItemType Directory -Path $root -Force | Out-Null
+                Write-CmsisMainHeader $root 'core_cm33.h' 1 1 1 1 1
+                $common = @('-mcpu=cortex-m33', '-mthumb', '-mfpu=fpv5-sp-d16', "-mfloat-abi=$abi",
+                    '-std=gnu11', $Optimization, '-g0', '-ffreestanding', '-fno-builtin', '-fno-common',
+                    '-ffunction-sections', '-fdata-sections', '-save-temps=obj', '-MMD')
+                $fiberFlags = $common + @('-Wall', '-Wextra', '-Wundef', '-Werror',
+                    '-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV8M_MAINLINE=1',
+                    '-DFIBER_SCHEDULER_BASEPRI=128',
+                    "-DFIBER_PORT_CM33F_MPU_TOTAL_REGIONS=$regions", "-I$root", "-I$profile",
+                    "-I$(Join-Path $RepoRoot 'fiber\port')", "-I$(Join-Path $RepoRoot 'fiber')", "-I$RepoRoot", "-I$cmsis")
+                $referenceFlags = $common + @('-DFIBER_FREERTOS_PARITY_ENABLE_MPU=1',
+                    '-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1', "-DFIBER_FREERTOS_PARITY_MPU_REGIONS=$regions",
+                    "-I$configDir", "-I$(Join-Path $kernel 'include')", "-I$referenceDir")
+                $fiberObject = Join-Path $root 'pendsv.o'
+                $referenceObject = Join-Path $root 'reference.o'
+                Invoke-C3fpProof $compiler ($fiberFlags + @('-c', $source, '-o', $fiberObject)) | Out-Null
+                Invoke-C3fpProof $compiler ($referenceFlags + @('-c', $referenceSource, '-o', $referenceObject)) | Out-Null
+                foreach ($object in @($fiberObject, $referenceObject)) {
+                    Invoke-C3fpProof $objdump @('-dr', $object) -Log ($object+'.dis') | Out-Null
+                    Invoke-C3fpProof $readelf @('-A', '-h', '-S', '-s', '-r', '-W', $object) -Log ($object+'.elf.txt') | Out-Null
+                }
+                # Compile the evolving real SVC as well; its first-start proof
+                # and the constructor row remain owned by their existing gate.
+                $svcObject = Join-Path $root 'svc.o'
+                Invoke-C3fpProof $compiler ($fiberFlags + @('-c', (Join-Path $profile 'fiber_port_svc.c'), '-o', $svcObject)) | Out-Null
+                Invoke-C3fpProof $objdump @('-dr', $svcObject) -Log ($svcObject+'.dis') | Out-Null
+                $manifest = [ordered]@{Fiber=$fiberObject; FiberDisassembly=($fiberObject+'.dis');
+                    Reference=$referenceObject; ReferenceDisassembly=($referenceObject+'.dis');
+                    Svc=$svcObject; SvcDisassembly=($svcObject+'.dis');
+                    Regions=$regions; Receipt=(Join-Path $root 'result.json')}
+                $manifestPath = Join-Path $root 'check.json'
+                Write-C3fpJson $manifestPath $manifest
+                $result = Invoke-C3fpProof $Python @('-B', $checker, $manifestPath) -Log (Join-Path $root 'check.log')
+                $runs += [ordered]@{Name=$name; Manifest=$manifestPath; Result=$result.Output}
+                foreach ($mutation in @(Get-Cm33fRunningMutants)) {
+                    $isReference = $mutation.ContainsKey('Reference') -and $mutation.Reference
+                    $isSvc = $mutation.ContainsKey('Svc') -and $mutation.Svc
+                    $text = if ($isReference) { $referenceText } elseif ($isSvc) { $svcText } else { $fiberText }
+                    if ($isSvc -and -not $mutation.ContainsKey('Code')) {
+                        # Keep the cold first-start prefix outside running-SVC
+                        # mutation anchors; its existing proof is unchanged.
+                        $start = $text.IndexOf('void SVC_Handler(void)', [StringComparison]::Ordinal)
+                        if ($start -lt 0) { throw 'C3FP running SVC mutation body missing' }
+                        $prefix = $text.Substring(0, $start)
+                        $changed = $prefix + (New-Cm33fRunningMutation $text.Substring($start) $mutation)
+                    }
+                    else { $changed = New-Cm33fRunningMutation $text $mutation }
+                    $copy = Join-Path $root ("mutant-"+$mutation.Name+'.c')
+                    Set-Content -LiteralPath $copy -Value $changed -Encoding ASCII
+                    $object = Join-Path $root ("mutant-"+$mutation.Name+'.o')
+                    $flags = if ($isReference) { $referenceFlags } else { $fiberFlags }
+                    Invoke-C3fpProof $compiler ($flags + @('-c', $copy, '-o', $object)) | Out-Null
+                    Invoke-C3fpProof $objdump @('-dr', $object) -Log ($object+'.dis') | Out-Null
+                    $negative = [ordered]@{}
+                    foreach ($key in $manifest.Keys) { $negative[$key] = $manifest[$key] }
+                    $side = if ($isReference) { 'Reference' } elseif ($isSvc) { 'Svc' } else { 'Fiber' }
+                    $negative[$side] = $object
+                    $negative[$side+'Disassembly'] = $object+'.dis'
+                    $negative.Receipt = $object+'.unexpected-pass.json'
+                    $negativePath = $object+'.json'
+                    Write-C3fpJson $negativePath $negative
+                    $rejected = Invoke-C3fpProof $Python @('-B', $checker, $negativePath) -Log ($object+'.check.log') -AllowFailure
+                    $expectedCode = if ($isReference) { 'REFERENCE' } elseif ($isSvc) { 'SVC' } else { 'PENDSV' }
+                    if ($mutation.ContainsKey('Code')) { $expectedCode = $mutation.Code }
+                    $allowed = if ($mutation.Name -in @('unknown-encoding', 'unknown-coprocessor')) { @('DECODE') } else { @($expectedCode) }
+                    $valid = $false
+                    foreach ($code in $allowed) {
+                        if (Test-C3fpCodeRejection $rejected $code) { $valid = $true }
+                    }
+                    if (-not $valid) { throw "C3FP mutant $($mutation.Name) survived or failed for unintended reason: $($rejected.Output)" }
+                    $mutantReceipts += [ordered]@{Configuration=$name; Name=$mutation.Name; Manifest=$negativePath; Diagnostic=$rejected.Output}
+                }
+                if ($controls.Count -eq 0) {
+                    $diagnostic = 'REJECT:PYTHON:optimization is unsupported'
+                    foreach ($flag in @('-O', '-OO')) {
+                        $control = Invoke-C3fpProof $Python @('-B', $flag, $checker, $manifestPath) -AllowFailure
+                        if (-not (Test-C3fpExactRejection $control $diagnostic)) { throw "C3FP Python $flag guard failed: $($control.Output)" }
+                        $controls += $flag
+                    }
+                    $oldOptimize = $env:PYTHONOPTIMIZE
+                    try {
+                        $env:PYTHONOPTIMIZE = '1'
+                        $control = Invoke-C3fpProof $Python @('-B', $checker, $manifestPath) -AllowFailure
+                        if (-not (Test-C3fpExactRejection $control $diagnostic)) { throw 'C3FP Python environment guard failed' }
+                        $controls += 'PYTHONOPTIMIZE=1'
+                    }
+                    finally { $env:PYTHONOPTIMIZE = $oldOptimize }
+                    foreach ($level in @(1, 2)) {
+                        $code = "from pathlib import Path; import sys; p=sys.argv[1]; exec(compile(Path(p).read_text(),p,'exec',optimize=$level),{'__name__':'compiled_import'})"
+                        $control = Invoke-C3fpProof $Python @('-B', '-c', $code, $checker) -AllowFailure
+                        if (-not (Test-C3fpExactRejection $control $diagnostic)) { throw 'C3FP compiled-import optimization guard failed' }
+                        $controls += "compiled-import-$level"
+                    }
+                    $counterfeit = Invoke-C3fpProof $Python @('-B', '-c', "raise RuntimeError('$diagnostic')") -AllowFailure
+                    if (Test-C3fpExactRejection $counterfeit $diagnostic) { throw 'C3FP diagnostic classifier accepted traceback counterfeit' }
+                    $controls += 'RuntimeError-counterfeit-rejected'
+                    $counterfeit = Invoke-C3fpProof $Python @('-B', '-c', "raise RuntimeError('REJECT:PENDSV:counterfeit')") -AllowFailure
+                    if (Test-C3fpCodeRejection $counterfeit 'PENDSV') { throw 'C3FP mutant classifier accepted traceback counterfeit' }
+                    $controls += 'mutant-RuntimeError-counterfeit-rejected'
+                    $guardSource = Get-Content -LiteralPath $checker -Raw
+                    $guardFrom = 'raise SystemExit("REJECT:PYTHON:optimization is unsupported")'
+                    $guardTo = 'raise RuntimeError("REJECT:PYTHON:optimization is unsupported")'
+                    if ([regex]::Matches($guardSource, [regex]::Escape($guardFrom)).Count -ne 1) { throw 'C3FP guard counterfeit anchor changed' }
+                    $guardCopy = Join-Path $directory 'counterfeit-guard.py'
+                    Set-Content -LiteralPath $guardCopy -Value $guardSource.Replace($guardFrom, $guardTo) -Encoding ASCII
+                    $counterfeit = Invoke-C3fpProof $Python @('-B', '-O', $guardCopy, $manifestPath) -AllowFailure
+                    if (Test-C3fpExactRejection $counterfeit $diagnostic) { throw 'C3FP classifier accepted SystemExit-to-RuntimeError counterfeit' }
+                    $controls += 'actual-guard-RuntimeError-counterfeit-rejected'
+                }
+                Write-Host "PASS C3FP auxiliary running $Optimization $name (33 compiled mutants)"
+            }
+        }
+        $success = $true
+    }
+    finally {
+        # Live originals, including every document, remain frozen during the
+        # run. Also verify that none of the retained snapshot bytes changed.
+        $drift = @((@($sourceInputs) + @($documentation)) | Where-Object {
+            -not (Test-Path -LiteralPath $_.Path) -or (Get-FileHash -LiteralPath $_.Path -Algorithm SHA256).Hash -ne $_.Sha256
+        })
+        Write-C3fpJson (Join-Path $directory 'inputs.drift.json') $drift
+        Write-C3fpJson (Join-Path $directory 'status.json') ([ordered]@{Status= $(if ($success -and $drift.Count -eq 0) { 'PASS' } else { 'INCOMPLETE' });
+            RuntimeProfileAdded=$false; Optimization=$Optimization; SourceDrift=$drift.Count;
+            DocumentationSnapshotCount=$documentation.Count; Configurations=$runs; Mutants=$mutantReceipts; Controls=$controls})
+        if ($drift.Count) { throw "C3FP running parity inputs changed during run; no qualification: $directory" }
+    }
+    $artifactPrefix = [IO.Path]::GetFullPath($directory).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $artifacts = @(Get-ChildItem -LiteralPath $directory -Recurse -File | Where-Object { $_.Name -ne 'artifacts.json' } | ForEach-Object {
+        if (-not $_.FullName.StartsWith($artifactPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "C3FP artifact escaped its evidence directory: $($_.FullName)"
+        }
+        [ordered]@{Path=$_.FullName; Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
+    })
+    Write-C3fpJson (Join-Path $directory 'artifacts.json') ([ordered]@{Status='PASS'; ReferenceCommit=$ExpectedFreeRtosCommit;
+        Optimization=$Optimization; RuntimeProfileAdded=$false; Inputs=$inputs; Artifacts=$artifacts})
+    Write-Host "PASS C3FP auxiliary running parity: 4 configurations, $($mutantReceipts.Count) compiled mutants, $($controls.Count) harness controls; $directory"
+}
+
 $expectedReferenceFiles = @{
     "portable\GCC\ARM_CM0\port.c" = "44A9D18193BF606BB8B6CC2B3341C207981C473D666A0C7075038E4FC18E1DF9"
     "portable\GCC\ARM_CM0\portasm.c" = "1696254D07EBE24CD635067B0449E8C156E948967D07CA2B0E09B0D577C55395"
@@ -395,6 +2428,13 @@ $expectedReferenceFiles = @{
     "portable\GCC\ARM_CM33\secure\secure_context_port.c" = "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E"
     "portable\GCC\ARM_CM33\secure\secure_init.c" = "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55"
     "portable\GCC\ARM_CM33\secure\secure_init.h" = "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149"
+    "portable\GCC\ARM_CM55\secure\secure_context.c" = "E25244584CE048F44AAD7C89E9FEA80B811141760F948FD775E0E9EB2964ED72"
+    "portable\GCC\ARM_CM55\secure\secure_context_port.c" = "B3ED96A95CB008F157082C4437D2846D740851865AD2E4DC893AED895823AF8E"
+    "portable\GCC\ARM_CM55\secure\secure_context.h" = "8209F4BAF60741E8ED5516AF9706FC4B5B2EE3CF16452EDB0C034B7DDDE443B4"
+    "portable\GCC\ARM_CM55\secure\secure_heap.h" = "E58805B998EE73A9EB84627EBD2955787CDFD0CD968D1BC7D93423441BAB6C87"
+    "portable\GCC\ARM_CM55\secure\secure_port_macros.h" = "5F2DF28DF3D445F08727CAF41F83ED6C67E0494E40AF5572B5E18F6416B2838D"
+    "portable\GCC\ARM_CM55\secure\secure_init.c" = "1B8444698089651C6415D48A2B6716BA6C6DC32F71C51B679F5A8A9A3968DE55"
+    "portable\GCC\ARM_CM55\secure\secure_init.h" = "7704E518DFAAE39170274B7DD924B1A214FFFB12DC37C050E7D3457B5AA0E149"
     "portable\GCC\ARM_CM3_MPU\port.c" = "B94311759D4B807017F56669BDE818215215076A20C301A10D3C9DAE3D736676"
     "portable\GCC\ARM_CM3_MPU\portmacro.h" = "FF720AEDBE44344752224173B3BBA316D675AD47C44103BBC8CAB984B0A98A68"
     "portable\GCC\ARM_CM4_MPU\port.c" = "CC9B731BC23E52A91D7D37B5DDA16D7B501CFB4D3B3A3C8229C355C66662BF59"
@@ -783,6 +2823,49 @@ $ports = @(
         ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1")
         ReferenceExtraIncludes = @("portable\GCC\ARM_CM33\secure")
     },
+    # Auxiliary private memory mechanisms only: C55S stays staged. Compile the
+    # actual M55 reference, not its currently identical M33 source. Both sides
+    # use three records and strict aliasing; only Fiber has fixed stack storage.
+    [pscustomobject]@{
+        Name = "ARM_CM55_SECURE_CONTEXT_POOL"
+        CpuArgs = @("-mcpu=cortex-m55", "-mcmse", "-mfloat-abi=soft",
+            "-fstrict-aliasing", "-Wstrict-aliasing=2", "-Werror=strict-aliasing")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55\secure"
+        FiberSource = "fiber_secure_context_pool.c"
+        FiberDefines = @(
+            "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3u",
+            "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM55\secure"
+        ReferenceSource = "secure_context.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1",
+            "-DsecureconfigMAX_SECURE_CONTEXTS=3u")
+        Auxiliary = 1
+    },
+    # Auxiliary one-shot CPU/gateway initialization, independent of C55SPOOL.
+    # Neither pair adds the deferred Non-secure scheduler runtime profile.
+    [pscustomobject]@{
+        Name = "ARM_CM55_SECURE_CONTEXT_INIT_PRIORITY"
+        CpuArgs = @("-mcpu=cortex-m55", "-mcmse", "-mfloat-abi=soft", "-fstrict-aliasing")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55\secure"; FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1",
+            "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3u", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM55\secure"; ReferenceSource = "secure_init.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1", "-DsecureconfigMAX_SECURE_CONTEXTS=3u")
+        Auxiliary = 1
+    },
+    [pscustomobject]@{
+        Name = "ARM_CM55_SECURE_CONTEXT_INIT_CPU"
+        CpuArgs = @("-mcpu=cortex-m55", "-mcmse", "-mfloat-abi=soft", "-fstrict-aliasing")
+        CoreHeader = "core_cm55.h"; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+        ProfileDir = "fiber\port\ARM_CM55\secure"; FiberSource = "fiber_secure_context_gateway.c"
+        FiberDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV81M_MAINLINE=1",
+            "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_COUNT=3u", "-DFIBER_ARM_CM55_SECURE_CONTEXT_MAX_STACK_BYTES=256u")
+        ReferenceDir = "portable\GCC\ARM_CM55\secure"; ReferenceSource = "secure_context.c"
+        ReferenceDefines = @("-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1", "-DsecureconfigMAX_SECURE_CONTEXTS=3u")
+        Auxiliary = 1
+    },
     [pscustomobject]@{
         Name = "ARM_CM33_SECURE_CONTEXT_ALLOCATOR"
         CpuArgs = @("-mcpu=cortex-m33", "-mcmse")
@@ -940,10 +3023,75 @@ $ports = @(
     }
 )
 
-$stagedRuntimeProfiles = @()
+$ports += [pscustomobject]@{
+    Name = 'ARM_CM55_TFM'; Staged = 1; PendingSelectableMetadata = 1
+    CpuArgs = @('-mcpu=cortex-m55', '-mfloat-abi=soft')
+    CoreHeader = 'core_cm55.h'; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+    ProfileDir = 'fiber\port\ARM_CM55_TFM\non_secure'; FiberSource = 'fiber_port.c'
+    FiberDefines = @('-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV81M_MAINLINE=1')
+    ReferenceDir = 'portable\GCC\ARM_CM55_NTZ\non_secure'; ReferenceSource = 'portasm.c'
+    ReferenceDefines = @()
+}
+# Exact staged inventory only; no C3FT closed-body parity is claimed here.
+$ports += [pscustomobject]@{
+    Name = 'ARM_CM33F_TFM'; Staged = 1
+    CpuArgs = @('-mcpu=cortex-m33', '-mfpu=fpv5-sp-d16', '-mfloat-abi=hard')
+    CoreHeader = 'core_cm33.h'; Vtor = 1; Mpu = 0; Fpu = 1; Dsp = 1
+    ProfileDir = 'fiber\port\ARM_CM33F_TFM\non_secure'; FiberSource = 'fiber_port.c'
+    FiberDefines = @('-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV8M_MAINLINE=1')
+    ReferenceDir = 'portable\GCC\ARM_CM33_NTZ\non_secure'; ReferenceSource = 'portasm.c'
+    ReferenceDefines = @('-DFIBER_FREERTOS_PARITY_ENABLE_FPU=1')
+}
+# The closed-body C3SO gate does not promote this staged definition. Consumer
+# and runtime integration qualification remain separate obligations.
+$ports += [pscustomobject]@{
+    Name = 'ARM_CM33_SECURE_ONLY'; Staged = 1
+    CpuArgs = @('-mcpu=cortex-m33', '-mcmse', '-mfloat-abi=soft')
+    CoreHeader = 'core_cm33.h'; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+    ProfileDir = 'fiber\port\ARM_CM33_SECURE_ONLY\secure'; FiberSource = 'fiber_port.c'
+    FiberDefines = @('-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV8M_MAINLINE=1')
+    ReferenceDir = 'portable\GCC\ARM_CM33_NTZ\non_secure'; ReferenceSource = 'portasm.c'
+    ReferenceDefines = @('-DFIBER_FREERTOS_PARITY_SECURE_ONLY=1',
+        '-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=0', '-DFIBER_FREERTOS_PARITY_ENABLE_FPU=0',
+        '-DFIBER_FREERTOS_PARITY_ENABLE_MPU=0')
+}
+# Inventory/compile only until the separate C5SO closed-body gate is qualified.
+$ports += [pscustomobject]@{
+    Name = 'ARM_CM55_SECURE_ONLY'; Staged = 1
+    CpuArgs = @('-mcpu=cortex-m55', '-mcmse', '-mfloat-abi=soft')
+    CoreHeader = 'core_cm55.h'; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+    ProfileDir = 'fiber\port\ARM_CM55_SECURE_ONLY\secure'; FiberSource = 'fiber_port.c'
+    FiberDefines = @('-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV81M_MAINLINE=1')
+    ReferenceDir = 'portable\GCC\ARM_CM55_NTZ\non_secure'; ReferenceSource = 'portasm.c'
+    ReferenceDefines = @('-DFIBER_FREERTOS_PARITY_SECURE_ONLY=1',
+        '-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=0', '-DFIBER_FREERTOS_PARITY_ENABLE_FPU=0',
+        '-DFIBER_FREERTOS_PARITY_ENABLE_MPU=0')
+}
+# New C55S adapters are staged inventory, not qualified by old component receipts.
+$ports += [pscustomobject]@{
+    Name = 'ARM_CM55_SECURE_CONTEXT_RUNTIME'; Staged = 1
+    CpuArgs = @('-mcpu=cortex-m55', '-mfloat-abi=soft')
+    CoreHeader = 'core_cm55.h'; Vtor = 1; Mpu = 0; Fpu = 0; Dsp = 1
+    ProfileDir = 'fiber\port\ARM_CM55\non_secure'; FiberSource = 'fiber_port.c'
+    FiberDefines = @('-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV81M_MAINLINE=1')
+    ReferenceDir = 'portable\GCC\ARM_CM55\non_secure'; ReferenceSource = 'portasm.c'
+    ReferenceDefines = @('-DFIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE=1')
+    ReferenceExtraIncludes = @('portable\GCC\ARM_CM55\secure')
+}
+$stagedRuntimeProfiles = @('fiber\port\ARM_CM55_TFM\non_secure',
+    'fiber\port\ARM_CM33F_TFM\non_secure',
+    'fiber\port\ARM_CM33_SECURE_ONLY\secure', 'fiber\port\ARM_CM55_SECURE_ONLY\secure',
+    'fiber\port\ARM_CM55\non_secure')
 
 Assert-ProductionPortCoverage -RepositoryRoot $RepoRoot `
     -PortDefinitions $ports -StagedRuntimeProfiles $stagedRuntimeProfiles
+
+$kernel = Find-FreeRtosKernel
+Assert-ReferenceIdentity -KernelRoot $kernel -ExpectedFiles $expectedReferenceFiles
+if ($ReferenceIdentityOnly) {
+    Write-Host "PASS pinned FreeRTOS reference identity (all tracked files; no extra files)"
+    return
+}
 
 $compiler = Find-ArmGcc
 $toolDir = Split-Path -Parent $compiler
@@ -952,7 +3100,6 @@ if (-not (Test-Path -LiteralPath $objdump)) {
     throw "arm-none-eabi-objdump.exe not found next to compiler"
 }
 $cmsis = Find-CmsisCore
-$kernel = Find-FreeRtosKernel
 $configDir = Join-Path $RepoRoot "tools\fixtures\freertos_asm_parity"
 $ledgerPath = Join-Path $RepoRoot "FREERTOS_ASM_PARITY.md"
 if (-not (Test-Path -LiteralPath $ledgerPath)) {
@@ -966,12 +3113,66 @@ if ($ownsBuildRoot) {
         ("fiber-freertos-asm-parity-" + [Guid]::NewGuid().ToString("N"))
 }
 New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
+if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly) | Where-Object { $_ }).Count -gt 1) {
+    throw 'Choose only one focused parity group'
+}
+if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly) { $KeepBuild = $true }
 
 try {
-    Assert-ReferenceIdentity -KernelRoot $kernel `
-        -ExpectedFiles $expectedReferenceFiles
-
     Write-Host "Parity optimization: $Optimization"
+
+    foreach ($mode in @('A30', 'C3SO', 'C5SO')) {
+        if ($Cm33fRunningOnly -or $Cm55TfmOnly -or
+                ($Cm33SecureContextOnly -and $mode -ne 'A30') -or
+                ($Cm33SecureOnly -and $mode -ne 'C3SO') -or
+                ($Cm55SecureOnly -and $mode -ne 'C5SO')) { continue }
+        $originIds = if ($mode -eq 'A30') {
+            @('FAP-C33S-DUAL-ORIGIN','FAP-C33S-RESTORE-ADMISSION','FAP-C33S-PSP-PRESERVATION','FAP-C33S-CLOSED-PROOF')
+        } elseif ($mode -eq 'C3SO') {
+            @('FAP-C3SO-CPU','FAP-C3SO-CONSTRUCTION','FAP-C3SO-START','FAP-C3SO-HARDENING','FAP-C3SO-STAGED')
+        } else {
+            @('FAP-C5SO-CPU','FAP-C5SO-CONSTRUCTION','FAP-C5SO-START','FAP-C5SO-HARDENING','FAP-C5SO-STAGED')
+        }
+        foreach ($id in $originIds) {
+            if ($ledger.IndexOf($id,[StringComparison]::Ordinal) -lt 0) { throw "Missing parity difference: $id" }
+        }
+        $originBuild = Join-Path $BuildRoot $mode
+        if (Test-Path -LiteralPath $originBuild) { throw "Evidence already exists; choose a fresh -BuildRoot: $originBuild" }
+        New-Item -ItemType Directory -Path $originBuild | Out-Null
+        $originCore = if ($mode -eq 'C5SO') { 'core_cm55.h' } else { 'core_cm33.h' }
+        Write-CmsisMainHeader $originBuild $originCore 1 0 0 0 1
+        & $Python -B (Join-Path $RepoRoot 'tools\fixtures\cm33_secure_parity\run.py') `
+            --repo $RepoRoot --arm-gcc $compiler --cmsis $cmsis --reference $kernel `
+            --build $originBuild --optimization=$Optimization --mode $mode
+        if ($LASTEXITCODE -ne 0) { throw "$mode closed parity failed; evidence retained: $originBuild" }
+    }
+    if ($Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly) {
+        Write-Host "SCALAR_SECURE_FOCUSED_PARITY_PASS ($Optimization; no profile promotion)"
+        return
+    }
+
+    if (-not $Cm55TfmOnly) { Assert-Cm33fMpuRunningParity }
+    if ($Cm33fRunningOnly) {
+        Write-Host "C3FP_RUNNING_PARITY_PASS ($Optimization; auxiliary only)"
+        return
+    }
+
+    $tfmBuild = Join-Path $BuildRoot 'C5TF'
+    foreach ($id in @('FAP-C5TF-CPU', 'FAP-C5TF-CONSTRUCTOR', 'FAP-C5TF-HARDENING',
+            'FAP-C5TF-INITIALIZE', 'FAP-C5TF-WRAPPER', 'FAP-C5TF-STAGED')) {
+        if ($ledger -notmatch [regex]::Escape($id)) { throw "C5TF difference missing from parity ledger: $id" }
+    }
+    if (Test-Path -LiteralPath $tfmBuild) { throw "C5TF evidence already exists; choose a fresh -BuildRoot: $tfmBuild" }
+    New-Item -ItemType Directory -Path $tfmBuild | Out-Null
+    Write-CmsisMainHeader $tfmBuild 'core_cm55.h' 1 0 0 0 1
+    & $Python -B (Join-Path $RepoRoot 'tools\fixtures\cm55_tfm_parity\run.py') `
+        --repo $RepoRoot --arm-gcc $compiler --cmsis $cmsis --reference $kernel `
+        --build $tfmBuild --optimization=$Optimization
+    if ($LASTEXITCODE -ne 0) { throw "C5TF actual-source parity failed; evidence retained: $tfmBuild" }
+    if ($Cm55TfmOnly) {
+        Write-Host "C5TF_PARITY_PASS ($Optimization; metadata one, no profile promotion by this gate)"
+        return
+    }
 
     $compiled = @{}
     foreach ($port in $ports) {
@@ -998,6 +3199,27 @@ try {
             "-I$(Join-Path $RepoRoot 'fiber')", "-I$RepoRoot", "-I$cmsis",
             "-c", $fiberPath, "-o", $fiberObject
         )
+        $captureC33 = $port.Name -in @('ARM_CM33_SECURE_CONTEXT_ALLOCATOR','ARM_CM33_SECURE_CONTEXT_DEPRIORITIZE',
+            'ARM_CM33_SECURE_CONTEXT_INITIALIZE','ARM_CM33_SECURE_CONTEXT_LOAD','ARM_CM33_SECURE_CONTEXT_SAVE')
+        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+            $fiberArgs += @("-save-temps=obj", "-MMD")
+        }
+        $initSourceHashes = @()
+        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+            $initInputs = @((Join-Path $RepoRoot "fiber\fiber_api_attributes.h"),
+                (Join-Path $RepoRoot "tools\freertos_asm_parity.ps1"), $ledgerPath) +
+                @(Get-ChildItem -LiteralPath $profileDir -File | Where-Object { $_.Extension -in @('.c', '.h', '.ld') } | Select-Object -ExpandProperty FullName) +
+                @(Get-ChildItem -LiteralPath $configDir -Filter '*.h' -File | Select-Object -ExpandProperty FullName) +
+                @(Get-ChildItem -LiteralPath (Join-Path $kernel $port.ReferenceDir) -File |
+                    Where-Object { $_.Extension -in @('.c', '.h') } | Select-Object -ExpandProperty FullName)
+            if ($captureC33) {
+                $initInputs += @((Join-Path $RepoRoot 'mcu_core.h'),(Join-Path $RepoRoot 'basic_types.h'))+
+                    @(Get-ChildItem -LiteralPath $cmsis -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
+            }
+            $initSourceHashes = @($initInputs | ForEach-Object {
+                [pscustomobject]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
+            })
+        }
         Invoke-Compile -Compiler $compiler -Arguments $fiberArgs `
             -Label "$($port.Name) Fiber"
 
@@ -1018,6 +3240,9 @@ try {
             "-I$referenceDir", "-c", $referencePath,
             "-o", $referenceObject
         )
+        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+            $referenceArgs += @("-save-temps=obj", "-MMD")
+        }
         Invoke-Compile -Compiler $compiler -Arguments $referenceArgs `
             -Label "$($port.Name) FreeRTOS"
 
@@ -1028,6 +3253,49 @@ try {
             ReferencePath = $referenceObject
             Reference = Get-ObjectDisassembly -Objdump $objdump `
                 -ObjectPath $referenceObject
+            FiberArguments = $fiberArgs
+            ReferenceArguments = $referenceArgs
+            InitSourceHashes = $initSourceHashes
+        }
+        if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
+            Set-Content -LiteralPath (Join-Path $portBuild "fiber-port.disasm") `
+                -Value $compiled[$port.Name].Fiber -Encoding ASCII
+            Set-Content -LiteralPath (Join-Path $portBuild "freertos-port.disasm") `
+                -Value $compiled[$port.Name].Reference -Encoding ASCII
+            $evidenceName = if ($captureC33) { 'c33s-evidence.json' } else { 'c55sinit-evidence.json' }
+            [ordered]@{
+                ReferenceCommit = $ExpectedFreeRtosCommit
+                Optimization = $Optimization
+                RuntimeProfileAdded = $false
+                Compiler = $compiler
+                FiberSource = $fiberPath
+                FiberSourceSha256 = (Get-FileHash -LiteralPath $fiberPath -Algorithm SHA256).Hash
+                FiberArguments = $fiberArgs
+                ReferenceSource = $referencePath
+                ReferenceSourceSha256 = (Get-FileHash -LiteralPath $referencePath -Algorithm SHA256).Hash
+                ReferenceArguments = $referenceArgs
+                Inputs = $initSourceHashes
+            } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath `
+                (Join-Path $portBuild $evidenceName) -Encoding ASCII
+        }
+        if ($port.Name -eq "ARM_CM55_SECURE_CONTEXT_POOL") {
+            Set-Content -LiteralPath (Join-Path $portBuild "fiber-port.disasm") `
+                -Value $compiled[$port.Name].Fiber -Encoding ASCII
+            Set-Content -LiteralPath (Join-Path $portBuild "freertos-port.disasm") `
+                -Value $compiled[$port.Name].Reference -Encoding ASCII
+            [ordered]@{
+                ReferenceCommit = $ExpectedFreeRtosCommit
+                Optimization = $Optimization
+                RuntimeProfileAdded = $false
+                Compiler = $compiler
+                FiberSource = $fiberPath
+                FiberSourceSha256 = (Get-FileHash -LiteralPath $fiberPath -Algorithm SHA256).Hash
+                FiberArguments = $fiberArgs
+                ReferenceSource = $referencePath
+                ReferenceSourceSha256 = (Get-FileHash -LiteralPath $referencePath -Algorithm SHA256).Hash
+                ReferenceArguments = $referenceArgs
+            } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath `
+                (Join-Path $portBuild "c55spool-evidence.json") -Encoding ASCII
         }
     }
 
@@ -2464,6 +4732,215 @@ try {
         -Patterns @('\bv(?:stm|ldm|push|pop|mov|ldr|str)\w*\b') `
         -Label "ARM_CM33F_NTZ Fiber initial construction"
 
+    # C55SPOOL is an auxiliary memory-mechanism pair, not a runtime profile.
+    # Signatures follow the reference scan/handle/owner contract and Fiber's
+    # documented static-storage adaptation; CPU initialization is not paired.
+    $pair = $compiled["ARM_CM55_SECURE_CONTEXT_POOL"]
+    $poolForbidden = @(
+        '\b(?:mrs|msr|cpsid|cpsie|svc|sg|bxns|blxns)\b',
+        '(?m)^\s*[0-9a-f]+:\s+(?:[0-9a-f]{4}\s+){1,2}v[a-z][a-z0-9.]*\b',
+        '\bblx\b', '\bbx\s+(?!lr\b)',
+        '\b(?:pvPortMalloc|vPortFree|malloc|calloc|realloc|free|memset|memcpy|memmove|__aeabi_\w*|__cmse_\w*)\b',
+        '__acle_se_', 'SecureContext_(?:Load|Save)ContextAsm')
+    Assert-AbsentPatterns -Body $pair.Fiber -Patterns $poolForbidden `
+        -Label "C55SPOOL complete private call graph: no CPU/NSC/FP/heap/libc"
+    foreach ($call in [regex]::Matches($pair.Fiber,
+            'R_ARM_THM_(?:CALL|JUMP24)\s+(?<target>[A-Za-z_.$][A-Za-z0-9_.$]*)')) {
+        $null = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+            -Symbol $call.Groups['target'].Value -Path $pair.FiberPath
+    }
+
+    $poolInitPatterns = @(
+        '\bldr(?:\.w)?\s+[^\r\n]+',
+        '\b(?:beq(?:\.[nw])?|cbz)\b',
+        '\b(?:cbz|cbnz|bne(?:\.[nw])?)\b',
+        '\bstr(?:\.w)?\s+[^\r\n]+',
+        '\bstrb(?:\.w)?\b',
+        '\b(?:le|bne(?:\.[nw])?)\b',
+        '\bldrb(?:\.w)?\b',
+        '\b(?:cbnz|bne(?:\.[nw])?)\b',
+        '\bldr(?:\.w)?\b', '\bcmp(?:\.w)?\b',
+        '\bbne(?:\.[nw])?\b', '\bstr(?:\.w)?\b',
+        '\bldr(?:\.w)?\b', '\bcmp(?:\.w)?\b',
+        '\bbne(?:\.[nw])?\b', '\bmovs?\s+r0,\s*#1\b')
+    Assert-MechanismParity -PortName "C55SPOOL" -Mechanism "one-shot-memory-init" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "SecureContext_Init" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR', '\bcbnz\b',
+            '\bstr(?:\.w)?\b', '\bmsr\s+PSPLIM', '\bmsr\s+PSP',
+            '\bstr(?:d|\.w)?\b',
+            '\bmsr\s+CONTROL') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_pool_boot_initialize" `
+        -FiberPatterns $poolInitPatterns -FiberPath $pair.FiberPath `
+        -DifferenceIds @("FAP-C55SPOOL-INIT") -Ledger $ledger
+
+    $referenceInit = Get-DisassemblyFunctionBody -Disassembly $pair.Reference `
+        -Symbol "SecureContext_Init" -Path $pair.ReferencePath
+    if ([regex]::Matches($referenceInit, '\bstrd\b').Count -eq 2) {
+        Assert-OrderedPatterns -Body $referenceInit -Patterns @(
+            '\badds?(?:\.w)?\s+[^,]+,\s*[^,]+,\s*#48\b', '\bstrd\b') `
+            -Label "C55SPOOL FreeRTOS three-record loop end"
+        $clear = Get-BackwardLoopContaining -Body $referenceInit `
+            -OperationPattern '\bstrd\b' -Label "C55SPOOL FreeRTOS 48-byte record clear"
+        if ([regex]::Matches($clear.Body, '\bstrd\b').Count -ne 2) {
+            throw "C55SPOOL FreeRTOS record-clear loop must clear four words per record"
+        }
+    } else {
+        # The size-optimized reference may unroll three four-word records.
+        $clearPatterns = @('\bstrd\s+[^\r\n]*\[[^\],]+(?:,\s*#0)?\]')
+        $clearPatterns += @(8, 16, 24, 32, 40 | ForEach-Object {
+            '\bstrd\s+[^\r\n]*\[[^\]]+,\s*#' + $_ + '\]'
+        })
+        Assert-OrderedPatterns -Body $referenceInit -Patterns $clearPatterns `
+            -Label "C55SPOOL FreeRTOS unrolled 48-byte record clear"
+    }
+    $poolInit = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+        -Symbol "fiber_secure_context_pool_boot_initialize" -Path $pair.FiberPath
+    if ([regex]::Matches($poolInit, '#864\b').Count -ne 2) {
+        throw "C55SPOOL scrub and readback must each cover the full 864-byte image"
+    }
+    $scrub = Get-BackwardLoopContaining -Body $poolInit `
+        -OperationPattern '\bstrb(?:\.w)?\b' -Label "C55SPOOL volatile scrub"
+    $readback = Get-BackwardLoopContaining -Body $poolInit `
+        -OperationPattern '\bldrb(?:\.w)?\b' -Label "C55SPOOL volatile readback"
+    if ($scrub.End -ge $readback.Start) {
+        throw "C55SPOOL must finish the scrub loop before its readback loop"
+    }
+    Assert-OrderedPatterns -Body $readback.Body `
+        -Patterns @('\bldrb(?:\.w)?\b', '\b(?:cbnz|bne(?:\.[nw])?)\b') `
+        -Label "C55SPOOL readback rejects nonzero bytes inside the loop"
+    Assert-OrderedPatterns -Body $poolInit -Patterns @(
+        'fiber_secure_context_pool_fail_closed', '0x53435042\b') `
+        -Label "C55SPOOL one-way marker and readback failure target"
+
+    Assert-MechanismParity -PortName "C55SPOOL" -Mechanism "bounded-allocation" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "SecureContext_AllocateContext" `
+        -ReferencePatterns @(
+            '\bmrs\s+[^,]+,\s*IPSR', '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#3\b', 'pvPortMalloc',
+            '\bstr(?:\.w)?\b', '\bstr(?:\.w)?\b', '0xfef5eda5\b') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_pool_allocate" `
+        -FiberPatterns @(
+            'fiber_secure_context_pool_require_ready',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#(?:255|256)\b',
+            '\b(?:ands?(?:\.w)?[^\r\n]*#7|lsls[^\r\n]*#29)\b',
+            'fiber_secure_context_pool_record_is_free',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#3\b',
+            'fiber_secure_context_pool_write_stack_seal',
+            '\bstr(?:d|\.w)?\b',
+            '\bstr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#20\]',
+            'fiber_secure_context_pool_record_is_valid',
+            'fiber_secure_context_pool_require_ready',
+            '\badds?(?:\.w)?\s+r0,\s*[^\r\n]*#1\b') `
+        -FiberPath $pair.FiberPath -DifferenceIds @("FAP-C55SPOOL-ALLOCATE") `
+        -Ledger $ledger
+
+    $referenceAllocate = Get-DisassemblyFunctionBody -Disassembly $pair.Reference `
+        -Symbol "SecureContext_AllocateContext" -Path $pair.ReferencePath
+    $poolAllocate = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+        -Symbol "fiber_secure_context_pool_allocate" -Path $pair.FiberPath
+    foreach ($allocation in @(
+            [pscustomobject]@{ Body = $referenceAllocate; Label = "FreeRTOS" },
+            [pscustomobject]@{ Body = $poolAllocate; Label = "Fiber" })) {
+        $null = Get-BackwardLoopContaining -Body $allocation.Body `
+            -OperationPattern '\bldr(?:\.w)?\b' `
+            -Label "C55SPOOL $($allocation.Label) bounded record scan"
+        Assert-OrderedPatterns -Body $allocation.Body -Patterns @(
+            '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#12\]', '\bcmp\b') `
+            -Label "C55SPOOL $($allocation.Label) compares opaque owner tokens"
+        Assert-OrderedPatterns -Body $allocation.Body -Patterns @(
+            '\badds?(?:\.w)?\s+r0,\s*[^\r\n]*#1\b') `
+            -Label "C55SPOOL $($allocation.Label) index-plus-one handle"
+    }
+    foreach ($seal in @(
+            [pscustomobject]@{ Symbol = "fiber_secure_context_pool_write_stack_seal"; Op = '\bstrb(?:\.w)?\b' },
+            [pscustomobject]@{ Symbol = "fiber_secure_context_pool_stack_seal_is_valid"; Op = '\bldrb(?:\.w)?\b' })) {
+        $body = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+            -Symbol $seal.Symbol -Path $pair.FiberPath
+        Assert-OrderedPatterns -Body $body -Patterns @(
+            '#(?:7|8)\b', $seal.Op, '0xfef5eda5\b') `
+            -Label "C55SPOOL $($seal.Symbol) eight-byte native seal"
+        $null = Get-BackwardLoopContaining -Body $body -OperationPattern $seal.Op `
+            -Label "C55SPOOL $($seal.Symbol) strict-alias-safe character loop"
+        $wordAccess = [regex]::Replace($body, $seal.Op, 'ldr')
+        $rejected = $false
+        try {
+            $null = Get-BackwardLoopContaining -Body $wordAccess `
+                -OperationPattern $seal.Op -Label "C55SPOOL word-access seal mutant"
+        } catch { $rejected = $true }
+        if (-not $rejected) { throw "C55SPOOL accepted a non-byte seal-access mutant" }
+    }
+
+    Assert-MechanismParity -PortName "C55SPOOL" -Mechanism "owned-handle-lookup" `
+        -ReferenceDisassembly $pair.Reference -ReferenceSymbol "SecureContext_LoadContext" `
+        -ReferencePatterns @(
+            '\bsubs?(?:\.w)?\s+[^\r\n]*#1\b',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#2\b', '\bmrs\s+[^,]+,\s*PSPLIM',
+            '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#12\]',
+            '\bcmp\b', 'SecureContext_LoadContextAsm') `
+        -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
+        -FiberSymbol "fiber_secure_context_pool_lookup_owned" `
+        -FiberPatterns @(
+            'fiber_secure_context_pool_require_ready',
+            '\bsubs?(?:\.w)?\s+[^\r\n]*#1\b',
+            '\bcmp(?:\.w)?\s+[^,]+,\s*#2\b',
+            '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#20\]',
+            'fiber_secure_context_pool_record_is_valid',
+            '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#12\]', '\bcmp\b') `
+        -FiberPath $pair.FiberPath -DifferenceIds @("FAP-C55SPOOL-LOOKUP") `
+        -Ledger $ledger
+    $recordValidation = Get-DisassemblyFunctionBody -Disassembly $pair.Fiber `
+        -Symbol "fiber_secure_context_pool_record_is_valid" -Path $pair.FiberPath
+    Assert-OrderedPatterns -Body $recordValidation -Patterns @(
+        '\bcmp(?:\.w)?\s+[^,]+,\s*#2\b',
+        '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#20\]',
+        '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#12\]',
+        '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#16\]',
+        '\bcmp(?:\.w)?\s+[^,]+,\s*#(?:255|256)\b',
+        '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#4\]',
+        '\bcmp\b', '\bldr(?:\.w)?\s+[^\r\n]*\[[^\]]+,\s*#8\]',
+        '\bcmp\b', 'fiber_secure_context_pool_stack_seal_is_valid') `
+        -Label "C55SPOOL checked record geometry precedes seal reads"
+
+    $poolSymbols = (& $objdump -t $pair.FiberPath) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "C55SPOOL symbol-table inspection failed" }
+    Assert-OrderedPatterns -Body $poolSymbols -Patterns @(
+        '(?m)^.*\sO\s+\.bss\.fiber_secure_context_pool_state\s+00000004\s+fiber_secure_context_pool_state\s*$',
+        '(?m)^.*\sO\s+\.fiber_secure_context_pool\s+00000360\s+fiber_secure_context_pool_image\s*$') `
+        -Label "C55SPOOL 864-byte retained image and separate four-byte BSS marker"
+
+    # Exercise the guards against mutations of the actual generated object text.
+    # A removed readback or a word-access replacement must not keep passing.
+    $rejected = $false
+    try {
+        $null = Get-BackwardLoopContaining `
+            -Body ([regex]::Replace($poolInit, '\bldrb(?:\.w)?\b', 'ldr')) `
+            -OperationPattern '\bldrb(?:\.w)?\b' -Label "C55SPOOL readback mutant"
+    } catch { $rejected = $true }
+    if (-not $rejected) { throw "C55SPOOL accepted the missing byte-readback mutant" }
+    $rejected = $false
+    try {
+        $backEdge = ($readback.Body -split "`n")[-1]
+        $null = Get-BackwardLoopContaining -Body ($poolInit.Replace($backEdge, '')) `
+            -OperationPattern '\bldrb(?:\.w)?\b' -Label "C55SPOOL readback-loop mutant"
+    } catch { $rejected = $true }
+    if (-not $rejected) { throw "C55SPOOL accepted readback without its loop back edge" }
+    $rejected = $false
+    try {
+        Assert-AbsentPatterns -Body ($pair.Fiber + "`nmsr CONTROL, r0`n") `
+            -Patterns $poolForbidden -Label "C55SPOOL CPU-write mutant"
+    } catch { $rejected = $true }
+    if (-not $rejected) { throw "C55SPOOL accepted a private CPU-write mutant" }
+    Write-Host "PASS C55SPOOL auxiliary storage, byte loops, no-CPU/no-heap, and negative guards"
+
+    Test-C55SInitMechanisms -PriorityPair $compiled["ARM_CM55_SECURE_CONTEXT_INIT_PRIORITY"] `
+        -CpuPair $compiled["ARM_CM55_SECURE_CONTEXT_INIT_CPU"]
+    Test-C55STransferMechanisms -Pair $compiled["ARM_CM55_SECURE_CONTEXT_INIT_CPU"]
+    Test-C33SCohortMechanisms -Pair $compiled['ARM_CM33_SECURE_CONTEXT_INITIALIZE'] `
+        -PriorityPair $compiled['ARM_CM33_SECURE_CONTEXT_DEPRIORITIZE']
+
     # The selected TrustZone profile retains the exact FreeRTOS
     # non-MPU/no-FPU 19-word initial image. Separate mechanisms prove Secure
     # save/load, first start, and the complete PendSV switch choreography.
@@ -2481,6 +4958,18 @@ try {
         -Ledger $ledger
 
     $pair = $compiled["ARM_CM33_SECURE_CONTEXT_ALLOCATOR"]
+    # A17 makes this reachable helper a canonical no-IPA boundary. Inspect its
+    # gate separately rather than requiring the compiler to inline it into each
+    # NSC entry. The entries below must still call it before accessing the pool.
+    $runtimeExceptionGate = Get-DisassemblyFunctionBody `
+        -Disassembly $pair.Fiber `
+        -Symbol "fiber_secure_context_gateway_is_runtime_exception" `
+        -Path $pair.FiberPath
+    Assert-OrderedPatterns -Body $runtimeExceptionGate -Patterns @(
+        '\bmrs\s+[^,]+,\s*IPSR',
+        '\bcmp\s+[^,]+,\s*#11\b',
+        '\b(?:cmp|sub)[a-z]*(?:\.w)?\s+[^\r\n]*#14\b') `
+        -Label "ARM_CM33 SecureContext runtime exception gate"
     Assert-MechanismParity -PortName "ARM_CM33 SecureContext" `
         -Mechanism "allocation-gate" `
         -ReferenceDisassembly $pair.Reference `
@@ -2492,8 +4981,7 @@ try {
         -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
         -FiberSymbol "fiber_secure_context_gateway_v1_allocate" `
         -FiberPatterns @(
-            '\bmrs\s+[^,]+,\s*IPSR',
-            '\bcmp\s+[^,]+,\s*#11\b',
+            '\bbl\s+[^\r\n]*fiber_secure_context_gateway_is_runtime_exception',
             '\bmrs\s+[^,]+,\s*PSPLIM',
             '\b(?:bl|b\.w)\s+[^\r\n]*fiber_secure_context_pool_allocate') `
         -FiberPath $pair.FiberPath `
@@ -2558,8 +5046,7 @@ try {
         -ReferencePath $pair.ReferencePath -FiberDisassembly $pair.Fiber `
         -FiberSymbol "fiber_secure_context_gateway_v1_load" `
         -FiberPatterns @(
-            '\bmrs\s+[^,]+,\s*IPSR',
-            '\bcmp(?:\.w)?\s+[^,]+,\s*#11\b',
+            '\bbl\s+[^\r\n]*fiber_secure_context_gateway_is_runtime_exception',
             'fiber_secure_context_pool_lookup_owned',
             '\bmsr\s+PSPLIM',
             '\bmrs\s+[^,]+,\s*PSPLIM',

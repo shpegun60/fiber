@@ -85,7 +85,7 @@ function Test-ArmCm55MvefMpuSlice1Contract {
             "requires CMSIS __FPU_USED == 1",
             "requires compiler FP code generation",
 			"requires MVE FP compiler support",
-            "FIBER_PORT_RUNTIME_SELECTABLE 0",
+            "FIBER_PORT_RUNTIME_SELECTABLE 1",
             "FIBER_PORT_HAS_FPU 1",
             "FIBER_PORT_HAS_EXTENDED_FP_CONTEXT 1",
 			"FIBER_PORT_HAS_MVE 1",
@@ -286,10 +286,10 @@ FiberContext fiber_arm_cm55_mvef_mpu_cpp_type_only_object;
             "-DFIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS=$regions"
         )
         $layoutVersionToken = if ($regions -eq 8) {
-            "l0x00010008u"
+            "l0x00020008u"
         }
         else {
-            "l0x00010010u"
+            "l0x00020010u"
         }
 
         $typeObject = Join-Path $regionDir "type-only.o"
@@ -390,6 +390,7 @@ FiberContext fiber_arm_cm55_mvef_mpu_cpp_type_only_object;
             $bootUndefined = @(Get-NmUndefinedSymbolNames -NmOutput $nmUndefined `
                 -Path $bootObject)
 			$allowedUndefined = @($boundarySymbols + @(
+					"fiber_internal_runtime_port_abi_v1_anchor",
 					"fiber_panic", "fiber_port_unprivileged_task_return",
 					$expectedCohort) |
                 Sort-Object)

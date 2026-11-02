@@ -4,8 +4,8 @@
 
 This directory is the exact build-selected Cortex-M55 MVE-FP, Non-secure,
 privileged, non-MPU, no-SecureContext, no-TF-M, no-PAC, and no-BTI context
-cohort. It is deliberately non-selectable while the first three slices establish
-the complete CPU/context runtime:
+cohort. Its three implementation slices provide the complete CPU/context
+software runtime through explicit build selection:
 
 ```text
 implemented:
@@ -23,9 +23,21 @@ not implemented:
   hardware validation
 ```
 
-`FIBER_PORT_RUNTIME_SELECTABLE` remains `0`. The profile has no global
-auto-selection or hardware-support claim. It must be deliberately compiled
-with this selected profile until matching M55 MVE-FP hardware evidence exists.
+`FIBER_PORT_RUNTIME_SELECTABLE` is `1` for this complete build-selected source
+group. The capability flag is not a global auto-selection or hardware-support
+flag. Explicit build selection remains required; no global route or hardware
+support is implied. The earlier zero value was stale staged metadata, not a
+runtime CPU gate. Correcting it changes no instructions, frame/layout, cohort
+identity, or callable ABI. Predefined capability overrides still reject.
+
+Focused before/after GCC 14.3.1 compile/layout evidence is retained at
+`%TEMP%/fiber-runtime-selectable-p3-51b2f6eef09346b28f96a3b0d0ebfb01/`.
+It covers the three corrected complete profiles at O2/Os, hard/softfp,
+lazy/eager, and applicable 8/16 MPU-region settings: 40 configurations and
+120 production objects plus 40 layout objects per phase. It compares actual
+source-generated object bytes, instructions/relocations, and exact cohort
+symbols; the only changed preprocessor capability is zero to one. This is
+metadata/build evidence, not new execution or hardware qualification.
 
 The selected construction manifest is:
 

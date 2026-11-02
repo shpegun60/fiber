@@ -821,6 +821,7 @@ void fiber_port_context_init(FiberContext *ctx,
 	ctx->protected_context.basic.core.control =
 			fiber_portINITIAL_CONTROL_UNPRIVILEGED;
 	ctx->protected_context.basic.core.r9 = fiber_port_read_r9();
+	FIBER_RUNTIME_PORT_ABI_RETAIN_V1();
 	ctx->protected_context.basic.core.exc_return =
 			fiber_portINITIAL_EXC_RETURN;
 	ctx->protected_context.basic.hardware.psp = (uint32_t)initial_psp;

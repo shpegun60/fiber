@@ -126,8 +126,10 @@ void fiber_port_validate_priority_contract(void)
 }
 
 static FIBER_CM0_MPU_PRIVILEGED
-void fiber_port_validate_exception_vectors(void)
+void fiber_port_validate_exception_vectors(const FiberPortMpuMemoryLayout *layout)
 {
+	FIBER_REQUIRE(layout != NULL, 'L');
+	const uintptr_t base = fiber_port_vectors_base_addr();
 #if FIBER_PORT_HAS_VTOR
 	const uintptr_t first = (uintptr_t)fiber_portSCB_VTOR_REG;
 	__DSB();
@@ -135,12 +137,22 @@ void fiber_port_validate_exception_vectors(void)
 	const uintptr_t second = (uintptr_t)fiber_portSCB_VTOR_REG;
 	FIBER_REQUIRE(first == second, 'V');
 	FIBER_REQUIRE((first & (fiber_portVECTOR_ALIGNMENT - 1u)) == 0u, 'V');
+	FIBER_REQUIRE(first == base, 'V');
 #endif
 
-	const uintptr_t actual_svc = (uintptr_t)fiber_port_read_vector_slot(
-			fiber_portVECTOR_INDEX_SVC);
-	const uintptr_t actual_pendsv = (uintptr_t)fiber_port_read_vector_slot(
-			fiber_portVECTOR_INDEX_PENDSV);
+	/* Only immutable RO code maps may contain the complete active table. In
+	 * particular, matching handler values in a user-writable stack do not
+	 * establish vector ownership. Prove placement before either slot read. */
+	const uintptr_t extent = fiber_portVECTOR_STORAGE_BYTES;
+	FIBER_REQUIRE(base <= UINTPTR_MAX - extent, 'V');
+	FIBER_REQUIRE(fiber_port_range_contains(layout->privileged_code_start,
+			layout->privileged_code_end, base, base + extent) ||
+			fiber_port_range_contains(layout->unprivileged_code_start,
+			layout->unprivileged_code_end, base, base + extent), 'V');
+	const uintptr_t actual_svc = (uintptr_t)fiber_port_read_vector_slot_at(
+			base, fiber_portVECTOR_INDEX_SVC);
+	const uintptr_t actual_pendsv = (uintptr_t)fiber_port_read_vector_slot_at(
+			base, fiber_portVECTOR_INDEX_PENDSV);
 	FIBER_REQUIRE((actual_svc & 1u) != 0u, 'y');
 	FIBER_REQUIRE((actual_pendsv & 1u) != 0u, 'Y');
 	FIBER_REQUIRE(fiber_port_code_address(actual_svc) ==
@@ -534,10 +546,10 @@ void fiber_port_runtime_prepare_start(void)
 	fiber_port_require_scheduler_configuration_environment();
 	fiber_port_mpu_load_linker_layout(&layout);
 	fiber_port_mpu_linker_layout_check(&layout);
-	fiber_port_validate_exception_vectors();
+	fiber_port_validate_exception_vectors(&layout);
 	fiber_port_validate_priority_contract();
 	fiber_port_configure_exception_priorities();
-	fiber_port_validate_exception_vectors();
+	fiber_port_validate_exception_vectors(&layout);
 	fiber_port_require_scheduler_configuration_environment();
 }
 

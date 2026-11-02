@@ -1,0 +1,17 @@
+{
+  "classification": "Historical stronger-oracle mismatch, not by itself a runtime bug",
+  "contract": "DECISIONS.md:1576-1588 and ARM_CM3_MPU/FREERTOS_PARITY.md:168: exact incoming static base only for an ABI reserving R9; ordinary AAPCS guarantees caller preservation, not a caller-derived initial R9 value",
+  "immutable_raw_receipts": [
+    {
+      "root": "%TEMP%/fiber-c5tf-r9-qualified-reproduction/cm55-tfm-10127862dc3246e29e81f67922879a85",
+      "input_manifest_sha256": "1195CC58EBA1FB6AEB950E8C02E1FE0F51CAC8DEDF217FB99D3DAA168F0A9CC8",
+      "raw_result": "2 tuples passed and 6 failed unconditional caller-entry initial-seed equality; all tuples omitted -ffixed-r9"
+    },
+    {
+      "root": "%TEMP%/fiber-c5tf-r9-repair-early/cm55-tfm-efd9356955e748b7998f70c525495d67",
+      "input_manifest_sha256": "87F8D16F7236CD78CCE8F135C261A7BC85902BF0EC6F1A39A5D631E2131BEA52",
+      "raw_result": "3 tuples passed and 5 failed the same stronger oracle; all tuples omitted -ffixed-r9; old mutant anchor then rejected source drift"
+    }
+  ],
+  "preservation": "Do not rewrite or relabel raw receipt fields. This separate classification records the architect-confirmed contract distinction. New ordinary/reserved runs have new independent roots and oracles."
+}
