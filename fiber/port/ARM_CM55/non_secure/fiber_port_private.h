@@ -2,6 +2,7 @@
 #ifndef FIBER_PORT_ARM_CM55_NON_SECURE_FIBER_PORT_PRIVATE_H_
 #define FIBER_PORT_ARM_CM55_NON_SECURE_FIBER_PORT_PRIVATE_H_
 
+#include "fiber_portmacro.h"
 #include "fiber_port_boot.h"
 #include "../../../fiber_runtime_port_abi.h"
 

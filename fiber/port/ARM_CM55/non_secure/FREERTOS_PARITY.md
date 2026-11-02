@@ -23,6 +23,24 @@ Slice 11 adds all eight forward operations and the real common-runtime
 integration candidate, with qualification pending. Runtime selection remains
 zero and no new complete-runtime claim is made before that gate passes.
 
+### Standalone Private Include Closure
+
+The private header now includes its own `fiber_portmacro.h` before boot types
+and private declarations. The standard build-owned exact-context expectation
+source includes only that private header, so it must receive the complete
+selected-port trait/cohort contract without a hidden forced include. Every
+production runtime C unit already includes the dictionary first; this repair
+does not edit a naked transfer or context identity. The complete runtime gate
+must qualify the ordinary include path, not promote the earlier explicitly
+incomplete `DevelopmentExpectationInclude` execution receipt.
+
+The focused parent compile proves eight ordinary expectation-object builds
+(O2/Os and all four hash/map policies), each with exactly one expected private
+cohort undefined symbol, without a forced port include. Receipt:
+`%TEMP%/fiber-c55s-private-include-409255edf760493ebdd5c9c958dc450e`.
+This compile-only result removes the include blocker; it does not promote the
+staged profile or substitute for the full common/two-image runtime gate.
+
 The future profile is one privileged, no-MPU, no-FPU, no-MVE Non-secure
 scheduler image paired with one matching `ARM_CM55/secure` SecureContext
 companion. FPU, MVE, MPU, PAC, BTI, TF-M, and Secure-only scheduling remain
