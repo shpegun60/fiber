@@ -78,7 +78,8 @@ Check 'concrete-selection/compiler-and-artifacts' ($selectionDispatch[0].Extent.
     '-ArmGcc \$gcc -BuildRoot \(Join-Path \$buildRoot "audit-concrete-selection"\)')
 foreach ($gate in @(
         @{Name='runtime-sources';Runner='test_runtime_sources';Tools=$false},
-        @{Name='context-facade';Runner='test_context_facade';Tools=$true})) {
+        @{Name='context-facade';Runner='test_context_facade';Tools=$true},
+        @{Name='fiber-lifecycle';Runner='test_fiber_lifecycle';Tools=$true})) {
     $needle = '"tools\' + $gate.Runner + '.ps1"'
     $dispatch = @($commands | Where-Object {$_.Extent.Text.Contains($needle)})
     Check ($gate.Name + '/one-dispatch') ($dispatch.Count -eq 1)

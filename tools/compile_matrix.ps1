@@ -22547,6 +22547,10 @@ try {
     & (Join-Path $RepoRoot "tools\test_context_facade.ps1") `
         -ArmGcc $gcc -CmsisCore $cmsis `
         -BuildRoot (Join-Path $buildRoot "audit-context-facade")
+    Write-Host "== audit / Fiber lifecycle over canonical Context =="
+    & (Join-Path $RepoRoot "tools\test_fiber_lifecycle.ps1") `
+        -ArmGcc $gcc -CmsisCore $cmsis `
+        -BuildRoot (Join-Path $buildRoot "audit-fiber-lifecycle")
 
     Write-Host "== audit / strict-mode parity helper imports =="
     & (Join-Path $RepoRoot "tools\test_parity_helper_imports.ps1") `

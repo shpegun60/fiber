@@ -3542,3 +3542,44 @@ parse-valid causal mutant. Fresh PASS, 68 checks:
 `%TEMP%/matrix-artifact-paths-4cffad711af644c09346fae89f955572/results.json`,
 SHA-256 `8460ABCBF82FE79EB23A25B304E3FA89FE9E92970C9CA6290040EC7097FED2F4`.
 The earlier 65-check receipt does not cover that added guard.
+
+### Fiber V1 Consumer Publication
+
+`fiber/lifecycle` now publishes the separate static-storage consumer. `FiberV1`
+contains the selected Context as its first member plus private lifecycle state;
+its runtime contains only selector/user policy. The five public operations and
+local adapter introduce no CPU conditional, trampoline, owned current pointer,
+dispatcher latch or new port operation. INITIALIZED and STARTED mean constructed
+and selected, not completed or successfully entered on CPU. Caller-owned storage
+must be valid/aligned, static/nonmoving, privileged where required and disjoint
+from execution stacks. This is not an arbitrary-pointer validation service.
+
+Initialization retains and calls the real Context configuration-open service
+before construction or state publication. Registration commits policy fields
+only after Context accepts it. Current/yield are identity-only Thread functions;
+the optional privileged Context accessor does not bypass feature/configuration
+guards. The exact v1 layout/semantics must not silently change under the same
+version. Rich task states, wait queues, tick/ISR preemption and C++ policies are
+not part of this publication.
+
+Fresh mixed-legacy and Context/Fiber-only qualification passes 310 host
+scenarios / 1,270 assertions, 44 behavioral mutants, 34 other controls, 40
+actual-classic-backend ELFs, 20 public C/C++ compiles and 50 attribute cells.
+Pure ELFs omit all five old public symbols and reject compiled legacy-shim
+counterexamples. Packaging, exact consumer exports, no owned writable globals,
+full-container overlap and cold/hot attribute boundaries remain independent
+oracles. Receipt:
+`C:/flife-publication/qualified/ef72b35302884ee98bb7e8de70058838/results.json`,
+SHA-256 `2267287A39E73E29D22F2E25864635D7CBA552120E27377B1F3D8DC68623FB61`.
+The fourteen maintained consumer/test files match the frozen accepted copies.
+
+Publication changes from the accepted draft are comments/documentation only.
+Ten C/C++ preprocessing pairs remain identical and ten compiles of the actual
+README round-robin example pass:
+`C:/flife-publication/equivalence-final-1e9edc8e43ab41ee83da466e7317439a/results.json`,
+SHA-256 `7C6DF8A89CCABA333A069A517FE9D11124F23FA61429479095D173F22EAF52A2`.
+Matrix dispatch-policy checks pass 83 assertions, including mandatory early
+execution of the lifecycle gate. This gate executes a labelled host mock of
+the eight CPU operations; target links prove layout/link/placement, not target
+constructor execution, MPU enforcement, SVC/PendSV transfer or board operation.
+The additional actual-ARM constructor cohort is a separate maintained proof.

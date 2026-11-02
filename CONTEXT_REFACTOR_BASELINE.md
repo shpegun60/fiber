@@ -69,6 +69,33 @@ requires a separately reviewed contract, not an implicit extension.
 6. Add C++ kernel policy separately. No tick, queue, priority or ISR preemption
    implementation is smuggled into this mechanical refactor.
 
+## Current Implementation
+
+The concrete-selection retirement and additive facade checkpoints are complete.
+`53b69aa2c4c63eb72230d35b94fa7c6af8ebbee9` makes `context/` the sole portable
+engine/state/panic owner. The old five calls in `fiber/fiber_core.c` delegate
+one-way into it; removed providers and the additive bridge are not alternative
+build inputs. The frozen CPU forward/reverse symbols and storage identity remain
+compatible, and backend native-object comparisons are recorded separately.
+
+`fiber/lifecycle` is the distinct Fiber v1 consumer, with five operations and
+contained Context storage. Its initialization requires Context's optional
+configuration service, not another lifecycle latch or a ninth CPU operation.
+Pure Context users do not select that service merely by using the five Context
+operations. Consumer qualification and migration evidence are independent of
+the earlier additive-facade receipts; see `PORT_ARCHITECTURE_AUDIT.md`.
+
+The backend directories and shared compiler-policy header temporarily retain
+their old physical paths. That does not introduce a dependency on Fiber
+lifecycle logic; physical relocation can be a later mechanical checkpoint.
+C++ Task/Kernel, timer/ISR dispatch, reclamation and richer scheduler policies
+are not implemented by this ownership extraction.
+
+An immutable pre-extraction combined replay may finish independently while
+focused mechanical checkpoints are developed. Its exact source SHA remains
+distinct: a PASS cannot qualify later sources, and pending/failed aggregate
+evidence cannot be replaced by focused receipts or called a software freeze.
+
 ## Evidence Boundary
 
 Every extraction checkpoint must retain the applicable constructor, consumer,

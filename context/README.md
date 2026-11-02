@@ -38,6 +38,12 @@ The optional `context/context_configuration.c` supplies the configuration-open
 service used by context-mutating extensions and the Fiber lifecycle consumer.
 The five Context operations alone do not require this optional provider.
 
+To use the separate Fiber v1 consumer, additionally compile
+`fiber/lifecycle/fiber_v1.c` and the configuration provider. Its public storage,
+five operations, callback contract and static setup example are documented in
+`fiber/lifecycle/README.md`. Do not install a second dispatcher through the
+Context or legacy registration API while that consumer owns dispatch.
+
 Add `fiber/fiber_core.c` only for legacy five-call consumers. It is a one-way
 compatibility shim into Context, not a second engine. Do not compile the removed
 old state/panic/configuration providers or the former additive bridge. The proof

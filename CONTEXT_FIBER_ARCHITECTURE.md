@@ -18,8 +18,12 @@ The owning Context implementation is documented in `context/README.md`:
 Context owns orchestration and singleton state; the old five-call API now
 delegates one-way into it. The earlier additive bridge is removed, not retained
 as a parallel owner. The unversioned names in conceptual examples below are
-design vocabulary, not a second exported API. A genuine Fiber lifecycle
-consumer remains a separate acceptance step.
+design vocabulary, not a second exported API. The separately qualified
+`fiber/lifecycle` consumer embeds Context in `FiberV1` and installs its adapter
+through the five-operation Context interface. It adds no CPU-specific branch,
+second current slot, tick, queue or entry trampoline. Its INITIALIZED/STARTED
+states describe construction and scheduler selection, not completion or proof
+of successful CPU entry. C++ Task/Kernel policies remain subsequent work.
 
 The active v2 five-function public API, eight-function forward port ABI,
 reverse ABI v1, selected-port context layouts, strong handlers, and context

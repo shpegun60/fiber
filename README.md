@@ -22,8 +22,21 @@ candidate feature combination is no longer a prerequisite to this extraction.
 A versioned [Context v1 runtime](context/README.md) owns the engine, current
 slot, dispatcher, startup and panic fallback. The existing five-call API remains
 supported as a one-way compatibility shim. It adds no second runtime state.
-A separate Fiber lifecycle consumer is the next independently qualified layer;
-moving source ownership alone does not qualify or publish that consumer.
+A separate [Fiber v1 lifecycle consumer](fiber/lifecycle/README.md) contains a
+Context and tracks initialization/selection without owning another current slot
+or dispatcher. It provides five `fiber_v1_*` calls over that lower interface.
+Context-only applications need not compile either Fiber consumer or the legacy
+shim. Future C++ Task/Kernel and scheduler policies remain a separate layer.
+
+| Consumer | Public Header | Implementation |
+| --- | --- | --- |
+| New stackful Fiber code | `fiber/lifecycle/fiber_v1.h` | Fiber v1 + Context + configuration service |
+| Execution-context integration | `context/context.h` | Context + selected backend |
+| Existing five-call applications | `fiber/fiber_core.h` | Legacy shim + Context + selected backend |
+
+Every row still requires one correctly configured concrete backend. Install
+exactly one dispatcher owner; do not mix Fiber's selector registration with a
+separate Context or legacy scheduler registration.
 
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
