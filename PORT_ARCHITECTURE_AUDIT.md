@@ -3058,3 +3058,44 @@ mismatch. Receipt:
 SHA-256 3ABBAA9D3268ED75CD2AD55CB7230D1DD9E5EA4A028C7D91C90469C4CA870EE7.
 The preceding aggregate remains FAIL; this focused proof does not upgrade later
 NOT_RUN gates, LTO/exception execution or hardware validation.
+
+### E69a839 Exported-Source Aggregate
+
+The fresh immutable 958-file snapshot of e69a839 passes pinned O2/Os assembly
+parity, 84 classic ARM ELFs / 842 focused checks, 80 Thumb-1 vector ELFs,
+156 public C/C++ consumer compilations, 256 cohort/GC links, constructor and
+startup hardening, and 32 inline-helper configurations / 256 annotation-removal
+controls. The scalar host cases then pass, including the twelve exact reader
+controls and independent MPU SH counterexamples.
+
+The run stops in the CM33 archive fixture: its pre-fix-handler negative case
+requires `git show` from the Fiber source tree, which is an exported immutable
+archive without `.git`. Matching, stale-BASEPRI and stale-reverse archive links
+had already passed. This is a source-export test dependency, not a successful
+aggregate or evidence of a runtime transfer defect. Preserve
+C:/fq-bf2431ee2b/matrix-result.json and C:/fqm-bf2431ee2b: FAIL, source drift zero,
+later aggregate gates NOT_RUN. Do not replace the historical handler control
+with a skipped test or a weakened identity check; a self-contained pinned input
+and fresh replay must establish the same causal rejection.
+
+### Self-Contained Historical Handler Control
+
+The scalar-v8 suite now consumes a plain historical C fixture with a fixed
+length/SHA-256 instead of requiring Fiber Git history. Parent independently
+compares its 16,959 bytes with the former Git-output join semantics at
+5c34785088e3496540a8dcbec1351fac241e11ca; the hash is
+21F1285D0F39511560BDD4E1F8CB0B961DFF0D0AF4CE644A2405471B045FB212.
+Missing/corrupt inputs fail before compilation. The runner has no Git fallback.
+
+Baseline and exported-source suites each pass fourteen host runs / 29,411
+checks, 52 ARM assembly objects, twelve reader mutants, eight INNER mutants
+and eight archive cases. The export has no `.git`, Git environment or Git on
+PATH. Historical input bytes match in both modes, and the ordinary historical
+object also matches. This does not qualify execution of the old handler.
+
+Parent rehashes 1,955 inputs, 2,541 final artifacts and all four owned files
+with zero mismatch and a stable artifact manifest. Receipt:
+%TEMP%/fiber-v8-scalar-export-4a7f5a2a799648de9ff593c9b4537a37/results.json,
+SHA-256 10A9C5D7A0F71A952A1A7914BA7A875058F62F425808111E8C93BB9051F22646.
+The earlier aggregate remains FAIL; its later NOT_RUN gates require a fresh
+combined replay. Production code, handler semantics and import sets are unchanged.

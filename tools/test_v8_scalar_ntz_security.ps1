@@ -43,6 +43,20 @@ function Run-Tool {
     if ($code -ne 0 -and !$MayFail) { throw "Tool failed ($code): $Tool`n$($output -join "`n")" }
     return [pscustomobject]@{ Code = $code; Text = ($output -join "`n") }
 }
+function Read-PreAuditCm33HandlerSource {
+    param([string]$Path)
+    if (!$Path -or !(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw 'Required pinned pre-audit CM33 handler source missing'
+    }
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $hash = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '') }
+    finally { $sha.Dispose() }
+    if ($bytes.Length -ne 16959 -or $hash -cne '21F1285D0F39511560BDD4E1F8CB0B961DFF0D0AF4CE644A2405471B045FB212') {
+        throw 'Checksum mismatch for pinned pre-audit CM33 handler source'
+    }
+    return [Text.Encoding]::UTF8.GetString($bytes)
+}
 function Actual-Function {
     param([string]$Text, [string]$Name)
     $m = [regex]::Match($Text, '(?m)^(?:void|int|uintptr_t|uint32_t|FiberContext \*)\s*' + [regex]::Escape($Name) + '\(')
@@ -180,6 +194,34 @@ $Base = @('-mthumb', '-std=gnu11', '-ffreestanding', '-fno-builtin', '-fno-commo
     '-fno-profile-arcs', '-fno-test-coverage', '-fno-sanitize=all',
     '-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1',
     '-DFIBER_SCHEDULER_BASEPRI=0x10', "-I$Repo", "-I$CmsisCore", "-I$Repo/fiber", "-I$Repo/fiber/port")
+$legacyHandlerPath = Join-Path $PSScriptRoot 'fixtures/v8_scalar_ntz_security/pre_audit_cm33_handler.c'
+$legacyHandlerSource = Read-PreAuditCm33HandlerSource $legacyHandlerPath
+$legacyHandlerSHA256 = '21F1285D0F39511560BDD4E1F8CB0B961DFF0D0AF4CE644A2405471B045FB212'
+if ($legacyHandlerSource -match 'handler_component_v1_anchor') {
+    throw 'The fixed pre-audit source pin is no longer a pre-fix handler'
+}
+$missingLegacy = Join-Path $BuildRoot 'missing-legacy-handler.c'
+if (Test-Path -LiteralPath $missingLegacy) { throw 'Missing-input control path must not exist' }
+$changedLegacy = Join-Path $BuildRoot 'corrupt-legacy-handler.c'
+[IO.File]::WriteAllBytes($changedLegacy, [Text.Encoding]::UTF8.GetBytes($legacyHandlerSource + "`n"))
+$legacyInputControls = @()
+foreach ($case in @(
+        @('missing', $missingLegacy, 'Required pinned pre-audit CM33 handler source missing'),
+        @('changed-bytes', $changedLegacy, 'Checksum mismatch for pinned pre-audit CM33 handler source'))) {
+    $rejected = $false
+    try { $null = Read-PreAuditCm33HandlerSource $case[1] }
+    catch {
+        if ($_.Exception.Message -cne $case[2]) { throw "Wrong legacy-input rejection: $($_.Exception.Message)" }
+        $rejected = $true
+    }
+    if (!$rejected) { throw "Invalid pinned legacy handler input survived: $($case[0])" }
+    $legacyInputControls += [pscustomobject]@{ Name = $case[0]; Diagnostic = $case[2] }
+}
+[IO.File]::WriteAllText((Join-Path $BuildRoot 'legacy-handler-input-controls.json'),
+    (ConvertTo-Json -Depth 5 -InputObject ([pscustomobject]@{
+        Pin = '5c34785088e3496540a8dcbec1351fac241e11ca:fiber/port/ARM_CM33/non_secure/fiber_port_svc.c'
+        Source = $legacyHandlerPath; SHA256 = $legacyHandlerSHA256; Bytes = 16959; Controls = $legacyInputControls
+    })))
 $profiles = @('ARM_CM33_NTZ', 'ARM_CM33F_NTZ', 'ARM_CM55_NTZ', 'ARM_CM55F_NTZ',
     'ARM_CM55_MVEF_NTZ', 'ARM_CM33', 'ARM_CM33_TFM', 'ARM_CM33_MPU', 'ARM_CM55_MPU')
 $readerControls = @()
@@ -408,9 +450,10 @@ foreach ($mode in @('normal', 'lto')) {
         $handlerSource = Join-Path $profileDir 'fiber_port_svc.c'
         if ($variant -eq 'pre-fix-handler') {
             $handlerSource = Join-Path $dir 'legacy-handler.c'
-            $legacy = (Run-Tool 'git' @('-C', $Repo, 'show', '5c34785088e3496540a8dcbec1351fac241e11ca:fiber/port/ARM_CM33/non_secure/fiber_port_svc.c')).Text
-            if ($legacy -match 'handler_component_v1_anchor') { throw 'The fixed pre-audit source pin is no longer a pre-fix handler' }
-            [IO.File]::WriteAllText($handlerSource, $legacy)
+            [IO.File]::WriteAllText($handlerSource, $legacyHandlerSource)
+            if ((Get-FileHash -LiteralPath $handlerSource -Algorithm SHA256).Hash -cne $legacyHandlerSHA256) {
+                throw 'Written pre-audit CM33 handler differs from its pinned bytes'
+            }
         }
         $null = Run-Tool $ArmGcc ($handlerFlags + @('-c', $handlerSource, '-o', $handler))
         $archive = Join-Path $dir ("lib-$variant.a")
