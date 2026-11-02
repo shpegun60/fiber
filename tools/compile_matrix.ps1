@@ -46,7 +46,7 @@ function Assert-MatrixC55sAdmissionReceipt {
             throw "C55S admission inventory fields must be JSON integers: $name"
         }
     }
-    if ($receipt.Verdict -cne "PASS" -or
+    if ($receipt.Verdict -isnot [string] -or $receipt.Verdict -cne "PASS" -or
             $receipt.CompleteSuite -isnot [bool] -or -not $receipt.CompleteSuite -or
             $receipt.OriginalRuntimeLaunches -ne 2490 -or
             $receipt.DefaultLaunches -ne 80 -or $receipt.InputDrift -ne 0 -or

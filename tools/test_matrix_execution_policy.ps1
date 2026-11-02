@@ -105,6 +105,7 @@ Check 'C55S/post-dispatch-receipt-required' ($source -cmatch
 $receiptCases = @(
     @{Name='complete';Field=$null;Value=$null;Reject=$false},
     @{Name='failed';Field='Verdict';Value='FAIL';Reject=$true},
+    @{Name='boolean-verdict';Field='Verdict';Value=$true;Reject=$true},
     @{Name='development';Field='CompleteSuite';Value=$false;Reject=$true},
     @{Name='truthy-string';Field='CompleteSuite';Value='true';Reject=$true},
     @{Name='null-complete';Field='CompleteSuite';Value=$null;Reject=$true},

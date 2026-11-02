@@ -3198,3 +3198,11 @@ zero drift and unchanged staged activation. Sixty-five maintained policy tests
 include malformed/missing/multiple/subset receipts and boolean/string count
 coercion counterexamples. A fresh full combined execution is still required;
 no production source, activation or hardware claim changes in this slice.
+
+The post-integration policy follow-up also requires a string Verdict. PowerShell
+can coerce boolean true to compare equal to a nonempty string; an explicit
+boolean-verdict negative now closes that edge. All 66 maintained controls pass,
+and independent replay rejects boolean/array/numeric/null verdicts. This pure
+receipt-parser refinement does not change generated ARM code. The running
+094ff9d immutable aggregate remains attributed only to its captured sources;
+real wrapper receipts use the required string PASS, not the counterfeit value.
