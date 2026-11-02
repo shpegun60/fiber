@@ -4,7 +4,10 @@ Run `tools/test_cm33f_tfm.ps1 -ArmGcc <gcc> -CmsisCore <CMSIS Include>`.
 Optional `-HostGcc`, `-BuildRoot`, `-FreeRtosRoot`, `-Python`, and
 `-ExpectedRuntimeSelectable` (default 0, required to remain 0 for this stage).
 Host GCC is mandatory; the existing MSYS2 UCRT64 GCC is a fallback. No downloads,
-emulator provisioning, target execution, or hardware programming are performed.
+emulator provisioning or hardware programming are performed. Actual modeled CPU
+execution additionally requires an explicit existing absolute WSL `-QemuRoot`,
+with optional `-WslDistro` (default `Ubuntu-24.04`). Without that argument the
+receipt explicitly records execution `NOT_RUN`, not an activation qualification.
 
 The new group derives CPU/boot mechanics from M33F_NTZ and TF-M adapter logic
 from C3TF; `provenance.json` records the exact consumed progenitor snapshots.
@@ -53,6 +56,51 @@ headers, Secure veneers, NS FP grant and matching hard/softfp ABI are integratio
 requirements, not tested facilities. The initializer preserves entry CPACR,
 FPCCR and full CONTROL before the later CPU FP preparation; it does not hide
 provider corruption by repairing registers. No fiber SecureContext is involved.
+
+## Actual Common And FP Execution
+
+With `-QemuRoot`, the maintained gate runs real common C and all four C3FT source
+objects on QEMU `mps2-an505` (Cortex-M33 with FP). The separate Secure bootstrap
+only grants NS memory and FP access, delegates lazy/eager selection, and branches
+to the NS image. It is not TF-M. `tfm_ns_interface_init` is a protected, typed NS
+fixture provider: there is no Secure TF-M image or Secure service execution.
+
+The hard/softfp, O2/Os, normal/LTO grid runs both lazy and eager FP policy and
+ordinary/reserved-R9 modes. Three owners exercise basic and extended frames,
+R4-R11, S0-S31, FPSCR, current-context publication, PSP/PSPLIM, masks, initializer
+order and all four cooperative mutex operations. Finite contention must not
+schedule; WAIT_FOREVER must actually yield until its owner releases. Reserved
+cases compile the entire common/port/provider/hook chain with `-ffixed-r9`, and
+handwritten NS assembly does not borrow R9. Ordinary cases check caller R9
+preservation and valid frames without imposing an incoming initial-frame seed.
+
+Actual admission cases cover provider errors/CPU leaks, early idempotent init,
+FPCA-set init preservation, Thread/PSP, nPRIV, genuine SysTick, runtime masks,
+PendSV callback corruption and the real common task-return path. Pure
+`fiber_init` is environment-neutral: prestart Handler/unprivileged construction
+are positive controls, not newly invented privilege restrictions. A prearmed
+SysTick reports an unprivileged panic or constructor result from Handler mode;
+the originating Thread never resumes. Callback-failure reports also terminate
+inside the originating PendSV before exception return.
+
+Compiled mutations must fail at specific data checks for lost high-FP transfers,
+lost R4, missing auto initialization, ordinary caller R9 corruption and reserved
+wrong seeding. High-FP copy mutants use eager policy to isolate payload copying
+from lazy materialization. Missing initializer CONTROL/CPACR/FPCCR guards must
+be rejected for forbidden later activation, not an unrelated crash. Additional
+compiled controls cover counterfeit Thread-origin Handler panic, unrelated
+fault, missing observation report and timeout. New fixture callbacks/helpers
+also undergo effective raw hostile/LTO compilation, separate from normal
+execution. These checks are not the independent complete reference-parity gate.
+Every execution image retains and checks all eight strong forward definitions.
+The fault control must report its exact UDF instruction, UsageFault/UNDEFINSTR,
+basic NS Thread/MSP return and stacked Thread/Thumb origin; a timeout or unrelated
+fault cannot substitute. The timeout control must reach bounded exit 124.
+
+Commands, separate images, maps, disassembly, exception logs, strict reports and
+QEMU binary/runtime dependency hashes are retained. QEMU and its actual loaded
+libraries are rehashed before/after execution. This proves only the tested M33
+model with FP present, not physical silicon or an absent-FP configuration.
 
 Each invocation preserves commands, generated sources, object/ELF symbols and
 disassemblies, maps, exact negative reports, before/after source/tool/include

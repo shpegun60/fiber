@@ -4,8 +4,8 @@
 
 This is a build-selected, scalar-FP, non-MPU Cortex-M33 Non-secure TF-M
 profile. `FIBER_PORT_RUNTIME_SELECTABLE` remains 0. No automatic route, shared
-configuration, or common-runtime ABI has been added. Compilation and typed
-provider tests are not real TF-M, CPU execution, hardware, or full parity proof.
+configuration, or common-runtime ABI has been added. Compile/typed-provider and
+modeled CPU tests are not real TF-M, hardware, or full reference-parity proof.
 
 The public facade remains `fiber_core.h` with the same five operations, static
 contexts/stacks, and external scheduler callback. The generic forward ABI remains
@@ -71,7 +71,8 @@ again; READY is idempotent. `fiber_start` invokes the same operation automatical
 An early explicit call is optional. Admission rejection precedes latch/provider
 effects. The initializer does not configure FP or repair a leaked value.
 
-The Secure TF-M provider must grant NS FP access. The external initializer must
+The Secure TF-M provider must grant NS FP access and permit the selected NS
+FPCCR policy (including LSPEN changes for eager mode). The external initializer must
 work in the entry FP configuration and preserve it, including FPCA. Later CPU
 preparation configures the inherited CPACR/FPCCR policy. A running FP fiber may
 have CONTROL=6: mutex admission checks only privilege/stack bits, not exact 2.
@@ -92,6 +93,11 @@ service, priority inheritance or FreeRTOS blocking-semaphore equivalence claim.
 
 The focused runner owns target C/C++/archive/cohort/role and source-derived host
 adapter tests, actual pinned reference compilation, and raw hostile codegen
-checks. Independent full CPU assembly/frame-transfer parity and any actual target
-execution are separate gates. This leaf must remain staged until the parent
-accepts all required evidence. No board has been programmed.
+checks. Explicit `-QemuRoot` additionally enables actual M33 common/FP execution,
+whole-group admission and compiled negative controls. This uses real common and
+all four port objects, but only a test Secure bootstrap and typed NS TF-M provider.
+No real Secure TF-M service is executed. The dedicated fixture README describes
+the exact boundaries and maintained modes; a run without QEMU is `NOT_RUN`, not
+CPU execution qualification. Independent full CPU assembly/frame-transfer parity
+is owned by a separate gate. This leaf must remain staged until the parent accepts
+all required evidence and the cohort. No board has been programmed.

@@ -116,6 +116,7 @@ class Proof:
         self.role_proofs = []
         self.role_definitions = []
         self.reference_objects, self.hostile_objects = [], []
+        self.execution = dict(status="NOT_RUN", reason="Explicit -QemuRoot required; no implicit provisioning")
         self.flags = ["-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=softfp", "-mfpu=fpv5-sp-d16", "-ffreestanding",
                       "-fno-builtin", "-fno-common", "-ffunction-sections", "-fdata-sections",
                       "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-Wall", "-Wextra", "-Werror", "-Wundef"]
@@ -936,6 +937,11 @@ class Proof:
             python_binary = Path(sys.base_prefix) / python_binary.name
         paths = {Path(__file__).resolve(), self.repo / "tools/test_cm33f_tfm.ps1", python_binary,
                  Path(self.a.arm_gcc), Path(self.a.host_gcc), *self.tools.values()}
+        paths.add(self.repo / "tools/fixtures/arm_control/qemu.sh")
+        if self.a.qemu_root:
+            wsl = shutil.which("wsl.exe")
+            require(wsl is not None, "explicit QEMU execution requires installed WSL")
+            paths.add(Path(wsl).resolve())
         for directory, extensions in ((self.fixture, None), (self.port, None), (self.common, {".c", ".h"}),
                                       (self.common / "port", {".h"}), (Path(self.a.cmsis), {".h"})):
             for p in directory.iterdir():
@@ -1007,6 +1013,16 @@ class Proof:
             self.target()
             self.host()
             self.hostile()
+            if self.a.qemu_root:
+                from execution import Execution
+                execution = Execution(self)
+                try:
+                    self.execution = execution.execute()
+                except Exception:
+                    self.execution = dict(status="FAIL", receipt=str(execution.root / "execution.receipt.json"))
+                    raise
+            else:
+                print("C3FT actual execution NOT_RUN: explicit -QemuRoot required", flush=True)
             success = True
         finally:
             if before is not None:
@@ -1021,10 +1037,13 @@ class Proof:
                 target_positives=self.positives, negatives=self.negatives, host_runs=self.host_runs,
                 role_proofs=self.role_proofs, role_definitions=self.role_definitions,
                 reference_objects=self.reference_objects, hostile_objects=self.hostile_objects,
+                execution=self.execution,
                 proof_scope="Staged M33 FP consumer compile/link and source-derived host adapter",
                 input_count=len(before or {}), drift=[] if before == after else
                     [p for p in before or {} if before[p] != (after or {}).get(p)],
-                boundary="Actual M33 hard/softfp compile/link, raw hostile objects and source-derived host adapter tests. Typed TF-M boundary only; no target execution, real Secure TF-M, or board claim.",
+                boundary=("Actual M33 NS common/FP execution with test-only Secure bootstrap and typed NS TF-M provider. No real Secure TF-M image or board proof."
+                    if self.execution.get("status") == "PASS" else
+                    "M33 compile/link, raw hostile objects and source-derived host adapter tests. Actual execution NOT_RUN or failed; no real Secure TF-M or board proof."),
                 reference_pin=PIN, reference_error=reference_error,
                 runtimeSelectable=self.verified_runtime_selectable,
                 expectedRuntimeSelectable=self.a.expected_runtime_selectable, forward_count=8))
@@ -1043,6 +1062,8 @@ def main():
     for name in ("repo", "arm-gcc", "host-gcc", "cmsis", "reference", "build"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--expected-runtime-selectable", type=int, choices=(0, 1), default=0)
+    parser.add_argument("--qemu-root")
+    parser.add_argument("--wsl-distro", default="Ubuntu-24.04")
     args = parser.parse_args()
     proof = Proof(args)
     try:

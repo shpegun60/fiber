@@ -5,6 +5,8 @@ param(
     [string]$FreeRtosRoot = $env:FREERTOS_KERNEL_REFERENCE,
     [string]$HostGcc,
     [ValidateSet(0, 1)][int]$ExpectedRuntimeSelectable = 0,
+    [string]$QemuRoot,
+    [string]$WslDistro = "Ubuntu-24.04",
     [string]$Python = "python"
 )
 $ErrorActionPreference = "Stop"
@@ -38,6 +40,10 @@ $arguments = @("-B", (Join-Path $PSScriptRoot "fixtures\cm33f_tfm\run.py"),
     "--cmsis", (Resolve-Path -LiteralPath $CmsisCore).Path,
     "--reference", (Resolve-Path -LiteralPath $FreeRtosRoot).Path,
     "--build", $build, "--expected-runtime-selectable", "$ExpectedRuntimeSelectable")
+if ($QemuRoot) {
+    if (-not $QemuRoot.StartsWith('/')) { throw 'Explicit existing absolute WSL -QemuRoot required; no provisioning' }
+    $arguments += @('--qemu-root', $QemuRoot, '--wsl-distro', $WslDistro)
+}
 $savedPath = $env:PATH
 $pythonPath = (Get-Command $Python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $proofExitCode = 1

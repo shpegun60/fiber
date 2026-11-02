@@ -2584,3 +2584,27 @@ equivalence, every model/geometry or automatic public activation. C55S remains
 results.json SHA-256:
   2EE13B8DD7019AAFF4C1D0B43385B5DE7588EFC618218722226B0F2FB496E2FC
 ```
+
+### C3FT Actual FP/Common Execution Replay
+
+The staged FP TF-M runner now passes 32 consumer ELFs, 288 exact negatives,
+212 typed host scenarios, 320 actual M33 CPU launches, 72 compiled mutants,
+four classifier controls and forty raw fixture checks. Actual execution uses
+real common state and the complete four-object selected-port group, hard and
+softfp, lazy/eager FP policy and ordinary/reserved-r9 modes. All eight forward
+definitions remain in every execution image. Parent independently rehashes
+20,246 entries across three input/artifact manifests with zero mismatches.
+
+The Secure bootstrap and typed NS TF-M interface are test providers. This does
+not execute an actual external Secure TF-M image, qualify hardware, replace
+the independent pinned reference parity experiment or activate C3FT. A missing
+explicit QEMU root is recorded as `NOT_RUN`, never CPU qualification. The
+profile remains `RuntimeSelectable=0` pending its separate admission gates.
+
+```text
+  %TEMP%/fiber-c3ft-actual-final/cm33f-tfm-155a6496d2f4414da005db8cc818f073
+receipt.json SHA-256:
+  515CA94D505B32CBA8CF50CA855BE96103940E124B60A445FA4C409E6188BA2D
+Exact 88-source archive SHA-256:
+  8C9A44E0AB58927D11897D3B00152663DEA3EF7A2E74FA92A8C0AF2F81A5B38C
+```
