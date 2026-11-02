@@ -385,16 +385,19 @@ M55 scalar NTZ full build-selected runtime source group:
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port.c
                fiber/port/ARM_CM55_NTZ/non_secure/fiber_port_boot.c
 
-M55 TrustZone SecureContext staged construction/first-start components (not a
-complete runtime source group):
+M55 TrustZone SecureContext full staged runtime and separate Secure companion
+(runtime-selectable remains zero):
+               fiber/fiber_runtime_context_configuration.c
                fiber/port/ARM_CM55/non_secure/fiber_port_types.h
                fiber/port/ARM_CM55/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM55/non_secure/fiber_portmacro.h
                fiber/port/ARM_CM55/non_secure/fiber_port_boot.h
                fiber/port/ARM_CM55/non_secure/fiber_port_boot.c
                fiber/port/ARM_CM55/non_secure/fiber_port_private.h
+               fiber/port/ARM_CM55/non_secure/fiber_port.c
                fiber/port/ARM_CM55/non_secure/fiber_port_runtime.c
                fiber/port/ARM_CM55/non_secure/fiber_port_svc.c
+               fiber/port/ARM_CM55/non_secure/fiber_port_pendsv.c
                fiber/port/ARM_CM55/non_secure/fiber_port_first_start_contract.ld
                fiber/port/ARM_CM55/non_secure/fiber_port_secure_gateway_abi.h
                fiber/port/ARM_CM55/non_secure/fiber_port_secure_context_gateway_abi.h
@@ -470,13 +473,21 @@ M33F NTZ full build-selected FPU runtime source group:
                fiber/port/ARM_CM33F_NTZ/non_secure/fiber_port_boot.c
 ```
 
-The CM33 SecureContext attachment source requires the optional common
-`fiber/fiber_runtime_context_configuration.c` module in the Non-secure image.
+Both the CM33 and staged CM55 SecureContext attachment sources require the
+optional common `fiber/fiber_runtime_context_configuration.c` module in the
+Non-secure image.
 It supplies `fiber_internal_runtime_require_context_configuration_open()` and
 `fiber_internal_runtime_context_configuration_abi_v1_anchor`; omitting it leaves
 the attachment call's guard and retained ABI anchor unresolved. This is an
 internal link dependency, not another user call or a requirement for profiles
 without a context-mutating extension.
+
+For either paired profile, build the `non_secure` and `secure` source groups
+into their respective images, not into one application image. Match the CMSE
+import artifact to the Secure image and follow that profile's leaf ledgers for
+its exact compiler, storage and linker manifest. Listing the full staged CM55
+sources does not promote its runtime-selectable metadata or require an
+attachment call from portable business logic.
 
 For the CM33 Secure image, include
 `fiber/port/ARM_CM33/secure/fiber_secure_context_cohort_contract.ld` at top level
@@ -603,12 +614,42 @@ exactly the five public API symbols, and link unchanged against every selected
 build profile without an optional feature header.
 
 For hook-based profiles, the conservative default also requires the integration
-to define both selected general-registers-only address-map hooks:
+to define both address-map hooks with the canonical sensitive and
+general-registers-only attributes. For example, a separate C integration TU,
+`board_fiber_address_map.c`, can use only the public attribute header:
 
 ```c
-int fiber_addr_plausible_ram(uintptr_t begin, uintptr_t end);
-int fiber_addr_plausible_code(uintptr_t address);
+#include <stdint.h>
+#include "fiber/fiber_api_attributes.h"
+
+extern const unsigned char __board_ram_start__[];
+extern const unsigned char __board_ram_end__[];
+extern const unsigned char __board_code_start__[];
+extern const unsigned char __board_code_end__[];
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+int fiber_addr_plausible_ram(uintptr_t begin, uintptr_t end)
+{
+    return begin < end &&
+        begin >= (uintptr_t)__board_ram_start__ &&
+        end <= (uintptr_t)__board_ram_end__;
+}
+
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+int fiber_addr_plausible_code(uintptr_t address)
+{
+    const uintptr_t pc = address & ~(uintptr_t)1u;
+    return pc >= (uintptr_t)__board_code_start__ &&
+        pc < (uintptr_t)__board_code_end__;
+}
 ```
+
+These illustrative symbol names are board-owned linker boundaries, not library
+symbols or C buffer definitions. Define their end-exclusive ranges in the board
+linker script to cover the permitted persistent RAM and executable code for that
+image. If the map has multiple windows, accept a RAM range only when wholly
+contained in one approved window. Do not span gaps between banks. No
+`fiber_port_private.h`, port dictionary or forced private include is needed.
 
 They must accept only valid persistent RAM ranges and executable code addresses
 for the actual linker map. `fiber_init()` always calls them for context storage,
@@ -616,7 +657,10 @@ the supplied PSP stack, and the entry point. The default does not call them
 from the save/restore switch path. Define
 `FIBER_VALIDATE_ADDRESS_MAP_ON_SWITCH=1` for a validation build that also
 checks runtime context/stack addresses and every saved stacked PC. Hook
-implementations must not use FP/MVE, allocate, block, or call fiber APIs.
+implementations and every helper they call must preserve the same sensitive/GRO
+contract: no FP/MVE, allocation, blocking, instrumentation or calls to fiber APIs.
+Apply the integration compiler restrictions described below to this call graph
+as well; a general-registers-only declaration alone is insufficient.
 Defining `FIBER_ALLOW_PERMISSIVE_ADDRESS_MAP_HOOKS=1` enables weak accept-any
 defaults for constrained bring-up only; it is not a production safety setting.
 
@@ -688,19 +732,37 @@ Configuration ownership, selected-port integration values, and global fault
 policy from `fiber/fiber_platform_policy.h` are documented in
 `FIBER_SETTINGS.md`.
 
-Port selection defaults to automatic detection from compiler ARM architecture
-macros. Production builds may select the profile explicitly, for example:
+Architecture selection defaults to compiler ARM architecture macros. For the
+classic privileged ports, an integration may instead supply a target-wide build
+definition, for example:
 
-```c
-#define FIBER_PORT_PROFILE FIBER_PORT_PROFILE_ARMV7EM
+```text
+FIBER_PORT_PROFILE=FIBER_PORT_PROFILE_ARMV7EM
 ```
 
 The selectable profile names are `FIBER_PORT_PROFILE_ARMV6M`,
 `FIBER_PORT_PROFILE_ARMV7M`, `FIBER_PORT_PROFILE_ARMV7EM`,
 `FIBER_PORT_PROFILE_ARMV8M_BASELINE`, `FIBER_PORT_PROFILE_ARMV8M_MAINLINE`, and
 `FIBER_PORT_PROFILE_ARMV81M_MAINLINE`. Leave `FIBER_PORT_PROFILE` undefined for
-auto-detection. When compiler ARM architecture macros are available, an
-explicit profile must match them. `FIBER_PORT_SELECTION_ALLOW_MISMATCH` is only
+auto-detection. These names select architecture classes, not concrete MPU, NTZ,
+paired SecureContext or TF-M implementations. In auto/profile mode the public
+facade routes all v8-M/v8.1-M classes to the non-production
+`transitional_v8m` bring-up port, not to the concrete runtimes listed above.
+
+Concrete production profiles outside the classic privileged routes require the
+build-selected workflow: `FIBER_PORT_BUILD_SELECTED=1`, exactly one matching
+`FIBER_PORT_ARMV*` architecture result, the chosen profile's include path and
+complete source group, and its integration/linker manifest. Use the same
+selection and public-storage settings for every consuming TU, and compile the
+separate build-owned cohort expectation with the selected CPU/ABI settings.
+Do not combine build-selected mode with `FIBER_PORT_PROFILE` or
+`FIBER_FORCE_PORT_*`; conflicting selection modes are compile errors. Keep these
+definitions in the build/integration configuration, not portable business code.
+Application TUs still include only `fiber_core.h`; no forced private header is
+needed. Staged profiles keep their existing runtime-selectable status.
+
+When compiler ARM architecture macros are available, an explicit architecture
+profile must match them. `FIBER_PORT_SELECTION_ALLOW_MISMATCH` is only
 for unusual toolchains or bring-up experiments where the compiler macros are
 missing or known to be wrong. After the direct trampoline removal, every
 selected profile must provide an SVC first-start symbol. STM32H7/Cortex-M7 is
