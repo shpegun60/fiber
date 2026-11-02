@@ -24,7 +24,8 @@
 
 #ifndef fiber_portFORCE_INLINE
 # if defined(__GNUC__) || defined(__clang__)
-#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline))
+#  define fiber_portFORCE_INLINE static inline __attribute__((always_inline)) \
+	FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
 # else
 #  define fiber_portFORCE_INLINE static inline
 # endif
@@ -259,6 +260,82 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Keep CMSIS-equivalent primitives inside the sensitive helper closure. */
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_faultmask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, faultmask" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_psplim(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psplim" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_msp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, msp" : "=r"(value));
+	return value;
+}
+
+fiber_portFORCE_INLINE void fiber_port_cpu_wfe(void)
+{
+	fiber_portASM volatile("wfe" ::: "memory");
+}
+
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_priority_get(IRQn_Type irq)
+{
+	if ((int32_t)irq >= 0) {
+		return NVIC->IPR[(uint32_t)irq] >> (8u - __NVIC_PRIO_BITS);
+	}
+	return SCB->SHPR[((uint32_t)irq & 0xFu) - 4u] >>
+			(8u - __NVIC_PRIO_BITS);
+}
+
+fiber_portFORCE_INLINE void fiber_port_cpu_priority_set(
+		IRQn_Type irq, uint32_t priority)
+{
+	const uint8_t encoded =
+			(uint8_t)((priority << (8u - __NVIC_PRIO_BITS)) & 0xFFu);
+	if ((int32_t)irq >= 0) {
+		NVIC->IPR[(uint32_t)irq] = encoded;
+	} else {
+		SCB->SHPR[((uint32_t)irq & 0xFu) - 4u] = encoded;
+	}
+}
 
 fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 {

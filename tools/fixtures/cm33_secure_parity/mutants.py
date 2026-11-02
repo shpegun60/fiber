@@ -4,8 +4,20 @@ if sys.flags.optimize or not __debug__:
     raise SystemExit("REJECT:PYTHON:optimization is unsupported")
 
 
-def cases(mode):
+def psp_anchor(source, prefix, suffix):
+    choices = [prefix+call+suffix for call in ('__get_PSP()', 'fiber_port_cpu_psp()')]
+    counts = [source.count(choice) for choice in choices]
+    if sum(counts) != 1:
+        raise ValueError('A30 PSP mutation requires one exact source anchor')
+    return choices[counts.index(1)]
+
+
+def cases(mode, attachment_source=None):
     if mode == 'A30':
+        if attachment_source is None:
+            raise ValueError('A30 mutation requires actual attachment source')
+        capture = psp_anchor(attachment_source, 'state->psp = ', ';')
+        preservation = psp_anchor(attachment_source, 'FIBER_REQUIRE(', " == before->psp, 'P');")
         return [
             ('origin-mask','Handlers','bic   r3, r3, #0x40','bic   r3, r3, #0x20',1,True),
             ('secure-reserve','Handlers','subs  r3, #%c[securebytes]','subs  r3, #%c[swbytes]',1,True),
@@ -26,8 +38,8 @@ def cases(mode):
             ('restore-fc-no-return','Boot','\t\treturn;\n\t}\n\tFIBER_REQUIRE(available >=','\t\t/* removed Secure-origin return */\n\t}\n\tFIBER_REQUIRE(available >=',1,True),
             ('restore-ns-minimum','Boot',"FIBER_REQUIRE(available >= (uintptr_t)FIBER_PORT_INITIAL_CONTEXT_BYTES, 'X');","FIBER_REQUIRE(available >= (uintptr_t)fiber_portSECURE_HEADER_BYTES, 'X');",1,True),
             ('save-fc-attachment','Attachment','if (exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN)','if (exc_return == 0u)',1,True),
-            ('psp-capture','Attachment','state->psp = __get_PSP();','state->psp = 0u;',1,True),
-            ('psp-preservation','Attachment','FIBER_REQUIRE(__get_PSP() == before->psp, \'P\');','(void)before->psp;',1,True),
+            ('psp-capture','Attachment',capture,'state->psp = 0u;',1,True),
+            ('psp-preservation','Attachment',preservation,'(void)before->psp;',1,True),
             ('reference-skip','Reference','lsls r0, r0, #25','lsls r0, r0, #24',2,True),
             ('reference-save-count','Reference','stmdb r2!, {r4-r11}','stmdb r2!, {r4-r10}',1,True),
         ]

@@ -2049,6 +2049,48 @@ SECTIONS {
         $elf = & $link @($objects.gateway,$objects.identity,$objects.pool) $variant 'fiber_secure_context_gateway_v1_initialize' -Fiber
         $variants[$variant] = [ordered]@{Objects=$objects;Elf=$elf}
     }
+    # C33S fixture-only source copies: test one legacy mechanism at a time.
+    # The production files and all twelve facts remain untouched.
+    $copySecure = {
+        param([string]$Name,[switch]$Literal)
+        $root = Join-Path $directory $Name
+        $copy = Join-Path $root 'fiber\port\ARM_CM33\secure'
+        New-Item -ItemType Directory -Path $copy -Force | Out-Null
+        Get-ChildItem -LiteralPath $profile -File | Where-Object { $_.Extension -in @('.c','.h','.ld') } |
+            ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $copy $_.Name) }
+        Copy-Item -LiteralPath (Join-Path $RepoRoot 'fiber\fiber_api_attributes.h') -Destination (Join-Path $root 'fiber\fiber_api_attributes.h')
+        if ($Literal) {
+            $header = Join-Path $copy 'fiber_secure_context_cohort.h'
+            $text = (Get-Content -LiteralPath $header -Raw).Replace("`r`n","`n")
+            $pair = '"movw %[cohort_byte], #:lower16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t" \' + "`n`t`t" +
+                '"movt %[cohort_byte], #:upper16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"'
+            if ([regex]::Matches($text,[regex]::Escape($pair)).Count -ne 1) { throw 'C33S materialization control anchor changed' }
+            $text.Replace($pair,'"ldr %[cohort_byte], =" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"') |
+                Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+        }
+        return $copy
+    }
+    foreach ($variant in @('literal-abs32','cmsis-caller')) {
+        $copy = & $copySecure ('source-'+$variant) -Literal:($variant -eq 'literal-abs32')
+        if ($variant -eq 'cmsis-caller') {
+            $gateway = Join-Path $copy 'fiber_secure_context_gateway.c'
+            $text = Get-Content -LiteralPath $gateway -Raw
+            if ([regex]::Matches($text,'__builtin_arm_cmse_nonsecure_caller\(\)').Count -ne 4) { throw 'C33S copied caller anchor changed' }
+            $text.Replace('__builtin_arm_cmse_nonsecure_caller()','cmse_nonsecure_caller()') |
+                Set-Content -LiteralPath $gateway -Encoding ASCII -NoNewline
+        }
+        $objects = @{}
+        foreach ($unit in @('gateway','identity','pool')) {
+            $file = switch ($unit) {
+                'gateway' { 'fiber_secure_context_gateway.c' }
+                'identity' { 'fiber_secure_gateway.c' }
+                'pool' { 'fiber_secure_context_pool.c' }
+            }
+            $objects[$unit] = & $compile (Join-Path $copy $file) "$variant-$unit"
+        }
+        $elf = & $link @($objects.gateway,$objects.identity,$objects.pool) $variant 'fiber_secure_context_gateway_v1_initialize' -Fiber
+        $variants[$variant] = [ordered]@{Objects=$objects;Elf=$elf}
+    }
     $isolatedReference = Join-Path $directory 'reference-init-only.o'
     $remove = @('SecureContext_AllocateContext','SecureContext_FreeContext','SecureContext_LoadContext','SecureContext_SaveContext') |
         ForEach-Object { '--remove-section=.text.'+$_ }
@@ -2103,6 +2145,52 @@ SECTIONS {
         # must reject these before a provider could hide the mismatch at link.
         $mutants += [ordered]@{Name=$name;Object=$object}
     }
+    foreach ($form in @('movw-movt','abs32')) {
+        foreach ($fault in @('wrong-key','extra-provider-call','unexpected-query-helper')) {
+            $name = "$form-$fault"
+            $copy = & $copySecure ('source-mutant-'+$name) -Literal:($form -eq 'abs32')
+            $header = Join-Path $copy 'fiber_secure_context_cohort.h'
+            if ($fault -eq 'wrong-key') {
+                $text = Get-Content -LiteralPath $header -Raw
+                $anchor = '"fiber_secure_context_cohort_c33s_g1"'
+                if ([regex]::Matches($text,[regex]::Escape($anchor)).Count -ne 1) { throw 'C33S wrong-key control anchor changed' }
+                $text.Replace($anchor,'"fiber_secure_context_cohort_c33s_g1_wrong"') |
+                    Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+            } else {
+                $gateway = Join-Path $copy 'fiber_secure_context_gateway.c'
+                $text = Get-Content -LiteralPath $gateway -Raw
+                $pattern = '(?m)^uint32_t fiber_secure_context_gateway_v1_abi_version\(void\)\r?\n\{[^{}]*^\}'
+                $matches = [regex]::Matches($text,$pattern)
+                if ($matches.Count -ne 1 -or [regex]::Matches($matches[0].Value,[regex]::Escape($retain)).Count -ne 1) {
+                    throw 'C33S extra-provider control anchor changed'
+                }
+                $extra = if ($fault -eq 'extra-provider-call') {
+                    "`n`tfiber_secure_context_pool_c33s_v1_cohort_provider();"
+                } else {
+                    "`n`textern void fiber_c33s_query_unexpected_helper(void);`n`tfiber_c33s_query_unexpected_helper();"
+                }
+                $text.Replace($matches[0].Value,$matches[0].Value.Replace($retain,$retain+$extra)) |
+                    Set-Content -LiteralPath $gateway -Encoding ASCII -NoNewline
+            }
+            $object = & $compile (Join-Path $copy 'fiber_secure_context_gateway.c') ('mutant-'+$name)
+            $mutants += [ordered]@{Name=$name;Object=$object}
+        }
+    }
+    foreach ($fault in @('missing-high-half','wrong-high-half','mixed-materialization')) {
+        $copy = & $copySecure ('source-mutant-'+$fault)
+        $header = Join-Path $copy 'fiber_secure_context_cohort.h'
+        $text = Get-Content -LiteralPath $header -Raw
+        $high = '"movt %[cohort_byte], #:upper16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"'
+        if ([regex]::Matches($text,[regex]::Escape($high)).Count -ne 1) { throw 'C33S high-half control anchor changed' }
+        $replacement = if ($fault -eq 'missing-high-half') { '""' } elseif ($fault -eq 'wrong-high-half') {
+            $high.Replace('FIBER_C33S_PRIVATE_COHORT_KEY','FIBER_C33S_PRIVATE_COHORT_KEY "_wrong_high"')
+        } else {
+            $high+' "ldr %[cohort_byte], =" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"'
+        }
+        $text.Replace($high,$replacement) | Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+        $object = & $compile (Join-Path $copy 'fiber_secure_context_gateway.c') ('mutant-'+$fault)
+        $mutants += [ordered]@{Name=$fault;Object=$object}
+    }
     $manifest = Join-Path $directory 'inputs.json'
     [ordered]@{Variants=$variants;Mutants=$mutants;Optimization=$Optimization;Exports=$exports;
         OriginalObject=$Pair.FiberPath;ReferenceOriginal=$Pair.ReferencePath;ReferenceIsolated=$isolatedReference;
@@ -2143,7 +2231,12 @@ PRIVATE={HELPER,'fiber_secure_context_pool_boot_initialize','fiber_secure_contex
 
 def retained(path,name):
     rel=base.function_relocations(path,name)
-    check(rel.count((10,HELPER))==1 and rel.count((2,KEY))==1,'missing exact C33S call/key relocations',name)
+    binding=sorted((t,n) for t,n in rel if n==HELPER or n.startswith('fiber_secure_context_cohort_'))
+    literal=sorted([(10,HELPER),(2,KEY)])
+    immediate=sorted([(10,HELPER),(47,KEY),(48,KEY)])
+    check(binding in (literal,immediate),'missing exact C33S call/key relocations',name)
+    if name!=INIT:
+        check(sorted(rel)==binding,'unexpected C33S query relocations',name)
 
 def gateway_dependencies(path):
     actual=base.dependencies(path)
@@ -2291,13 +2384,21 @@ def main():
     expected={'missing-retain':'missing exact C33S call/key relocations','helper-only':'missing exact C33S call/key relocations',
               'before-preflight':'C33S rejected preflight reached cohort','after-commit':'C33S cohort/precommit order changed',
               'stale-layout-key':'C33S gateway exact dependencies changed','unexpected-helper':'C33S gateway exact dependencies changed'}
+    for form in ('movw-movt','abs32'):
+        for fault in ('wrong-key','extra-provider-call','unexpected-query-helper'):
+            expected[form+'-'+fault]=('unexpected C33S query relocations' if fault=='unexpected-query-helper'
+                                     else 'missing exact C33S call/key relocations')
+    expected.update({'missing-high-half':'missing exact C33S call/key relocations',
+                     'wrong-high-half':'missing exact C33S call/key relocations',
+                     'mixed-materialization':'missing exact C33S call/key relocations'})
     check({m['Name'] for m in inputs['Mutants']}==set(expected),'C33S mutant inventory changed')
     killed=[]
     for mutant in inputs['Mutants']:
         if mutant['Name']=='stale-layout-key':
             check(base.dependencies(mutant['Object'])==(GATEWAY-{KEY})|{STALE_KEY},'C33S stale-key negative shape changed')
             rel=base.function_relocations(mutant['Object'],INIT)
-            check(rel.count((10,HELPER))==1 and rel.count((2,STALE_KEY))==1 and (2,KEY) not in rel,
+            check(sorted((t,n) for t,n in rel if n==HELPER or n.startswith('fiber_secure_context_cohort_'))
+                  in (sorted([(10,HELPER),(2,STALE_KEY)]),sorted([(10,HELPER),(47,STALE_KEY),(48,STALE_KEY)])),
                   'C33S stale-key negative callsite changed')
         elif mutant['Name']=='unexpected-helper':
             check(base.dependencies(mutant['Object'])==GATEWAY|{'fiber_c33s_cohort_unexpected_helper'},
@@ -2306,17 +2407,19 @@ def main():
                   'C33S extra-helper negative callsite changed')
         try:
             if mutant['Name'] in ('missing-retain','helper-only'): retained(mutant['Object'],INIT)
+            elif mutant['Name'] in ('missing-high-half','wrong-high-half','mixed-materialization') or mutant['Name'].startswith(('movw-movt-','abs32-')):
+                retained(mutant['Object'],CAPACITY[0])
             elif mutant['Name'] in ('stale-layout-key','unexpected-helper'): gateway_dependencies(mutant['Object'])
             else: init_checks(mutant['Elf'])
         except Failure as exc:
             check(exc.code==expected[mutant['Name']],'C33S mutant failed for unintended reason',mutant['Name']+': '+str(exc))
             killed.append(dict(Name=mutant['Name'],Diagnostic=str(exc)))
         else: raise RuntimeError('C33S cohort mutant survived: '+mutant['Name'])
-    result=dict(Optimization=inputs['Optimization'],ArmCalls=base.COUNTS['calls'],ActualQueryCalls=16,
+    result=dict(Optimization=inputs['Optimization'],ArmCalls=base.COUNTS['calls'],ActualQueryCalls=8*len(inputs['Variants']),
         ColdConsumers=9,Key=KEY,Facts=FACTS,StaticCalls=calls,CompiledMutants=len(killed),Killed=killed,Scope=__doc__)
     (Path(sys.argv[1]).parent/'trace-result.json').write_text(json.dumps(result,indent=2)+'\n')
-    print('PASS C33SCOHORT: 9 cold edges, 16 real query calls, '+str(base.COUNTS['calls'])+
-          ' ARM calls, 6 compiled mutants; actual pinned CM33 init, void pool, masked CONTROL')
+    print('PASS C33SCOHORT: 9 cold edges, '+str(result['ActualQueryCalls'])+' real query calls, '+str(base.COUNTS['calls'])+
+          ' ARM calls, '+str(len(killed))+' compiled mutants; actual pinned CM33 init, void pool, masked CONTROL')
 
 if __name__=='__main__': main()
 '@ | Set-Content $proof -Encoding ASCII
@@ -2333,7 +2436,7 @@ if __name__=='__main__': main()
     [ordered]@{Optimization=$Optimization;Sources=$Pair.InitSourceHashes;ReferenceCommit=$ExpectedFreeRtosCommit;
         Compiler=[ordered]@{Path=$compiler;Sha256=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash};
         UpstreamReceipt=[ordered]@{Path=$upstreamPath;Sha256=(Get-FileHash -LiteralPath $upstreamPath -Algorithm SHA256).Hash};
-        Artifacts=@(Get-ChildItem -LiteralPath $evidenceDirectories -File |
+        Artifacts=@(Get-ChildItem -LiteralPath $evidenceDirectories -File -Recurse |
             Where-Object {$_.Name -ne 'artifacts.json'} | ForEach-Object {
                 [ordered]@{Path=$_.FullName;Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
             })} | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $directory 'artifacts.json') -Encoding ASCII

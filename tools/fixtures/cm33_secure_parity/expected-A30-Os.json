@@ -124,17 +124,25 @@
         "Instructions": 13,
         "Sha256": "37E8C769F23E17E73B7DB9AD574310ED891E2C757B1AE14028051A952CE6E7D5"
       },
-      "fiber_port_validate_stack_canary": {
-        "Instructions": 23,
-        "Sha256": "CA272EAABBDD10115926D1B5D11DC21920C6AB2C6C3DD1AA48BFCA50F69A3099"
+      "fiber_port_context_frame_check": {
+        "Instructions": 126,
+        "Sha256": "AABB55ED878F70EEDF0BE72863E82375F41430F1CDF0B4EAD647B9C746D32192"
       },
       "fiber_port_validate_context_pointer": {
         "Instructions": 13,
         "Sha256": "59015BF2824421699730B9498C41BC929B502EEC30AB2CB7973929CAB5DE401C"
       },
-      "fiber_port_context_frame_check": {
-        "Instructions": 126,
-        "Sha256": "AABB55ED878F70EEDF0BE72863E82375F41430F1CDF0B4EAD647B9C746D32192"
+      "fiber_port_validate_stack_canary": {
+        "Instructions": 23,
+        "Sha256": "CA272EAABBDD10115926D1B5D11DC21920C6AB2C6C3DD1AA48BFCA50F69A3099"
+      },
+      "fiber_port_prepare_start_msp_plan": {
+        "Instructions": 36,
+        "Sha256": "35AD1D0494B77EC727B2DE36C7C4E5C3D49254756BFB286758A99170FBEBD794"
+      },
+      "fiber_port_validate_start_msp_for_boot": {
+        "Instructions": 50,
+        "Sha256": "B1A18E251A929EEE3AC40E74D8BF39DB9D0D8DCBFE74BB545DF30A161042D491"
       },
       "fiber_port_boot_record_compute_hash": {
         "Instructions": 43,
@@ -146,15 +154,15 @@
       },
       "fiber_port_boot_record_check": {
         "Instructions": 11,
-        "Sha256": "B8A0245B7E1761226B39CC345746A31270916C027D9F0719F90455E78C5DE501"
+        "Sha256": "D0B135FD7EEB6F8B7C99B2A031E4A23364F050750B0DF10ABBE0E95CCEA9F3F8"
       },
       "fiber_port_boot_check": {
         "Instructions": 60,
         "Sha256": "C131B954471DD3736B2AF4D2314B9B238E27A139C3A3F3C62937730BA1A3F639"
       },
       "fiber_port_boot_create": {
-        "Instructions": 126,
-        "Sha256": "373E8EB963CCDDF33DF0A479B33D82497080392458BA36C81AFE35F070D2E93C"
+        "Instructions": 110,
+        "Sha256": "412CEC8E5C6ED5D41E851EA1FCFFB74FA0A9202B30DBC0E972351EDBCC4178FD"
       },
       "fiber_port_boot_attach_secure_stack": {
         "Instructions": 29,
@@ -185,8 +193,8 @@
         "Sha256": "A821848EDB685F91F7E2B5B1D31CB27C0410F27A0529D4A13A0849F961BD62AF"
       },
       "fiber_port_context_prepare_first_start": {
-        "Instructions": 52,
-        "Sha256": "4B0C6548A2F7EE86F00E99F61C75D6A58F9E6880E7E8F6AB9333647FBD1D03BF"
+        "Instructions": 10,
+        "Sha256": "9BB20E1F4C6236C777529105094BA7853FB3F2DDEB4EED62100F84B376A3AC7D"
       },
       "fiber_port_require_start_environment": {
         "Instructions": 15,
@@ -197,8 +205,8 @@
         "Sha256": "CBABEEBA041B75B08ABFAC03A94891FE619A4EFD35B6DB234349B6E3C2385FF5"
       },
       "fiber_port_runtime_prepare": {
-        "Instructions": 36,
-        "Sha256": "522FF4DC9C704AA5E6415AA20473944D71C31C1D76BC0BFCBAC6FDD4780CFF28"
+        "Instructions": 1,
+        "Sha256": "EBE67161F72407907F0A672766B0C54058950678E516472818F722AE098A1901"
       }
     }
   },

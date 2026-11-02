@@ -129,6 +129,61 @@ class Proof(base.Proof):
         codes = 'BRANCH' if behavior else 'BODY|DEPENDENCY|RELOC|DECODE|INVENTORY|BRANCH|INSTRUCTION'
         return r['ExitCode'] == 1 and re.fullmatch(r'REJECT:(?:'+codes+r'):[^\r\n]+\n?',r['Output']) is not None
 
+    def psp_source_controls(self, manifest, source_map):
+        from mutants import cases, psp_anchor
+        source, flags = source_map['Attachment']
+        text = source.read_text()
+        current, alternate = 'fiber_port_cpu_psp()', '__get_PSP()'
+        require(text.count(current) == 2 and text.count(alternate) == 0,
+                'CONTROL', 'actual A32 PSP source inventory')
+        changed = text.replace(current, alternate)
+        path = self.build/'alternate-psp-source.c'
+        path.write_text(changed, encoding='ascii')
+        obj = self.compile(path, 'alternate-psp-source', flags)
+        positive = dict(manifest, Attachment=obj, AttachmentDisassembly=obj+'.dis',
+                        Receipt=obj+'.positive.json')
+        positive_path = Path(obj+'.json')
+        base.write(positive_path, positive)
+        self.command([sys.executable,'-B',HERE/'check.py',positive_path],
+                     'complete alternate PSP spelling')
+        r = self.command([sys.executable,'-B',HERE/'check.py','--behavior-only',positive_path],
+                         'independent alternate PSP spelling')
+        require(r['Output'] == 'PASS SCALAR_BRANCH_ONLY scenarios=69 (not a parity receipt)\n',
+                'CONTROL', 'alternate PSP positive')
+        controls = ['compiled alternate PSP complete/independent positive']
+        killed = []
+        for name, side, old, new, count, behavior in cases('A30', changed):
+            if name not in ('psp-capture', 'psp-preservation'):
+                continue
+            require(changed.count(old) == count == 1, 'CONTROL', 'alternate mutation anchor')
+            mutant = self.build/('alternate-'+name+'.c')
+            mutant.write_text(changed.replace(old,new), encoding='ascii')
+            target = self.compile(mutant, 'alternate-'+name, flags)
+            m = dict(manifest, Attachment=target, AttachmentDisassembly=target+'.dis',
+                     Receipt=target+'.unexpected-pass.json')
+            mp = Path(target+'.json')
+            base.write(mp, m)
+            r = self.command([sys.executable,'-B',HERE/'check.py',mp], 'alternate closed reject '+name, allow=True)
+            require(self.rejected(r), 'CONTROL', 'alternate closed '+name)
+            independent = self.command([sys.executable,'-B',HERE/'check.py','--behavior-only',mp],
+                                       'alternate independent reject '+name, allow=True)
+            require(self.rejected(independent,True), 'CONTROL', 'alternate independent '+name)
+            killed.append(dict(Name='alternate-'+name,Diagnostic=r['Output'].strip(),
+                               IndependentDiagnostic=independent['Output'].strip()))
+        for call in (current, alternate):
+            valid = 'state->psp = '+call+';'
+            require(psp_anchor(valid,'state->psp = ',';') == valid, 'CONTROL', 'exact PSP selector positive')
+            for invalid in ('', valid+valid, valid+'state->psp = '+(alternate if call == current else current)+';'):
+                try:
+                    psp_anchor(invalid,'state->psp = ',';')
+                except ValueError as error:
+                    require(str(error) == 'A30 PSP mutation requires one exact source anchor',
+                            'CONTROL', 'PSP anchor diagnostic')
+                else:
+                    require(False, 'CONTROL', 'ambiguous/missing PSP anchor accepted')
+                controls.append('PSP selector rejects '+repr(invalid))
+        return controls, killed
+
     def run(self):
         self.snapshot()
         passed, mutants, controls, independent = False, [], [], []
@@ -156,7 +211,8 @@ class Proof(base.Proof):
             require(positive['Output'] == 'PASS SCALAR_BRANCH_ONLY scenarios=%d (not a parity receipt)\n' % result['Scenarios'],
                     'CONTROL','independent positive diagnostic')
             from mutants import cases
-            for case in cases(self.mode):
+            attachment_source = source_map['Attachment'][0].read_text() if self.mode == 'A30' else None
+            for case in cases(self.mode, attachment_source):
                 name, side, old, new, count, behavior = case
                 source, flags = source_map[side]
                 text = source.read_text()
@@ -176,6 +232,11 @@ class Proof(base.Proof):
                     require(self.rejected(r,True),'MUTANT','independent branch oracle '+name+'/'+r['Output'])
                     independent.append(dict(Name=name,Diagnostic=r['Output'].strip()))
             controls = self.check_controls(path)
+            if self.mode == 'A30':
+                extra, killed = self.psp_source_controls(manifest, source_map)
+                controls += extra
+                mutants += [dict(Name=r['Name'],Diagnostic=r['Diagnostic']) for r in killed]
+                independent += [dict(Name=r['Name'],Diagnostic=r['IndependentDiagnostic']) for r in killed]
             self.dependency_closure()
             passed = True
         finally:

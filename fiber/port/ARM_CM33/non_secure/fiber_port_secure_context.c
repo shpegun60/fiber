@@ -33,13 +33,13 @@ void fiber_port_capture_attachment_cpu_state(
 {
 	FIBER_REQUIRE(state != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	state->ipsr = __get_IPSR();
-	state->primask = __get_PRIMASK();
+	state->ipsr = fiber_port_cpu_ipsr();
+	state->primask = fiber_port_cpu_primask();
 	state->basepri = fiber_port_basepri_read();
-	state->faultmask = __get_FAULTMASK();
-	state->control = __get_CONTROL();
-	state->psplim = __get_PSPLIM();
-	state->psp = __get_PSP();
+	state->faultmask = fiber_port_cpu_faultmask();
+	state->control = fiber_port_cpu_control();
+	state->psplim = fiber_port_cpu_psplim();
+	state->psp = fiber_port_cpu_psp();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -49,13 +49,13 @@ void fiber_port_validate_attachment_cpu_state(
 {
 	FIBER_REQUIRE(before != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	FIBER_REQUIRE(__get_IPSR() == before->ipsr, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() == before->ipsr, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_primask() == before->primask, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 'f');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
-	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
-	FIBER_REQUIRE(__get_PSP() == before->psp, 'P');
+	FIBER_REQUIRE(fiber_port_cpu_faultmask() == before->faultmask, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_control() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_psplim() == before->psplim, 'L');
+	FIBER_REQUIRE(fiber_port_cpu_psp() == before->psp, 'P');
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -112,7 +112,7 @@ void fiber_port_secure_context_attach(FiberContext *const ctx,
 {
 	/* Handler rejection intentionally precedes the common lifecycle guard so
 	 * public panic precedence is deterministic. */
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() == 0u, 'i');
 	FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_RETAIN_V1();
 	fiber_internal_runtime_require_context_configuration_open(ctx);
 	FiberPortAttachmentCpuState cpu_state;
@@ -152,12 +152,12 @@ void fiber_port_secure_context_attach(FiberContext *const ctx,
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_secure_context_prepare_first_start(FiberContext *const ctx)
 {
-	FIBER_REQUIRE(__get_IPSR() ==
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER, 'j');
-	FIBER_REQUIRE(__get_PRIMASK() == 1u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_primask() == 1u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_faultmask() == 0u, 'f');
+	FIBER_REQUIRE((fiber_port_cpu_control() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(ctx != NULL, 'C');
 	FIBER_REQUIRE(fiber_port_current_secure_context_handle ==
 			fiber_portNO_SECURE_CONTEXT, 'D');
@@ -214,13 +214,13 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_secure_context_save_current_from_pendsv(
 		FiberContext *const current, const uint32_t exc_return)
 {
-	FIBER_REQUIRE(__get_IPSR() ==
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER, 'j');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_faultmask() == 0u, 'f');
 	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
+	FIBER_REQUIRE((fiber_port_cpu_control() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(current != NULL, 'C');
 	FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN ||
 			exc_return == fiber_portSECURE_ORIGIN_EXC_RETURN, 'x');
@@ -256,13 +256,13 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_secure_context_prepare_next_from_pendsv(
 		FiberContext *const next)
 {
-	FIBER_REQUIRE(__get_IPSR() ==
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER, 'j');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_faultmask() == 0u, 'f');
 	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
+	FIBER_REQUIRE((fiber_port_cpu_control() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(next != NULL, 'C');
 	FIBER_REQUIRE(next->sp != NULL, 'P');
 	FIBER_REQUIRE(fiber_port_current_secure_context_handle ==
@@ -297,16 +297,16 @@ void fiber_port_secure_context_load_next_from_pendsv(
 		FiberContext *const next,
 		const uint32_t handle)
 {
-	FIBER_REQUIRE(__get_IPSR() ==
+	FIBER_REQUIRE(fiber_port_cpu_ipsr() ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER, 'j');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_faultmask() == 0u, 'f');
 	/* The assembly entry has already checked Thread/PSP EXC_RETURN. */
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
+	FIBER_REQUIRE((fiber_port_cpu_control() & 3u) == 0u, 'l');
 	FIBER_REQUIRE(next != NULL, 'C');
 	FIBER_REQUIRE(next->sp != NULL, 'P');
-	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)next->boot.stack_base, 'L');
+	FIBER_REQUIRE(fiber_port_cpu_psplim() == (uint32_t)next->boot.stack_base, 'L');
 	FIBER_REQUIRE(next->sp[0] == handle, 'D');
 	FIBER_REQUIRE(fiber_port_current_secure_context_handle ==
 			fiber_portNO_SECURE_CONTEXT, 'D');

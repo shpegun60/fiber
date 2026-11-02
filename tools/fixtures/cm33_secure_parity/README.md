@@ -33,7 +33,7 @@ Exact numeric selected-header geometry is checked independently. M33 flags and
 ARMv8-M Mainline attributes are retained; general-registers-only attributes
 may name the ISA ceiling `8-M.MAIN` rather than the original compiler CPU name.
 
-A30 has 64 O2 / 66 Os closed bodies and 69 independent scenarios. They execute
+A30 has 68 O2 / 68 Os closed bodies and 69 independent scenarios. They execute
 the actual decoded whole PendSV on both sides for every BC/FC combination,
 including the 44-byte NS and 12-byte Secure-origin save extents. Secure-origin
 fixtures intentionally do not map an NS core/GPR frame. The actual compiled C
@@ -41,8 +41,8 @@ restore validator runs with minimum 12-byte FC storage, nonzero attachment and
 handle admission, NS PC/xPSR/padding bounds and malformed encodings. Actual
 capture/readback helpers and the Secure-save C function run with PSP corruption
 at the explicit external gateway boundary. These add behavioral proofs to the
-closed bodies, not only source-pattern assertions. Twenty-three compiled
-mutants must reject; 21 must additionally reject the independent oracle with
+closed bodies, not only source-pattern assertions. Twenty-five compiled
+mutants must reject; 23 must additionally reject the independent oracle with
 no closed-baseline lookup. Two mutation candidates that only alter structurally
 compared checks are labelled as such in `mutants.py`.
 
@@ -93,3 +93,38 @@ acceptance. Commands, preprocessing, assembly, objects, relocations, attributes,
 dependency closure, diagnostics and source/tool hashes are retained. Source
 drift produces INCOMPLETE without an artifact PASS manifest. Documentation
 artifacts are immutable copies, never mutable live repository paths.
+
+## C33S A32 Fixture Admission
+
+Only the A30 Boot baseline changed for the canonical helper-closure repair:
+four outlined helpers and nine changed callers at O2, two outlined helpers and
+four changed callers at Os. Every dependency set and complete non-Boot body
+remains fixed. The existing cold memcpy/memset imports are not broadened.
+The RAW_READY production/test/leaf-ledger inputs remain a separate frozen set.
+
+PSP mutations select exactly one actual source anchor, accepting the old CMSIS
+read or the canonically annotated local read. Missing/duplicate anchors reject.
+The alternate source spelling is compiled and must pass complete parity and
+the independent oracle; both compiled guard-removal mutants must then fail
+both checks. These controls are additional to the existing 23 mutations.
+
+The C33S cohort fixture in Test-C33SCohortMechanisms accepts exactly one strong
+C helper call and either one ABS32 exact-key relocation or the matching
+MOVW/MOVT exact-key pair. Queries permit no other relocation or helper call;
+the initializer retains its original exact dependency set and precommit trace.
+Both address forms and direct builtin/CMSIS caller spellings compile actual
+copied source, link the real pool and execute with the existing explicit CPU,
+AIRCR and CMSE-return doubles. This is not exception/security-state execution.
+Normal and supported-counterflag variants remain distinct from RAW_READY.
+
+Fifteen compiled cohort mutants cover the original six controls plus wrong
+keys, extra provider calls and foreign query helpers in both address forms,
+and missing/wrong high halves or mixed materialization. Each must reject for
+its exact intended diagnostic. Neither helper allowlists nor numeric cohort
+facts are widened. The dedicated archive/cohort runner additionally compiles
+both relocation shapes and wrong-key/extra-call controls at O2/Os while
+retaining its C/C++, GC, LTO and all eight query-owned RETAIN-removal proofs.
+Its exact inventory is 540 checks and 32 query-owned RETAIN-removal mutants;
+the additional 44 checks are 32 compiled address positives and 12 negatives.
+The caller/AIRCR runner compiles and executes both accepted caller spellings
+and their guard-removal mutants; its supported build contract is unchanged.

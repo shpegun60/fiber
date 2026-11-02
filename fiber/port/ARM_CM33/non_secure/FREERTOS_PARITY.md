@@ -251,3 +251,30 @@ The focused receipt is
 SHA-256 `4F58DB769ECFB670DD209920803A3CD518FFB26A05A8BF39043CDDCDA2AF7310`.
 Whole-body reference parity and global compiler-attribute closure remain
 separate gates; there is no new hardware claim.
+
+## A32/A33 Raw Compiler Closure
+
+An immutable pre-repair audit reproduced instrumentable boot/hash/validation
+helpers, instrumentable CMSIS CPU/priority/wait helpers, and O0/Og forced-inline
+failures under the simultaneous raw compiler-hook flags. Its receipt is
+`%TEMP%/fiber-c33-paired-raw-prefix-20261102b/results.json`, SHA-256
+`0CB6F4C2E17EF5A11F3F8FBDE23B95B6851FB02124D4F52CECF95BB00841D749`:
+30 baseline passes, 15 raw compiled failures, 15 unqualified raw cells, and no
+copied-input drift. This receipt remains FAIL, not a supported-build failure or
+a qualification of repaired bytes.
+
+The repair applies the canonical sensitive bundles to the transitive local
+helper closure and uses port-local, canonically annotated CPU/wait/NVIC
+primitives matching the original CMSIS instructions, clobbers, field indexing
+and priority encoding. Existing GRO declarations remain in force. The context
+generation, runtime flag, frame/layout dictionaries, admission checks and the
+three naked transfer sources are not changed.
+
+`tools/test_cm33_paired_raw_compiler.ps1` is the bounded maintained raw gate:
+O0/Og/O2/Os/O3, baseline plus all six raw hook families, ordinary native and
+sectioned/unsectioned slim-IR native LTO. It preserves exact pre-repair source,
+compiles helper-removal controls, and compares complete O2/Os naked function
+section bytes and relocations plus the selected-port macro dictionary. Its
+raw closure receipt is separate from actual pinned O2/Os closed-body parity,
+paired execution, external memory-helper/callback qualification and hardware.
+No blanket helper allowance or profile activation is introduced by this slice.

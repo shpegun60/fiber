@@ -98,12 +98,15 @@ FIBER_C33S_PRIVATE_COHORT_ASSERT(
 
 /* A real C dependency extracts the pool archive member even with LTO. The
  * subsequent volatile exact-key relocation/read binds its actual tuple.
- * This uses 24 immediate inputs plus one scratch output, not hot-path calls. */
+ * MOVW/MOVT keep this relocation independent of an assembler literal pool,
+ * including unsectioned native LTO. There are still 24 immediate inputs plus
+ * one scratch output, not hot-path calls. */
 #define FIBER_C33S_PRIVATE_COHORT_RETAIN() do { \
 	uint32_t fiber_c33s_private_cohort_byte; \
 	fiber_secure_context_pool_c33s_v1_cohort_provider(); \
 	__asm volatile ( \
-		"ldr %[cohort_byte], =" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t" \
+		"movw %[cohort_byte], #:lower16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t" \
+		"movt %[cohort_byte], #:upper16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t" \
 		"ldrb %[cohort_byte], [%[cohort_byte]]" \
 		: [cohort_byte] "=&r" (fiber_c33s_private_cohort_byte) \
 		: FIBER_C33S_PRIVATE_COHORT_OPERANDS : "memory"); \

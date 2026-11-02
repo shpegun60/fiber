@@ -16,28 +16,30 @@ enum {
 	FIBER_PORT_BOOT_RECORD_GUARD_HI = 0x5A5A5A5Au
 };
 
-FIBER_GENERAL_REGS_ONLY int
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_ram(uintptr_t start, uintptr_t end);
-FIBER_GENERAL_REGS_ONLY int
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_code(uintptr_t addr);
 
+FIBER_API_ATTR_SENSITIVE
 FiberPortBoot fiber_port_boot_create(void *begin,
 		void *end,
 		entry_t entry,
 		void *arg);
+FIBER_API_ATTR_SENSITIVE
 void fiber_port_boot_check(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_check(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_fast_check(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_attach_secure_stack(FiberPortBoot *boot,
 		uint32_t secure_stack_bytes);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_initial_frame_check(const FiberContext *ctx);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_first_start_frame_check(const FiberContext *ctx);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_save_current(const FiberContext *ctx);

@@ -184,12 +184,79 @@ function QueryBodyFingerprint([string]$Object,[string]$Query,[string]$Prefix) {
     $text=(Recorded $objdump @('-r','-j',$section,$Object) ($Prefix+'-relocations.txt')).Text
     $relocations=@([regex]::Matches($text,'(?m)^([0-9a-fA-F]+)\s+(R_ARM_\S+)\s+(\S+)\r?$') |
         ForEach-Object {$_.Groups[1].Value+' '+$_.Groups[2].Value+' '+$_.Groups[3].Value})
-    if($relocations.Count -ne 2 -or $text -notmatch ('R_ARM_THM_CALL\s+'+[regex]::Escape($provider)) -or
-            $text -notmatch ('R_ARM_ABS32\s+'+[regex]::Escape((Key (Facts))))) {
+    $shape=@([regex]::Matches($text,'(?m)^([0-9a-fA-F]+)\s+(R_ARM_\S+)\s+(\S+)\r?$') |
+        ForEach-Object {$_.Groups[2].Value+' '+$_.Groups[3].Value} | Sort-Object)
+    $literal=@(('R_ARM_THM_CALL '+$provider),('R_ARM_ABS32 '+(Key (Facts)))) | Sort-Object
+    $immediate=@(('R_ARM_THM_CALL '+$provider),('R_ARM_THM_MOVW_ABS_NC '+(Key (Facts))),
+        ('R_ARM_THM_MOVT_ABS '+(Key (Facts)))) | Sort-Object
+    if(($shape -join "`n") -cne ($literal -join "`n") -and
+            ($shape -join "`n") -cne ($immediate -join "`n")) {
         throw "Native query lost its exact call/key relocations: $Query"
     }
     [pscustomobject]@{CodeSha256=(Get-FileHash -LiteralPath $raw -Algorithm SHA256).Hash;
         Relocations=($relocations -join "`n")}
+}
+function TestQueryAddressForms([object]$Mode,[object]$Source) {
+    $query='fiber_secure_context_gateway_v1_abi_version'
+    foreach($form in @('movw-movt','abs32')) {
+        $dir=Join-Path $out ($Mode.Name+'-address-'+$form)
+        $copy=Join-Path $dir 'fiber\port\ARM_CM33\secure'
+        $null=New-Item -ItemType Directory -Path $copy -Force
+        Get-ChildItem -LiteralPath $secure -File | Where-Object {$_.Extension -in @('.c','.h','.ld')} |
+            ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $copy $_.Name)}
+        Copy-Item -LiteralPath (Join-Path $repo 'fiber\fiber_api_attributes.h') -Destination (Join-Path $dir 'fiber\fiber_api_attributes.h')
+        $header=Join-Path $copy 'fiber_secure_context_cohort.h'
+        $text=(Get-Content -LiteralPath $header -Raw).Replace("`r`n","`n")
+        $pair='"movw %[cohort_byte], #:lower16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t" \' + "`n`t`t" +
+            '"movt %[cohort_byte], #:upper16:" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"'
+        if([regex]::Matches($text,[regex]::Escape($pair)).Count -ne 1) {throw 'C33S actual address-materialization anchor changed'}
+        if($form -eq 'abs32') {$text=$text.Replace($pair,'"ldr %[cohort_byte], =" FIBER_C33S_PRIVATE_COHORT_KEY "\n\t"')}
+        $text | Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+        foreach($unit in @('fiber_secure_gateway','fiber_secure_context_gateway')) {
+            $obj=Join-Path $dir ($unit+'.o')
+            $null=Recorded $ArmGcc ($Source.Flags+@('-save-temps=obj','-MMD','-c',(Join-Path $copy ($unit+'.c')),'-o',$obj)) (Join-Path $dir ($unit+'.log'))
+            foreach($name in @($queries | Where-Object {
+                if($unit -eq 'fiber_secure_gateway') {$_ -like 'fiber_secure_gateway_*'}
+                else {$_ -like 'fiber_secure_context_gateway_*'}
+            })) {
+                $null=QueryBodyFingerprint $obj $name (Join-Path $dir $name)
+                $checks.Add([pscustomobject]@{Name=($Mode.Name+'-'+$form+'-'+$name);Kind='compiled exact address positive'})
+            }
+        }
+        $sourcePath=Join-Path $copy 'fiber_secure_context_gateway.c'
+        $originalContextText=Get-Content -LiteralPath $sourcePath -Raw
+        foreach($negative in @('wrong-key','extra-provider-call','unexpected-query-helper')) {
+            $sourceText=$originalContextText
+            $sourceText | Set-Content -LiteralPath $sourcePath -Encoding ASCII -NoNewline
+            if($negative -eq 'wrong-key') {
+                $anchor='"fiber_secure_context_cohort_c33s_g1"'
+                if([regex]::Matches($text,[regex]::Escape($anchor)).Count -ne 1) {throw 'C33S wrong-key control anchor'}
+                $text.Replace($anchor,'"fiber_secure_context_cohort_c33s_g1_wrong"') |
+                    Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+            } else {
+                $text | Set-Content -LiteralPath $header -Encoding ASCII -NoNewline
+                $pattern='(?m)^uint32_t '+[regex]::Escape($query)+'\(void\)\r?\n\{[^{}]*^\}'
+                $functions=[regex]::Matches($sourceText,$pattern)
+                if($functions.Count -ne 1) {throw 'C33S extra-provider query boundary'}
+                $old=$functions[0].Value
+                $marker='FIBER_C33S_PRIVATE_COHORT_RETAIN();'
+                if([regex]::Matches($old,[regex]::Escape($marker)).Count -ne 1) {throw 'C33S extra-provider RETAIN anchor'}
+                $extra=if($negative -eq 'extra-provider-call') {"`n`t"+$provider+'();'}
+                    else {"`n`textern void fiber_c33s_query_unexpected_helper(void);`n`tfiber_c33s_query_unexpected_helper();"}
+                $changed=$old.Replace($marker,$marker+$extra)
+                $sourceText.Replace($old,$changed) | Set-Content -LiteralPath $sourcePath -Encoding ASCII -NoNewline
+            }
+            $obj=Join-Path $dir ($negative+'.o')
+            $null=Recorded $ArmGcc ($Source.Flags+@('-save-temps=obj','-MMD','-c',$sourcePath,'-o',$obj)) (Join-Path $dir ($negative+'.log'))
+            try {
+                $null=QueryBodyFingerprint $obj $query (Join-Path $dir $negative)
+                throw ('C33S address mutant survived: '+$negative)
+            } catch {
+                if($_.Exception.Message -cne ('Native query lost its exact call/key relocations: '+$query)) {throw}
+            }
+            $checks.Add([pscustomobject]@{Name=($Mode.Name+'-'+$form+'-'+$negative);Kind='compiled exact address rejection'})
+        }
+    }
 }
 function TestQueryRetention([object]$Mode,[object]$Source,[object]$Foreign) {
     foreach($q in 0..($queries.Count-1)) {
@@ -312,6 +379,7 @@ try {
             Link ($mode.Name+'-'+$variant.Name+'-complete') $flags @($all,$archive) $group.Key '' -FullSurface -PoolBytes ($variant.Count*(24+$variant.Capacity+8)+8)
         }
         $a=$groups[$mode.Name+'.a'];$b=$groups[$mode.Name+'.b'];$e=$groups[$mode.Name+'.expression']
+        if($mode.Name -notmatch 'lto') {TestQueryAddressForms $mode $a}
         foreach($variant in @($a,$b)) {
             for($q=0;$q -lt $queries.Count;++$q) {
                 foreach($language in @('c','c++')) {
@@ -406,7 +474,7 @@ try {
     $after=HashInputs
     $after | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'inputs-after.json') -Encoding ASCII
     if(Compare-Object $before $after -Property Path,Hash) {throw 'Cohort qualification inputs changed; rerun required'}
-    if($retentionMutants.Count -ne 32 -or $checks.Count -ne 496) {throw 'Changed cohort retention proof inventory'}
+    if($retentionMutants.Count -ne 32 -or $checks.Count -ne 540) {throw 'Changed cohort retention proof inventory'}
     $verdict='PASS'
 } finally {
     @{Verdict=$verdict;Checks=$checks.ToArray();QueryRetentionMutants=$retentionMutants.ToArray();

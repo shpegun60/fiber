@@ -6,6 +6,79 @@
 #include "fiber_secure_context_pool.h"
 #include "fiber_secure_context_cohort.h"
 
+/* These primitives mirror CMSIS without entering an instrumentable helper. */
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_cpu_ipsr(void)
+{
+	uint32_t value;
+	__asm volatile("mrs %0, ipsr" : "=r"(value));
+	return value;
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_cpu_control(void)
+{
+	uint32_t value;
+	__asm volatile("mrs %0, control" : "=r"(value));
+	return value;
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_cpu_psplim(void)
+{
+	uint32_t value;
+	__asm volatile("mrs %0, psplim" : "=r"(value));
+	return value;
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_secure_context_cpu_psp(void)
+{
+	uint32_t value;
+	__asm volatile("mrs %0, psp" : "=r"(value));
+	return value;
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_cpu_isb(void)
+{
+	__asm volatile("isb 0xF" ::: "memory");
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_cpu_dsb(void)
+{
+	__asm volatile("dsb 0xF" ::: "memory");
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_cpu_set_psplim(uint32_t value)
+{
+	__asm volatile("msr psplim, %0" :: "r"(value));
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_cpu_set_psp(uint32_t value)
+{
+	__asm volatile("msr psp, %0" :: "r"(value));
+}
+
+static inline __attribute__((always_inline))
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_secure_context_cpu_set_control(uint32_t value)
+{
+	__asm volatile("msr control, %0" :: "r"(value) : "memory");
+	fiber_secure_context_cpu_isb();
+}
+
 #define fiber_secure_contextSCB_AIRCR \
 	(*((volatile uint32_t *)0xE000ED0Cu))
 #define fiber_secure_contextAIRCR_VECTKEY_MASK (0xFFFFu << 16u)
@@ -20,7 +93,7 @@ static volatile uint32_t fiber_secure_context_gateway_state;
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_secure_context_gateway_is_runtime_exception(void)
 {
-	const uint32_t exception_number = __get_IPSR();
+	const uint32_t exception_number = fiber_secure_context_cpu_ipsr();
 
 	return ((exception_number ==
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER) ||
@@ -68,7 +141,7 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 	 * The Non-secure port separately owns that first-start site. Enter
 	 * an irreversible intermediate state before the first destructive write,
 	 * so a partial failure cannot retry initialization. */
-	if ((cmse_nonsecure_caller() == 0) || (__get_IPSR() !=
+	if ((__builtin_arm_cmse_nonsecure_caller() == 0) || (fiber_secure_context_cpu_ipsr() !=
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_SVC_EXCEPTION_NUMBER) ||
 			(fiber_secure_context_gateway_state != 0u)) {
 		return 0u;
@@ -83,8 +156,8 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 	FIBER_C33S_PRIVATE_COHORT_RETAIN();
 	fiber_secure_context_gateway_state =
 			fiber_secure_contextGATEWAY_INITIALIZING;
-	__DSB();
-	__ISB();
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
 	if (fiber_secure_context_gateway_state !=
 			fiber_secure_contextGATEWAY_INITIALIZING) {
 		return 0u;
@@ -98,8 +171,8 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 			fiber_secure_contextAIRCR_VECTKEY_WRITE |
 			fiber_secure_contextAIRCR_PRIS_MASK;
 	fiber_secure_contextSCB_AIRCR = aircr_expected;
-	__DSB();
-	__ISB();
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
 	aircr_after = fiber_secure_contextSCB_AIRCR;
 	if (((aircr_after & fiber_secure_contextAIRCR_PRIS_MASK) == 0u) ||
 			((aircr_after & ~fiber_secure_contextAIRCR_VECTKEY_MASK) !=
@@ -109,25 +182,25 @@ uint32_t fiber_secure_context_gateway_v1_initialize(void)
 
 	/* Match SecureContext_Init(): no Secure Thread stack is active until an
 	 * owned context is loaded, and Secure Thread mode is privileged PSP. */
-	__set_PSPLIM(0u);
-	__set_PSP(0u);
-	__DSB();
-	__ISB();
-	if ((__get_PSPLIM() != 0u) || (__get_PSP() != 0u)) {
+	fiber_secure_context_cpu_set_psplim(0u);
+	fiber_secure_context_cpu_set_psp(0u);
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
+	if ((fiber_secure_context_cpu_psplim() != 0u) || (fiber_secure_context_cpu_psp() != 0u)) {
 		return 0u;
 	}
 
 	fiber_secure_context_pool_boot_initialize();
 
-	__set_CONTROL(2u);
-	__ISB();
-	if ((__get_CONTROL() & 3u) != 2u) {
+	fiber_secure_context_cpu_set_control(2u);
+	fiber_secure_context_cpu_isb();
+	if ((fiber_secure_context_cpu_control() & 3u) != 2u) {
 		return 0u;
 	}
 
 	fiber_secure_context_gateway_state = fiber_secure_contextGATEWAY_READY;
-	__DSB();
-	__ISB();
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
 	return (fiber_secure_context_gateway_state ==
 			fiber_secure_contextGATEWAY_READY) ? 1u : 0u;
 }
@@ -138,11 +211,11 @@ uint32_t fiber_secure_context_gateway_v1_allocate(
 {
 	/* Caller state and exception number are independent gates. The Non-secure
 	 * port separately validates its first-start or lazy-activation call site. */
-	if ((cmse_nonsecure_caller() == 0) ||
+	if ((__builtin_arm_cmse_nonsecure_caller() == 0) ||
 			(fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||
-			(__get_PSPLIM() != 0u) || (__get_PSP() != 0u)) {
+			(fiber_secure_context_cpu_psplim() != 0u) || (fiber_secure_context_cpu_psp() != 0u)) {
 		return (uint32_t)FIBER_SECURE_CONTEXT_HANDLE_INVALID;
 	}
 
@@ -158,12 +231,12 @@ uint32_t fiber_secure_context_gateway_v1_load(
 	uintptr_t stack_pointer;
 	uintptr_t stack_limit;
 
-	if ((cmse_nonsecure_caller() == 0) ||
+	if ((__builtin_arm_cmse_nonsecure_caller() == 0) ||
 			(fiber_secure_context_gateway_is_runtime_exception() == 0u) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||
-			(owner_token == 0u) || (__get_PSPLIM() != 0u) ||
-			(__get_PSP() != 0u)) {
+			(owner_token == 0u) || (fiber_secure_context_cpu_psplim() != 0u) ||
+			(fiber_secure_context_cpu_psp() != 0u)) {
 		return 0u;
 	}
 
@@ -183,17 +256,17 @@ uint32_t fiber_secure_context_gateway_v1_load(
 
 	/* Keep the exact FreeRTOS load order: PSPLIM before PSP. Readback and
 	 * barriers are deliberate Fiber hardening on this one-shot path. */
-	__set_PSPLIM((uint32_t)stack_limit);
-	__DSB();
-	__ISB();
-	if (__get_PSPLIM() != (uint32_t)stack_limit) {
+	fiber_secure_context_cpu_set_psplim((uint32_t)stack_limit);
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
+	if (fiber_secure_context_cpu_psplim() != (uint32_t)stack_limit) {
 		return 0u;
 	}
-	__set_PSP((uint32_t)stack_pointer);
-	__DSB();
-	__ISB();
-	if ((__get_PSP() != (uint32_t)stack_pointer) ||
-			(__get_PSPLIM() != (uint32_t)stack_limit)) {
+	fiber_secure_context_cpu_set_psp((uint32_t)stack_pointer);
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
+	if ((fiber_secure_context_cpu_psp() != (uint32_t)stack_pointer) ||
+			(fiber_secure_context_cpu_psplim() != (uint32_t)stack_limit)) {
 		return 0u;
 	}
 
@@ -207,7 +280,7 @@ uint32_t fiber_secure_context_gateway_v1_save(
 	FiberSecureContextRecord *record;
 	uintptr_t stack_pointer;
 
-	if ((cmse_nonsecure_caller() == 0) || (__get_IPSR() !=
+	if ((__builtin_arm_cmse_nonsecure_caller() == 0) || (fiber_secure_context_cpu_ipsr() !=
 			FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER) ||
 			(fiber_secure_context_gateway_state !=
 				fiber_secure_contextGATEWAY_READY) ||
@@ -217,7 +290,7 @@ uint32_t fiber_secure_context_gateway_v1_save(
 
 	/* An unattached fiber must not have inherited any Secure Thread state. */
 	if (handle == (uint32_t)FIBER_SECURE_CONTEXT_HANDLE_INVALID) {
-		return ((__get_PSPLIM() == 0u) && (__get_PSP() == 0u)) ? 1u : 0u;
+		return ((fiber_secure_context_cpu_psplim() == 0u) && (fiber_secure_context_cpu_psp() == 0u)) ? 1u : 0u;
 	}
 
 	record = fiber_secure_context_pool_lookup_owned(
@@ -225,8 +298,8 @@ uint32_t fiber_secure_context_gateway_v1_save(
 	if (record == 0) {
 		return 0u;
 	}
-	stack_pointer = (uintptr_t)__get_PSP();
-	if ((__get_PSPLIM() != (uint32_t)record->stack_limit) ||
+	stack_pointer = (uintptr_t)fiber_secure_context_cpu_psp();
+	if ((fiber_secure_context_cpu_psplim() != (uint32_t)record->stack_limit) ||
 			((stack_pointer &
 				(FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_STACK_ALIGNMENT - 1u)) !=
 			 0u) ||
@@ -238,23 +311,23 @@ uint32_t fiber_secure_context_gateway_v1_save(
 	/* Match SecureContext_SaveContextAsm(): save PSP, then remove all Secure
 	 * Thread stack state before another context can be selected. */
 	record->current_stack_pointer = stack_pointer;
-	__DSB();
-	__ISB();
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
 	if (fiber_secure_context_pool_lookup_owned(
 			(FiberSecureContextHandle)handle, owner_token) != record) {
 		return 0u;
 	}
 
-	__set_PSPLIM(0u);
-	__DSB();
-	__ISB();
-	if (__get_PSPLIM() != 0u) {
+	fiber_secure_context_cpu_set_psplim(0u);
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
+	if (fiber_secure_context_cpu_psplim() != 0u) {
 		return 0u;
 	}
-	__set_PSP(0u);
-	__DSB();
-	__ISB();
-	if ((__get_PSP() != 0u) || (__get_PSPLIM() != 0u)) {
+	fiber_secure_context_cpu_set_psp(0u);
+	fiber_secure_context_cpu_dsb();
+	fiber_secure_context_cpu_isb();
+	if ((fiber_secure_context_cpu_psp() != 0u) || (fiber_secure_context_cpu_psplim() != 0u)) {
 		return 0u;
 	}
 

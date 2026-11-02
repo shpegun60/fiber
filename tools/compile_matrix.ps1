@@ -8053,12 +8053,12 @@ function Test-ArmCm33SecureGatewayAbi {
             "fiber_secure_contextSCB_AIRCR",
             "fiber_secure_contextAIRCR_PRIS_MASK",
             "fiber_secure_context_pool_boot_initialize",
-            "__set_CONTROL(2u)",
+            "fiber_secure_context_cpu_set_control(2u)",
             "fiber_secure_context_gateway_state",
             "fiber_secure_contextGATEWAY_INITIALIZING",
             "fiber_secure_contextGATEWAY_READY",
-            "__get_PSPLIM() != 0u",
-            "__get_PSP() != 0u",
+            "fiber_secure_context_cpu_psplim() != 0u",
+            "fiber_secure_context_cpu_psp() != 0u",
             "fiber_secure_context_pool_allocate",
             "fiber_secure_context_pool_lookup_owned",
             "FIBER_SECURE_CONTEXT_HANDLE_INVALID")) {
@@ -8089,9 +8089,9 @@ function Test-ArmCm33SecureGatewayAbi {
     $ipsrGate = $allocationBody.IndexOf(
         "fiber_secure_context_gateway_is_runtime_exception() == 0u",
         [System.StringComparison]::Ordinal)
-    $psplimGate = $allocationBody.IndexOf("__get_PSPLIM() != 0u",
+    $psplimGate = $allocationBody.IndexOf("fiber_secure_context_cpu_psplim() != 0u",
         [System.StringComparison]::Ordinal)
-    $pspGate = $allocationBody.IndexOf("__get_PSP() != 0u",
+    $pspGate = $allocationBody.IndexOf("fiber_secure_context_cpu_psp() != 0u",
         [System.StringComparison]::Ordinal)
     $poolCall = $allocationBody.IndexOf("fiber_secure_context_pool_allocate(",
         [System.StringComparison]::Ordinal)
@@ -8104,13 +8104,13 @@ function Test-ArmCm33SecureGatewayAbi {
         -Path $secureContextGatewaySource
     $initializeCursor = -1
     foreach ($token in @(
-            "__get_IPSR() !=",
+            "fiber_secure_context_cpu_ipsr() !=",
             "fiber_secure_contextGATEWAY_INITIALIZING;",
             "fiber_secure_contextSCB_AIRCR = aircr_expected;",
-            "__set_PSPLIM(0u);",
-            "__set_PSP(0u);",
+            "fiber_secure_context_cpu_set_psplim(0u);",
+            "fiber_secure_context_cpu_set_psp(0u);",
             "fiber_secure_context_pool_boot_initialize();",
-            "__set_CONTROL(2u);",
+            "fiber_secure_context_cpu_set_control(2u);",
             "fiber_secure_contextGATEWAY_READY;")) {
         $next = $initializeBody.IndexOf($token, $initializeCursor + 1,
             [System.StringComparison]::Ordinal)
@@ -8125,11 +8125,11 @@ function Test-ArmCm33SecureGatewayAbi {
     $loadCursor = -1
     foreach ($token in @(
             "fiber_secure_context_gateway_is_runtime_exception() == 0u",
-            "__get_PSPLIM() != 0u",
-            "__get_PSP() != 0u",
+            "fiber_secure_context_cpu_psplim() != 0u",
+            "fiber_secure_context_cpu_psp() != 0u",
             "fiber_secure_context_pool_lookup_owned(",
-            "__set_PSPLIM((uint32_t)stack_limit);",
-            "__set_PSP((uint32_t)stack_pointer);")) {
+            "fiber_secure_context_cpu_set_psplim((uint32_t)stack_limit);",
+            "fiber_secure_context_cpu_set_psp((uint32_t)stack_pointer);")) {
         $next = $loadBody.IndexOf($token, $loadCursor + 1,
             [System.StringComparison]::Ordinal)
         if ($next -le $loadCursor) {
@@ -8142,13 +8142,13 @@ function Test-ArmCm33SecureGatewayAbi {
         -Path $secureContextGatewaySource
     $saveCursor = -1
     foreach ($token in @(
-            "__get_IPSR() !=",
+            "fiber_secure_context_cpu_ipsr() !=",
             "FIBER_ARM_CM33_SECURE_CONTEXT_GATEWAY_PENDSV_EXCEPTION_NUMBER",
             "fiber_secure_context_pool_lookup_owned(",
-            "stack_pointer = (uintptr_t)__get_PSP();",
+            "stack_pointer = (uintptr_t)fiber_secure_context_cpu_psp();",
             "record->current_stack_pointer = stack_pointer;",
-            "__set_PSPLIM(0u);",
-            "__set_PSP(0u);")) {
+            "fiber_secure_context_cpu_set_psplim(0u);",
+            "fiber_secure_context_cpu_set_psp(0u);")) {
         $next = $saveBody.IndexOf($token, $saveCursor + 1,
             [System.StringComparison]::Ordinal)
         if ($next -le $saveCursor) {
@@ -8172,7 +8172,7 @@ function Test-ArmCm33SecureGatewayAbi {
     $attachBody = Get-CFunctionBody -Source $attachText `
         -Signature "void fiber_port_secure_context_attach(" `
         -Path $nonSecureAttachSource
-    $handlerGuard = $attachBody.IndexOf("FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+    $handlerGuard = $attachBody.IndexOf("FIBER_REQUIRE(fiber_port_cpu_ipsr() == 0u, 'i');",
         [System.StringComparison]::Ordinal)
     $lifecycleGuard = $attachBody.IndexOf(
         "fiber_internal_runtime_require_context_configuration_open(ctx);",
@@ -8353,7 +8353,7 @@ function Test-ArmCm33SecureGatewayAbi {
         -Path $nonSecureAttachSource
     $loadNextCursor = -1
     foreach ($token in @(
-            "__get_PSPLIM() == (uint32_t)next->boot.stack_base",
+            "fiber_port_cpu_psplim() == (uint32_t)next->boot.stack_base",
             "next->sp[0] == handle",
             "fiber_port_current_secure_context_handle ==",
             "fiber_port_context_validate_loaded_secure_handle(next);",

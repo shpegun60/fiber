@@ -2932,3 +2932,32 @@ SHA-256: 2B8AAB0C94F6E6AEE791636B0C8D311464AFC72BA6FA659ABF54D8DA72EDB831
 This is source-derived C-state, code-generation and archive evidence, not
 physical exception execution. The earlier aggregate remains FAIL and its
 later gates remain NOT_RUN until a fresh immutable aggregate reaches them.
+
+### Paired CM33 Helper And Cohort Closure
+
+The paired scalar CM33 Non-secure runtime and Secure companion now protect
+their complete local CPU/helper closure. NSC entries use the direct CMSE
+caller builtin rather than an instrumentable helper; admission ordering is
+unchanged. Secure-private exact-key retention uses MOVW/MOVT instead of a
+distance-limited literal pool. Context generation, policies and all six naked
+transfer bodies remain unchanged. The separate raw gate passes eighty cells,
+380 controls and 41 bounded checks under its captured classifier.
+
+Closed pinned O2/Os parity independently passes 68 complete bodies, 69 numeric
+scenarios, 25 compiled mutants, 23 independent rejections and 38 controls per
+optimization. Only the Boot fingerprints affected by outlining protected
+helpers change. Dependency sets and other complete bodies stay fixed. Cohort
+mechanism checks retain exact key/call shapes for both address forms and reject
+wrong keys, extra calls and broken high halves. Complete cohort, ISA and QEMU
+origin/guard proofs remain distinct from that closed analysis.
+
+The frozen handoff is C:/fc33-da1c9f48b9/handoff-checkpoint/qualification.json,
+SHA-256 724725863BD4423AB843568FE5A7EBFED20A0FA142638A55F4C46BE8F94A2DAD.
+Parent checks all twenty frozen files, eight receipt hashes, 3,412 captured
+input entries and 10,690 additional recorded manifest entries without mismatch.
+The previously checked raw artifact capture remains separate. The fresh
+maintained layout/gateway replay passes at
+%TEMP%/fiber-classic-current-integration-d6350f286d6c4d47980663ace6ce487a
+after updating only exact local-reader spellings in existing ordering guards.
+No full-matrix PASS, new classifier invariant, profile promotion or hardware
+execution is inferred from these focused receipts.

@@ -151,15 +151,37 @@ function Assert-EntryCallerProof([string]$Disassembly, [string]$Name, [string]$R
 $gatewayPath = Join-Path $secure 'fiber_secure_context_gateway.c'
 $gatewaySource = Get-Content -LiteralPath $gatewayPath -Raw
 $poolSource = Get-Content -LiteralPath (Join-Path $secure 'fiber_secure_context_pool.c') -Raw
+$callerName = '(?<![A-Za-z0-9_])(?:__builtin_arm_cmse_nonsecure_caller|cmse_nonsecure_caller)\(\)'
+$callerPredicate = '\((?:__builtin_arm_cmse_nonsecure_caller|cmse_nonsecure_caller)\(\) == 0\)'
+function Remove-C33CallerGuard([string]$Body) {
+    if ([regex]::Matches($Body, $callerPredicate).Count -ne 1) {
+        throw 'C33S caller guard requires exactly one supported predicate'
+    }
+    return [regex]::Replace($Body, $callerPredicate, '(0)')
+}
+$spellingControls = @()
+foreach ($spelling in @('cmse_nonsecure_caller', '__builtin_arm_cmse_nonsecure_caller')) {
+    $predicate = '(' + $spelling + '() == 0)'
+    if ((Remove-C33CallerGuard ('if (' + $predicate + ') return 0;')) -cne 'if ((0)) return 0;') {
+        throw 'C33S caller predicate positive changed'
+    }
+    foreach ($invalid in @('', ($predicate + $predicate), '(__builtin_arm_cmse_nonsecure_caller_fake() == 0)')) {
+        try { $null = Remove-C33CallerGuard $invalid; throw 'C33S invalid caller predicate survived' }
+        catch { if ($_.Exception.Message -cne 'C33S caller guard requires exactly one supported predicate') { throw } }
+    }
+    $spellingControls += [pscustomobject]@{Spelling=$spelling;Positive=$predicate;Rejected=3}
+}
+$spellingControls | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'caller-spelling-controls.json') -Encoding ASCII
 $operations = @('initialize', 'allocate', 'load', 'save')
 foreach ($operation in $operations) {
     $name = 'fiber_secure_context_gateway_v1_' + $operation
     $body = [regex]::Match($gatewaySource, '(?ms)^uint32_t ' + $name + '\(.*?^\}').Value
-    if (-not $body -or ([regex]::Matches($body, 'cmse_nonsecure_caller\(\)')).Count -ne 1) {
+    if (-not $body -or ([regex]::Matches($body, $callerName)).Count -ne 1 -or
+            ([regex]::Matches($body, $callerPredicate)).Count -ne 1) {
         throw "Stateful NSC entry must directly check the CMSE caller: $name"
     }
 }
-if (([regex]::Matches($gatewaySource, 'cmse_nonsecure_caller\(\)')).Count -ne 4) {
+if (([regex]::Matches($gatewaySource, $callerName)).Count -ne 4) {
     throw 'Origin checks must be exactly in the four stateful entries, not helpers or pure queries'
 }
 foreach ($helper in @('write_stack_seal', 'stack_seal_is_valid')) {
@@ -195,12 +217,18 @@ $cases = @(
     @{Name='o2-lto'; Flags=@('-O2', '-flto'); Mutant=''; Exit=0; Marker='PASS:CM33-SECURE-GUARDS'},
     @{Name='os-lto'; Flags=@('-Os', '-flto'); Mutant=''; Exit=0; Marker='PASS:CM33-SECURE-GUARDS'}
 )
+$cases += @(
+    @{Name='o2-cmsis-caller'; Flags=@('-O2'); Mutant=''; CallerStyle='cmsis'; Exit=0; Marker='PASS:CM33-SECURE-GUARDS'},
+    @{Name='os-cmsis-caller'; Flags=@('-Os'); Mutant=''; CallerStyle='cmsis'; Exit=0; Marker='PASS:CM33-SECURE-GUARDS'}
+)
 foreach ($operation in $operations) {
     $status = @{initialize=40; allocate=41; load=42; save=43}[$operation]
     $cases += @{Name="mutant-$operation"; Flags=@('-O2'); Mutant=$operation; Exit=$status;
         Marker="FAIL:GUARDS:secure-$operation-accepted"}
+    $cases += @{Name="mutant-cmsis-$operation"; Flags=@('-O2'); Mutant=$operation; CallerStyle='cmsis'; Exit=$status;
+        Marker="FAIL:GUARDS:secure-$operation-accepted"}
 }
-foreach ($mode in @($cases | Where-Object { -not $_.Mutant })) {
+foreach ($mode in @($cases | Where-Object { -not $_.Mutant -and -not $_.ContainsKey('CallerStyle') })) {
     $cases += @{Name=("mutant-bfhfnmins-" + $mode.Name); Flags=$mode.Flags; Mutant='bfhfnmins'; Exit=0;
         Marker='PASS:GUARDS:BFHFNMINS-mutant-stopped-before-AIRCR-STR'}
 }
@@ -208,11 +236,21 @@ foreach ($case in $cases) {
     $dir = Join-Path $out $case.Name
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $source = $gatewayPath
+    $caseSource = $gatewaySource
+    if ($case.ContainsKey('CallerStyle')) {
+        if ($case.CallerStyle -ne 'cmsis' -or
+                [regex]::Matches($caseSource, '__builtin_arm_cmse_nonsecure_caller\(\)').Count -ne 4) {
+            throw 'C33S copied caller-spelling source changed'
+        }
+        $caseSource = $caseSource.Replace('__builtin_arm_cmse_nonsecure_caller()', 'cmse_nonsecure_caller()')
+        $source = Join-Path $dir 'gateway-cmsis-spelling.c'
+        $caseSource | Set-Content -LiteralPath $source -Encoding ASCII
+    }
     if ($case.Mutant) {
         $operation = $case.Mutant
         if ($operation -eq 'bfhfnmins') { $operation = 'initialize' }
         $name = 'fiber_secure_context_gateway_v1_' + $operation
-        $match = [regex]::Match($gatewaySource, '(?ms)^uint32_t ' + $name + '\(.*?^\}')
+        $match = [regex]::Match($caseSource, '(?ms)^uint32_t ' + $name + '\(.*?^\}')
         if ($case.Mutant -eq 'bfhfnmins') {
             $predicate = '\(\(aircr_before & fiber_secure_contextAIRCR_BFHFNMINS_MASK\) != 0u\)'
             if (([regex]::Matches($match.Value, $predicate)).Count -ne 1) {
@@ -220,12 +258,12 @@ foreach ($case in $cases) {
             }
             $body = [regex]::Replace($match.Value, $predicate, '(0)')
         } else {
-            $body = $match.Value.Replace('(cmse_nonsecure_caller() == 0)', '(0)')
+            $body = Remove-C33CallerGuard $match.Value
         }
         if ($body -eq $match.Value) { throw "Missing exact mutation site: $name" }
         $source = Join-Path $dir 'gateway-mutant.c'
-        ($gatewaySource.Substring(0, $match.Index) + $body +
-            $gatewaySource.Substring($match.Index + $match.Length)) |
+        ($caseSource.Substring(0, $match.Index) + $body +
+            $caseSource.Substring($match.Index + $match.Length)) |
             Set-Content -LiteralPath $source -Encoding ASCII
     }
     $common = @('-mcpu=cortex-m33', '-mthumb', '-mfloat-abi=soft', '-mgeneral-regs-only',

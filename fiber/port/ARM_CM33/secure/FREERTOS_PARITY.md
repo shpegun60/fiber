@@ -273,7 +273,7 @@ hardware validation are not established by these focused link results.
 ## Caller And Typed-Storage Hardening
 
 Each stateful NSC entry (`initialize`, `allocate`, `load`, `save`) evaluates
-`cmse_nonsecure_caller()` directly, before any helper call or state mutation.
+`__builtin_arm_cmse_nonsecure_caller()` directly, before any helper call or state mutation.
 This is deliberate additional Fiber policy: the reference checks Handler mode,
 not immediate caller security. IPSR and caller security prove different facts;
 neither authenticates a particular Non-secure instruction site. The trusted
@@ -309,3 +309,36 @@ and stops five guard-removal mutants before the exact forbidden AIRCR store.
 Together with the four original caller mutants this is 14 cases / 28 ELFs.
 The parent replay and actual O2/Os FreeRTOS comparison receipts are recorded in
 `PORT_ARCHITECTURE_AUDIT.md`; this is not STM32 hardware qualification.
+
+## A32/A33 Raw Compiler Closure And Key Reach
+
+The immutable pre-repair paired audit is retained at
+`%TEMP%/fiber-c33-paired-raw-prefix-20261102b`. It reproduces raw CMSIS-helper
+instrumentation/forced-inline failures and three unsectioned native-LTO
+assembler failures at the exact-key `ldr =symbol` loads. The receipt remains
+FAIL; its input manifest SHA-256 is
+`D1B0A7D4A70298165814AAD423588A5E9A16F81D53458D74B53FA799DFCAA4ED`.
+
+Stateful entries now invoke the GCC CMSE caller builtin at the original direct
+admission site, avoiding an instrumentable wrapper that can itself call before
+reading LR. Local CPU/barrier primitives carry the canonical inline-sensitive
+bundle and existing GRO restriction. They preserve the CMSIS instruction and
+clobber behavior, including the implicit ISB in CONTROL writes and the caller's
+additional explicit ISB. The CM33 CONTROL readback remains `(CONTROL & 3)==2`;
+it is not changed to the CM55 companion's distinct admission policy.
+
+Each retained query/initializer still calls the same strong pool C provider and
+performs the same volatile exact-key byte read. Its address is now materialized
+with ARM MOVW/MOVT low/high relocations instead of an assembler-managed literal
+pool. All twelve facts, halfword encoding, data symbol, generation, export ABI,
+pool geometry, seals, ownership and initializer commitment/order are unchanged.
+This is a range repair, not whole-function byte equivalence with FreeRTOS.
+
+The dedicated paired raw gate checks all eight individual call/key relocation
+sites, actual helper/caller-wrapper mutants and matched unreachable literal
+pressure controls at O2/Os. The MOVW/MOVT variant must lower; reverting only the
+address materialization must fail at the exact saved-assembly key loads. Query
+archive/cohort and caller-guard fixtures must explicitly understand this measured
+relocation/builtin spelling change; old receipts remain historical rather than
+being relabeled as proof of current bytes. Actual pinned reference, CMSE image
+execution, platform security attribution and hardware remain separate gates.
