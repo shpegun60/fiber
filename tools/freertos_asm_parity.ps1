@@ -255,7 +255,7 @@ function Invoke-Compile {
         [string]$Label
     )
 
-    if ($ClassicOnly) {
+    if ((Get-Variable -Name ClassicOnly -ValueOnly -ErrorAction SilentlyContinue) -eq $true) {
         ConvertTo-Json -InputObject (@($Compiler) + $Arguments) -Compress |
             Add-Content -LiteralPath (Join-Path $BuildRoot "$ClassicEvidence/commands.jsonl") -Encoding ASCII
     }
@@ -301,7 +301,7 @@ function Get-ObjectDisassembly {
         [string]$ObjectPath
     )
 
-    if ($ClassicOnly) {
+    if ((Get-Variable -Name ClassicOnly -ValueOnly -ErrorAction SilentlyContinue) -eq $true) {
         ConvertTo-Json -InputObject @($Objdump, '-dr', $ObjectPath) -Compress |
             Add-Content -LiteralPath (Join-Path $BuildRoot "$ClassicEvidence/commands.jsonl") -Encoding ASCII
     }
@@ -507,7 +507,7 @@ function Assert-MechanismParity {
 
     Write-Host ("PASS {0,-14} {1,-18} {2} -> {3}" -f `
         $PortName, $Mechanism, $ReferenceSymbol, $FiberSymbol)
-    if ($ClassicOnly) {
+    if ((Get-Variable -Name ClassicOnly -ValueOnly -ErrorAction SilentlyContinue) -eq $true) {
         $script:cm0Mechanisms += [ordered]@{Port=$PortName; Mechanism=$Mechanism;
             ReferenceSymbol=$ReferenceSymbol; FiberSymbol=$FiberSymbol;
             ReferencePatterns=$ReferencePatterns; FiberPatterns=$FiberPatterns; DifferenceIds=$DifferenceIds}

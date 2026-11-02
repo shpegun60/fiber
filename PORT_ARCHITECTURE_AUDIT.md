@@ -2731,3 +2731,19 @@ gates and twenty-four unchanged ordered assertions against actual pinned
 FreeRTOS O2/Os objects also pass. Exact roots/hashes are in the three leaf
 ledgers. These focused repairs do not close global A32, final-LTO reference
 parity, actual FP/MVE exception execution or hardware validation.
+
+### Imported Parity Helper Caller-State Regression
+
+The immutable b181ee7 matrix replay passes complete O2/Os pinned parity,
+classic/Thumb-1/consumer and A17-A19 subgates, then fails in the owner audit:
+imported parity helpers read the caller-only ClassicOnly variable under strict
+mode. All 932 source files have zero drift. This remains a failed combined
+receipt at C:/fq-8037c672fb/matrix-result.json, not a global PASS.
+
+The compile, disassembly and mechanism helpers now treat focused recording as
+optional caller telemetry while keeping every compile and ordered assertion
+mandatory. The maintained strict-mode import regression covers absent, false
+and true caller state using three real small ARM objects; missing-instruction
+controls still reject, and restoring the old caller dependency reproduces the
+specific undefined-variable error. The central matrix invokes this guard before
+full parity. This is test-infrastructure repair, with no production changes.

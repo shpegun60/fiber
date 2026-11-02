@@ -22077,6 +22077,9 @@ try {
     & (Join-Path $RepoRoot "tools\test_matrix_execution_policy.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-matrix-execution-policy")
 
+    Write-Host "== audit / strict-mode parity helper imports =="
+    & (Join-Path $RepoRoot "tools\test_parity_helper_imports.ps1") `
+        -ArmGcc $gcc -BuildRoot (Join-Path $buildRoot "audit-parity-helper-imports")
     Write-Host "== pinned FreeRTOS generated-assembly parity =="
     foreach ($parityOptimization in @("-O2", "-Os")) {
         $parityBuildName = "freertos-asm-parity-" +
