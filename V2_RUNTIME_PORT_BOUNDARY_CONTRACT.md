@@ -750,10 +750,16 @@ The exact semantics are:
   common-to-port functions, the reverse v1 symbols, their calling conventions,
   required attributes, and normative semantics. Its declaration lives on the
   reverse boundary because the common runtime defines it and every selected
-  port must reference it; its version scope is not reverse-only. An object that
-  implements at least one mandatory common-to-port ABI function and is therefore
-  referenced by common runtime must retain a relocation to this exact symbol.
-  The relocation must not depend on handler archive extraction. Any incompatible
+  port source group must reference it; its version scope is not reverse-only.
+  Consumed construction and one-shot startup paths each retain a cold-path
+  dependency on this exact symbol in a live section. Constructor-only use must
+  retain its guard without startup or handler extraction. This is a selected-group
+  contract, not one relocation per object or a fixed physical relocation count.
+  It is the baseline, not a replacement for the independent cold version binding
+  of separately compiled handler components that call reverse symbols, as
+  required below.
+  The runtime ABI guard, exact profile/context cohort guard, and mandatory
+  handler-extraction guards are independent requirements. Any incompatible
   signature, semantic, calling-convention, or required-attribute change in
   either direction creates a new anchor spelling and removes the old spelling
   from that ABI generation. Old-common/new-port and new-common/old-port links
@@ -812,8 +818,11 @@ validator. Those hooks are not common reverse ABI. Their exact declarations,
 trust level, sensitive-function attributes, override rules, and state-preservation
 proofs live in the concrete port manifest and parity ledger.
 
-Their weak defaults, override policy, CPU-state preservation checks, and linker
-map semantics belong to the selected port/integration contract. Secure gateway
+Their declarations, weak defaults, override policy, CPU-state preservation
+checks, and linker-map semantics belong to the selected port/integration
+contract; application integration supplies the required implementations. They
+are not a common-owned CPU API. Protected MPU profiles may instead require
+mandatory exact linker maps without these callbacks. Secure gateway
 symbols similarly belong to a separately versioned cross-image ABI. Neither
 category may be admitted by the reverse common-symbol allowlist accidentally.
 
@@ -987,7 +996,7 @@ archive. A direct reference to `SVC_Handler` or `PendSV_Handler` is also not a
 sufficient extraction guard when an already-linked startup object provides a
 weak definition with the same name.
 
-The selected port must use one of these two layouts:
+The selected port must use one of these layouts:
 
 1. Define both strong handlers in an object that also implements at least one
    mandatory common-to-port ABI function referenced by common runtime.
@@ -1007,9 +1016,11 @@ The selected port must use one of these two layouts:
 The handler-bundle anchor is port-owned and is not part of either directional
 runtime ABI. Exactly one selected port object may define it. Every separately
 compiled handler component that calls reverse symbols retains its matching
-runtime ABI and cohort relocations itself. The common ABI version anchor and
-the handler extraction anchors are independent proofs and may not be combined
-into one relocation.
+runtime ABI and cohort relocations itself. This component-specific cold binding
+supplements the selected group's live construction/start baseline; it does not
+impose one physical relocation per function or a global relocation count. The
+common ABI version anchor and the handler extraction anchors are independent
+proofs and may not be combined into one relocation.
 
 The `v1` suffix also identifies the selected port's internal mandatory-object
 to handler-object bundle contract. If their private calling convention, helper
@@ -1019,7 +1030,13 @@ object must define it. This is port-internal versioning, not common ABI
 versioning. A separately compiled handler object that calls any reverse/common
 ABI symbol must additionally retain its own relocation to the matching
 `fiber_internal_runtime_port_abi_vN_anchor`; extraction through the bundle anchor
-does not prove common ABI compatibility.
+does not prove common ABI compatibility. Its exact profile/context cohort also
+does not encode the complete runtime calling convention, attributes or semantics.
+The component's own version binding must remain live through its cold
+component/startup path when extracted, including when a mandatory schedule
+operation shares the handler object. This requires no per-switch anchor read.
+Conversely, a runtime ABI dependency alone does not force extraction of every
+mandatory handler component.
 
 The build proof must cover:
 
@@ -1170,7 +1187,8 @@ The common runtime boundary is frozen only when:
 - `fiber_runtime_port_abi.h` exposes exactly the v1 reverse symbols listed in
   this document, and no selected port includes the transitional runtime-state
   header;
-- every selected port retains the v1 link-anchor relocation and passes exact
+- every selected port source group retains the v1 link-anchor dependency in live
+  construction and one-shot startup paths and passes exact
   bidirectional-version, reverse-symbol, application-hook, section-GC, and LTO
   allowlist proofs;
 - one exact selected-profile/context cohort anchor is defined by the mandatory

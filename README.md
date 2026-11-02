@@ -164,8 +164,9 @@ normal/LTO archives, vectors, ABI, cohort, and negative manifests are covered;
 M55 hardware remains unvalidated. See
 `fiber/port/ARM_CM55_NTZ/non_secure/FREERTOS_PARITY.md`.
 
-`ARM_CM55/non_secure` is a staged `C55S` TrustZone SecureContext foundation,
-not a runnable M55 port. It freezes the scalar Non-secure eleven-word
+`ARM_CM55/non_secure` is a staged `C55S` TrustZone SecureContext runtime,
+not yet a runtime-selectable M55 profile. It freezes the scalar Non-secure
+eleven-word
 `[SecureContext handle][PSPLIM][EXC_RETURN][r4-r11]` layout, the pre-start
 `secure_stack_bytes` request, and the Cortex-M55 ARMv8.1-M CMSE-level-1
 manifest. The paired `ARM_CM55/secure` artifact retains the eight C55S-named
@@ -191,11 +192,17 @@ The later first-start component owns SVC #70, a reserved-MSP plan and guarded
 Secure initialization/allocation/load. Its separate two-image AN547 suite
 passed 568 launches and 5740 checks across ten build modes, including compiled
 source mutants; the immutable receipt is in `PORT_ARCHITECTURE_AUDIT.md`.
-This qualifies first start, not ordinary Secure-origin/Non-secure-origin
-switching or the complete eight-operation runtime. That running component is
-under implementation and qualification. There is still no global selector
-route or hardware-support claim. The portable five-call API is unchanged,
-and unattached contexts require no attachment step. See
+That historical receipt qualifies first start, not the later running component
+or complete eight-operation runtime. The committed `b66dfab` staged runtime now
+has all eight forward operations, exact context/storage providers and strong
+SVC/PendSV. Its separate complete two-image AN547 suite passes the 2,490-launch
+inventory plus a priority-mask probe, including Secure-origin/Non-secure-origin
+switching, real common lifecycle/reverse state and direct/archive/GC/LTO cases.
+The exact receipt and integration counterflag/stack-budget limits are recorded
+in `PORT_ARCHITECTURE_AUDIT.md`; this is not whole-reference or hardware
+qualification. `FIBER_PORT_RUNTIME_SELECTABLE` remains zero pending independent
+admission/freeze gates, with no global selector route. The portable five-call API
+is unchanged, and unattached contexts require no attachment step. See
 `fiber/port/ARM_CM55/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM55F_NTZ/non_secure` is the complete build-selected scalar-FP M55
@@ -1043,9 +1050,13 @@ build-selected Non-secure non-MPU runtime profile with
 compile/generated-assembly/ELF evidence but no hardware validation.
 Concrete M55 scalar, scalar-FP, MVE-FP and MPU runtimes, plus the scalar M33
 SecureContext and TF-M runtimes, have separately scoped software evidence as
-listed above. That evidence is not hardware qualification. M55 SecureContext,
-M33 scalar-FP MPU activation and M55 TF-M are staged work; their component
-results must not be substituted for complete-runtime results. Other FP/MPU,
+listed above. M33 scalar-FP MPU (`C3FP`) and scalar M55 TF-M (`C5TF`) are complete
+explicit build-selected software runtimes, as recorded above; actual TF-M
+Secure-image/PSA integration and hardware qualification remain separate.
+M55 SecureContext (`C55S`) has complete staged common-runtime emulator evidence
+but remains runtime-selectable zero pending independent admission/freeze gates.
+C3FT, C3SO and C5SO also remain staged; this summary does not activate them.
+Earlier component receipts do not qualify later runtime bytes. Other FP/MPU,
 security-role and PAC/BTI combinations remain pending or unresolved in
 `STM32_PROFILE_BACKLOG.md`. Cortex-M85 retains the conditional scope in
 `STM32_PORT_FREEZE_INVENTORY.md`; no complete Fiber M85 runtime is claimed.
