@@ -8,6 +8,7 @@ param(
     [switch]$ReferenceIdentityOnly,
     [switch]$Cm33fRunningOnly,
     [switch]$Cm55TfmOnly,
+    [switch]$Cm33fTfmOnly,
     [switch]$Cm33SecureContextOnly,
     [switch]$Cm33SecureOnly,
     [switch]$Cm55SecureOnly,
@@ -2083,6 +2084,25 @@ SECTIONS {
         $elf = & $link @($object,$variants.normal.Objects.identity,$variants.normal.Objects.pool) "mutant-$name" 'fiber_secure_context_gateway_v1_initialize' -Fiber
         $mutants += [ordered]@{Name=$name;Object=$object;Elf=$elf}
     }
+    foreach ($name in @('stale-layout-key','unexpected-helper')) {
+        $copy = $original
+        if ($name -eq 'stale-layout-key') {
+            $anchor = '#include "fiber_secure_context_cohort.h"'
+            if ([regex]::Matches($copy,[regex]::Escape($anchor)).Count -ne 1) { throw 'C33S stale-key include anchor changed' }
+            $copy = $copy.Replace($anchor,$anchor+"`n#undef FIBER_ARM_CM33_SECURE_GATEWAY_CONTEXT_LAYOUT_VERSION`n"+
+                '#define FIBER_ARM_CM33_SECURE_GATEWAY_CONTEXT_LAYOUT_VERSION 0x00010001u')
+        } else {
+            $changed = $body.Replace($retain,$retain+"`n`textern void fiber_c33s_cohort_unexpected_helper(void);`n"+
+                "`tfiber_c33s_cohort_unexpected_helper();")
+            $copy = $original.Substring(0,$start)+$changed+$original.Substring($end)
+        }
+        $path = Join-Path $directory "mutant-$name.c"
+        $copy | Set-Content $path -Encoding ASCII
+        $object = & $compile $path "mutant-$name"
+        # Deliberately unresolved object controls: exact dependency admission
+        # must reject these before a provider could hide the mismatch at link.
+        $mutants += [ordered]@{Name=$name;Object=$object}
+    }
     $manifest = Join-Path $directory 'inputs.json'
     [ordered]@{Variants=$variants;Mutants=$mutants;Optimization=$Optimization;Exports=$exports;
         OriginalObject=$Pair.FiberPath;ReferenceOriginal=$Pair.ReferencePath;ReferenceIsolated=$isolatedReference;
@@ -2105,9 +2125,11 @@ base=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 check,Failure,arm=base.check,base.ProofFailure,base.arm
 HELPER='fiber_secure_context_pool_c33s_v1_cohort_provider'
-FACTS=(('p',0x43333353),('l',0x00010001),('f',0x8A),('i',1),('c',1),('r',1),
+FACTS=(('p',0x43333353),('l',0x00020001),('f',0x8A),('i',1),('c',1),('r',1),
        ('n',3),('b',256),('a',8),('w',2),('s',8),('v',0xFEF5EDA5))
 KEY='fiber_secure_context_cohort_c33s_g1'+''.join('_'+tag+'_'+str(v>>16)+'_'+str(v&65535) for tag,v in FACTS)
+STALE_KEY='fiber_secure_context_cohort_c33s_g1'+''.join('_'+tag+'_'+str(v>>16)+'_'+str(v&65535)
+    for tag,v in ((tag,0x00010001 if tag=='l' else v) for tag,v in FACTS))
 COHORT={HELPER,KEY}
 INIT='fiber_secure_context_gateway_v1_initialize'
 CAPACITY=['fiber_secure_context_gateway_v1_'+n for n in ('abi_version','stack_alignment','max_stack_bytes','max_contexts')]
@@ -2122,6 +2144,14 @@ PRIVATE={HELPER,'fiber_secure_context_pool_boot_initialize','fiber_secure_contex
 def retained(path,name):
     rel=base.function_relocations(path,name)
     check(rel.count((10,HELPER))==1 and rel.count((2,KEY))==1,'missing exact C33S call/key relocations',name)
+
+def gateway_dependencies(path):
+    actual=base.dependencies(path)
+    check(actual==GATEWAY,'C33S gateway exact dependencies changed',str(sorted(actual^GATEWAY)))
+
+def dependency_facts(path):
+    return dict(Undefined=sorted(base.dependencies(path)),Consumers={name:base.function_relocations(path,name)
+        for name in [INIT]+CAPACITY})
 
 def definitions(path):
     image=base.Image(path)
@@ -2213,7 +2243,7 @@ def init_checks(path):
         rejected(m,'partial failure retry')
 
 def query_checks(path):
-    for name,value in zip(IDENTITY+CAPACITY,(1,0x43333353,0x00010001,0x8A,1,8,256,3)):
+    for name,value in zip(IDENTITY+CAPACITY,(1,0x43333353,0x00020001,0x8A,1,8,256,3)):
         m=Machine(path,ipsr=0)
         before=bytes(m.uc.mem_read(0x30000000,0x18000))
         cpu=dict(m.cpu)
@@ -2240,9 +2270,12 @@ def reference_checks():
 
 def main():
     calls={}
+    facts={variant:dependency_facts(item['Objects']['gateway']) for variant,item in inputs['Variants'].items()}
+    facts['original-pinned-pair']=dependency_facts(inputs['OriginalObject'])
+    (Path(sys.argv[1]).parent/'dependency-facts.json').write_text(json.dumps(facts,indent=2)+'\n')
     for variant,item in inputs['Variants'].items():
         objects=item['Objects']
-        check(base.dependencies(objects['gateway'])==GATEWAY,'C33S gateway exact dependencies changed',variant)
+        gateway_dependencies(objects['gateway'])
         check(base.dependencies(objects['identity'])==COHORT,'C33S identity exact dependencies changed',variant)
         check(not base.dependencies(objects['pool']),'C33S pool acquired helper dependency',variant)
         for name in [INIT]+CAPACITY: retained(objects['gateway'],name)
@@ -2253,15 +2286,27 @@ def main():
         calls[variant]=definitions(item['Elf'])
         query_checks(item['Elf'])
         init_checks(item['Elf'])
-    check(base.dependencies(inputs['OriginalObject'])==GATEWAY,'C33S pinned-pair gateway dependencies changed')
+    gateway_dependencies(inputs['OriginalObject'])
     reference_checks()
     expected={'missing-retain':'missing exact C33S call/key relocations','helper-only':'missing exact C33S call/key relocations',
-              'before-preflight':'C33S rejected preflight reached cohort','after-commit':'C33S cohort/precommit order changed'}
+              'before-preflight':'C33S rejected preflight reached cohort','after-commit':'C33S cohort/precommit order changed',
+              'stale-layout-key':'C33S gateway exact dependencies changed','unexpected-helper':'C33S gateway exact dependencies changed'}
     check({m['Name'] for m in inputs['Mutants']}==set(expected),'C33S mutant inventory changed')
     killed=[]
     for mutant in inputs['Mutants']:
+        if mutant['Name']=='stale-layout-key':
+            check(base.dependencies(mutant['Object'])==(GATEWAY-{KEY})|{STALE_KEY},'C33S stale-key negative shape changed')
+            rel=base.function_relocations(mutant['Object'],INIT)
+            check(rel.count((10,HELPER))==1 and rel.count((2,STALE_KEY))==1 and (2,KEY) not in rel,
+                  'C33S stale-key negative callsite changed')
+        elif mutant['Name']=='unexpected-helper':
+            check(base.dependencies(mutant['Object'])==GATEWAY|{'fiber_c33s_cohort_unexpected_helper'},
+                  'C33S extra-helper negative shape changed')
+            check(base.function_relocations(mutant['Object'],INIT).count((10,'fiber_c33s_cohort_unexpected_helper'))==1,
+                  'C33S extra-helper negative callsite changed')
         try:
             if mutant['Name'] in ('missing-retain','helper-only'): retained(mutant['Object'],INIT)
+            elif mutant['Name'] in ('stale-layout-key','unexpected-helper'): gateway_dependencies(mutant['Object'])
             else: init_checks(mutant['Elf'])
         except Failure as exc:
             check(exc.code==expected[mutant['Name']],'C33S mutant failed for unintended reason',mutant['Name']+': '+str(exc))
@@ -2271,7 +2316,7 @@ def main():
         ColdConsumers=9,Key=KEY,Facts=FACTS,StaticCalls=calls,CompiledMutants=len(killed),Killed=killed,Scope=__doc__)
     (Path(sys.argv[1]).parent/'trace-result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('PASS C33SCOHORT: 9 cold edges, 16 real query calls, '+str(base.COUNTS['calls'])+
-          ' ARM calls, 4 compiled mutants; actual pinned CM33 init, void pool, masked CONTROL')
+          ' ARM calls, 6 compiled mutants; actual pinned CM33 init, void pool, masked CONTROL')
 
 if __name__=='__main__': main()
 '@ | Set-Content $proof -Encoding ASCII
@@ -3171,7 +3216,8 @@ $ports += [pscustomobject]@{
     ReferenceDir = 'portable\GCC\ARM_CM55_NTZ\non_secure'; ReferenceSource = 'portasm.c'
     ReferenceDefines = @()
 }
-# Exact staged inventory only; no C3FT closed-body parity is claimed here.
+# Exact staged-zero inventory. Independent C3FT closed proof runs below;
+# neither this definition nor that source/object gate promotes the profile.
 $ports += [pscustomobject]@{
     Name = 'ARM_CM33F_TFM'; Staged = 1
     CpuArgs = @('-mcpu=cortex-m33', '-mfpu=fpv5-sp-d16', '-mfloat-abi=hard')
@@ -3252,16 +3298,16 @@ if ($ownsBuildRoot) {
         ("fiber-freertos-asm-parity-" + [Guid]::NewGuid().ToString("N"))
 }
 New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
-if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly, $Cm0Only, $Cm3Only) | Where-Object { $_ }).Count -gt 1) {
+if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33fTfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly, $Cm0Only, $Cm3Only) | Where-Object { $_ }).Count -gt 1) {
     throw 'Choose only one focused parity group'
 }
-if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly -or $ClassicOnly) { $KeepBuild = $true }
+if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33fTfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly -or $ClassicOnly) { $KeepBuild = $true }
 
 try {
     Write-Host "Parity optimization: $Optimization"
 
     foreach ($mode in @('A30', 'C3SO', 'C5SO')) {
-        if ($ClassicOnly -or $Cm33fRunningOnly -or $Cm55TfmOnly -or
+        if ($ClassicOnly -or $Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33fTfmOnly -or
                 ($Cm33SecureContextOnly -and $mode -ne 'A30') -or
                 ($Cm33SecureOnly -and $mode -ne 'C3SO') -or
                 ($Cm55SecureOnly -and $mode -ne 'C5SO')) { continue }
@@ -3288,6 +3334,25 @@ try {
     if ($Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly) {
         Write-Host "SCALAR_SECURE_FOCUSED_PARITY_PASS ($Optimization; no profile promotion)"
         return
+    }
+
+    if (-not $ClassicOnly -and -not $Cm33fRunningOnly -and -not $Cm55TfmOnly) {
+        foreach ($id in @('FAP-C3FT-CPU','FAP-C3FT-CONSTRUCTOR','FAP-C3FT-FPU-EAGER',
+                'FAP-C3FT-HARDENING','FAP-C3FT-INITIALIZE','FAP-C3FT-WRAPPER','FAP-C3FT-STAGED')) {
+            if ($ledger.IndexOf($id,[StringComparison]::Ordinal) -lt 0) { throw "C3FT difference missing: $id" }
+        }
+        foreach ($floatAbi in @('hard','softfp')) {
+            $tfmFpBuild = Join-Path $BuildRoot "C3FT-$floatAbi"
+            if (Test-Path -LiteralPath $tfmFpBuild) { throw "C3FT evidence exists; choose a fresh BuildRoot: $tfmFpBuild" }
+            & $Python -B (Join-Path $RepoRoot 'tools/fixtures/cm33f_tfm_parity/run.py') `
+                --repo $RepoRoot --arm-gcc $compiler --cmsis $cmsis --reference $kernel `
+                --build $tfmFpBuild --optimization=$Optimization --float-abi $floatAbi
+            if ($LASTEXITCODE -ne 0) { throw "C3FT actual-source parity failed; evidence retained: $tfmFpBuild" }
+        }
+        if ($Cm33fTfmOnly) {
+            Write-Host "C3FT_PARITY_PASS ($Optimization; hard/softfp, staged metadata zero, no profile promotion)"
+            return
+        }
     }
 
     if (-not $ClassicOnly -and -not $Cm55TfmOnly) { Assert-Cm33fMpuRunningParity }

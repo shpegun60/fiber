@@ -1,0 +1,310 @@
+{
+  "Fiber/fiber_port_primask_save_disable": {
+    "Instructions": 5,
+    "Sha256": "39E2A5781CD048E6E3246747E52DEEC82A2D8D077A6975566466FDB04EF90744"
+  },
+  "Fiber/fiber_port_primask_restore": {
+    "Instructions": 12,
+    "Sha256": "F311FB15F073D5CD6FF389898D878C4B62BB10567A09C6A6A5F0C7E5AF4749A6"
+  },
+  "Fiber/fiber_port_validate_svc_vector": {
+    "Instructions": 14,
+    "Sha256": "CF391CB2DABE9740C365532F1D9049CBEDEEE2747F3B7C6F49612B28F1996700"
+  },
+  "Fiber/fiber_port_validate_pendsv_vector": {
+    "Instructions": 14,
+    "Sha256": "37E1870305D216D66CE5170B84477A7A1B8FBA96586D76D83B815E7204C57795"
+  },
+  "Fiber/fiber_port_probe_implemented_priority_mask": {
+    "Instructions": 22,
+    "Sha256": "FFE94A25EA68FC2C04D7E5A1893D038CE13C18740760C772B6B645CD54A2E1D9"
+  },
+  "Fiber/fiber_port_count_implemented_priority_bits": {
+    "Instructions": 9,
+    "Sha256": "A088DE636FBA0C09B0A4DE566F17A1E2DCC6A4274DEAEE4CAA587717B32CE264"
+  },
+  "Fiber/fiber_port_validate_basepri_priority_policy": {
+    "Instructions": 18,
+    "Sha256": "12EAB19108D8662ED9A6820F0CAE3ADDD2582DF59981342A789E9F648C47848C"
+  },
+  "Fiber/fiber_port_validate_exception_start_configuration": {
+    "Instructions": 18,
+    "Sha256": "5C03D0F2C343AAF7074924EC67699A8B1E90F4738626603FD627077A74239959"
+  },
+  "Fiber/fiber_port_prepare_exception_start": {
+    "Instructions": 22,
+    "Sha256": "BA041C1164D681DBDE96173A0C964405A5B50A491C47DF294BD209EB6751148A"
+  },
+  "Fiber/fiber_port_capture_scheduler_cpu_state": {
+    "Instructions": 20,
+    "Sha256": "F5DDD0E9B2990B513F494ED77D83B1A1BA0B9EAE26E08BB59094E7E587761E10"
+  },
+  "Fiber/fiber_port_validate_scheduler_cpu_state": {
+    "Instructions": 49,
+    "Sha256": "A1F7C013A41B8D47A6421F78C23A3C3519A595CA671A1DE5A7E64CA633F1535C"
+  },
+  "Fiber/SVC_Handler": {
+    "Instructions": 115,
+    "Sha256": "4728FB2FB54AE83F7C74A0FECA694C635D81BC7B4A8670FD9BB7A451A7C3CC6D"
+  },
+  "Fiber/PendSV_Handler": {
+    "Instructions": 139,
+    "Sha256": "C7837CC3C0BFB27FA0DEB31D8EEC058EAFE4042308CDBC61D031CCFDE458029C"
+  },
+  "Fiber/fiber_port_scheduler_pick_next_from_pendsv": {
+    "Instructions": 50,
+    "Sha256": "1F8DB32B31493545FEF440B1CA6E1EA38327F50DCB43204A673A384C9E067D1B"
+  },
+  "Fiber/fiber_port_init_context_frame": {
+    "Instructions": 35,
+    "Sha256": "F6EFE4C0F336228075BC7AF582348540592699E4C68B3946D40A2FFE45F50630"
+  },
+  "Fiber/fiber_port_fpu_require_configured": {
+    "Instructions": 16,
+    "Sha256": "791DF8FD38BAEE9E57D84D780C1943348B25C7A373D91C09131905537952819C"
+  },
+  "Fiber/fiber_port_fpu_require_ready": {
+    "Instructions": 9,
+    "Sha256": "B1EE8546AE6B283044BE61DEEDCF3FA556571844B8E6DF9F8DF749A730A25832"
+  },
+  "Fiber/fiber_port_fpu_prepare": {
+    "Instructions": 28,
+    "Sha256": "E380EF87DC052E6A0E4CECDC403CCBD389768E8571CC7959E5D0CA809EE69461"
+  },
+  "Fiber/fiber_port_runtime_memory_barrier": {
+    "Instructions": 2,
+    "Sha256": "85ADD4E6B93221AE1D033359438A7465A7EDDF3B08663D260435CBDAD4D0FA1A"
+  },
+  "Fiber/fiber_port_panic_wait": {
+    "Instructions": 4,
+    "Sha256": "E8D08F5470D55510F743EDA8D88056EA7598CA0DA375F355CEB037FB424829EB"
+  },
+  "Fiber/fiber_port_require_scheduler_configuration_environment": {
+    "Instructions": 6,
+    "Sha256": "387684E9D3ECFE2CC36643AAC6F2D6E40E7B0128939BD9C61F8023B1CFBCCE6D"
+  },
+  "Fiber/fiber_port_runtime_schedule": {
+    "Instructions": 31,
+    "Sha256": "E51669939A543D1A6E1CB0AD630D0D2CF00CC3E807F9F4519EC360087DD36F66"
+  },
+  "Fiber/fiber_port_runtime_prepare_start": {
+    "Instructions": 18,
+    "Sha256": "0A9FBF778E1D2390441A1A4DE99DEA132708605904EF7D61D9C48C15F5556167"
+  },
+  "Fiber/fiber_port_scheduler_pick_first_from_start": {
+    "Instructions": 30,
+    "Sha256": "A59647861D50B2E099345B8D17291293F95EA0457A0B8BE417355066E6FDD861"
+  },
+  "Fiber/fiber_port_runtime_select_first": {
+    "Instructions": 1,
+    "Sha256": "77689CDBB6199D2CB73A53D95155C40D25D9A05C15E98974423E35A937344AFD"
+  },
+  "Fiber/fiber_port_start_first_context": {
+    "Instructions": 42,
+    "Sha256": "DCDC71B1052D4C9082038D32A469BB41C62AE12E8938D3492D6BA62C39975CEC"
+  },
+  "Fiber/fiber_port_runtime_start_first": {
+    "Instructions": 16,
+    "Sha256": "3288B781FAE0D06A0D9CF14029B07541651F4FFD262D7EE1B9E472B0A6378C02"
+  },
+  "Boot/fiber_port_hash32_accum": {
+    "Instructions": 13,
+    "Sha256": "37E8C769F23E17E73B7DB9AD574310ED891E2C757B1AE14028051A952CE6E7D5"
+  },
+  "Boot/fiber_port_validate_initial_frame": {
+    "Instructions": 84,
+    "Sha256": "E255369969B2A9B7E8085B4875573DFBEFED1E12F4BFB29B2F0D5ECF03B3C841"
+  },
+  "Boot/fiber_port_validate_context_pointer": {
+    "Instructions": 13,
+    "Sha256": "334D1951EF4DEC2FA6C9E2C08E11C038090A2F983BAADF2D33A5810A1023A52F"
+  },
+  "Boot/fiber_port_validate_stack_canary": {
+    "Instructions": 23,
+    "Sha256": "CA272EAABBDD10115926D1B5D11DC21920C6AB2C6C3DD1AA48BFCA50F69A3099"
+  },
+  "Boot/fiber_port_prepare_start_msp_plan": {
+    "Instructions": 36,
+    "Sha256": "35AD1D0494B77EC727B2DE36C7C4E5C3D49254756BFB286758A99170FBEBD794"
+  },
+  "Boot/fiber_port_validate_start_msp_for_boot": {
+    "Instructions": 50,
+    "Sha256": "B1A18E251A929EEE3AC40E74D8BF39DB9D0D8DCBFE74BB545DF30A161042D491"
+  },
+  "Boot/fiber_port_boot_record_compute_hash": {
+    "Instructions": 41,
+    "Sha256": "88D578CDF3E743D60C4EF79852E0DDF6FC2FF25725625F2C4F80C93861B8891E"
+  },
+  "Boot/fiber_port_boot_record_fast_check": {
+    "Instructions": 93,
+    "Sha256": "CAD403EF40F6F7E22C1E0F5C8B03815D094A458D577926AC8653D02AB862F2D9"
+  },
+  "Boot/fiber_port_boot_record_check": {
+    "Instructions": 11,
+    "Sha256": "2D801809F2FE17CC37F19AE967C2DEC5A0EA72E8D8AE0BF8A28ABB2022FFB8E1"
+  },
+  "Boot/fiber_port_boot_check": {
+    "Instructions": 60,
+    "Sha256": "69A79B27C507E4BC7FCEF1565C4AFB3497482A1255C1BC90112EDBC61BCF4518"
+  },
+  "Boot/fiber_port_boot_create": {
+    "Instructions": 102,
+    "Sha256": "40EB761413F7817624D7994BA70504185ACE10EB23C74CD2742B0A33B7665FD5"
+  },
+  "Boot/fiber_port_context_init": {
+    "Instructions": 97,
+    "Sha256": "3999AE6D6FE7A543DF0242C813F4894AAE7E0429B5F8110D9095D81097331AE2"
+  },
+  "Boot/fiber_port_context_validate_save_current": {
+    "Instructions": 24,
+    "Sha256": "856E15804F28FDFAC0785A2888AB1331784B9597FC3A5A0EECA4D7FEF3814F6F"
+  },
+  "Boot/fiber_port_context_validate_restore": {
+    "Instructions": 67,
+    "Sha256": "FA9BC49248D5CA61C8D92CB18366E921815A64037F281B125C1B06D645AAE864"
+  },
+  "Boot/fiber_port_context_prepare_first_start": {
+    "Instructions": 20,
+    "Sha256": "5728E5FA34FEF966253DF0A6CBEADDD0193414AFE1D350D1B6AD2DDF5D1DD674"
+  },
+  "Boot/fiber_port_require_start_environment": {
+    "Instructions": 15,
+    "Sha256": "BA5F1BAF8050C73766E6F8CAE20384990441329C09B56FFB594C58EB0F4D76A3"
+  },
+  "Boot/fiber_port_require_start_interrupt_state": {
+    "Instructions": 18,
+    "Sha256": "CBABEEBA041B75B08ABFAC03A94891FE619A4EFD35B6DB234349B6E3C2385FF5"
+  },
+  "Boot/fiber_port_runtime_prepare": {
+    "Instructions": 5,
+    "Sha256": "CBE78BC4CA10B9CBBAE6FC236BE0FC9B0865E43365F6E943F9EAE7884460FE86"
+  },
+  "Init/fiber_port_tfm_require_prestart_environment": {
+    "Instructions": 23,
+    "Sha256": "DB2238BE6E5D6A9AB1ACECD3EC51868414754865919B5BE5A19827FF0D615933"
+  },
+  "Init/fiber_port_tfm_capture_cpu_state": {
+    "Instructions": 22,
+    "Sha256": "556D27859101925B204E8C29E1347E2A6A5780847BB658AD413958DE604492AB"
+  },
+  "Init/fiber_port_tfm_validate_cpu_state": {
+    "Instructions": 54,
+    "Sha256": "34E2D0875D0589521EEF822C43A345757EB9EF32C5D31882BACEABCAFDDF8AC9"
+  },
+  "Init/fiber_port_tfm_initialize": {
+    "Instructions": 41,
+    "Sha256": "FF1F9318E260E3CFB53B78F1DC5F3BBAF7BF0E957E285B72EA0FED4D30F62865"
+  },
+  "Init/fiber_port_tfm_require_initialized": {
+    "Instructions": 6,
+    "Sha256": "C9E30BB4EB7CC4BC901485C6B3929E6DBC76ACAA7516C7FBC790160BAF035270"
+  },
+  "Wrapper/fiber_port_tfm_primask_save_disable": {
+    "Instructions": 5,
+    "Sha256": "39E2A5781CD048E6E3246747E52DEEC82A2D8D077A6975566466FDB04EF90744"
+  },
+  "Wrapper/fiber_port_tfm_primask_restore": {
+    "Instructions": 12,
+    "Sha256": "F311FB15F073D5CD6FF389898D878C4B62BB10567A09C6A6A5F0C7E5AF4749A6"
+  },
+  "Wrapper/fiber_port_tfm_require_unmasked_thread": {
+    "Instructions": 18,
+    "Sha256": "CBABEEBA041B75B08ABFAC03A94891FE619A4EFD35B6DB234349B6E3C2385FF5"
+  },
+  "Wrapper/fiber_port_tfm_require_running_fiber": {
+    "Instructions": 13,
+    "Sha256": "305A7EB7F6BE63010B51823DF0E6EAA354EDF6049AB19AA1CD30399903E45A5E"
+  },
+  "Wrapper/fiber_port_tfm_mutex_handle_is_valid": {
+    "Instructions": 10,
+    "Sha256": "1158BE58A79E6C12C7B116B9A4DF2D4C7FBF549CA36F4F047E35262EBF7EAA68"
+  },
+  "Wrapper/fiber_port_tfm_mutex_state_check": {
+    "Instructions": 13,
+    "Sha256": "BB288C013A415CB5BF096EECC03FC13BDC50A0B88DB70D842DEC8F85DD739407"
+  },
+  "Wrapper/os_wrapper_mutex_create": {
+    "Instructions": 29,
+    "Sha256": "DC1BE01A3728DB53D51DCF0ECA04C49AD80EAB32887C09491B50FEE07E6DB685"
+  },
+  "Wrapper/os_wrapper_mutex_acquire": {
+    "Instructions": 42,
+    "Sha256": "FA7845126684262CDC47F9A25631371F36FBE860835D078108B014EC0871030A"
+  },
+  "Wrapper/os_wrapper_mutex_release": {
+    "Instructions": 32,
+    "Sha256": "DA8F0099B5300285792375BFD4521DFEEEF928D3564DBAA81BF72D087044DACB"
+  },
+  "Wrapper/os_wrapper_mutex_delete": {
+    "Instructions": 34,
+    "Sha256": "8D30C0AFA3FE97389B20023A50713CB30F993BA2B68BD683419143B294ACFCEE"
+  },
+  "Reference/vRestoreContextOfFirstTask": {
+    "Instructions": 14,
+    "Sha256": "9F523A2837E6D50A4FB1F27F87469BE4A553B72375BFFDE8EAB1A5566F66F9E1"
+  },
+  "Reference/xIsPrivileged": {
+    "Instructions": 6,
+    "Sha256": "6B5CF6753EDED64C742E6A672C2B8C34639E29904E015F22B01F19B08FB209EF"
+  },
+  "Reference/vRaisePrivilege": {
+    "Instructions": 4,
+    "Sha256": "CADF50069F57B9AB5A353C5B2A7F0A288B94C6EAC89B60D9F11DD63E58BB3E1A"
+  },
+  "Reference/vResetPrivilege": {
+    "Instructions": 4,
+    "Sha256": "21759EF6E44D8A9E31413098C175929873633E3A7DEF6D4150A9BA4AC2897C54"
+  },
+  "Reference/vStartFirstTask": {
+    "Instructions": 10,
+    "Sha256": "BE90ADBC0954A464DE2770ED58F56D5072641DDC2A94F009119C1E9BB2C5DD7C"
+  },
+  "Reference/ulSetInterruptMask": {
+    "Instructions": 6,
+    "Sha256": "159C33A4FA758C3BCE7E2A4544F15FD23BE126631877C7D1C2938504C473E379"
+  },
+  "Reference/vClearInterruptMask": {
+    "Instructions": 4,
+    "Sha256": "898ABB3456B4ECE8FB73E0F87A00E886F2F80C4C686A6FF1A5FA254D48CBBAE0"
+  },
+  "Reference/PendSV_Handler": {
+    "Instructions": 27,
+    "Sha256": "1FF68DBE7F276157B3454EA471DFB772E0780C5CA20D92D643DCD31BF3EDFF09"
+  },
+  "Reference/SVC_Handler": {
+    "Instructions": 6,
+    "Sha256": "26ADC8C515D08229E39D53E5C29CC0AEF0013D3BA2ECBCC24B19C71F760AA631"
+  },
+  "ReferenceConstructor/pxPortInitialiseStack": {
+    "Instructions": 28,
+    "Sha256": "4FC3D0092FD3B1DF6EA87966EB352C34A85577EEFD9C33D43F64DC28B663D426"
+  },
+  "ReferenceConstructor/vPortSVCHandler_C": {
+    "Instructions": 13,
+    "Sha256": "A8C4EA6032EEDEBC107460DD27DBC07E0A3BD24F532A124C5056CCAC7C536373"
+  },
+  "ReferenceConstructor/xPortStartScheduler": {
+    "Instructions": 23,
+    "Sha256": "9909D1BD12D3B3587BBA3CDF268233C26651949BBA83C5D17F026FE1DAEE62C1"
+  },
+  "ReferenceWrapper/os_wrapper_mutex_create": {
+    "Instructions": 3,
+    "Sha256": "A9EF42F59E686DA5CA7C19AF165664B21E34433B082F96AF793AC75398648563"
+  },
+  "ReferenceWrapper/os_wrapper_mutex_acquire": {
+    "Instructions": 9,
+    "Sha256": "17BD96EE5F19E589215BFBC4B147DDE614CF1CA8AE93AAAD9A67F09F78136100"
+  },
+  "ReferenceWrapper/os_wrapper_mutex_release": {
+    "Instructions": 12,
+    "Sha256": "6C2E3D64C17B8F1DA18ECAA41BC901C62C751B58CC9610256143D1D6137AD5F5"
+  },
+  "ReferenceWrapper/os_wrapper_mutex_delete": {
+    "Instructions": 4,
+    "Sha256": "248E310345B2B883B7C3481BD7D452061C81B44D274BDD628FD89FF839CFF4F2"
+  },
+  "ReferenceFpuProbe/prvSetupFPU": {
+    "Instructions": 8,
+    "Sha256": "359C908D28D4F1D97E84DB92582DA2E40A7BAB2F8D9FEA9CAF67909B98EB076C"
+  }
+}

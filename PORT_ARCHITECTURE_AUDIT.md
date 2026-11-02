@@ -2686,3 +2686,26 @@ C5SO:
 receipt.json SHA-256:
   BCD43BE5923245906E8608911227C3BD2EB321D2D6217B85EF4C9F0FC564F3D2
 ```
+
+### C3FT Reference Closure And C33S Cohort Oracle Repair
+
+The maintained parity entry now runs actual pinned CM33F TF-M reference pairs
+at O2/Os with hard/softfp ABIs. Each of the four tuples closes 77 complete
+decoded streams and 151 bounded numeric scenarios, rejects 46 compiled mutants
+(37 independently of fingerprints), and passes 31 classifier controls. Parent
+rehashes 8,884 input/artifact entries across eight manifests without mismatch.
+This is object-level reference proof with explicit CPU/MMIO doubles, not native
+LTO, real FP exceptions, an external TF-M image or profile activation.
+
+The bc520c5 combined failure is traced to the C33S oracle retaining layout 1
+after production had moved to layout 2. The oracle now requires that exact
+layout-2 dependency and rejects independently compiled stale-key and extra-helper
+controls; no undefined-symbol allowlist is widened. Fresh O2/Os focused runs
+each pass 123 ARM calls and six compiled mutants. Parent verifies all 450
+recorded source/artifact entries against the existing exact input mirror.
+Only the root parity ledger has later prose appended; its archived bytes,
+not the modified live document, satisfy the original receipt hashes.
+
+Both repairs leave production sources and RuntimeSelectable flags unchanged.
+The failed combined receipt remains FAIL; a fresh combined run is required.
+Exact tuple hashes and limits are retained in FREERTOS_ASM_PARITY.md.

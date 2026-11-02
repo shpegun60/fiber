@@ -286,9 +286,9 @@ and ARMv8.1-M code generation; this is not proof of physical CPU features.
   profile count, prove final archive/GC/LTO integration, or execute actual
   exceptions, TrustZone transitions, TF-M or physical M55 hardware.
 
-`ARM_CM33F_TFM/non_secure` is separately enumerated as exact staged-zero
-production inventory with an actual M33_NTZ FP reference compile tuple. That
-entry is not a closed-body parity row and does not increase the complete count.
+`ARM_CM33F_TFM/non_secure` has a separate actual M33_NTZ FP gate below.
+Its staged-zero inventory entry does not increase the complete count or
+inherit this scalar-M55 row's mechanics or receipts.
 
 The maintained fixture locks 55 generated function bodies separately for
 GCC 14.3.1 O2/Os, preserving offsets, counts, writeback, instruction order,
@@ -386,6 +386,112 @@ the exact `source.zip` SHA-256 is
 Both optimizations used that copied source tree and explicit copied CMSIS and
 FreeRTOS roots, with zero copied-input/artifact drift. Later live root-doc or
 unrelated staged-profile changes do not alter that frozen input set.
+
+## Staged C3FT FP And Wrapper Parity
+
+`-Cm33fTfmOnly` runs the independent `ARM_CM33F_TFM/non_secure` gate; the
+ordinary driver also runs it. Each requested O2/Os optimization compiles both
+hard and softfp ABIs with `-mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -mthumb`.
+The actual pinned `GCC/ARM_CM33_NTZ/non_secure/port.c` and `portasm.c` have
+FPU=1, MPU/MVE/TrustZone/Secure-only=0, independently asserted in a compiled
+configuration object. The actual pinned ARM_TFM FreeRTOS wrapper is compiled
+too. Neither M55 source substitution nor a fabricated runtime provider is used.
+
+- **FAP-C3FT-CPU:** Both PendSV implementations save PSPLIM, EXC_RETURN,
+  R4..R11 below raw PSP, conditionally placing S16..S31 between that ten-word
+  software prefix and the hardware core for an extended frame. Basic/extended
+  software cursors are raw PSP minus 40/104 bytes. The hardware core remains
+  at raw PSP in either shape; low FP/FPSCR follow it at +32. Poisoned-register
+  cases exercise all four outgoing/incoming shape pairs with distinct task
+  images, exact writes, inverse GPR/high-FP transfers and PSPLIM-before-PSP.
+  Hardware stacking, low-FP restoration and FPCA transitions are not emulated.
+- **FAP-C3FT-CONSTRUCTOR:** Both real C builders create an initial 18-word,
+  72-byte basic image even with FPU enabled. Fiber stores its private builder's
+  live captured R9, zero GPRs, argument, task-return trap and bit-zero-cleared
+  PC; the pin uses debug GPR patterns, its exit trap and the original PC.
+  Both use EXC_RETURN BC, PSPLIM and xPSR T. Every slot, cursor, canary and
+  write extent is numerically checked. This builder-only R9 proof does not
+  promise inheritance of an ordinary outer application's R9 value. Real Boot
+  code is compiled and closed, but its admission functions are explicit
+  external assumptions of the bounded builder interpreter.
+- **FAP-C3FT-FPU-EAGER:** Fiber's default `FIBER_FPU_LAZY=0` enables CP10/11
+  and ASPEN but clears LSPEN; the pin enables ASPEN and LSPEN. Independent
+  numeric cases check both policies and preservation of unrelated bits, not
+  erased eager/lazy operands. Fiber's configured check permits LSPACT for a
+  running transition; its first-start ready check rejects it. Default `port.c`
+  code generation is closed normally. A separately labelled compilation of
+  the same unmodified reference with `-fno-inline` exposes static `prvSetupFPU`
+  for the numeric oracle; it is not presented as default generated code.
+- **FAP-C3FT-HARDENING:** Fiber retains exact origins, context bounds, raw-core
+  xPSR offsets, limit/mask readbacks and panic paths. First SVC restores all ten
+  software words; the reference skips its eight debug GPR words. Fiber uses
+  SVC 70 versus 102, a validated optional MSP argument versus VTOR, captured
+  BASEPRI versus clearing it, and its common scheduler/current slot versus
+  `vTaskSwitchContext`/`pxCurrentTCB`. Handler CONTROL write 2 reads back as 2;
+  entry SPSEL is a distinct state. Complete decoded bodies retain every count,
+  offset, predicate, order, writeback, branch and relocation target/addend.
+- **FAP-C3FT-INITIALIZE:** The reference requires application-owned TF-M
+  interface initialization. Fiber adds sticky one-shot states and exact
+  IPSR/PRIMASK/BASEPRI/FAULTMASK/full CONTROL/PSPLIM/CPACR/FPCCR preservation.
+  Cases admit pre-start CONTROL 0/4, reject provider changes to any observation,
+  and reject an FPCA-only leak. This is not actual TF-M or Secure execution.
+- **FAP-C3FT-WRAPPER:** Fiber uses a single static, owner-checked nonrecursive
+  cooperative mutex instead of the pin's FreeRTOS static semaphore. Finite
+  waits poll once; WAIT_FOREVER yields unmasked. Numeric cases admit running
+  CONTROL 2/6 and check ownership, release/delete policy and actual reference
+  timeout forwarding/status mapping. The declared TF-M mutex header is only
+  an ABI compile boundary, not a semaphore or TF-M implementation.
+- **FAP-C3FT-STAGED:** C3FT ID `0x43334654`, layout `0x00010001`, features
+  `0x83`, context/boot 76/72 bytes and selectable metadata exactly zero are
+  independent numeric ELF facts. This gate neither promotes the profile nor
+  increases the complete-profile count. Consumer, archive/LTO, hostile-helper,
+  actual exception/FP execution and physical hardware gates remain separate.
+
+The maintained fixture closes 77 function streams at each optimization using
+reviewed per-function instruction counts and SHA-256 fingerprints over the
+entire relocation-aware decoded stream, not regex presence or learned baselines.
+Every actual stream is retained for inspection. O2/Os fingerprints are shared
+across hard/softfp only because their complete instruction streams match;
+actual ABI attributes are checked separately. All four production C objects
+are closed, including all Boot helpers; exact undefined sets admit no memory
+helper there for this measured source/compiler tuple. Only the two high-FP
+transfers are admitted FP instructions in the production code. No FPU/CPU write
+or FP instruction is admitted in context-frame construction.
+
+Each configuration runs 151 grouped numeric scenarios, 46 compiled copied-source
+mutants, 37 independent rejections without baseline lookup, and 31 harness
+controls. VSTMDB without writeback is unencodable; its writeback mutant instead
+compiles a real ADD that cancels the update. Invalid assembler output is not
+counted as a compiled mutation. Optimized and compiled-optimized Python imports
+are rejected; diagnostics must be a sole expected line, never a traceback
+substring. Commands, all source/preprocessing/assembly/object/relocation bytes,
+dependencies, diagnostics, attributes and exact source/tool hashes are retained.
+Documentation inputs are copied into the evidence root, not mutable artifacts.
+These are bounded instruction checks, not CPU emulation, full TF-M integration,
+global all-optimization qualification, or a whole-matrix receipt.
+
+Immutable C3FT O2/Os x hard/softfp qualification on 2026-11-02:
+`%TEMP%/fiber-c3ft-fp-parity-immutable-20261102-50a41ef5b9e048ad884f7ae088dfa635`.
+
+| Tuple | Receipt under that root | Receipt SHA-256 |
+| --- | --- | --- |
+| O2 hard | `C3FT-O2/C3FT-hard/artifacts.json` | `B39BE28CA670CFDE69923CB33D695DE9C3918B59D5203C323DACEB6BAE7D5657` |
+| O2 softfp | `C3FT-O2/C3FT-softfp/artifacts.json` | `6D38A9CD5005DB43705BF2F2829AED68A8E8114ADC1923EFF307374DBA53B35C` |
+| Os hard | `C3FT-Os/C3FT-hard/artifacts.json` | `AE1123E1D94BD06EA22F8BB730A4889F5A97C9167D55CDDC2C208B38562FF7E3` |
+| Os softfp | `C3FT-Os/C3FT-softfp/artifacts.json` | `FBB0DAFE47EEAE7248CFAFB1269A374D1FDC0D6BC9DE6CDD017F544E9618FBE8` |
+
+`qualification.json` SHA-256:
+`EA78115460DF35FFA5ED6E6915979C64295E7A5FA3122E777C4C8E27A9EF01BF`.
+`source.zip` SHA-256:
+`2109A1C567A2B8F3837801BE4CA27F7C5F9BC043DFE8B1DD6B5F44E3FCD95A2F`.
+The source manifest hash is
+`0F0A395949CF93F34DCAE185ABF2A7054FF5B0528DBFC0368B93F5157195E8F6`.
+All 1,884 copied files and ZIP payloads verified; eleven frozen production
+C/H and eleven owned proof inputs matched live bytes at qualification. Every
+tuple passed the counts above with 1,487 inputs and 734 artifacts, independently
+rehashed with zero mismatches. All references/CMSIS came from explicit copied
+roots. Other copied profiles are archival inventory, not newly qualified
+dependencies. This later receipt table is not a mutable artifact of those runs.
 
 ## Auxiliary C3FP Running Components
 
@@ -796,7 +902,38 @@ The actual pinned CM33 priority and CPU initializers run separately too; its
 default eight four-word records are not confused with Fiber's three six-word
 records. Four compiled production-source mutants remove RETAIN, remove its
 key read, or move the retained operations before preflight or after commitment.
-Only their exact designated proof failures count as kills.
+Two additional compiled object controls emit a stale layout-1 exact key or add
+one unexpected ordinary helper. Their exact undefined sets and initializer
+relocations are measured before checking rejection. Only designated failures
+count; the extra controls are pre-link dependency rejection, not executable
+or archive/LTO proof. `dependency-facts.json` retains actual per-consumer call
+and key relocation facts for both variants and the original paired object.
+
+The A30 context layout is now `0x00020001`, encoded as `_l_2_1_` within the
+unchanged private-key-format generation 1. The old literal layout-1 oracle
+caused the preserved immutable bc520c5 O2 matrix failure at
+`C:/fqm-e6379d9d53-r2/freertos-asm-parity-o2/C33SCOHORT`. Its exact five-symbol
+gateway dependency shape did not acquire a new helper or libc dependency;
+only the selected key's layout fact changed. Both the key and numeric query
+oracles now require layout 2. Old layout-1 receipts remain historical.
+
+Fresh focused O2/Os qualification is preserved under
+`%TEMP%/fiber-c33s-cohort-layout2-focused-20261102-67aae0324a944e91a67d8460ced53ac5`.
+`qualification.json` SHA-256:
+`31D1A7FE9B7D68B087582CBB94E44A32C3CCB88FA620E2F49A42AF41C6DC5E3E`.
+The O2/Os `C33SCOHORT/artifacts.json` receipt hashes are respectively
+`E3600769B9C1787E9451A1969DFA8347B068D64FE76A70F62E19738102B1909C`
+and `0F7FCE7BBD73BE07C4399433C0852F1C92C71103D02F7675E33F5790076C2095`.
+Each has 78 sources, 147 artifacts, nine cold consumers, sixteen actual query
+calls, 123 ARM calls with explicit CPU/AIRCR/CMSE-return doubles, and six
+compiled mutation rejections. Current CM33 gateway/identity/pool and all five
+actual pinned reference pairs were freshly compiled. The exact existing
+C55SINIT generic trace support/receipt was copied and hash-checked from the
+preserved failed run, not treated as new C55S qualification. Source and artifact
+rehash found zero mismatches before this later attribution table. Historical
+live source paths are mapped to exact preserved bytes by `input-mirror.json`;
+its SHA-256 is `3D5F216D1E0BB7523468AD0700AEDB0EBE54249424866A1CE95D45A007970879`.
+This focused result is not a new whole-driver or full-matrix PASS.
 
 Each of the five existing CM33 Secure pair directories retains actual
 arguments, preprocessed C, assembly, disassembly, source hashes and paired
@@ -1333,12 +1470,12 @@ static lifetime.
 ### FAP-C33S-PRIVATE-COHORT
 
 The pinned CM33 sources have no Fiber-private static-pool cohort. CM33
-generation 1 retains an actual C call to
+private-key-format generation 1 retains an actual C call to
 `fiber_secure_context_pool_c33s_v1_cohort_provider`, then a byte read through
 the exact `fiber_secure_context_cohort_c33s_g1_...` symbol. The twelve uint32
 facts use twenty-four delimited unsigned decimal halfwords, not a runtime
 table. The independent parity oracle selects port 0x43333353, layout
-0x00010001, features 0x8A, identity/context ABI 1/1, record revision 1,
+0x00020001 (A30 context generation 2), features 0x8A, identity/context ABI 1/1, record revision 1,
 N=3/S=256, alignment 8, two seal words/eight bytes and seal 0xFEF5EDA5.
 This must not reuse the C55S port ID or pool initialization representation.
 

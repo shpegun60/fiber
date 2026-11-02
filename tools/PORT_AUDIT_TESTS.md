@@ -154,6 +154,7 @@ Additional maintained compiler proofs are independent from the default matrix:
 | --- | --- |
 | `test_sensitive_port_closure.ps1` | Exact selected/common native source groups, raw instrumentation/SSP/coverage/sanitizer/profile flags without exclusion counterflags, normal/slim-native-LTO and sectioned/unsectioned text. Function reachability separates sensitive common roots from cold public construction/configuration. Unknown initializers, hooks, build failures and drift fail. The recorded global 336-cell receipt is FAIL; it is not a replacement for the documented supported-build counterflags. |
 | `test_constructor_r9.ps1` | Actual public constructors and bounded linked GPR restore slices under ordinary AAPCS and consistently reserved-r9 ABIs. `-ImmutableInputs` freezes actual sources before execution; development subsets cannot qualify the full inventory. Ordinary borrowed frame R9 is an observation, not an invented static-base failure. See the fixture README for the exact boundary and historical unqualified builds. |
+| `freertos_asm_parity.ps1 -Cm33fTfmOnly` | Focused actual pinned C3FT O2/Os hard/softfp object closure, 77 complete streams, bounded numeric oracles and compiled causal controls. The default parity dispatch includes it. It does not execute real FP exceptions, qualify native LTO or activate the staged profile. |
 
 - Public `fiber_core.h` usage automatically emits a caller-storage expectation.
   Direct concrete-type allocators must include the expectation header described
