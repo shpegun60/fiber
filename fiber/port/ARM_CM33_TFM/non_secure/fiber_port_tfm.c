@@ -30,11 +30,11 @@ static volatile uint32_t fiber_port_tfm_initialization_state;
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_tfm_require_prestart_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 0u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 0u, 'l');
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -42,12 +42,12 @@ void fiber_port_tfm_capture_cpu_state(FiberPortTfmCpuState *const state)
 {
 	FIBER_REQUIRE(state != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	state->ipsr = __get_IPSR();
-	state->primask = __get_PRIMASK();
+	state->ipsr = fiber_port_cpu_read_ipsr();
+	state->primask = fiber_port_cpu_read_primask();
 	state->basepri = fiber_port_basepri_read();
-	state->faultmask = __get_FAULTMASK();
-	state->control = __get_CONTROL();
-	state->psplim = __get_PSPLIM();
+	state->faultmask = fiber_port_cpu_read_faultmask();
+	state->control = fiber_port_cpu_read_control();
+	state->psplim = fiber_port_cpu_read_psplim();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -57,12 +57,12 @@ void fiber_port_tfm_validate_cpu_state(
 {
 	FIBER_REQUIRE(before != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	FIBER_REQUIRE(__get_IPSR() == before->ipsr, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == before->ipsr, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 'f');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
-	FIBER_REQUIRE(__get_PSPLIM() == before->psplim, 'L');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == before->faultmask, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_psplim() == before->psplim, 'L');
 	fiber_portCOMPILER_BARRIER();
 }
 

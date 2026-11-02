@@ -2880,3 +2880,31 @@ No production file changes in this repair, and previous receipts do not acquire
 the new invariant retroactively. Global A32, other relocation forms and dynamic
 indirect-call provenance remain separate limits. Exact roots/hashes and the
 preserved diagnostic FAIL are in the fixture README.
+
+### CM33 TF-M Transitive Helper Closure
+
+The scalar C3TF dictionary, CPU primitives, boot helpers, initializer and mutex
+adapter now keep the canonical sensitive/GRO closure. All existing naked
+transfer bodies, context geometry, C3TF identity and selectable status remain
+unchanged. The immutable qualification passes 120 baseline/raw cells and 600
+controls across five optimizations, ordinary/native LTO and text layouts.
+Parent rehashes all 406 consumed inputs, 16,985 artifacts and fourteen owned
+files without drift. The leaf ledger is post-qualification evidence, not a
+claimed consumed test input. Forty-five compiled old/new naked bodies match;
+six actual pinned O2/Os CPU/wrapper reference pairs pass. Constructor evidence
+is explicitly a scoped 21-ELF subset, not a full inventory receipt.
+
+The maintained runtime gate initially rejects a new memset dependency. Native
+disassembly locates it in the 72-byte zero-initialized boot record construction,
+not in transfer assembly. Exact CPU/boot and whole-group import sets now admit
+that memory routine only; role-leak and common-definition negatives remain.
+The synthetic memory providers retain their definitions through late LTO
+lowering and carry sensitive/GRO attributes. The fresh focused runtime gate
+passes normal/LTO archive, vector, cohort and negative links at
+%TEMP%/fiber-classic-current-integration-170dc0331c9b49989b8e177b59c8d0bb.
+
+The raw receipt uses the captured classifier predating the ABS32 interior-data
+repair; it does not acquire that newer invariant retroactively. These results
+do not close global raw qualification, real Secure TF-M/PSA execution, external
+callback/memory-helper closure or hardware validation. Exact receipt hashes
+and the preserved pre-repair FAIL remain in the selected-port leaf ledger.

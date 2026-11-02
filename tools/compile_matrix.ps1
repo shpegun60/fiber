@@ -15719,13 +15719,13 @@ function Test-ArmCm33TfmObjectRoles {
     if ($LASTEXITCODE -ne 0) { throw "TF-M mandatory CPU/boot role group failed relocatable link" }
     $cpuExpected = @($commonOwned + @(
         "fiber_port_arm_cm33_tfm_integration_bundle_v1_anchor",
-        "fiber_port_tfm_require_initialized", "memcpy"
+        "fiber_port_tfm_require_initialized", "memcpy", "memset"
     ))
     if ($Lto) {
         # IR nm cannot see literal assembly references or lowered memory calls.
         # The final native ELF/vector proof remains independently required.
         $cpuExpected = @($cpuExpected | Where-Object {
-            $_ -notin @("fiber_internal_runtime_current_context_slot", "memcpy")
+            $_ -notin @("fiber_internal_runtime_current_context_slot", "memcpy", "memset")
         })
     }
     $roles = @(
@@ -16054,6 +16054,7 @@ FiberContext fiber_cm33_tfm_cpp_type_only_object;
         "fiber_internal_task_return",
         "fiber_panic",
         "memcpy",
+        "memset",
         "tfm_ns_interface_init"
     ) -Actual $undefined -Description `
         "ARM_CM33_TFM exact reverse/TF-M dependency surface"
@@ -16100,6 +16101,9 @@ FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_internal_task_return(void) { for (;;) { __asm volatile("wfe"); } }
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_panic(char code) { (void)code; for (;;) { __asm volatile("wfe"); } }
+/* Keep native memory-call providers alive until LTO has lowered aggregates. */
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memcpy(void *d, const void *s, size_t n)
 {
     unsigned char *o = (unsigned char *)d;
@@ -16107,6 +16111,8 @@ void *memcpy(void *d, const void *s, size_t n)
     while (n-- != 0u) { *o++ = *i++; }
     return d;
 }
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memset(void *d, int v, size_t n)
 {
     unsigned char *o = (unsigned char *)d;

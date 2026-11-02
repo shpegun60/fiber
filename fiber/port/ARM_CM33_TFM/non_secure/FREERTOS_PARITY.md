@@ -153,6 +153,78 @@ Fiber additionally validates:
 - this profile defines no SecureContext gateway, slot, handler, or companion
   artifact.
 
+## A32 Sensitive Helper Closure
+
+The selected dictionary inlines, boot helpers and frame builder now use the
+canonical sensitive/inline-sensitive and general-register-only attributes.
+Port-local integer MRS, wait and priority primitives replace unannotated CMSIS
+helper bodies throughout CPU snapshots, TF-M initialization and mutex guards.
+Wrapper declarations carry the same attributes as their existing definitions.
+The global force-inline macro, public five operations, eight-operation port
+ABI, `C3TF` layout generation `0x00010001`, feature mask `0x82`, geometry and
+`FIBER_PORT_RUNTIME_SELECTABLE == 1` are unchanged. A32 changes no naked
+instruction, terminal pool, exception-origin check or TF-M state transition.
+
+The maintained standalone gate is `tools/test_cm33_tfm_raw_compiler.ps1`, with
+`-ArmGcc`, `-CmsisCore`, optional `-FreeRtosRoot`, `-BuildRoot`, `-Python` and
+`-PythonModules`. It verifies/copies inputs before executing the immutable
+copy. The actual pre-repair source at Git revision
+`62dca07736a0f50f5f399dff3314dbdfc6e57ce8` must reproduce instrumentation escapes
+against the captured shared contracts; it is not a parallel model or a full
+historical-repository qualification.
+
+Pre-repair O2/Os evidence remains FAIL at
+`%TEMP%/fiber-sensitive-port-closure-40a96aae4d43435abca83398e7f056b0`:
+six matched baseline passes, six raw-hook failures, no build failures and no
+copied-input drift. Its `results.json` SHA256 is
+`B5E5CFCE6152FAEAB6622753FAF227E6C59209F36002D6D84327076C57318462`;
+all 1,679 archived artifact hashes independently match.
+
+The final PASS receipt is
+`%TEMP%/fiber-cm33-tfm-raw-3bd5b9d017244f71a669b18b9ef6d61c/results.json`
+(SHA256 `638B3920A6895EF4C9B8C34E639F092B8E20493792C4035463F359DA23352908`).
+It covers 120 cells and 600 controls: O0/Og/O2/Os/O3, ordinary/native slim-IR
+LTO, function-sectioned/unsectioned text, baseline/all-six-family raw flags,
+and three hash/map/MSP-rewind profiles: unchanged default `1/0/1`, explicit
+`0/0/0`, and explicit `1/1/1`. Data sections remain enabled. Normal import sets
+match their baselines. This is helper-closure coverage, not all-four-policy
+runtime qualification or a replacement for supported counterflag builds.
+
+Forty-five compiled old/current naked bodies match exactly, including existing
+terminal pools. Fifteen compiled geometry/policy records match independent
+numeric expectations. Six actual pinned O2/Os CPU/wrapper reference pairs
+preserve first-start, first-restore, PendSV and wrapper dependency checks.
+Reference first restore discards eight GPR words; Fiber still restores them.
+The declaration-only TF-M mutex boundary is not a TF-M provider. Static
+cooperative mutex policy remains different from FreeRTOS semaphore blocking.
+
+Twenty-four actual-header mutants remove only inline-sensitive annotations,
+retain GRO/non-inline attributes, compile/lower, and are then rejected for
+instrumentation escapes. The nested constructor gate passes 16 production and
+five compiled-negative ELFs: 84 calls and 168 bounded first/running restore
+slices. Ordinary AAPCS borrowing is separate from strict inherited `r9` in
+explicit fixed-R9 builds. It is not arbitrary PIC/TLS qualification.
+
+The final receipt has 406 consumed inputs with zero drift; the 97-file immutable
+capture also reports zero live-original drift at receipt completion. Afterward,
+the parent updated shared `Elf.targets` to resolve ABS32 interior-object addends.
+That newer classifier invariant is not part of this captured runner's claim;
+the handoff sidecar records the post-receipt shared-script change separately.
+This does not qualify physical
+exception/PSPLIM/TF-M/PSA execution, a complete external memory/callback closure,
+whole-application LTO, a current global aggregate, or other profiles' raw builds.
+
+Parent integration rehashes all 406 consumed inputs, 16,985 output artifacts
+and fourteen owned files without mismatch. This ledger is evidence written
+after qualification, not one of the thirteen owned consumed code/fixture files.
+The first maintained runtime replay rejects a newly lowered memset call in
+the 72-byte boot-record initializer. The exact CPU/boot and whole-group import
+sets now include memset; no new arbitrary helper allowance is added. Real
+fixture memcpy/memset providers are retained through late LTO lowering and
+carry the canonical sensitive/GRO attributes. A fresh complete focused
+runtime/archive/vector/cohort/negative-link gate passes at
+`%TEMP%/fiber-classic-current-integration-170dc0331c9b49989b8e177b59c8d0bb`.
+
 ## Required Proofs
 
 Before this profile is accepted, the matrix must prove:

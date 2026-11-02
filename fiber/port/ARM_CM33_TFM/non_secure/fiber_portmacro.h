@@ -21,6 +21,7 @@
 #include "../../fiber_port_select.h"
 #include "../../fiber_settings.h"
 #include "../../fiber_compiler.h"
+#include "../../../fiber_panic.h"
 #include "fiber_port_types.h"
 
 #ifndef fiber_portFORCE_INLINE
@@ -37,6 +38,8 @@
 
 #define fiber_portCOMPILER_BARRIER() \
 	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_MEMORY_BARRIER() \
+	fiber_portASM volatile("dmb" ::: "memory")
 #define fiber_portDATA_SYNC_BARRIER() \
 	fiber_portASM volatile("dsb" ::: "memory")
 #define fiber_portINST_SYNC_BARRIER() \
@@ -247,24 +250,112 @@ FIBER_STATIC_ASSERT((FIBER_PORT_SCHEDULER_BASEPRI & 1u) == 0u,
 extern "C" {
 #endif
 
-fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+/* CMSIS inline bodies do not inherit the caller's instrumentation exclusions.
+ * Keep the complete sensitive CPU primitive chain inside this selected port. */
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_faultmask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, faultmask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_msp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, msp" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_cpu_wait(void)
+{
+	fiber_portASM volatile("wfe" ::: "memory");
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_priority_index(const IRQn_Type irq)
+{
+	const int32_t number = (int32_t)irq;
+	FIBER_REQUIRE(number >= -12 && number < 240, 'Q');
+	return number < 0 ? (((uint32_t)number & 15u) - 4u) : (uint32_t)number;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_get_priority(const IRQn_Type irq)
+{
+	const uintptr_t base = (int32_t)irq < 0 ? 0xE000ED18u : 0xE000E400u;
+	return ((const volatile uint8_t *)base)[fiber_port_cpu_priority_index(irq)] >>
+			(8u - __NVIC_PRIO_BITS);
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_cpu_set_priority(const IRQn_Type irq, const uint32_t priority)
+{
+	const uintptr_t base = (int32_t)irq < 0 ? 0xE000ED18u : 0xE000E400u;
+	((volatile uint8_t *)base)[fiber_port_cpu_priority_index(irq)] =
+			(uint8_t)(priority << (8u - __NVIC_PRIO_BITS));
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_psplim(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psplim" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_r9(void)
 {
 	uint32_t value;
 	fiber_portASM volatile("mov %0, r9" : "=r"(value));
 	return value;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_initial_xpsr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_initial_xpsr(void)
 {
 	return fiber_portINITIAL_XPSR;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_stacked_pc(uintptr_t entry)
 {
 	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_basepri_read(void)
 {
 	uint32_t value;
 	fiber_portASM volatile("mrs %0, " fiber_portBASEPRI_SYM
@@ -272,7 +363,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
 	return value;
 }
 
-fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_basepri_write(uint32_t value)
 {
 	fiber_portASM volatile("msr " fiber_portBASEPRI_SYM ", %0"
 			:: "r"(value) : "memory");
@@ -280,19 +371,19 @@ fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t value)
 	fiber_portINST_SYNC_BARRIER();
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_scheduler_critical_enter(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_scheduler_critical_enter(void)
 {
 	const uint32_t previous = fiber_port_basepri_read();
 	fiber_port_basepri_write((uint32_t)FIBER_PORT_SCHEDULER_BASEPRI);
 	return previous;
 }
 
-fiber_portFORCE_INLINE void fiber_port_scheduler_critical_exit(uint32_t state)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_scheduler_critical_exit(uint32_t state)
 {
 	fiber_port_basepri_write(state);
 }
 
-fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t fiber_port_vectors_base_addr(void)
 {
 	uintptr_t value = (uintptr_t)SCB->VTOR;
 #if defined(SCB_VTOR_TBLOFF_Msk)
@@ -301,12 +392,12 @@ fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 	return value;
 }
 
-fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_initial_msp(void)
 {
 	return fiber_port_vectors_base_ptr()[0];
 }
