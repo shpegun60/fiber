@@ -1,4 +1,4 @@
-# Additive Context Facade Gate
+# Context Ownership And Compatibility Gate
 
 Run from the repository root with Python 3.10+ (standard library only), GCC/G++
 for the host, ARM GCC/G++ including the LTO plugin, and real CMSIS Core headers:
@@ -16,8 +16,8 @@ programs hardware, invokes the catalog/matrix, or edits production sources.
 
 ## Executed Host Contract
 
-The five actual common C sources (core, state, panic, optional configuration,
-and compatibility facade) are compiled together with all eight mock port
+The explicitly selected engine, state, panic, optional configuration and
+compatibility sources are compiled together with all eight mock port
 operations, a C consumer and a C++ consumer. The consumer dialects alternate.
 Each scenario gets a new process: no test-only production reset or copied runtime
 model is used. O0/O2/Os and O2/Os LTO run 38 scenarios each:
@@ -43,6 +43,9 @@ Seven compiled actual-source controls change start precedence, remove configurat
 closure, break facade current/user/yield forwarding, change task-return panic,
 or retain the previous dispatcher instead of accepting replacement.
 Each must reach its exact maintained assertion and exit 90, not merely crash.
+The wrong-current control retains the actual owner read/barrier call and changes
+only its result, so shared Context ownership cannot substitute an earlier missing
+barrier assertion for the intended post-publication value assertion.
 
 ## ARM Compile And Link Contract
 
@@ -62,6 +65,31 @@ expectations must reject the opposite complete archive. Real stale
 storage/private-cohort/reverse-v1 inputs must fail
 with the exact unresolved identity, not an unrelated compiler or linker error.
 This link script is synthetic, not an executable board startup image.
+
+## Pure Context Link Cohort
+
+Separate C and C++ allocating consumers link at O2/Os, ordinary/native LTO,
+direct/archive, against exactly `context/context_core.c`,
+`context/context_runtime_state.c` and `context/context_panic.c` plus each actual
+classic backend. No `legacy_compat`, `facade_bridge` or optional-configuration
+source enters these links. The manifest selects input paths, but an independent
+explicit three-provider oracle checks their ownership.
+
+The allocating consumer imports exactly the five `ctxrt_v1_*` calls and one
+storage identity. Its dependency file cannot contain the legacy callable API,
+private runtime or CMSIS headers. The final ELF must have no old five-operation
+symbol and no optional configuration helper/ABI marker, no undefined symbols,
+one current slot and reverse-v1 marker, the correct private/storage cohort and
+the actual strong SVC/PendSV vectors. Hard-FP ABI tags are checked independently.
+These 80 pure links are recorded separately from the unchanged 40 mixed links.
+
+For every profile/mode, two real engine mutations introduce a call to
+`fiber_current` or the optional configuration helper. Both must compile, import
+exactly the intended missing name, then fail linking under the existing closed
+diagnostic classifier without adding the omitted provider. The 40 dependency
+controls are separate from the unchanged mixed host/cohort/diagnostic controls.
+This proves selected classic link independence, not CPU execution or the still
+separate TF-M OS-wrapper adapter migration. The pure target driver is not run.
 
 The expected missing name comes from `gcc-nm -u` on the actual stale input,
 requiring exactly one import with the relevant identity prefix. Classification
@@ -98,12 +126,13 @@ Attribute aliases must match the canonical Fiber bundle including
 GRO. Removing the actual sensitive annotations from declarations and definitions
 must compile/lower and expose instrumentation in each tuple.
 
-This is a facade-body/attribute proof, NOT a transitive raw closure claim for
-init/set-dispatcher: those delegate to deliberately ordinary legacy cold wrappers
-`fiber_init` and `fiber_scheduler_set_pick_next`, whose own raw compiler hooks
-remain permitted by the current contract. No runtime ownership inversion, Fiber
-lifecycle, entry trampoline, new profile, five-option pinned FreeRTOS equivalence,
-or hardware qualification is implied.
+This is a selected API-body/attribute proof, NOT a global transitive raw closure
+claim. The deliberately ordinary legacy cold wrappers `fiber_init` and
+`fiber_scheduler_set_pick_next`, and the internal cold registration helper, are
+not upgraded by the Context body's annotations. Historical additive-facade
+receipts remain old-owner results and are not relabeled as ownership-inversion
+proof. No Fiber lifecycle, entry trampoline, new profile, five-option pinned
+FreeRTOS equivalence or hardware qualification is implied.
 
 ## Provenance
 

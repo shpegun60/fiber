@@ -33,7 +33,9 @@ BUNDLES = dict(FAMILIES, baseline=(), raw=tuple(f for flags in FAMILIES.values()
 FORWARD = set("fiber_port_context_init fiber_port_runtime_memory_barrier fiber_port_panic_wait "
               "fiber_port_require_scheduler_configuration_environment fiber_port_runtime_prepare_start "
               "fiber_port_runtime_select_first fiber_port_runtime_start_first fiber_port_runtime_schedule".split())
-PUBLIC_HOT = {"fiber_current", "fiber_start", "fiber_schedule"}
+PUBLIC_HOT = {"fiber_current", "fiber_start", "fiber_schedule",
+              "ctxrt_v1_current", "ctxrt_v1_start", "ctxrt_v1_yield"}
+BODY_ONLY = {"ctxrt_v1_init", "ctxrt_v1_set_dispatcher"}
 COMMON_COLD = {"fiber_init", "fiber_scheduler_set_pick_next", "fiber_internal_scheduler_store_pick_next"}
 COMMON_ROLES = ("engine", "state", "optional_configuration", "panic", "legacy_compat")
 VALIDATION_ROLES = ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")
@@ -81,6 +83,13 @@ def family(name):
 
 def cold_name(name, allowed=COMMON_COLD):
     return any(name == n or name.startswith(n + ".") for n in allowed)
+
+
+def whole_roots(names):
+    # Body-only entries are not independent transitive roots. They remain in
+    # the graph, so a hot caller still traverses their complete reachable chain.
+    return {name for name in names if name not in BODY_ONLY and not cold_name(name) and
+            not name.startswith(("_sub_I_", "_sub_D_"))}
 
 
 class Elf:
@@ -620,6 +629,49 @@ class Audit:
         write_json(directory / (p["name"].lower() + "-pool-controls.json"), row)
         self.controls.append(row)
 
+    def context_body_controls(self, p, directory, flags, lto, section_mode):
+        require(COMMON_COLD == {"fiber_init", "fiber_scheduler_set_pick_next", "fiber_internal_scheduler_store_pick_next"}
+                and BODY_ONLY == {"ctxrt_v1_init", "ctxrt_v1_set_dispatcher"},
+                "Context body-only policy must not widen ordinary cold exemptions")
+        root = directory / "context-body-boundary"
+        root.mkdir()
+        variants = (("positive", []), ("setter-body-poison", ["-DCLOSURE_CONTEXT_POISON=1"]),
+                    ("init-body-poison", ["-DCLOSURE_CONTEXT_POISON=2"]),
+                    ("hot-through-setter", ["-DCLOSURE_HOT_TO_CONTEXT_SETTER=1"]))
+        for name, extra in variants:
+            case = root / name
+            case.mkdir()
+            obj = self.compile(self.fixture / "context_body_control.c", case / "control.o", flags, extra)
+            target = case / "native.o"
+            dis = self.lower(p, [obj], target, flags, lto, section_mode)
+            names = {function["name"] for function in Elf(target).functions}
+            roots = whole_roots(names)
+            require(roots == {"ctxrt_v1_current"}, "Compiled Context control transitive root policy changed")
+            result = inspect(target, dis, roots, True)
+            if name == "positive":
+                require(not result["defects"] and result["reachable"] == ["ctxrt_v1_current"],
+                        "Body-only Context setter incorrectly makes its cold helper transitive")
+                require(any(h["function"] == "fiber_internal_scheduler_store_pick_next" and
+                            h["family"] == "instrument" for h in result["hooks"]),
+                        "Ordinary cold helper control instrumentation is inactive")
+                require(not any(h["function"] in BODY_ONLY for h in result["hooks"]),
+                        "Canonical Context control body acquired instrumentation")
+            elif name == "hot-through-setter":
+                require({"ctxrt_v1_current", "ctxrt_v1_set_dispatcher", "fiber_internal_scheduler_store_pick_next"}
+                        <= set(result["reachable"]) and
+                        any(d["kind"] == "function-hook" and d["function"] == "fiber_internal_scheduler_store_pick_next"
+                            and d["family"] == "instrument" for d in result["defects"]),
+                        "Hot-to-Context-setter path incorrectly exempted the reachable ordinary helper")
+            else:
+                poisoned = "ctxrt_v1_set_dispatcher" if name == "setter-body-poison" else "ctxrt_v1_init"
+                require(any(d["kind"] == "unclassified-common-hook" and d["function"] == poisoned and
+                            d["family"] == "instrument" for d in result["defects"]),
+                        "Body-only canonical Context instrumentation was incorrectly allowed: " + poisoned)
+            write_json(case / "classification.json", result)
+            self.controls.append(dict(case=directory.name, kind="compiled-context-body-boundary-" + name,
+                                      roots=sorted(roots), expected="PASS" if name == "positive" else "REJECT",
+                                      native_sha256=digest(target)))
+
     def case(self, p, opt, lto, bundle, section_mode="sectioned"):
         profile_label = p["name"] + ("-vtor1" if p["core"] == 0 and p.get("vtor") == 1 else "")
         label = "%s-%s-%s-%s" % (profile_label, opt, "native-lto-" + section_mode if lto else "normal", bundle)
@@ -644,7 +696,7 @@ class Audit:
                 common = True
                 # No guessed namespace exemption for CMSIS/local helpers after LTO.
                 present = {f["name"] for f in Elf(target).functions}
-                roots = {n for n in present if not cold_name(n) and not n.startswith(("_sub_I_", "_sub_D_"))}
+                roots = whole_roots(present)
             groups[group] = inspect(target, dis, roots, common)
             if group == "port" and p["kind"] != "companion":
                 require(FORWARD <= set(groups[group]["functions"]), "Actual forward ABI functions missing")
@@ -698,6 +750,8 @@ class Audit:
                     "Counterfeit gcov-shaped initializer inherited cold registration allowance")
             self.controls.append(dict(case=label, kind="compiled-counterfeit-registration", expected="unclassified-common-initializer"))
         if bundle == "raw":
+            if p["kind"] != "companion":
+                self.context_body_controls(p, directory, flags, lto, section_mode)
             if p["kind"] == "companion":
                 mutation_source = next(s for s in port_sources if s.name == "fiber_secure_context_pool.c")
                 mutation_root = "fiber_secure_context_pool_boot_initialize"

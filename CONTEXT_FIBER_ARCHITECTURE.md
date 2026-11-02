@@ -10,15 +10,16 @@ changes sequencing, not the layering, opaque-context or proof contracts below.
 
 This document freezes the intended post-port-freeze separation between the
 processor execution-context engine, the stackful Fiber lifecycle, and the
-future C++ kernel. It is a design and migration contract, not a claim that the
-separation is implemented in the current tree.
+future C++ kernel. Source ownership, consumer integration and qualification
+are separate acceptance steps; this contract is not a full-separation claim.
 
-The first additive implementation is documented in `context/README.md`:
-`CtxrtContextV1` and five `ctxrt_v1_*` operations reuse existing CPU storage and
-delegate one-way to the current engine. They add no runtime state. The
-unversioned names in the conceptual examples below are design vocabulary,
-not a second exported API. Actual ownership inversion and a genuine Fiber
-lifecycle consumer remain separate subsequent implementation steps.
+The owning Context implementation is documented in `context/README.md`:
+`CtxrtContextV1` and five `ctxrt_v1_*` operations reuse existing CPU storage.
+Context owns orchestration and singleton state; the old five-call API now
+delegates one-way into it. The earlier additive bridge is removed, not retained
+as a parallel owner. The unversioned names in conceptual examples below are
+design vocabulary, not a second exported API. A genuine Fiber lifecycle
+consumer remains a separate acceptance step.
 
 The active v2 five-function public API, eight-function forward port ABI,
 reverse ABI v1, selected-port context layouts, strong handlers, and context
@@ -470,28 +471,28 @@ be used as evidence for a preemptive target profile.
 
 ## Current v2 Mapping
 
-The current source already provides most of the future Context engine:
+The active source mapping preserves the old port ABI while moving its owner:
 
 ```text
-fiber_port_context_init
-  future Context construction
+ctxrt_v1_init -> fiber_port_context_init
+  Context construction delegated to the selected backend
 
 fiber_internal_runtime_current_context_slot
-  future Context-owned current slot
+  Context-owned current slot, historical reverse-v1 symbol
 
-fiber_scheduler_set_pick_next
-  future Context dispatcher registration used by the Fiber adapter
+ctxrt_v1_set_dispatcher
+  Context dispatcher registration used by consumers
 
-fiber_start
-  future Context one-shot start
+ctxrt_v1_start
+  Context one-shot start
 
-fiber_schedule
-  future Context Thread-mode yield request
+ctxrt_v1_yield
+  Context Thread-mode yield request
 
-fiber_port_runtime_abi.h
+context/context_port_abi.h
   current Context-to-selected-port substrate
 
-fiber_runtime_port_abi.h
+context/context_runtime_port_abi.h
   current selected-port-to-Context substrate
 ```
 

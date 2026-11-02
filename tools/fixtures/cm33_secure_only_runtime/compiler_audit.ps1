@@ -2,6 +2,55 @@ function Test-CompilerSensitiveBody([string]$Text,[string]$Hook,[string[]]$ColdF
     $cold='\b(?:'+(($ColdFunctions | ForEach-Object {[regex]::Escape($_)}) -join '|')+')\b'
     return ($Text -notmatch $Hook -and $Text -notmatch $cold)
 }
+function Get-CompilerFunctionBody([string]$Text,[string]$Name) {
+    $bodies=[regex]::Matches($Text,'(?ms)^[0-9a-f]+ <'+[regex]::Escape($Name)+'>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
+    if($bodies.Count -ne 1){return ''}
+    return $bodies[0].Groups[1].Value
+}
+function Get-CompilerDirectTargets([string]$Body,[string]$Caller) {
+    $relocations=@{};$consumed=@{}
+    foreach($m in [regex]::Matches($Body,'(?m)\b([0-9a-f]+):\s+R_ARM_THM_(?:CALL|JUMP24|JUMP19)\s+(\S+)')) {
+        $offset=[Convert]::ToUInt64($m.Groups[1].Value,16)
+        if($relocations.ContainsKey($offset)){return @('<duplicate-transfer-relocation>')}
+        $relocations[$offset]=$m.Groups[2].Value
+    }
+    $targets=New-Object System.Collections.Generic.List[string]
+    foreach($m in [regex]::Matches($Body,'(?m)^\s*([0-9a-f]+):\s+(?:[0-9a-f]{4}(?:[ \t]+[0-9a-f]{4})?|[0-9a-f]{8})[ \t]+([a-z][a-z0-9.]*)(?:[ \t]+([^\r\n]*))?')) {
+        $opcode=$m.Groups[2].Value;$operand=$m.Groups[3].Value
+        if($opcode -notmatch '^(?:blx?|bx|b(?:eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le)?(?:\.[wn])?)$'){continue}
+        if($opcode -eq 'bx' -and $operand -match '^lr(?:\s|$)'){continue}
+        $offset=[Convert]::ToUInt64($m.Groups[1].Value,16)
+        if($relocations.ContainsKey($offset)) {
+            $targets.Add($relocations[$offset]);$consumed[$offset]=$true;continue
+        }
+        $target=[regex]::Match($operand,'^[0-9a-f]+\s+<([^>]+)>')
+        if(!$target.Success){$targets.Add('<unparsed-or-indirect-transfer>');continue}
+        $name=$target.Groups[1].Value
+        if($opcode -notmatch '^bl' -and $name -match ('^'+[regex]::Escape($Caller)+'\+0x[0-9a-f]+$')){continue}
+        $targets.Add($name)
+    }
+    if(@($relocations.Keys|Where-Object {!$consumed.ContainsKey($_)}).Count){$targets.Add('<unmatched-transfer-relocation>')}
+    return $targets.ToArray()
+}
+function Test-CompilerCurrentChain([string]$Text) {
+    foreach($edge in @(@('fiber_current','ctxrt_v1_current'),@('ctxrt_v1_current','fiber_internal_runtime_load_current_context'))) {
+        $body=Get-CompilerFunctionBody $Text $edge[0]
+        if(!$body){return $false}
+        $targets=@(Get-CompilerDirectTargets $body $edge[0])
+        if($targets.Count -ne 1 -or $targets[0] -cne $edge[1]){return $false}
+    }
+    $load=Get-CompilerFunctionBody $Text 'fiber_internal_runtime_load_current_context'
+    $calls=@(Get-CompilerDirectTargets $load 'fiber_internal_runtime_load_current_context')
+    if(!$load -or $calls.Count -ne 1 -or $calls[0] -cne 'fiber_port_runtime_memory_barrier'){return $false}
+    $barrier=Get-CompilerFunctionBody $Text 'fiber_port_runtime_memory_barrier'
+    if(!$barrier -or @(Get-CompilerDirectTargets $barrier 'fiber_port_runtime_memory_barrier').Count -or
+        $barrier -notmatch '(?m)^\s*[0-9a-f]+:\s+[0-9a-f ]+\s+dmb\s+sy\b'){return $false}
+    $slot='fiber_internal_runtime_current_context_slot'
+    $address=($load -match ('R_ARM_ABS32\s+'+$slot+'\b')) -or
+        (($load -match ('R_ARM_THM_MOVW_ABS_NC\s+'+$slot+'\b')) -and ($load -match ('R_ARM_THM_MOVT_ABS\s+'+$slot+'\b')))
+    $read=[regex]::Match($load,'\bldr(?:\.w)?\s+r0,\s*\[r[0-9]+(?:,\s*#0)?\]')
+    return ($address -and $read.Success -and $load.IndexOf('fiber_port_runtime_memory_barrier') -lt $read.Index)
+}
 function CompilerAdversarial {
     $families=@(
         @{Name='instrument';Enable=@('-finstrument-functions');Pattern='__cyg_profile_func_(enter|exit)'},
@@ -24,7 +73,9 @@ function CompilerAdversarial {
         'fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor',
         'fiber_internal_runtime_publish_current_context','fiber_internal_runtime_require_current_context',
         'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_task_return','fiber_panic','memcpy','memset')
-    $commonSensitive=@('fiber_current','fiber_start','fiber_schedule','fiber_internal_task_return',
+    $contextSensitive=@('ctxrt_v1_init','ctxrt_v1_current','ctxrt_v1_set_dispatcher','ctxrt_v1_start','ctxrt_v1_yield')
+    $legacyHot=@('fiber_current','fiber_start','fiber_schedule')
+    $commonSensitive=$contextSensitive+$legacyHot+@('fiber_internal_task_return',
         'fiber_internal_runtime_load_current_context','fiber_internal_scheduler_is_configured',
         'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_runtime_publish_current_context',
         'fiber_internal_runtime_require_current_context','fiber_internal_runtime_close_context_configuration',
@@ -59,6 +110,8 @@ function CompilerAdversarial {
                 $baselineGroup=Join-Path $dir 'baseline-group.o'
                 $null=Need $ArmGcc ($nativeFlags+$baselineObjects+@('-o',$baselineGroup)) ($baselineGroup+'.link.log')
                 $baselineU=Need $nm @('-u',$baselineGroup) ($baselineGroup+'.undefined.txt')
+                $baselineDump=Need $objdump @('-drwC',$baselineGroup) ($baselineGroup+'.disassembly.txt')
+                Check "$mode/actual-legacy-Context-current-slot-chain" (Test-CompilerCurrentChain $baselineDump) $baselineGroup
                 $expected=@([regex]::Matches($baselineU,'(?m)^\s*U\s+(\S+)\r?$') | ForEach-Object {$_.Groups[1].Value} | Sort-Object)
                 $integration=@('fiber_addr_plausible_code','fiber_addr_plausible_ram','memcpy','memset')
                 Check "$mode/exact-baseline-integration-dependencies" (@(Compare-Object $integration $expected).Count -eq 0 -and $baselineU -notmatch $hook) $baselineU
@@ -95,13 +148,23 @@ function CompilerAdversarial {
                         $protected=($function -match '^(fiber_port_|fiber_addr_plausible_|SVC_Handler$|PendSV_Handler$)' -or $function -in $commonSensitive)
                         if($protected) {
                             $seen[$function]=$true
-                            Check "$name/protected-body-and-no-cold-edge-$function" (Test-CompilerSensitiveBody $text $hook $ordinary) ($rawGroup+':'+$function)
+                            # Registration is a cold API. Its one documented ordinary
+                            # helper remains outside transitive protection; hot bodies
+                            # and every other Context entry keep the full cold-edge ban.
+                            $forbidden=$ordinary
+                            if($function -ceq 'ctxrt_v1_set_dispatcher') {
+                                $forbidden=@($ordinary|Where-Object {$_ -cne 'fiber_internal_scheduler_store_pick_next'})
+                                $targets=@(Get-CompilerDirectTargets $text $function)
+                                Check "$name/exact-cold-registration-boundary" ($targets.Count -eq 2 -and
+                                    !(Compare-Object @('fiber_port_require_scheduler_configuration_environment','fiber_internal_scheduler_store_pick_next') $targets)) $targets
+                            }
+                            Check "$name/protected-body-and-no-unadmitted-cold-edge-$function" (Test-CompilerSensitiveBody $text $hook $forbidden) ($rawGroup+':'+$function)
                         }
                         if($function -in $ordinaryExports) {
                             $coldSeen[$function]=$text
                         }
                         if($text -match $hook) {
-                            if($function -match '^fiber_') {
+                            if($function -match '^(?:fiber_|ctxrt_)') {
                                 Check "$name/raw-hooks-only-frozen-cold-common-$function" ($function -in $ordinary) ($rawGroup+':'+$function)
                             }
                             $inventory.Add([pscustomobject]@{Mode=$mode;Family=$family.Name;Function=$function;Protected=$protected;
@@ -109,6 +172,7 @@ function CompilerAdversarial {
                         }
                     }
                     foreach($function in $commonSensitive) {Check "$name/real-sensitive-common-body-$function" ($seen.ContainsKey($function)) $rawGroup}
+                    Check "$name/actual-raw-legacy-Context-current-slot-chain" (Test-CompilerCurrentChain $dump) $rawGroup
                     foreach($function in $ordinaryExports) {
                         Check "$name/real-ordinary-cold-export-$function" ($coldSeen.ContainsKey($function)) $rawGroup
                         if($family.Name -ne 'ubsan') {
@@ -158,7 +222,8 @@ function CompilerAdversarial {
                         RawAdmission=$true;RawAllGroup=$rawGroup;RawPortGroup=$rawPortGroup;PortExpectedUndefined=$portExpected;
                         RawPortNeutralCommonGroup=$executionGroup;ELF=$elf;
                         PortFlags=$rawFlags;CommonExecutionFlags=$flags;HarnessFlags=$caseFlags;RawPortRuntimeExecuted=$true;
-                        CommonRawGeneratedSensitiveBodiesChecked=$commonSensitive;UnprotectedCommonWrappers=$ordinary})
+                        CommonRawGeneratedSensitiveBodiesChecked=$commonSensitive;CanonicalContextBodies=$contextSensitive;LegacyHotWrappers=$legacyHot;
+                        UnprotectedCommonWrappers=$ordinary;ColdRegistrationBoundary='ctxrt_v1_set_dispatcher -> ordinary fiber_internal_scheduler_store_pick_next; not transitive protection'})
                 }
                 # Current-source single attribute removals must acquire actual
                 # hooks. The controls are compiled, never linked to fake hooks.
@@ -209,18 +274,18 @@ function CompilerAdversarial {
                 $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <fiber_port_hash32_accum>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
                 Check "$mode/coverage-attribute-removal-rejected-in-hot-helper-body" ($body.Success -and $body.Value -match '__gcov0[.]fiber_port_hash32_accum') $native
                 # Poison one real sensitive common function with a cold
-                # registration call. The exact normal-body predicate must
-                # reject its native output, even though raw cold hooks are
-                # legitimate elsewhere in the same relocatable group.
+                # registration call. Use both normal current-body predicates:
+                # native LTO may inline the invalid registration into panic
+                # paths, removing its name but breaking the required load chain.
                 $owners=@($units | Where-Object {$_.Common -and
-                    (Defined (Join-Path $dir ($_.Name+'.o'))) -match '(?m)^[0-9a-f]+\s+T\s+fiber_current\r?$'})
+                    (Defined (Join-Path $dir ($_.Name+'.o'))) -match '(?m)^[0-9a-f]+\s+T\s+ctxrt_v1_current\r?$'})
                 Check "$mode/cold-edge-control-unique-actual-owner" ($owners.Count -eq 1) $owners
                 $owner=$owners[0]
                 $core=[IO.File]::ReadAllText($owner.Source)
                 $needle='return fiber_internal_runtime_load_current_context();'
                 Check "$mode/cold-edge-control-exact-source-anchor" ([regex]::Matches($core,[regex]::Escape($needle)).Count -eq 1) $needle
                 $c=Join-Path $controlDir 'sensitive-cold-edge.c'
-                [IO.File]::WriteAllText($c,$core.Replace($needle,('fiber_scheduler_set_pick_next(0, 0);'+[Environment]::NewLine+$needle)))
+                [IO.File]::WriteAllText($c,$core.Replace($needle,('fiber_internal_scheduler_store_pick_next(0, 0);'+[Environment]::NewLine+$needle)))
                 $f=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})+@('-finstrument-functions')
                 $o=Join-Path $controlDir 'sensitive-cold-edge.o';Compile $c $o ($f+@("-I$(Split-Path $owner.Source)"))
                 $native=Join-Path $controlDir 'sensitive-cold-edge-native.o'
@@ -228,9 +293,27 @@ function CompilerAdversarial {
                 $mutantObjects=@($baselineObjects | ForEach-Object {if($_ -eq $ownerObject){$o}else{$_}})
                 $null=Need $ArmGcc ($nativeFlags+@('-finstrument-functions')+$mutantObjects+@('-o',$native)) ($native+'.link.log')
                 $d=Need $objdump @('-drwC',$native) ($native+'.disassembly.txt')
-                $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <fiber_current>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
+                $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <ctxrt_v1_current>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
                 Check "$mode/compiled-sensitive-cold-edge-control-rejected" ($body.Success -and
-                    !(Test-CompilerSensitiveBody $body.Groups[1].Value $hook $ordinary)) $native
+                    (!(Test-CompilerSensitiveBody $body.Groups[1].Value $hook $ordinary) -or
+                     !(Test-CompilerCurrentChain $d))) $native
+
+                # Keep all real chain symbols and canonical attributes. Removing
+                # only the actual Context-to-state call must fail the same chain
+                # predicate, not pass because symbol names still occur elsewhere.
+                $c=Join-Path $controlDir 'current-chain-null.c'
+                [IO.File]::WriteAllText($c,$core.Replace($needle,'return 0;'))
+                $o=Join-Path $controlDir 'current-chain-null.o'
+                $f=@($flags|Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})+@("-I$(Split-Path $owner.Source)")
+                Compile $c $o $f
+                $native=Join-Path $controlDir 'current-chain-null-native.o'
+                $mutantObjects=@($baselineObjects|ForEach-Object {if($_ -eq $ownerObject){$o}else{$_}})
+                $null=Need $ArmGcc ($nativeFlags+$mutantObjects+@('-o',$native)) ($native+'.link.log')
+                $d=Need $objdump @('-drwC',$native) ($native+'.disassembly.txt')
+                foreach($function in @('fiber_current','ctxrt_v1_current','fiber_internal_runtime_load_current_context','fiber_port_runtime_memory_barrier')) {
+                    Check "$mode/null-chain-control-still-has-$function" (![string]::IsNullOrEmpty((Get-CompilerFunctionBody $d $function))) $native
+                }
+                Check "$mode/compiled-null-current-chain-rejected" (!(Test-CompilerCurrentChain $d)) $native
 
             }
         }

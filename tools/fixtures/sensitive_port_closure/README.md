@@ -55,8 +55,12 @@ receipt contains the exact admitted C inventories, CPU/FP/MPU dialect and role.
 The finite default inventory uses each recorded primary ABI and 8 MPU regions
 where configurable. It is not every ABI/region/feature permutation.
 
-Every port function is protected. Common roots include the three canonical
-sensitive public operations and the task-return/panic chain. Relocations,
+Every port function is protected. Common roots include legacy and Context
+current/start/yield operations and the task-return/panic chain. Context init and
+set-dispatcher have hook-clean canonical bodies but are not independent
+transitive roots. They are not cold exemptions: hooks/counters in either body
+still fail. A hot call to either entry traverses all its callees normally, and
+an instrumented store helper reachable from such a path still fails. Relocations,
 resolved same-section branches and locally initialized callback data extend
 reachability. The callback analysis conservatively follows defined objects;
 unresolved external providers remain explicit integration boundaries. Only exact cold exports
@@ -87,6 +91,15 @@ isolated cold instrumentation stays allowed beside a relocated external call,
 an unknown compiled initializer rejects, and removing the actual canonical
 bundle on actual common/port source exposes hooks and sanitizer calls. No
 historical receipt is trusted.
+Each non-companion raw cell also compiles a canonical Context body-boundary
+fixture. Its setter may call an instrumented, unreachable ordinary cold store
+without becoming a transitive root. Two variants remove only the canonical
+body bundle on init/setter and must reject their own instrumentation; a fourth
+routes a hot current operation through the canonical setter and must reject the
+now-reachable store helper. These are compiler/classifier controls, not
+production-function or CPU-execution substitutes. The exact three ordinary cold
+identities remain unchanged, and actual-source annotation-removal controls still
+run separately.
 For CM0, CM0MPU, CM3 and CM3MPU, an additional actual-dictionary copy removes
 only `FIBER_API_ATTR_INLINE_SENSITIVE`, retaining all GRO and non-inline
 annotations at O2/Os. Its complete actual selected C group must compile and expose a

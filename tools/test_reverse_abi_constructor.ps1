@@ -182,6 +182,40 @@ function AuditConstructors {
             [regex]::Matches($body,'\bFIBER_RUNTIME_PORT_ABI_RETAIN_V1\s*\(\s*\)\s*;').Count -eq $sample.Count) $body
     }
 }
+function Test-ConstructorCallChain([string]$Assembly) {
+    $pending = New-Object 'System.Collections.Generic.Stack[string]'
+    $visited = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    $pending.Push('Reset_Handler')
+    while ($pending.Count -ne 0) {
+        $symbol = $pending.Pop()
+        if (!$visited.Add($symbol)) { continue }
+        $body = [regex]::Match($Assembly,
+            '(?ms)^[0-9a-fA-F]+ <' + [regex]::Escape($symbol) +
+            '>:\r?\n(?<body>.*?)(?=^[0-9a-fA-F]+ <|\z)')
+        if (!$body.Success) { continue }
+        if ($symbol -ceq 'fiber_port_context_init') { return $true }
+        # Follow only the finite public compatibility/Context constructor path.
+        # A symbol merely present in the ELF, an interior target or an unrelated
+        # helper with the same spelling in data is not constructor reachability.
+        $edges = [regex]::Matches($body.Groups['body'].Value,
+            '(?m)\b(?:bl(?:\.w)?|b(?:\.[nw])?)\s+[0-9a-fA-F]+\s+<(fiber_init|ctxrt_v1_init|fiber_port_context_init)>')
+        foreach ($edge in $edges) { $pending.Push($edge.Groups[1].Value) }
+    }
+    return $false
+}
+foreach ($case in @(
+        @{Name='direct';Body="0 <Reset_Handler>:`n 0: bl 8 <fiber_port_context_init>`n8 <fiber_port_context_init>:`n 8: bx lr";Accept=$true},
+        @{Name='legacy';Body="0 <Reset_Handler>:`n 0: bl 8 <fiber_init>`n8 <fiber_init>:`n 8: b.w 10 <fiber_port_context_init>`n10 <fiber_port_context_init>:`n 10: bx lr";Accept=$true},
+        @{Name='context';Body="0 <Reset_Handler>:`n 0: bl 8 <ctxrt_v1_init>`n8 <ctxrt_v1_init>:`n 8: b.w 10 <fiber_port_context_init>`n10 <fiber_port_context_init>:`n 10: bx lr";Accept=$true},
+        @{Name='both';Body="0 <Reset_Handler>:`n 0: bl 8 <fiber_init>`n8 <fiber_init>:`n 8: b.n 10 <ctxrt_v1_init>`n10 <ctxrt_v1_init>:`n 10: bl 18 <fiber_port_context_init>`n18 <fiber_port_context_init>:`n 18: bx lr";Accept=$true},
+        @{Name='presence-only';Body="0 <Reset_Handler>:`n 0: bx lr`n8 <fiber_port_context_init>:`n 8: bx lr";Accept=$false},
+        @{Name='data-reference';Body="0 <Reset_Handler>:`n 0: ldr r0, 8 <fiber_port_context_init>`n8 <fiber_port_context_init>:`n 8: bx lr";Accept=$false},
+        @{Name='interior';Body="0 <Reset_Handler>:`n 0: bl a <fiber_port_context_init+0x2>`n8 <fiber_port_context_init>:`n 8: bx lr";Accept=$false},
+        @{Name='stub';Body="0 <Reset_Handler>:`n 0: bl 8 <ctxrt_v1_init>`n8 <ctxrt_v1_init>:`n 8: bx lr`n10 <fiber_port_context_init>:`n 10: bx lr";Accept=$false},
+        @{Name='cycle';Body="0 <Reset_Handler>:`n 0: bl 8 <fiber_init>`n8 <fiber_init>:`n 8: b.n 8 <fiber_init>`n10 <fiber_port_context_init>:`n 10: bx lr";Accept=$false})) {
+    Check ('constructor-chain-parser/' + $case.Name) (
+        (Test-ConstructorCallChain $case.Body) -eq $case.Accept) $case.Body
+}
 function InspectPositive([string]$Name,[string]$Elf,[bool]$Start,[bool]$Lto,[string]$Anchor) {
     $symbols = Required $nm @('--defined-only',$Elf) ($Elf + '.defined.txt')
     $undefined = Required $nm @('-u',$Elf) ($Elf + '.undefined.txt')
@@ -191,12 +225,9 @@ function InspectPositive([string]$Name,[string]$Elf,[bool]$Start,[bool]$Lto,[str
     Check "$Name/actual-constructor-live" ($names -ccontains 'fiber_port_context_init') $symbols
     Check "$Name/entry-live" ($names -ccontains 'Reset_Handler') $symbols
     if (!$Lto) { Check "$Name/public-init-live" ($names -ccontains 'fiber_init') $symbols }
-    $entryBody = [regex]::Match($assembly,
-        '(?ms)^[0-9a-fA-F]+ <Reset_Handler>:\r?\n(?<body>.*?)(?=^[0-9a-fA-F]+ <|\z)')
-    Check "$Name/entry-calls-actual-init" ($entryBody.Success -and
-        ($entryBody.Groups['body'].Value -cmatch '(?m)\bbl(?:\.w)?\s+[^\r\n]*<(?:fiber_init|fiber_port_context_init)>')) ($Elf + '.asm')
+    Check "$Name/entry-calls-actual-init" (Test-ConstructorCallChain $assembly) ($Elf + '.asm')
     if (!$Start) {
-        $forbidden = @('fiber_start','fiber_port_runtime_prepare_start','fiber_port_runtime_start_first',
+        $forbidden = @('fiber_start','ctxrt_v1_start','fiber_port_runtime_prepare_start','fiber_port_runtime_start_first',
             'fiber_port_start_first_context','fiber_port_runtime_select_first','SVC_Handler','PendSV_Handler')
         $live = @($forbidden | Where-Object { $names -ccontains $_ })
         Check "$Name/start-and-handlers-discarded" ($live.Count -eq 0) $live

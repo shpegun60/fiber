@@ -3402,3 +3402,110 @@ controls. Frozen receipt/source inventory:
 `%TEMP%/fiber-python-runtime-recipes-qualified-1a19e6b7b07/migration-freeze.json`.
 Other bounded replays continue against that immutable old-owner export; these
 focused results do not establish post-inversion ownership or a combined PASS.
+
+### Context Ownership Inversion
+
+The portable implementation moves into `context/`: core orchestration,
+singleton state, fallback panic and the separately selected configuration
+service. The old five public calls now delegate into the versioned Context
+API. Old implementation files and the additive bridge are deleted, not kept
+as alternate providers. Legacy headers forward to canonical Context headers
+while preserving typedef visibility and the same `struct FiberContext` tag.
+The frozen reverse names, sole current-slot section, eight forward operations,
+panic override, startup ordering and selected-backend storage remain unchanged.
+Physical compiler-policy/backend paths remain recorded migration debt.
+
+The post-switch reverse constructor proof initially fails twelve LTO shape
+checks: the ordinary legacy init wrapper is inlined and Reset directly calls
+the canonical Context init instead. Receipt
+`%TEMP%/fiber-reverse-abi-constructor-02c21341ff9842f9a13cbf4223a76c71/receipt.json`
+is retained as FAIL. No source-runtime repair is made for that diagnostic.
+The maintained oracle now follows only the finite exact Reset/legacy/Context/
+actual-port-constructor call chain and rejects presence-only, interior-target,
+stub and cyclic substitutes. Init-only links also forbid canonical start.
+
+The fresh replay passes 32 production links, eight guard-removal controls and
+293 checks, zero input drift:
+`%TEMP%/fiber-reverse-abi-constructor-fbb2f05273074b559622e012b5b3789d/receipt.json`,
+SHA-256 `AF79DCC9074341D14007D43D634873F2F138C6E6F78AE33FB93D71F9696977E1`.
+Independent review accepts the finite-call-chain oracle; 672 input/artifact
+records independently rehash unchanged. This is syntactic call-graph/link
+evidence, not target execution or instruction-level control-flow equivalence.
+
+The actual-owner source inventory again passes all 139 shared cases. Pure
+Context, mixed legacy, matrix-boundary, MPU placement and external H7 build
+acceptance are separate post-switch receipts, not inherited facade claims.
+The three TF-M OS-wrapper adapters still use the legacy current-identity call
+at this engine checkpoint; their optional adapter migration remains explicit.
+
+Post-inversion acceptance uses the actual Context providers, not the earlier
+additive bridge. The maintained facade gate passes 190 host scenarios / 2,410
+assertions, 30 public C/C++ compiles, 40 mixed and 80 pure Context ELF links,
+50 attribute cells, 125 mixed controls, 46 diagnostic controls and 40 pure
+dependency controls. Pure links omit both the legacy shim and optional
+configuration service and reject injected dependencies on either one. Receipt:
+`%TEMP%/fiber-context-facade-phaseb-1a19e7aaea5/fiber-context-facade-ad1756b76afd4c079a9d9bd88f24d26c/results.json`,
+SHA-256 `671F34B5AD09097FAC5A7876E178597A17346E4F46A6107AC20DE5B812123B6D`.
+
+The matrix's focused ownership/boundary replay passes 30 checks, including
+normal, slim-LTO and native-LTO symbol ownership, independent forward/reverse
+ABI oracles, canonical MPU placement and ten causal controls:
+`C:/fmb-b158c0e7/attempt2/results.json`, SHA-256
+`A84BDD9F8883822BB219CB0AC88050AED4AD3C6D5461C2B18E726A5DF2EC6EF7`.
+Its 461 inputs and 5,168 artifacts independently rehash without mismatch.
+
+Canonical init/setter attributes protect their own bodies; they do not confer
+transitive protection on ordinary cold registration helpers. The raw classifier
+therefore excludes them only as automatic closure roots, never as graph nodes
+or edges. An actual hot caller reaching either one must still traverse its
+callees. Twelve CM7-soft O2/Os ordinary/native-LTO cells and 84 causal controls
+pass; 24 controls specifically distinguish body and transitive boundaries.
+Separate staged C55S admission preserves twelve expected missing-operation
+rejections and the reproduced false acceptance of the old exemption. Handoff:
+`%TEMP%/fiber-context-body-boundary-1a19e86c5dd/handoff.json`, SHA-256
+`A0E57282B2A5B6B15FBF6F99DC38DA5EE37515526075B493248E2DA385EA5543`.
+Earlier failed candidate receipts are retained, not rewritten.
+
+An independent ELF-object comparator checks 60 native backend pairs across
+CM0, both CM0+ VTOR capabilities, CM4 hard FP and CM7 hard FP, O2/Os, comparing
+pre-inversion backend objects with pure and mixed Context builds. Executable
+bytes, allocated data/BSS, relocations, symbols and ARM attributes match.
+Eight comparator controls pass. Receipt:
+`%TEMP%/fiber-context-backend-identity-a9fecee87ac541a0a50d7879becd5a37/comparison-1/receipt.json`,
+SHA-256 `A37667E4E51C98973449C0B4D9D211D92A2BAE4F8DEC8B608CD567BEFC176000`.
+Sixty slim-LTO pairs are explicitly unqualified because they contain no native
+instructions. This is backend-object identity, not whole-image identity,
+five-optimization global FreeRTOS equivalence, CPU execution or board evidence.
+
+A second read-only comparison checks 30 native pairs for the moved common
+state, panic and optional configuration providers across the same five classic
+configurations and O2/Os. Executable bytes, data/BSS, relocation identities,
+symbols and ARM attributes match after excluding the expected source-file name
+records; the differing symbol/string tables remain in the report. Receipt:
+`%TEMP%/fiber-context-backend-identity-a9fecee87ac541a0a50d7879becd5a37/comparison-2/receipt.json`,
+SHA-256 `3A0DC6A10E37F3FFE683F7F2AB66A2C3D6E30A5C908F9532347E7C6B38A3BF68`.
+It excludes the intentionally changed core/wrapper bodies and makes no LTO,
+final-linked-image or whole-engine identity claim.
+
+The two Secure-only compiler audit recipes now follow actual canonical owners
+and prove the exact legacy/Context/state/current-slot chain. Their independent
+causal controls reject both a cold registration edge injected into current and
+a compiled NULL-return substitute that retains every expected symbol. The
+bounded CM33/CM55 replay passes 96 hostile cells, 98 executions and 50,777
+checks; 11,475 artifacts, 305 input rows and 1,033 snapshot files rehash without
+mismatch. Receipt: `C:/fr-context-compiler-qualified-860e25a4/results.json`,
+SHA-256 `D36DC2A5610899261A554184CE3B91A2AA621C0EE89C61313BECA358411B3E23`.
+`CompleteSuite=false`: this qualifies those compiler boundaries, not the full
+Secure-only architecture suite or runtime-profile activation.
+
+The actual external H7S Boot Debug/O2 and Release/Os builds also pass after the
+ownership switch. Compile commands and final maps identify the new Context
+core/state/panic/configuration providers and legacy shim, with retired owners
+excluded. The unpublished lifecycle consumer is not part of these builds.
+Strong SVC/PendSV, slots 11/14, single current/ABI identity, exact private/storage
+cohorts and readonly expectations pass ELF audit. Ten external generated make
+files are updated; Cube regeneration and project-metadata edits are not claimed.
+Receipt: `%TEMP%/fiber-h7-context-switch-qualified-481f3ec8/results.json`,
+SHA-256 `409281A155F210567A8897782B4DC9FB483F9CE59B14C444DCFF02D903B01CA5`.
+Those external build files/ELFs are not contained in this library commit. No
+board was programmed and no new hardware checkpoint is established.

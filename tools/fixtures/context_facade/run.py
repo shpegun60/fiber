@@ -1,4 +1,4 @@
-"""Finite additive Context facade qualification; no packages or target execution."""
+"""Finite mixed/pure Context qualification; no packages or target execution."""
 import argparse
 import hashlib
 import importlib.util
@@ -13,6 +13,11 @@ import sys
 import time
 
 COMMON_ROLES = ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")
+PURE_PROVIDERS = (("engine", "context/context_core.c"),
+                  ("state", "context/context_runtime_state.c"),
+                  ("panic", "context/context_panic.c"))
+OPTIONAL_SYMBOLS = {"fiber_internal_runtime_context_configuration_abi_v1_anchor",
+                    "fiber_internal_runtime_require_context_configuration_open"}
 API = ["ctxrt_v1_init", "ctxrt_v1_current", "ctxrt_v1_set_dispatcher",
        "ctxrt_v1_start", "ctxrt_v1_yield"]
 LEGACY = ["fiber_init", "fiber_current", "fiber_scheduler_set_pick_next",
@@ -150,7 +155,8 @@ class Suite:
         self.inputs = []
         self.dependencies = set()
         self.results = {"Status": "FAIL", "HostMock": [], "PublicCompiles": [],
-                        "TargetLinks": [], "Attributes": [], "Controls": [], "DiagnosticControls": []}
+                        "TargetLinks": [], "Attributes": [], "Controls": [], "DiagnosticControls": [],
+                        "PureContextLinks": [], "PureContextControls": []}
         self.linker = None
         self.count = 0
         self.start = time.time()
@@ -377,7 +383,8 @@ class Suite:
             ("configuration-close", engine_relative,
              "fiber_internal_runtime_close_context_configuration();", "/* removed by control */", 8,
              "fiber_internal_runtime_context_configuration_is_open() == 0"),
-            ("facade-current", api_relative, current_calls[0], "return 0;", 8,
+            ("facade-current", api_relative, current_calls[0],
+             "(void)" + current_calls[0][len("return "):] + " return 0;", 8,
              "modern_current() == ctx && legacy_current() == ctx"),
             ("facade-user", api_relative,
              set_calls[0], "(void)user; " + set_calls[0].replace("dispatch, user", "dispatch, 0"), 8,
@@ -431,6 +438,7 @@ class Suite:
                                                            "Order": order, "Storage": identities[0]})
             for mode, opts in MODES:
                 self.target_links(profile, mode, opts, directory)
+                self.pure_context_links(profile, mode, opts, directory)
             self.attributes(profile, directory)
             print("PASS " + name + " public/ELF/attributes", flush=True)
 
@@ -630,6 +638,113 @@ class Suite:
         self.results["Controls"].append({"Name": "stale-reverse-v1", "Profile": profile[0], "Mode": mode,
                                          "ExpectedMissing": expected, "StaleInput": str(old_consumer.relative_to(self.build))})
 
+    def pure_context_links(self, profile, mode, opts, parent):
+        directory = parent / ("pure-" + mode)
+        directory.mkdir()
+        flags = self.flags(profile) + opts
+        reader = runtime_reader(self.root)
+        # Independent expected owner paths: the manifest selects inputs, not the
+        # oracle that those inputs are the canonical Context-only provider trio.
+        sources = []
+        for role, relative in PURE_PROVIDERS:
+            selected = reader.get_runtime_source_paths(self.root, (role,))
+            require(selected == (self.root / relative,), "Pure Context provider ownership changed: " + role)
+            sources.extend(selected)
+        common = {source: self.compile(source, directory / (source.name + ".o"), flags) for source in sources}
+        for source, obj in common.items():
+            defined = {row[0] for row in self.symbols(obj)}
+            imported = set(re.findall(r"\bU\s+(\w+)", self.run("nm", ["-u", obj]).stdout))
+            require(not (defined | imported).intersection(set(LEGACY) | OPTIONAL_SYMBOLS),
+                    "Mandatory Context object acquired legacy/optional ownership or dependency: " + str(source))
+        ports = [self.compile(path, directory / (path.name + ".o"), flags, cmsis=True)
+                 for path in sorted((self.root / "fiber/port" / profile[1]).glob("*.c"))]
+        expectation = self.compile(self.root / "fiber/port/fiber_port_context_cohort_expectation.c",
+                                   directory / "expectation.o", flags, cmsis=True)
+        driver = self.compile(self.fixture / "context_target.c", directory / "driver.o", flags, cmsis=True)
+        archive = directory / "libcontext-port.a"
+        self.run("ar", ["rcs", archive, *common.values(), *ports])
+        consumers = {}
+        for cxx in (False, True):
+            language = "cpp" if cxx else "c"
+            consumer = self.compile(self.fixture / "consumer.c", directory / (language + "-consumer.o"),
+                                    flags + ["-DUSE_NEW=1", "-DINCLUDE_ORDER=0"], cxx)
+            consumers[language] = consumer
+            imports = set(re.findall(r"\bU\s+(\w+)", self.run("nm", ["-u", consumer]).stdout))
+            storage = {name for name in imports if name.startswith("fiber_port_storage_cohort_")}
+            require(len(storage) == 1 and imports == set(API) | storage,
+                    "Pure allocating consumer must import only Context v1 and one storage identity")
+            dependencies = consumer.with_suffix(".d").read_text(encoding="utf-8")
+            require(not re.search(r"(?:fiber_core|fiber_api_decl|fiber_runtime_state|fiber_port_private|core_cm\w+)\.h", dependencies),
+                    "Pure public consumer acquired a legacy/private/CMSIS dependency")
+            for form in ("direct", "archive"):
+                engine = [*common.values(), *ports] if form == "direct" else [archive]
+                binary, _ = self.link(profile, flags, directory, language + "-" + form,
+                                      [driver, expectation, consumer, *engine])
+                rows = self.symbols(binary)
+                names = {r[0] for r in rows}
+                require(not names.intersection(LEGACY), "Pure Context ELF contains a legacy five-operation symbol")
+                require(not names.intersection(OPTIONAL_SYMBOLS), "Pure Context ELF contains optional configuration")
+                for name in API + ["fiber_internal_runtime_port_abi_v1_anchor",
+                                   "fiber_internal_runtime_current_context_slot"]:
+                    require(len([r for r in rows if r[0] == name]) == 1,
+                            "Pure Context missing/duplicate runtime symbol: " + name)
+                slot = next(r for r in rows if r[0] == "fiber_internal_runtime_current_context_slot")
+                require(slot[1] in "Bb" and slot[3] == 4, "Pure Context acquired a second/invalid current slot")
+                cohorts = [r[0] for r in rows if r[0].startswith("fiber_port_context_cohort_armv")]
+                require(len(cohorts) == 1 and ("_v%d_d" % profile[7]) in cohorts[0],
+                        "Pure Context private cohort/VTOR capability mismatch")
+                require(storage <= names, "Pure Context storage provider lost")
+                for name in ("SVC_Handler", "PendSV_Handler"):
+                    require(len([r for r in rows if r[0] == name and r[1] == "T"]) == 1,
+                            "Pure Context lost its actual strong vector: " + name)
+                vector = binary.with_suffix(".vectors.bin")
+                self.run("copy", ["-O", "binary", "--only-section=.isr_vector", binary, vector])
+                words = struct.unpack("<48I", vector.read_bytes())
+                for index, name in ((11, "SVC_Handler"), (14, "PendSV_Handler")):
+                    require(words[index] == (next(r[2] for r in rows if r[0] == name) | 1),
+                            "Pure Context vector does not resolve to actual backend: " + name)
+                require(not self.run("nm", ["-u", binary]).stdout.strip(), "Pure Context has unresolved dependencies")
+                attributes = self.run("elf", ["-A", binary]).stdout
+                if profile[5]:
+                    require("Tag_ABI_VFP_args: VFP registers" in attributes, "Pure Context lost hard-FP ABI")
+                self.run("dump", ["-drwC", binary])
+                self.results["PureContextLinks"].append(dict(Profile=profile[0], Mode=mode, Language=language,
+                    Form=form, ELF=str(binary.relative_to(self.build)), Providers=[str(s.relative_to(self.root)) for s in sources],
+                    LegacyFiveAbsent=True, OptionalConfigurationAbsent=True, StrongVectors=True))
+
+        # Retain the same closed missing-name classifier. No shim or optional
+        # provider is added to make either deliberate dependency link.
+        engine = self.root / PURE_PROVIDERS[0][1]
+        actual = engine.read_text(encoding="utf-8")
+        calls = [call for call in ("fiber_port_context_init(context, stack_begin, stack_end, entry, arg);",
+                                  "fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);") if call in actual]
+        require(len(calls) == 1, "Pure optional-dependency mutant init anchor changed")
+        parameter = "context" if calls[0].startswith("fiber_port_context_init(context,") else "ctx"
+        mutants = (("legacy-dependency", "return fiber_internal_runtime_load_current_context();",
+                    "extern CtxrtContextV1 *fiber_current(void); "
+                    "CtxrtContextV1 *(*volatile dependency_call)(void) = fiber_current; "
+                    "return dependency_call();", "fiber_current"),
+                   ("optional-dependency", calls[0],
+                    "extern void fiber_internal_runtime_require_context_configuration_open(const CtxrtContextV1 *); "
+                    "void (*volatile dependency_call)(const CtxrtContextV1 *) = "
+                    "fiber_internal_runtime_require_context_configuration_open; "
+                    "dependency_call(" + parameter + "); " + calls[0],
+                    "fiber_internal_runtime_require_context_configuration_open"))
+        for label, old, new, missing in mutants:
+            require(actual.count(old) == 1, "Pure dependency mutant anchor changed: " + label)
+            changed = directory / (label.replace("-", "_") + ".c")
+            changed.write_text(actual.replace(old, new), encoding="utf-8")
+            obj = self.compile(changed, directory / (label + ".o"), flags)
+            expected = self.expected_missing(obj, missing)
+            require(expected == missing, "Pure dependency control does not import the exact intended symbol")
+            _, result = self.link(profile, flags, directory, label,
+                                  [driver, expectation, consumers["c"], obj] +
+                                  [output for source, output in common.items() if source != engine] + ports, True)
+            self.require_unresolved(result, missing)
+            self.results["PureContextControls"].append(dict(Name=label, Profile=profile[0], Mode=mode,
+                ExpectedMissing=missing, Mutant=str(changed.relative_to(self.build)),
+                MutantSHA256=digest(changed), OptionalAndLegacyProvidersOmitted=True))
+
     def attribute_object(self, root, profile, directory, opts, label):
         directory.mkdir(parents=True, exist_ok=True)
         raw = ["-finstrument-functions", "-fstack-protector-all", "-fprofile-arcs", "-ftest-coverage",
@@ -747,6 +862,8 @@ def main():
           (len(suite.results["HostMock"]), len(suite.results["PublicCompiles"]),
            len(suite.results["TargetLinks"]), len(suite.results["Controls"]), suite.build), flush=True)
     print("PASS closed diagnostic controls: %d" % len(suite.results["DiagnosticControls"]), flush=True)
+    print("PASS pure Context: %d real-backend ELF links, %d exact dependency controls" %
+          (len(suite.results["PureContextLinks"]), len(suite.results["PureContextControls"])), flush=True)
 
 
 if __name__ == "__main__":

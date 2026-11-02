@@ -19,10 +19,11 @@ The immediate [Context/Fiber refactor baseline](CONTEXT_REFACTOR_BASELINE.md)
 is F0, G0, G4, H7 and H7S. Other concrete ports are retained; completing every
 candidate feature combination is no longer a prerequisite to this extraction.
 
-An additive, versioned [Context v1 migration surface](context/README.md) now
-reuses that engine. It adds no second current slot or dispatcher. The existing
-five-call API remains supported; actual ownership inversion and a separate
-Fiber lifecycle consumer are still subsequent steps, not completed work.
+A versioned [Context v1 runtime](context/README.md) owns the engine, current
+slot, dispatcher, startup and panic fallback. The existing five-call API remains
+supported as a one-way compatibility shim. It adds no second runtime state.
+A separate Fiber lifecycle consumer is the next independently qualified layer;
+moving source ownership alone does not qualify or publish that consumer.
 
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
@@ -33,7 +34,7 @@ stack geometry, restore
 validation, and first-start preparation. Classic unprotected profiles use a
 saved stack pointer and port boot record; protected MPU profiles instead own
 their privileged register image, save cursor and region descriptors.
-`fiber_core.c` and the common scheduler bridge use only callable port ABI
+`context/context_core.c` and the common dispatcher bridge use only callable port ABI
 functions and do not dereference either layout. A future port may change its
 boot record or use a
 hardware-backed integrity implementation without changing the common core.
@@ -56,8 +57,9 @@ outstanding validation requirement.
 runtime into a processor execution-context engine, a portable stackful Fiber
 lifecycle, and C++ Task/Kernel policy layers. The existing selected ports become
 Context backends; they are not rewritten into direct Boost.Context-style jumps.
-The document is a future migration contract only. Current v2 symbols, frame
-layouts, handlers, directional ABIs, and validation claims are unchanged.
+The Context ownership slice implements part of that migration. Historical v2
+symbols, frame layouts, handlers and directional ABIs remain compatible;
+older qualification receipts are not automatically post-refactor evidence.
 After that extraction, supporting another processor means adding one complete
 Context backend and its conformance evidence; Fiber and C++ kernel sources stay
 unchanged. Applications that use only the portable kernel and service APIs are
@@ -66,10 +68,10 @@ integration remains platform-specific.
 
 `STM32_PORT_FREEZE_INVENTORY.md` records the concrete profiles already present,
 the remaining STM32 port families and feature cohorts, the current planning
-estimate, and the no-known-software-gap gate that must pass before Context
-extraction starts.
+estimate, and the broader software-freeze gate. The bounded baseline above
+supersedes its old all-catalog pre-extraction prerequisite.
 
-The five functions in `fiber_core.h` are the complete portable common API.
+The five functions in `fiber_core.h` remain the complete legacy portable API.
 Future MPU/unprivileged, SecureContext, or TF-M support may add explicit
 selected-port integration headers and sources. Those extensions are not
 included by `fiber_core.h`, are absent from ports that do not implement them,

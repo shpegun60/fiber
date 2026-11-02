@@ -231,12 +231,12 @@ function Test-SchedulePortBoundary {
     $corePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles engine
     $coreSource = Get-Content -LiteralPath $corePath -Raw
     $scheduleBody = Get-CFunctionBody -Source $coreSource `
-        -Signature "void fiber_schedule(void)" -Path $corePath
+        -Signature "void ctxrt_v1_yield(void)" -Path $corePath
 
     $requiredCalls = @("fiber_port_runtime_schedule();")
     foreach ($requiredCall in $requiredCalls) {
         if ($scheduleBody.IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
-            throw "fiber_schedule must delegate through selected-port ABI: missing $requiredCall"
+            throw "ctxrt_v1_yield must delegate through selected-port ABI: missing $requiredCall"
         }
     }
 
@@ -251,7 +251,7 @@ function Test-SchedulePortBoundary {
     )
     foreach ($forbidden in $forbiddenCpuAccess) {
         if ($scheduleBody.IndexOf($forbidden, [System.StringComparison]::Ordinal) -ge 0) {
-            throw "fiber_schedule must not contain CPU-specific schedule access: $forbidden"
+            throw "ctxrt_v1_yield must not contain CPU-specific schedule access: $forbidden"
         }
     }
 
@@ -262,7 +262,7 @@ function Test-SchedulePortBoundary {
     foreach ($forbidden in $forbiddenTransitionalCalls) {
         if ($scheduleBody.IndexOf($forbidden,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "fiber_schedule must use only the frozen schedule ABI: $forbidden"
+            throw "ctxrt_v1_yield must use only the frozen schedule ABI: $forbidden"
         }
     }
 }
@@ -270,7 +270,7 @@ function Test-SchedulePortBoundary {
 function Test-FinalForwardPortAbi {
     param([string]$RepositoryRoot)
 
-    $abiPath = Join-Path $RepositoryRoot "fiber\port\fiber_port_runtime_abi.h"
+    $abiPath = Join-Path $RepositoryRoot "context\context_port_abi.h"
     $abiSource = Get-Content -LiteralPath $abiPath -Raw
     $expectedSymbols = @(
         "fiber_port_context_init",
@@ -298,7 +298,7 @@ function Test-FinalForwardPortAbi {
 function Test-FinalReversePortAbi {
     param([string]$RepositoryRoot)
 
-    $abiPath = Join-Path $RepositoryRoot "fiber\fiber_runtime_port_abi.h"
+    $abiPath = Join-Path $RepositoryRoot "context\context_runtime_port_abi.h"
     $abiSource = Get-Content -LiteralPath $abiPath -Raw
     $expectedFunctions = @(
         "fiber_internal_runtime_select_scheduler_candidate",
@@ -321,7 +321,7 @@ function Test-FinalReversePortAbi {
     foreach ($required in @(
             "#define FIBER_RUNTIME_PORT_ABI_VERSION 1u",
             "fiber_internal_runtime_port_abi_v1_anchor",
-            '#include "fiber_panic.h"')) {
+            '#include "context_panic.h"')) {
         if ($abiSource.IndexOf($required,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "Reverse port ABI is missing required contract text: $required"
@@ -333,7 +333,7 @@ function Test-FinalReversePortAbi {
         throw "Reverse port ABI must not expose the current-context slot as a C lvalue"
     }
 
-    $panicHeaderPath = Join-Path $RepositoryRoot "fiber\fiber_panic.h"
+    $panicHeaderPath = Join-Path $RepositoryRoot "context\context_panic.h"
     $panicHeader = Get-Content -LiteralPath $panicHeaderPath -Raw
     $panicDeclaration = [regex]::Match($panicHeader,
         '(?s)(?<declaration>[^;]*\bfiber_panic\s*\(\s*char\s+code\s*\)\s*;)')
@@ -343,6 +343,126 @@ function Test-FinalReversePortAbi {
     if ($panicDeclaration.Groups['declaration'].Value.IndexOf("FIBER_API_WEAK",
             [System.StringComparison]::Ordinal) -ge 0) {
         throw "Port-side fiber_panic declaration must be strong; only the fallback definition is weak"
+    }
+}
+
+function Test-CanonicalContextOwnership {
+    param([string]$RepositoryRoot)
+
+    # Source ownership is an independent oracle, not inferred from the manifest.
+    $owners = [ordered]@{
+        engine = 'context\context_core.c'
+        state = 'context\context_runtime_state.c'
+        panic = 'context\context_panic.c'
+        optional_configuration = 'context\context_configuration.c'
+        legacy_compat = 'fiber\fiber_core.c'
+    }
+    foreach ($role in $owners.Keys) {
+        $actual = @(Get-MatrixRuntimeSources -RepositoryRoot $RepositoryRoot -Roles $role)
+        if ($actual.Count -ne 1 -or $actual[0] -cne $owners[$role]) {
+            throw "Context ownership role must select its exact canonical source: $role"
+        }
+    }
+    if (@(Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles facade_bridge).Count -ne 0) {
+        throw 'Activated Context must not retain the additive reverse-direction facade bridge'
+    }
+    foreach ($retired in @('fiber\fiber_runtime_state.c', 'fiber\fiber_panic.c',
+            'fiber\fiber_runtime_context_configuration.c', 'fiber\fiber_context_compat.c')) {
+        if (Test-Path -LiteralPath (Join-Path $RepositoryRoot $retired)) {
+            throw "Retired common owner/bridge must not survive Context activation: $retired"
+        }
+    }
+
+    $public = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'context\context_api_decl.h') -Raw
+    if ($public -notmatch '(?m)^\s*#\s*define\s+CTXRT_API_VERSION\s+1u\s*$') {
+        throw 'Canonical Context API must retain version 1'
+    }
+    $expectedApi = @('ctxrt_v1_init', 'ctxrt_v1_current', 'ctxrt_v1_set_dispatcher',
+        'ctxrt_v1_start', 'ctxrt_v1_yield') | Sort-Object
+    $actualApi = @([regex]::Matches($public, '\b(ctxrt_[A-Za-z0-9_]+)\s*\(') |
+        ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    if ($actualApi.Count -ne 5 -or (Compare-Object $expectedApi $actualApi)) {
+        throw 'Canonical Context callable surface must contain exactly the five versioned operations'
+    }
+    $legacyPath = Join-Path $RepositoryRoot $owners.legacy_compat
+    $legacy = Get-Content -LiteralPath $legacyPath -Raw
+    $bodies = [ordered]@{
+        fiber_init = '{ctxrt_v1_init(ctx,stack_begin,stack_end,entry,arg);}'
+        fiber_current = '{returnctxrt_v1_current();}'
+        fiber_start = '{ctxrt_v1_start();}'
+        fiber_scheduler_set_pick_next = '{ctxrt_v1_set_dispatcher(pick_next,user);}'
+        fiber_schedule = '{ctxrt_v1_yield();}'
+    }
+    foreach ($name in $bodies.Keys) {
+        $body = Get-CFunctionBody -Source $legacy -Signature ($name + '(') -Path $legacyPath
+        if (($body -replace '\s+', '') -cne $bodies[$name]) {
+            throw "Legacy wrapper must contain only its one-way canonical call: $name"
+        }
+    }
+    $legacyCode = [regex]::Replace($legacy, '(?s)/\*.*?\*/|//[^\r\n]*', '')
+    $legacyCalls = @([regex]::Matches($legacyCode, '\b([A-Za-z_][A-Za-z0-9_]*)\s*\(') |
+        ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    $expectedCalls = @(@($bodies.Keys) + $expectedApi | Sort-Object)
+    if ($legacyCalls.Count -ne 10 -or (Compare-Object $expectedCalls $legacyCalls)) {
+        throw 'Legacy compatibility source must not own helper calls, state access, or port operations'
+    }
+    $remaining = $legacyCode
+    foreach ($name in $bodies.Keys) {
+        $pattern = '(?m)^\s*(?:(?:FIBER_API_[A-Z_]+|FIBER_GENERAL_REGS_ONLY)\s+)*' +
+            '(?:void|FiberContext\s*\*)\s*' + $name + '\s*\([^;{]*\)\s*\{[^{}]*\}'
+        if ([regex]::Matches($remaining, $pattern).Count -ne 1) {
+            throw "Legacy wrapper must have one simple definition: $name"
+        }
+        $remaining = [regex]::Replace($remaining, $pattern, '')
+    }
+    $remaining = [regex]::Replace($remaining,
+        '(?m)^\s*#\s*include\s+"(?:fiber_api_decl\.h|\.\./context/context_api_decl\.h)"\s*$', '')
+    if ($remaining -match '\S') {
+        throw 'Legacy compatibility source must not own additional declarations/storage/preprocessor policy'
+    }
+    foreach ($cold in @('fiber_init', 'fiber_scheduler_set_pick_next')) {
+        foreach ($text in @($legacyCode, (Get-Content -LiteralPath (
+                Join-Path $RepositoryRoot 'fiber\fiber_api_decl.h') -Raw))) {
+            if ($text -match ('(?s)FIBER_API_[A-Z_]+\s+(?:[A-Z_]+\s+)*void\s+' + $cold + '\s*\(')) {
+                throw "Cold legacy wrapper must retain its ordinary-body boundary: $cold"
+            }
+        }
+    }
+
+    $forwarders = [ordered]@{
+        'fiber\port\fiber_port_runtime_abi.h' = 'context\context_port_abi.h'
+        'fiber\fiber_runtime_port_abi.h' = 'context\context_runtime_port_abi.h'
+        'fiber\fiber_panic.h' = 'context\context_panic.h'
+        'fiber\fiber_runtime_state.h' = 'context\context_runtime_state.h'
+        'fiber\fiber_runtime_context_configuration_abi.h' = 'context\context_configuration_abi.h'
+    }
+    foreach ($relative in $forwarders.Keys) {
+        $path = Join-Path $RepositoryRoot $relative
+        $code = [regex]::Replace((Get-Content -LiteralPath $path -Raw),
+            '(?s)/\*.*?\*/|//[^\r\n]*', '')
+        $includes = @([regex]::Matches($code, '(?m)^\s*#\s*include\s+"([^"]+)"\s*$'))
+        $targets = @($includes | ForEach-Object {
+            [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $path) $_.Groups[1].Value))
+        })
+        $canonical = Join-Path $RepositoryRoot $forwarders[$relative]
+        if (@($targets | Where-Object { $_ -eq $canonical }).Count -ne 1) {
+            throw "Legacy header must forward once to its canonical Context owner: $relative"
+        }
+        $allowed = @($canonical, (Join-Path $RepositoryRoot 'fiber\fiber_api_attributes.h'),
+            (Join-Path $RepositoryRoot 'fiber\fiber_api_types.h'))
+        if (@($targets | Where-Object { $allowed -notcontains $_ }).Count -ne 0 -or
+                @($targets | Sort-Object -Unique).Count -ne $targets.Count) {
+            throw "Legacy forwarding header acquired another dependency: $relative"
+        }
+        $guards = @([regex]::Matches($code, '(?m)^\s*#\s*ifndef\s+([A-Za-z_][A-Za-z0-9_]*)\s*$'))
+        if ($guards.Count -ne 1) { throw "Legacy forwarding header lost its sole guard: $relative" }
+        $guard = [regex]::Escape($guards[0].Groups[1].Value)
+        $stripped = [regex]::Replace($code,
+            '(?m)^\s*#\s*(?:include\s+"[^"]+"|ifndef\s+' + $guard +
+            '|define\s+' + $guard + '|endif)\s*$', '')
+        if ($stripped -match '\S') {
+            throw "Legacy header must not redeclare canonical ABI/storage/macros: $relative"
+        }
     }
 }
 
@@ -358,6 +478,8 @@ function Test-ContextPortBoundary {
         $runtimePath = Get-Content -LiteralPath $runtimePath -Raw
         $configurationPath = Get-Content -LiteralPath $configurationPath -Raw
     }
+    $panicPath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles panic
+    $sources[$panicPath] = Get-Content -LiteralPath $panicPath -Raw
 
     $forbiddenLayoutKnowledge = @(
         "->boot",
@@ -365,7 +487,10 @@ function Test-ContextPortBoundary {
         "FiberPortBoot",
         "offsetof(FiberContext",
         "sizeof(FiberContext",
-        "_Alignof(FiberContext"
+        "_Alignof(FiberContext",
+        "offsetof(CtxrtContextV1",
+        "sizeof(CtxrtContextV1",
+        "_Alignof(CtxrtContextV1"
     )
     foreach ($path in $sources.Keys) {
         foreach ($forbidden in $forbiddenLayoutKnowledge) {
@@ -379,6 +504,12 @@ function Test-ContextPortBoundary {
         if ($sources[$path].IndexOf("fiber_port_selected.h",
                 [System.StringComparison]::Ordinal) -ge 0) {
             throw "Common runtime must not include the selected complete type facade: $path"
+        }
+        if ($sources[$path] -match '(?m)^\s*#\s*include\s*[<"][^">\r\n]*(?:fiber_core|fiber_api_decl|fiber_runtime_state|fiber_runtime_port_abi|fiber_panic|fiber_port_runtime_abi|context)\.h[">]') {
+            throw "Canonical Context C must not include higher-layer or legacy forwarding headers: $path"
+        }
+        if ($sources[$path] -match '\bfiber_(?:init|current|start|scheduler_set_pick_next|schedule)\s*\(') {
+            throw "Canonical Context C must not call higher-layer legacy wrappers: $path"
         }
     }
 
@@ -411,7 +542,7 @@ function Test-ContextPortBoundary {
     )
     foreach ($requiredCall in $requiredCoreCalls) {
         if ($sources[$corePath].IndexOf($requiredCall, [System.StringComparison]::Ordinal) -lt 0) {
-            throw "fiber_core.c must use selected-port context ABI: missing $requiredCall"
+            throw "Canonical Context engine must use selected-port context ABI: missing $requiredCall"
         }
     }
 
@@ -430,18 +561,18 @@ function Test-ContextPortBoundary {
     foreach ($call in $transitionalCoreCalls) {
         if ($sources[$corePath].IndexOf($call,
                 [System.StringComparison]::Ordinal) -ge 0) {
-            throw "fiber_core.c must not use displaced transitional port ABI: $call"
+            throw "Canonical Context engine must not use displaced transitional port ABI: $call"
         }
     }
 
     $startBody = Get-CFunctionBody -Source $sources[$corePath] `
-        -Signature "void fiber_start(void)" -Path $corePath
+        -Signature "void ctxrt_v1_start(void)" -Path $corePath
     $startSteps = @(
         "FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');",
-        "FIBER_REQUIRE(fiber_current() == 0, 'k');",
+        "FIBER_REQUIRE(ctxrt_v1_current() == 0, 'k');",
         "fiber_internal_runtime_close_context_configuration();",
         "fiber_port_runtime_prepare_start();",
-        "FiberContext *const first = fiber_port_runtime_select_first();",
+        "CtxrtContextV1 *const first = fiber_port_runtime_select_first();",
         "fiber_internal_runtime_publish_current_context(first);",
         "fiber_port_runtime_start_first(first);"
     )
@@ -450,19 +581,19 @@ function Test-ContextPortBoundary {
         $stepIndex = $startBody.IndexOf($step,
             [System.StringComparison]::Ordinal)
         if ($stepIndex -le $lastIndex) {
-            throw "fiber_start must preserve frozen lifecycle and panic order: $step"
+            throw "ctxrt_v1_start must preserve frozen lifecycle and panic order: $step"
         }
         $lastIndex = $stepIndex
     }
 
     $setBody = Get-CFunctionBody -Source $sources[$corePath] `
-        -Signature "void fiber_scheduler_set_pick_next(FiberSchedulerPickNextFn pick_next, void *user)" `
+        -Signature "void ctxrt_v1_set_dispatcher(CtxrtDispatchFnV1 dispatch, void *user)" `
         -Path $corePath
     $setEnvironment = $setBody.IndexOf(
         "fiber_port_require_scheduler_configuration_environment();",
         [System.StringComparison]::Ordinal)
     $setStore = $setBody.IndexOf(
-        "fiber_internal_scheduler_store_pick_next(pick_next, user);",
+        "fiber_internal_scheduler_store_pick_next(dispatch, user);",
         [System.StringComparison]::Ordinal)
     if (($setEnvironment -lt 0) -or ($setStore -le $setEnvironment)) {
         throw "Scheduler hook installation must validate the port environment before common-owned storage"
@@ -476,16 +607,16 @@ function Test-ContextPortBoundary {
     foreach ($requiredCall in $requiredRuntimeCalls) {
         if ($sources[$runtimePath].IndexOf($requiredCall,
                 [System.StringComparison]::Ordinal) -lt 0) {
-            throw "fiber_runtime_state.c must retain common scheduler ownership: missing $requiredCall"
+            throw "Canonical Context state must retain common scheduler ownership: missing $requiredCall"
         }
     }
 
     $candidateBody = Get-CFunctionBody -Source $sources[$runtimePath] `
-        -Signature "FiberContext *fiber_internal_runtime_select_scheduler_candidate(" `
+        -Signature "CtxrtContextV1 *fiber_internal_runtime_select_scheduler_candidate(" `
         -Path $runtimePath
     $candidateSteps = @(
         "fiber_internal_runtime_scheduler_first_selection_started = 1u;",
-        "FiberContext *const next = pick_next(current, user);",
+        "CtxrtContextV1 *const next = pick_next(current, user);",
         "FIBER_REQUIRE(next != 0, 'N');",
         "return next;"
     )
@@ -540,11 +671,11 @@ function Test-ContextPortBoundary {
     }
     if ([regex]::Matches($sources[$runtimePath],
             'fiber_internal_runtime_context_configuration_closed\s*=\s*0').Count -ne 1) {
-        throw "Context configuration lifecycle must never reopen after fiber_start begins"
+        throw "Context configuration lifecycle must never reopen after ctxrt_v1_start begins"
     }
 
     $publishBody = Get-CFunctionBody -Source $sources[$runtimePath] `
-        -Signature "void fiber_internal_runtime_publish_current_context(FiberContext *next)" `
+        -Signature "void fiber_internal_runtime_publish_current_context(CtxrtContextV1 *next)" `
         -Path $runtimePath
     $publishNull = $publishBody.IndexOf("FIBER_REQUIRE(next != 0, 'N');",
         [System.StringComparison]::Ordinal)
@@ -681,8 +812,10 @@ function Test-ContextPortBoundary {
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "Selected port must include the frozen reverse ABI: $path"
         }
-        if ($source.IndexOf("fiber_runtime_state.h",
-                [System.StringComparison]::Ordinal) -ge 0) {
+        if (($source.IndexOf("fiber_runtime_state.h",
+                    [System.StringComparison]::Ordinal) -ge 0) -or
+                ($source.IndexOf("context_runtime_state.h",
+                    [System.StringComparison]::Ordinal) -ge 0)) {
             throw "Selected port must not include common-private runtime state: $path"
         }
 
@@ -1389,6 +1522,8 @@ function Test-CommonRuntimeWithoutCmsis {
         [string]$RepositoryRoot,
         [string]$Compiler,
         [string]$Objdump,
+        [string]$Nm,
+        [string]$GccNm,
         [string]$BuildRoot
     )
 
@@ -1438,6 +1573,79 @@ function Test-CommonRuntimeWithoutCmsis {
             '\.bss\.fiber_runtime_current_context_slot\s+00000004\s+') {
         throw "Common current slot must remain one 32-bit object in its isolated .bss subsection"
     }
+
+    $definitions = [ordered]@{
+        engine = @('T ctxrt_v1_init', 'T ctxrt_v1_current', 'T ctxrt_v1_set_dispatcher',
+            'T ctxrt_v1_start', 'T ctxrt_v1_yield', 'T fiber_internal_task_return')
+        state = @('R fiber_internal_runtime_port_abi_v1_anchor',
+            'B fiber_internal_runtime_current_context_slot',
+            'T fiber_internal_scheduler_store_pick_next',
+            'T fiber_internal_runtime_load_current_context',
+            'T fiber_internal_runtime_select_scheduler_candidate',
+            'T fiber_internal_runtime_publish_current_context',
+            'T fiber_internal_runtime_require_current_context',
+            'T fiber_internal_scheduler_is_configured',
+            'T fiber_internal_runtime_close_context_configuration',
+            'T fiber_internal_runtime_context_configuration_is_open')
+        panic = @('W fiber_panic')
+        optional_configuration = @('R fiber_internal_runtime_context_configuration_abi_v1_anchor',
+            'T fiber_internal_runtime_require_context_configuration_open')
+        legacy_compat = @('T fiber_init', 'T fiber_current', 'T fiber_start',
+            'T fiber_scheduler_set_pick_next', 'T fiber_schedule')
+    }
+    $ltoObjects = @()
+    foreach ($role in $definitions.Keys) {
+        $source = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles $role
+        foreach ($lto in @($false, $true)) {
+            $object = Join-Path $probeDir ((Split-Path $source -Leaf) + '.o')
+            $reader = $Nm
+            if ($lto) {
+                $object = Join-Path $probeDir ((Split-Path $source -Leaf) + '.lto.o')
+                $reader = $GccNm
+                & $Compiler -mcpu=cortex-m7 -mthumb -std=gnu11 -ffreestanding -fno-common `
+                    -O2 -flto -fno-fat-lto-objects "-I$RepositoryRoot" `
+                    "-I$(Join-Path $RepositoryRoot 'fiber')" -c $source -o $object
+                if ($LASTEXITCODE -ne 0) { throw "Common LTO ownership compile failed: $role" }
+                $ltoObjects += $object
+            }
+            $output = @(& $reader -g --defined-only $object)
+            if ($LASTEXITCODE -ne 0) { throw "Common ownership symbol scan failed: $role" }
+            $actual = @($output | ForEach-Object {
+                if ($_ -match '^\s*[0-9a-fA-F]+\s+([A-Za-z])\s+(\S+)\s*$') {
+                    $Matches[1] + ' ' + $Matches[2]
+                }
+            })
+            # GCC's slim-LTO plugin reports const data as D, not its eventual
+            # native section. Require R separately in the native LTO object.
+            $expected = @($definitions[$role] | ForEach-Object {
+                if ($lto) { $_ -replace '^R ', 'D ' } else { $_ }
+            })
+            Assert-ExactSymbolSet -Expected $expected -Actual $actual `
+                -Description "Common object ownership ($role, LTO=$lto)"
+            if ($role -eq 'legacy_compat') {
+                $undefinedOutput = @(& $reader -u $object)
+                if ($LASTEXITCODE -ne 0) { throw 'Legacy object dependency scan failed' }
+                $undefined = Get-NmUndefinedSymbolNames -NmOutput $undefinedOutput -Path $object
+                Assert-ExactSymbolSet -Expected @('ctxrt_v1_init', 'ctxrt_v1_current',
+                    'ctxrt_v1_set_dispatcher', 'ctxrt_v1_start', 'ctxrt_v1_yield') `
+                    -Actual $undefined -Description 'Legacy object one-way canonical dependencies'
+            }
+        }
+    }
+    $native = Join-Path $probeDir 'common-lto-native.o'
+    & $Compiler -mcpu=cortex-m7 -mthumb -O2 -flto -nostdlib -r `
+        -flinker-output=nolto-rel @ltoObjects -o $native
+    if ($LASTEXITCODE -ne 0) { throw 'Common native LTO ownership link failed' }
+    $nativeOutput = @(& $Nm -g --defined-only $native)
+    if ($LASTEXITCODE -ne 0) { throw 'Common native LTO ownership scan failed' }
+    $nativeDefinitions = @($nativeOutput | ForEach-Object {
+        if ($_ -match '^\s*[0-9a-fA-F]+\s+([A-Za-z])\s+(\S+)\s*$') {
+            $Matches[1] + ' ' + $Matches[2]
+        }
+    })
+    $expectedNative = @($definitions.Keys | ForEach-Object { $definitions[$_] })
+    Assert-ExactSymbolSet -Expected $expectedNative -Actual $nativeDefinitions `
+        -Description 'Native LTO common ownership, read-only anchors and sole current slot'
 }
 
 function Test-OptionalContextConfigurationAbi {
@@ -1448,8 +1656,7 @@ function Test-OptionalContextConfigurationAbi {
         [string[]]$MandatoryCommonSources
     )
 
-    $headerPath = Join-Path $RepositoryRoot `
-        "fiber\fiber_runtime_context_configuration_abi.h"
+    $headerPath = Join-Path $RepositoryRoot "context\context_configuration_abi.h"
     $sourcePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles optional_configuration
     $statePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles state
     $corePath = Get-RuntimeSourcePaths -RepositoryRoot $RepositoryRoot -Roles engine
@@ -1489,7 +1696,7 @@ function Test-OptionalContextConfigurationAbi {
             "#define FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_VERSION 1u",
             "fiber_internal_runtime_context_configuration_abi_v1_anchor",
             "FIBER_RUNTIME_CONTEXT_CONFIGURATION_ABI_RETAIN_V1()",
-            "FIBER_GENERAL_REGS_ONLY")) {
+            "CTXRT_GENERAL_REGS_ONLY")) {
         if ($header.IndexOf($required,
                 [System.StringComparison]::Ordinal) -lt 0) {
             throw "Optional context-configuration ABI lost required contract text: $required"
@@ -1516,7 +1723,7 @@ function Test-OptionalContextConfigurationAbi {
     }
     if ($core.IndexOf("fiber_internal_runtime_close_context_configuration();",
             [System.StringComparison]::Ordinal) -lt 0) {
-        throw "fiber_start must close context configuration before selected-port start work"
+        throw "ctxrt_v1_start must close context configuration before selected-port start work"
     }
     if ([regex]::Matches($state,
             'fiber_internal_runtime_context_configuration_closed\s*=\s*0').Count -ne 1) {
@@ -1747,18 +1954,24 @@ function Test-ReverseAbiSlotCIsolation {
         }
     )
 
-    foreach ($case in $cases) {
+    foreach ($surface in @(
+            @{Name='canonical'; Header='context/context_runtime_port_abi.h'; Type='CtxrtContextV1'},
+            @{Name='legacy'; Header='fiber/fiber_runtime_port_abi.h'; Type='FiberContext'})) {
+      foreach ($case in $cases) {
+        $returnType = $case.ReturnType.Replace('FiberContext', $surface.Type)
+        $argument = $case.Argument.Replace('FiberContext', $surface.Type)
         $source = @"
-#include "fiber/fiber_runtime_port_abi.h"
+#include "$($surface.Header)"
 
-$($case.ReturnType) fiber_reverse_slot_$($case.Name)($($case.Argument))
+$returnType fiber_reverse_slot_$($case.Name)($argument)
 {
     $($case.Body)
 }
 "@
-        $sourcePath = Join-Path $probeDir ($case.Name + ".c")
-        $objectPath = Join-Path $probeDir ($case.Name + ".o")
-        $logPath = Join-Path $probeDir ($case.Name + ".log")
+        $name = $surface.Name + '-' + $case.Name
+        $sourcePath = Join-Path $probeDir ($name + ".c")
+        $objectPath = Join-Path $probeDir ($name + ".o")
+        $logPath = Join-Path $probeDir ($name + ".log")
         Set-Content -LiteralPath $sourcePath -Value $source -Encoding ASCII
 
         $args = @(
@@ -1782,8 +1995,9 @@ $($case.ReturnType) fiber_reverse_slot_$($case.Name)($($case.Argument))
         if (($result.ExitCode -eq 0) -or
                 ($result.Output -notmatch 'fiber_internal_runtime_current_context_slot') -or
                 ($result.Output -notmatch 'undeclared')) {
-            throw "Reverse current slot must be unavailable as a C lvalue ($($case.Name)).`n$($result.Output)"
+            throw "Reverse current slot must be unavailable as a C lvalue ($name).`n$($result.Output)"
         }
+      }
     }
 }
 
@@ -2116,7 +2330,26 @@ function Test-SensitiveAttributeContract {
         }
     }
 
-    $forwardPath = Join-Path $RepositoryRoot "fiber\port\fiber_port_runtime_abi.h"
+    $contextPublic = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'context\context_api_decl.h') -Raw
+    foreach ($pattern in @(
+            'CTXRT_API_ATTR_SENSITIVE\s+CTXRT_GENERAL_REGS_ONLY\s+void\s+ctxrt_v1_init\s*\(',
+            'CTXRT_API_ATTR_SENSITIVE\s+CTXRT_GENERAL_REGS_ONLY\s+CTXRT_API_THREAD_FUNCTION\s+CtxrtContextV1\s*\*ctxrt_v1_current\s*\(void\)',
+            'CTXRT_API_ATTR_SENSITIVE\s+CTXRT_GENERAL_REGS_ONLY\s+void\s+ctxrt_v1_set_dispatcher\s*\(',
+            'CTXRT_API_NORETURN\s+CTXRT_API_ATTR_SENSITIVE\s+CTXRT_GENERAL_REGS_ONLY\s+void\s+ctxrt_v1_start\s*\(void\)',
+            'CTXRT_API_ATTR_SENSITIVE\s+CTXRT_GENERAL_REGS_ONLY\s+CTXRT_API_THREAD_FUNCTION\s+void\s+ctxrt_v1_yield\s*\(void\)')) {
+        if ($contextPublic -notmatch $pattern) {
+            throw "Canonical Context API lost its declared body/Thread placement attributes: $pattern"
+        }
+    }
+    $contextAttributes = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'context\context_api_attributes.h') -Raw
+    foreach ($alias in @('API_NORETURN', 'API_ATTR_SENSITIVE', 'API_ATTR_INLINE_SENSITIVE',
+            'GENERAL_REGS_ONLY', 'API_THREAD_FUNCTION')) {
+        if ($contextAttributes -notmatch ('(?m)^\s*#\s*define\s+CTXRT_' + $alias + '\s+FIBER_' + $alias + '\s*$')) {
+            throw "Context attributes must retain the explicit shared compiler-policy bridge: $alias"
+        }
+    }
+
+    $forwardPath = Join-Path $RepositoryRoot "context\context_port_abi.h"
     $forward = Get-Content -LiteralPath $forwardPath -Raw
     foreach ($symbol in @(
             "fiber_port_context_init",
@@ -2134,9 +2367,9 @@ function Test-SensitiveAttributeContract {
         $declarationWindow = $forward.Substring($declarationWindowStart,
                 $forward.IndexOf($symbol, [System.StringComparison]::Ordinal) -
                 $declarationWindowStart)
-        if (($declarationWindow.IndexOf("FIBER_API_ATTR_SENSITIVE",
+        if (($declarationWindow.IndexOf("CTXRT_API_ATTR_SENSITIVE",
                 [System.StringComparison]::Ordinal) -lt 0) -or
-                ($declarationWindow.IndexOf("FIBER_GENERAL_REGS_ONLY",
+                ($declarationWindow.IndexOf("CTXRT_GENERAL_REGS_ONLY",
                 [System.StringComparison]::Ordinal) -lt 0)) {
             throw "Forward ABI function lacks the sensitive/general-registers-only contract: $symbol"
         }
@@ -2230,9 +2463,11 @@ function Test-AdversarialSensitiveGeneratedCode {
     ) + $adversarial
     $commonFunctions = @{
         engine = @(
-            "fiber_current",
-            "fiber_start",
-            "fiber_schedule",
+            "ctxrt_v1_init",
+            "ctxrt_v1_current",
+            "ctxrt_v1_set_dispatcher",
+            "ctxrt_v1_start",
+            "ctxrt_v1_yield",
             "fiber_internal_task_return"
         )
         state = @(
@@ -2248,6 +2483,13 @@ function Test-AdversarialSensitiveGeneratedCode {
             "fiber_internal_runtime_require_context_configuration_open"
         )
         panic = @("fiber_panic")
+        legacy_compat = @('fiber_current', 'fiber_start', 'fiber_schedule')
+    }
+    # These are deliberately ordinary cold bodies, not a raw-global-clean
+    # transitive closure. Verify that the hostile flags remain effective here.
+    $ordinaryFunctions = @{
+        state = @('fiber_internal_scheduler_store_pick_next')
+        legacy_compat = @('fiber_init', 'fiber_scheduler_set_pick_next')
     }
 
     foreach ($role in $commonFunctions.Keys) {
@@ -2267,6 +2509,14 @@ function Test-AdversarialSensitiveGeneratedCode {
         foreach ($symbol in $commonFunctions[$role]) {
             Assert-SensitiveFunctionClean -Disassembly $disassembly `
                 -Symbol $symbol -Path $source
+        }
+        if ($ordinaryFunctions.ContainsKey($role)) {
+            foreach ($symbol in $ordinaryFunctions[$role]) {
+                $body = Get-DisassemblyFunctionBody -Disassembly $disassembly -Symbol $symbol -Path $source
+                if ($body.IndexOf('__cyg_profile_func_enter', [StringComparison]::Ordinal) -lt 0) {
+                    throw "Cold ordinary body was silently treated as transitively sensitive: $symbol"
+                }
+            }
         }
     }
 
@@ -5101,6 +5351,8 @@ typedef enum IRQn {
                     Symbols = @(
                         "fiber_current",
                         "fiber_schedule",
+                        "ctxrt_v1_current",
+                        "ctxrt_v1_yield",
                         "fiber_internal_runtime_load_current_context",
                         "fiber_port_runtime_memory_barrier",
                         "portable_fixture_entry"
@@ -5123,6 +5375,9 @@ typedef enum IRQn {
                         "fiber_init",
                         "fiber_start",
                         "fiber_scheduler_set_pick_next",
+                        "ctxrt_v1_init",
+                        "ctxrt_v1_start",
+                        "ctxrt_v1_set_dispatcher",
                         "fiber_internal_runtime_select_scheduler_candidate",
                         "fiber_internal_runtime_publish_current_context",
                         "fiber_internal_runtime_require_current_context",
@@ -6286,6 +6541,8 @@ typedef enum IRQn {
                     Symbols = @(
                         "fiber_current",
                         "fiber_schedule",
+                        "ctxrt_v1_current",
+                        "ctxrt_v1_yield",
                         "fiber_internal_runtime_load_current_context",
                         "fiber_port_runtime_memory_barrier",
                         "portable_fixture_entry"
@@ -6308,6 +6565,9 @@ typedef enum IRQn {
                         "fiber_init",
                         "fiber_start",
                         "fiber_scheduler_set_pick_next",
+                        "ctxrt_v1_init",
+                        "ctxrt_v1_start",
+                        "ctxrt_v1_set_dispatcher",
                         "fiber_internal_runtime_select_scheduler_candidate",
                         "fiber_internal_runtime_publish_current_context",
                         "fiber_internal_runtime_require_current_context",
@@ -6748,6 +7008,7 @@ typedef enum IRQn {
                     Start = [uint32]0x08010000; End = [uint32]0x08020000;
                     Name = "unprivileged flash";
                     Symbols = @("fiber_current", "fiber_schedule",
+                        "ctxrt_v1_current", "ctxrt_v1_yield",
                         "fiber_port_runtime_memory_barrier")
                 },
                 [pscustomobject]@{
@@ -6760,6 +7021,7 @@ typedef enum IRQn {
                     Start = [uint32]0x08000000; End = [uint32]0x08010000;
                     Name = "privileged flash";
                     Symbols = @("fiber_port_context_init", "fiber_port_panic_wait",
+                        "ctxrt_v1_init", "ctxrt_v1_start", "ctxrt_v1_set_dispatcher",
                         "fiber_port_require_scheduler_configuration_environment",
                         "fiber_port_runtime_prepare_start",
                         "fiber_port_runtime_select_first",
@@ -7121,6 +7383,7 @@ typedef enum IRQn {
                     Start = [uint32]0x08010000; End = [uint32]0x08020000;
                     Name = "unprivileged flash";
                     Symbols = @("fiber_current", "fiber_schedule",
+                        "ctxrt_v1_current", "ctxrt_v1_yield",
                         "fiber_port_runtime_memory_barrier")
                 },
                 [pscustomobject]@{
@@ -7133,6 +7396,7 @@ typedef enum IRQn {
                     Start = [uint32]0x08000000; End = [uint32]0x08010000;
                     Name = "privileged flash";
                     Symbols = @("fiber_port_context_init", "fiber_port_panic_wait",
+                        "ctxrt_v1_init", "ctxrt_v1_start", "ctxrt_v1_set_dispatcher",
                         "fiber_port_require_scheduler_configuration_environment",
                         "fiber_port_runtime_prepare_start",
                         "fiber_port_runtime_select_first",
@@ -18562,6 +18826,8 @@ function Test-ArmCm4MpuRuntimeIntegration {
                     Symbols = @(
                         "fiber_current",
                         "fiber_schedule",
+                        "ctxrt_v1_current",
+                        "ctxrt_v1_yield",
                         "fiber_internal_runtime_load_current_context",
                         "fiber_port_runtime_memory_barrier",
                         "fiber_port_runtime_schedule",
@@ -18576,6 +18842,9 @@ function Test-ArmCm4MpuRuntimeIntegration {
                         "fiber_init",
                         "fiber_start",
                         "fiber_scheduler_set_pick_next",
+                        "ctxrt_v1_init",
+                        "ctxrt_v1_start",
+                        "ctxrt_v1_set_dispatcher",
                         "fiber_internal_runtime_select_scheduler_candidate",
                         "fiber_internal_runtime_publish_current_context",
                         "fiber_internal_runtime_require_current_context",
@@ -20237,6 +20506,8 @@ function Test-ArmCm0MpuRuntimeIntegration {
                 Symbols = @(
                     "fiber_current",
                     "fiber_schedule",
+                    "ctxrt_v1_current",
+                    "ctxrt_v1_yield",
                     "fiber_internal_runtime_load_current_context",
                     "fiber_port_runtime_memory_barrier",
                     "fiber_port_runtime_schedule",
@@ -20252,6 +20523,9 @@ function Test-ArmCm0MpuRuntimeIntegration {
                     "fiber_init",
                     "fiber_start",
                     "fiber_scheduler_set_pick_next",
+                    "ctxrt_v1_init",
+                    "ctxrt_v1_start",
+                    "ctxrt_v1_set_dispatcher",
                     "fiber_internal_runtime_select_scheduler_candidate",
                     "fiber_internal_runtime_publish_current_context",
                     "fiber_internal_runtime_require_current_context",
@@ -21750,6 +22024,8 @@ function Test-ArmCm3MpuRuntimeIntegration {
                 Symbols = @(
                     "fiber_current",
                     "fiber_schedule",
+                    "ctxrt_v1_current",
+                    "ctxrt_v1_yield",
                     "fiber_internal_runtime_load_current_context",
                     "fiber_port_runtime_memory_barrier",
                     "fiber_port_runtime_schedule",
@@ -21764,6 +22040,9 @@ function Test-ArmCm3MpuRuntimeIntegration {
                     "fiber_init",
                     "fiber_start",
                     "fiber_scheduler_set_pick_next",
+                    "ctxrt_v1_init",
+                    "ctxrt_v1_start",
+                    "ctxrt_v1_set_dispatcher",
                     "fiber_internal_runtime_select_scheduler_candidate",
                     "fiber_internal_runtime_publish_current_context",
                     "fiber_internal_runtime_require_current_context",
@@ -21955,6 +22234,7 @@ if (-not (Test-Path $ar)) {
 Test-SchedulePortBoundary -RepositoryRoot $RepoRoot
 Test-FinalForwardPortAbi -RepositoryRoot $RepoRoot
 Test-FinalReversePortAbi -RepositoryRoot $RepoRoot
+Test-CanonicalContextOwnership -RepositoryRoot $RepoRoot
 Test-SensitiveAttributeContract -RepositoryRoot $RepoRoot
 Test-StrongHandlerSourceOwnership -RepositoryRoot $RepoRoot
 Test-ContextPortBoundary -RepositoryRoot $RepoRoot
@@ -22263,7 +22543,7 @@ try {
     Write-Host "== audit / shared common-source inventory readers =="
     & (Join-Path $RepoRoot "tools\test_runtime_sources.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-runtime-sources")
-    Write-Host "== audit / additive Context facade =="
+    Write-Host "== audit / canonical Context and legacy facade =="
     & (Join-Path $RepoRoot "tools\test_context_facade.ps1") `
         -ArmGcc $gcc -CmsisCore $cmsis `
         -BuildRoot (Join-Path $buildRoot "audit-context-facade")
@@ -22459,7 +22739,7 @@ try {
 
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
-        -Objdump $objdump -BuildRoot $buildRoot
+        -Objdump $objdump -Nm $nm -GccNm $gccNm -BuildRoot $buildRoot
     Write-Host "== optional context-configuration ABI =="
     Test-OptionalContextConfigurationAbi -RepositoryRoot $RepoRoot `
         -Compiler $gcc -BuildRoot $buildRoot `
