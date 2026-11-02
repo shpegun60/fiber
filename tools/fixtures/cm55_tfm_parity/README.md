@@ -59,12 +59,19 @@ bounded scenarios supplement closed baselines, not actual TF-M/CPU execution.
 
 The actual M33 TF-M policy source relation permits only the exact leading
 initializer profile comment, bundle symbol and count-checked A32 raw CPU-reader
-call names versus CMSIS calls. Those substitutions are a policy source-relation
+call names versus CMSIS calls. C3TF may use either the complete old CMSIS dialect
+or the complete canonical `fiber_port_cpu_read_*` dialect; C5TF must retain only
+canonical readers. Mixed readers within a file or dialects between the two files
+are rejected. Those substitutions are a policy source-relation
 check only: the compiler receives unmodified production, and all generated
 instructions remain subject to the closed body/data-flow checks. Reader counts
 are retained in wrapper-policy-source.json; no condition, instruction or
-register choice is normalized away. The CPU reference remains the actual
-M55_NTZ source/manifest.
+register choice is normalized away. Forty-three source-relation controls cover
+both allowed C3TF dialects, each missing reader count, same-count register swaps,
+changed numeric policy, mixed dialects and noncanonical C5TF readers. Their exact
+diagnostics are recorded in `wrapper-policy-controls.json`; these source-only
+controls do not replace the complete compiled closed-body gate. The CPU reference
+remains the actual M55_NTZ source/manifest.
 
 43 bounded compiled mutations change fixture copies of real production or
 pinned reference source. None edit either checkout. They cover transfer
@@ -76,7 +83,7 @@ compile and produce a sole intended rejection diagnostic; compile errors and
 tracebacks cannot masquerade as rejection. Eight R9 mutations must also fail
 the independent data-flow oracle: zero/late/context-end builder values, wrong
 or re-read caller arguments, capture after cold reads and removed readback.
-49 harness controls cover all seven
+In addition to those 43 source-relation controls, 49 harness controls cover all seven
 Python modules with -O/-OO, environment and compiled-import optimization plus
 counterfeit traceback diagnostics. No Python assertion controls acceptance.
 

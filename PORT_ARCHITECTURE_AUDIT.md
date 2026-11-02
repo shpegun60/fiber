@@ -3039,3 +3039,22 @@ This is a maintained cross-profile test dependency, not evidence that changing
 register semantics is permissible. Preserve C:/fq-31f2e2afed/matrix-result.json
 and C:/fqm-31f2e2afed: FAIL, source drift zero, later gates NOT_RUN. A repaired
 comparison needs exact spelling/count controls and a new complete replay.
+
+### C5TF Cross-Profile Reader Compatibility
+
+The fixture now accepts exactly a complete historical CMSIS or canonical C3TF
+reader dialect, while C5TF remains canonical-only. Exact per-register counts
+and normalized whole-source equality remain required. Forty-three new source
+controls reject missing counts, same-count register swaps, changed numeric
+policy, mixed readers/files and noncanonical C5TF calls. These source-only
+controls supplement, not replace, compiled closed-body checking.
+
+Fresh complete pinned O2 and Os checks each pass 55 bodies, 105 scenarios,
+43 compiled mutants, eight independent R9 rejections and 92 controls. No
+production body, baseline, instruction oracle or import set changes. Parent
+rehashes 1,873 captured inputs, 3,226 artifacts and both owned files without
+mismatch. Receipt:
+%TEMP%/fiber-c5tf-policy-readers-77ffaf26669c4d42b3c1bf00689585c3/results.json,
+SHA-256 3ABBAA9D3268ED75CD2AD55CB7230D1DD9E5EA4A028C7D91C90469C4CA870EE7.
+The preceding aggregate remains FAIL; this focused proof does not upgrade later
+NOT_RUN gates, LTO/exception execution or hardware validation.

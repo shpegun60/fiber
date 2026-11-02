@@ -26,6 +26,11 @@ def write(path, value):
 
 
 class Proof:
+    POLICY_READERS = {'ipsr': 'IPSR', 'primask': 'PRIMASK', 'faultmask': 'FAULTMASK',
+                      'control': 'CONTROL', 'psplim': 'PSPLIM'}
+    POLICY_COUNTS = {'fiber_port_tfm.c': {'ipsr': 3, 'primask': 3, 'faultmask': 3, 'control': 3, 'psplim': 2},
+                     'fiber_port_tfm_os_wrapper.c': {'ipsr': 1, 'primask': 2, 'faultmask': 1, 'control': 3}}
+
     def __init__(self, a):
         self.a = a
         self.repo, self.build = Path(a.repo).resolve(), Path(a.build).resolve()
@@ -101,30 +106,113 @@ class Proof:
         write(self.build / "inputs.before.json", inputs)
         write(self.build / 'production-profile.json', [r for r in inputs if Path(r.get('SourcePath', r['Path'])).parent == self.port])
 
-    def policy_source_relation(self):
-        other = self.repo / 'fiber/port/ARM_CM33_TFM/non_secure'
-        readers = {'ipsr': 'IPSR', 'primask': 'PRIMASK', 'faultmask': 'FAULTMASK',
-                   'control': 'CONTROL', 'psplim': 'PSPLIM'}
-        counts = {'fiber_port_tfm.c': {'ipsr': 3, 'primask': 3, 'faultmask': 3, 'control': 3, 'psplim': 2},
-                  'fiber_port_tfm_os_wrapper.c': {'ipsr': 1, 'primask': 2, 'faultmask': 1, 'control': 3}}
-        for name in ('fiber_port_tfm.c', 'fiber_port_tfm_os_wrapper.c'):
-            left, right = (other / name).read_text(encoding='utf-8'), (self.port / name).read_text(encoding='utf-8')
+    @classmethod
+    def compare_policy_sources(cls, left_sources, right_sources):
+        require(set(left_sources) == set(right_sources) == set(cls.POLICY_COUNTS),
+                'A32 policy source-relation file inventory changed')
+        dialects = set()
+        for name, counts in cls.POLICY_COUNTS.items():
+            left, right = left_sources[name], right_sources[name]
             if name == 'fiber_port_tfm.c':
                 right = right.replace('/* ARM_CM55 TF-M Non-secure interface initialization. */',
                                       '/* ARM_CM33 TF-M Non-secure interface initialization. */')
                 right = right.replace('fiber_port_arm_cm55_tfm_integration_bundle_v1_anchor',
                                       'fiber_port_arm_cm33_tfm_integration_bundle_v1_anchor')
-            for reader, count in counts[name].items():
+            dialect = None
+            for reader, count in counts.items():
                 call = 'fiber_port_cpu_read_' + reader + '()'
-                cmsis = '__get_' + readers[reader] + '()'
-                require(right.count(call) == count and left.count(cmsis) == count,
-                        'A32 policy source-relation reader count changed: ' + name + '/' + reader)
+                cmsis = '__get_' + cls.POLICY_READERS[reader] + '()'
+                require(right.count(call) == count and right.count(cmsis) == 0,
+                        'A32 C5TF reader count changed: ' + name + '/' + reader)
+                raw_count, cmsis_count = left.count(call), left.count(cmsis)
+                require((raw_count == count and cmsis_count == 0) or
+                        (cmsis_count == count and raw_count == 0),
+                        'A32 C3TF reader count changed: ' + name + '/' + reader)
+                current = 'canonical' if raw_count else 'CMSIS'
+                require(dialect is None or dialect == current, 'A32 C3TF reader dialect mixed: ' + name)
+                dialect = current
+                left = left.replace(call, cmsis)
                 right = right.replace(call, cmsis)
             require(left == right, 'M33/C5TF wrapper policy source relation changed; review difference explicitly: ' + name)
+            dialects.add(dialect)
+        require(len(dialects) == 1, 'A32 C3TF policy reader dialects differ between files')
+        return dialects.pop()
+
+    def policy_source_controls(self, left_sources, right_sources):
+        variants = {}
+        for dialect in ('CMSIS', 'canonical'):
+            sources = dict(left_sources)
+            for name, counts in self.POLICY_COUNTS.items():
+                for reader in counts:
+                    call = 'fiber_port_cpu_read_' + reader + '()'
+                    cmsis = '__get_' + self.POLICY_READERS[reader] + '()'
+                    old, new = (call, cmsis) if dialect == 'CMSIS' else (cmsis, call)
+                    sources[name] = sources[name].replace(old, new)
+            variants[dialect] = sources
+        records = []
+
+        def check(label, left, right, expected=None):
+            try:
+                dialect = self.compare_policy_sources(left, right)
+            except RuntimeError as error:
+                require(expected is not None and str(error) == expected,
+                        'Policy source control rejected for unintended reason: ' + label + '/' + str(error))
+                records.append(dict(Name=label, Diagnostic=str(error)))
+            else:
+                require(expected is None, 'Policy source mismatch survived: ' + label)
+                records.append(dict(Name=label, Dialect=dialect, Status='PASS'))
+            self.controls.append('policy-source/' + label)
+
+        for dialect, sources in variants.items():
+            check(dialect + '/positive', sources, right_sources)
+            for name, counts in self.POLICY_COUNTS.items():
+                for reader in counts:
+                    call = ('fiber_port_cpu_read_' + reader + '()' if dialect == 'canonical'
+                            else '__get_' + self.POLICY_READERS[reader] + '()')
+                    changed = dict(sources, **{name: sources[name].replace(call, '0u', 1)})
+                    check(dialect + '/' + name + '/missing-' + reader, changed, right_sources,
+                          'A32 C3TF reader count changed: ' + name + '/' + reader)
+                prefix = 'fiber_port_cpu_read_' if dialect == 'canonical' else '__get_'
+                ipsr = prefix + ('ipsr' if dialect == 'canonical' else 'IPSR') + '()'
+                fault = prefix + ('faultmask' if dialect == 'canonical' else 'FAULTMASK') + '()'
+                swapped = sources[name].replace(ipsr, '@IPSR@').replace(fault, ipsr).replace('@IPSR@', fault)
+                body_error = 'M33/C5TF wrapper policy source relation changed; review difference explicitly: ' + name
+                check(dialect + '/' + name + '/same-count-register-swap',
+                      dict(sources, **{name: swapped}), right_sources, body_error)
+                anchor = "== 0u, 'i')"
+                require(sources[name].count(anchor) == 1, 'Policy numeric mutation anchor changed')
+                numeric = sources[name].replace(anchor, "== 1u, 'i')")
+                check(dialect + '/' + name + '/numeric-policy',
+                      dict(sources, **{name: numeric}), right_sources, body_error)
+                other_ipsr = '__get_IPSR()' if dialect == 'canonical' else 'fiber_port_cpu_read_ipsr()'
+                mixed = sources[name].replace(ipsr, other_ipsr)
+                check(dialect + '/' + name + '/mixed-readers',
+                      dict(sources, **{name: mixed}), right_sources, 'A32 C3TF reader dialect mixed: ' + name)
+            other = variants['canonical' if dialect == 'CMSIS' else 'CMSIS']
+            changed = dict(sources, **{'fiber_port_tfm.c': other['fiber_port_tfm.c']})
+            check(dialect + '/mixed-files', changed, right_sources,
+                  'A32 C3TF policy reader dialects differ between files')
+        for name, counts in self.POLICY_COUNTS.items():
+            for reader in counts:
+                call, cmsis = 'fiber_port_cpu_read_' + reader + '()', '__get_' + self.POLICY_READERS[reader] + '()'
+                changed = dict(right_sources, **{name: right_sources[name].replace(call, cmsis, 1)})
+                check('C5TF/' + name + '/noncanonical-' + reader, variants['canonical'], changed,
+                      'A32 C5TF reader count changed: ' + name + '/' + reader)
+        require(len(records) == 43, 'Policy source control inventory incomplete')
+        write(self.build / 'wrapper-policy-controls.json', dict(Status='PASS', Controls=records,
+              Scope='Source-relation controls, not compiled parity or CPU behavior'))
+
+    def policy_source_relation(self):
+        other = self.repo / 'fiber/port/ARM_CM33_TFM/non_secure'
+        left = {name: (other / name).read_text(encoding='utf-8') for name in self.POLICY_COUNTS}
+        right = {name: (self.port / name).read_text(encoding='utf-8') for name in self.POLICY_COUNTS}
+        dialect = self.compare_policy_sources(left, right)
+        self.policy_source_controls(left, right)
         write(self.build / 'wrapper-policy-source.json', dict(Status='PASS',
-            Wrapper='only exact count-checked A32 raw-reader call names differ',
-            Initializer='exact profile comment, integration-bundle symbol and count-checked A32 raw-reader call names differ',
-            ReaderCounts=counts, CompiledSource='unaltered actual C5TF production; substitutions are source-relation checks only',
+            Wrapper='C3TF complete CMSIS or canonical-reader dialect; C5TF canonical only; exact counts and body relation',
+            Initializer='exact profile comment, integration-bundle symbol and the same count-checked reader dialect policy',
+            C3tfReaderDialect=dialect, ReaderCounts=self.POLICY_COUNTS,
+            CompiledSource='unaltered actual C5TF production; substitutions are source-relation checks only',
             CpuReference='actual ARM_CM55_NTZ, not M33 wrapper CPU code'))
 
     @staticmethod
