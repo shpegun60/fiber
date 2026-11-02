@@ -2861,3 +2861,22 @@ functions now use port-local CPU readers while the fixture still supplies only
 CMSIS-named doubles. Its source drift is zero, exit status is FAIL, and later
 gates are NOT_RUN. Preserve C:/fq-eb32f77e84/matrix-result.json and artifacts
 at C:/fqm-eb32f77e84; a fixture repair requires new scoped and combined runs.
+
+### ABS32 Interior Callback Reachability
+
+The readiness diagnostic exposes six false negatives in the raw audit's common
+sensitive-to-cold graph: an ABS32 section relocation points to a callback field
+inside a large initialized object, not its symbol start. Production use of that
+specific path is not demonstrated. The ELF resolver now includes containing
+data-object extents while preserving exact Thumb-normalized function entries.
+
+The maintained regression passes 24 compiled native objects, 48 exact protected/
+ordinary direct/indirect roots and six containment-removal causal controls at
+O2/Os, normal and both native-LTO text layouts. Parent verifies all 199 recorded
+manifest entries. The central matrix runs it before reference parity. A fresh
+immutable C5TF/CM7 replay with the repaired classifier passes 24 cells and 120
+controls; parent rehashes 72 consumed inputs and 3,186 artifacts without mismatch.
+No production file changes in this repair, and previous receipts do not acquire
+the new invariant retroactively. Global A32, other relocation forms and dynamic
+indirect-call provenance remain separate limits. Exact roots/hashes and the
+preserved diagnostic FAIL are in the fixture README.

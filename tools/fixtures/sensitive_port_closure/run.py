@@ -143,13 +143,16 @@ class Elf:
         if target["type"] != 3:
             return [target["name"]] if target["name"] else []
         # ABS32 section relocations occur in GCC literal pools, gcov and init arrays.
+        # A data addend can select an interior callback field; only functions
+        # use Thumb-bit normalization and exact entry-address matching.
         if rel["type"] == 2:
             source = self.sections[rel["section"]]
             value = struct.unpack_from("<I", self.payload(source), rel["offset"])[0]
             return [s["name"] for s in self.symbols if s["name"] and s["type"] in (1, 2)
                     and s["section"] == target["section"] and
-                    (s["value"] & ~1 if s["type"] == 2 else s["value"]) ==
-                    (value & ~1 if s["type"] == 2 else value)]
+                    ((s["type"] == 2 and (s["value"] & ~1) == (value & ~1)) or
+                     (s["type"] == 1 and (s["value"] == value or
+                                          s["value"] <= value < s["value"] + s["size"])))]
         if rel["type"] in (10, 30, 51, 102):
             source = self.payload(self.sections[rel["section"]])
             if rel["type"] == 102:

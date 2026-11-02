@@ -22180,6 +22180,9 @@ try {
     Write-Host "== audit / strict-mode parity helper imports =="
     & (Join-Path $RepoRoot "tools\test_parity_helper_imports.ps1") `
         -ArmGcc $gcc -BuildRoot (Join-Path $buildRoot "audit-parity-helper-imports")
+    Write-Host "== audit / sensitive interior-data reachability =="
+    & (Join-Path $RepoRoot "tools\test_sensitive_data_reachability.ps1") `
+        -ArmGcc $gcc -BuildRoot (Join-Path $buildRoot "audit-sensitive-data-reachability")
     Write-Host "== pinned FreeRTOS generated-assembly parity =="
     foreach ($parityOptimization in @("-O2", "-Os")) {
         $parityBuildName = "freertos-asm-parity-" +
