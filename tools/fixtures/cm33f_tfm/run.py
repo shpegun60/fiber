@@ -4,6 +4,7 @@ The typed NS provider and test Secure bootstrap are not a real Secure TF-M image
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -45,6 +46,14 @@ def require(condition, message):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def runtime_reader(repo):
+    path = Path(repo) / "tools/runtime_sources.py"
+    spec = importlib.util.spec_from_file_location("c3ft_runtime_sources", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_json(path, data):
@@ -123,7 +132,22 @@ class Proof:
                       "-fno-unwind-tables", "-fno-asynchronous-unwind-tables", "-Wall", "-Wextra", "-Werror", "-Wundef"]
         self.selection = ["-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV8M_MAINLINE=1"]
         self.sources = [self.port / n for n in ("fiber_port.c", "fiber_port_boot.c", "fiber_port_tfm.c", "fiber_port_tfm_os_wrapper.c")]
-        self.common_sources = [self.common / n for n in ("fiber_core.c", "fiber_runtime_state.c", "fiber_panic.c")]
+        self.runtime_sources = runtime_reader(self.repo)
+        self.common_roles = ("engine", "state", "panic", "legacy_compat")
+        self.common_by_role = {role: self.runtime_sources.get_runtime_source_paths(self.repo, (role,))
+                               for role in self.common_roles}
+        self.common_sources = list(self.runtime_sources.get_runtime_source_paths(self.repo, self.common_roles))
+
+    def common_owner(self, role):
+        sources = self.common_by_role[role]
+        require(len(sources) == 1, "Expected one actual common role owner: " + role)
+        return sources[0]
+
+    def common_object(self, source, objects):
+        matches = [obj for path, obj in zip(self.common_sources, objects) if path == source]
+        require(len(objects) == len(self.common_sources) and len(matches) == 1,
+                "Missing/ambiguous actual common object owner: " + str(source))
+        return matches[0]
 
     def run(self, argv, label, timeout=90, allowed=False):
         argv = list(map(str, argv))
@@ -147,7 +171,7 @@ class Proof:
         return result
 
     def includes(self, port=None, cmsis=True):
-        dirs = [self.fixture, port or self.port, self.common / "port", self.common, self.repo]
+        dirs = [self.fixture, port or self.port, self.common / "port", self.common, self.repo / "context", self.repo]
         if cmsis:
             dirs.append(Path(self.a.cmsis))
         return ["-I" + str(p) for p in dirs]
@@ -383,10 +407,12 @@ class Proof:
     def constructor_archive(self, d, common_objects, port_objects, options):
         # This pre-v1 model removes only the marker definition from real common
         # state. It is not presented as an entire historical source checkout.
-        text = self.common_sources[1].read_text()
-        marker = ("const unsigned char fiber_internal_runtime_port_abi_v1_anchor =\n"
-                  "\t\t(unsigned char)FIBER_RUNTIME_PORT_ABI_VERSION;")
-        require(text.count(marker) == 1, "pre-v1 common archive marker definition drift")
+        state_source = self.common_owner("state")
+        text = state_source.read_text()
+        markers = re.findall(r"const unsigned char fiber_internal_runtime_port_abi_v1_anchor =\n"
+                             r"[ \t]+\(unsigned char\)FIBER_RUNTIME_PORT_ABI_VERSION;", text)
+        require(len(markers) == 1, "pre-v1 common archive marker definition drift")
+        marker = markers[0]
         stale_source = d / "pre-v1-common-state.c"
         stale_source.write_text(text.replace(marker, ""))
         stale_obj = d / "pre-v1-common-state.o"
@@ -395,7 +421,8 @@ class Proof:
                 "pre-v1 archive model must contain neither definition nor dependency on v1")
         archives = {}
         for current in (False, True):
-            objects = common_objects if current else [common_objects[0], stale_obj, common_objects[2]]
+            state_object = self.common_object(state_source, common_objects)
+            objects = common_objects if current else [stale_obj if obj == state_object else obj for obj in common_objects]
             archive = d / ("libcommon-current-v1.a" if current else "libcommon-pre-v1.a")
             self.run([self.tools["gcc-ar"], "rcs", archive, *objects], "archive real common current/pre-v1")
             listing = self.run([self.tools["gcc-ar"], "t", archive], "inspect common archive members")["output"].splitlines()
@@ -455,7 +482,7 @@ class Proof:
     def object_roles(self, d, port_objects, common_objects, options, lto):
         common_owned = PUBLIC | {REVERSE, "fiber_panic", "fiber_addr_plausible_ram", "fiber_addr_plausible_code"}
         for obj in common_objects:
-            common_owned |= {name for name, kind in self.nm(obj) if name.startswith("fiber_") and kind.isupper()}
+            common_owned |= {name for name, kind in self.nm(obj) if name.startswith(("fiber_", "ctxrt_")) and kind.isupper()}
         for obj in port_objects:
             self.role_no_common_definitions(obj, common_owned)
         cpu_expected = CPU_BASE_IMPORTS | CPU_PRIVATE_IMPORTS
@@ -638,9 +665,10 @@ class Proof:
         base = [app, *fixtures, *common_objects]
         # Rename only the real common marker; callbacks and common state remain real.
         wrong_state = d / "wrong-reverse-state.o"
-        self.compile(self.common / "fiber_runtime_state.c", wrong_state, options, selected=False, cpu=False,
+        self.compile(self.common_owner("state"), wrong_state, options, selected=False, cpu=False,
                      extra=["-D" + REVERSE + "=fiber_internal_runtime_port_abi_v999_anchor"])
-        common_wrong = [wrong_state if p.stem == "fiber_runtime_state" else p for p in common_objects]
+        state_object = self.common_object(self.common_owner("state"), common_objects)
+        common_wrong = [wrong_state if p == state_object else p for p in common_objects]
         self.link([app, *fixtures, *common_wrong, *port_objects], d / "missing-reverse-v1.elf", options, expected={REVERSE})
         # A genuinely absent external initializer, not an arbitrary prefix allowlist.
         provider_text = (self.fixture / "provider.c").read_text()
@@ -1073,6 +1101,9 @@ class Proof:
             python_binary = Path(sys.base_prefix) / python_binary.name
         paths = {Path(__file__).resolve(), self.repo / "tools/test_cm33f_tfm.ps1", python_binary,
                  Path(self.a.arm_gcc), Path(self.a.host_gcc), *self.tools.values()}
+        paths.update(self.runtime_sources.get_runtime_source_inputs(self.repo,
+                     ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")))
+        paths.update((self.repo / "context").glob("*.h"))
         paths.add(self.repo / "tools/fixtures/portable_application.c")
         paths.add(self.repo / "tools/fixtures/arm_control/qemu.sh")
         if self.a.qemu_root:

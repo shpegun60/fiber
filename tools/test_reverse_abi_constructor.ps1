@@ -10,6 +10,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 if (!$RepositoryRoot) { $RepositoryRoot = Join-Path $PSScriptRoot '..' }
 $repo = (Resolve-Path -LiteralPath $RepositoryRoot).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('engine','state','panic','legacy_compat')
+$runtimeSources = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
+$stateSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'state')[0]
+$panicSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'panic')[0]
 $fixture = Join-Path $PSScriptRoot 'fixtures/reverse_abi_constructor'
 $port = Join-Path $repo 'fiber/port/ARM_CM7/r0p1'
 if (!$ArmGcc -or !(Test-Path -LiteralPath $ArmGcc -PathType Leaf)) { throw 'Supply existing -ArmGcc' }
@@ -33,10 +38,11 @@ $failures = New-Object System.Collections.Generic.List[string]
 $verdict = 'FAIL'
 $v1 = 'fiber_internal_runtime_port_abi_v1_anchor'
 $v2 = 'fiber_internal_runtime_port_abi_v2_anchor'
-$actualSources = @('fiber_core','fiber_runtime_state','fiber_panic')
 $portSources = @('fiber_port','fiber_port_boot','fiber_port_exception')
 $inputs = @($PSCommandPath,$ArmGcc,$ar,$nm,$dump,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles) +
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem -LiteralPath (Join-Path $repo 'fiber') -Recurse -File |
         Where-Object { $_.Extension -in @('.c','.h') } | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem -LiteralPath $CmsisCore -Recurse -File -Filter '*.h' | Select-Object -ExpandProperty FullName) +
@@ -212,7 +218,7 @@ $before = HashInputs
 $before | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $out 'inputs-before.json') -Encoding ASCII
 try {
     $null = Required $ArmGcc @('--version') (Join-Path $out 'compiler-version.txt')
-    $commonPath = Join-Path $repo 'fiber/fiber_runtime_state.c'
+    $commonPath = $stateSource
     $commonText = Get-Content -LiteralPath $commonPath -Raw
     $pattern = 'const unsigned char fiber_internal_runtime_port_abi_v1_anchor\s*=\s*\(unsigned char\)FIBER_RUNTIME_PORT_ABI_VERSION;'
     if ([regex]::Matches($commonText,$pattern).Count -ne 1) { throw 'Common-v2 fixture requires one exact production anchor definition' }
@@ -282,13 +288,20 @@ try {
                 "-I$port","-I$repo","-I$(Join-Path $repo 'fiber')","-I$fixture","-I$CmsisCore")
             if ($lto) { $flags += '-flto' }
             $objects = @{}
-            foreach ($unit in $actualSources + $portSources + @('integration','common_v2_state')) {
-                $source = if ($actualSources -contains $unit) { Join-Path $repo "fiber/$unit.c" }
-                    elseif ($portSources -contains $unit) { Join-Path $port "$unit.c" }
+            $commonBySource = @{}
+            foreach ($source in $runtimeSources) {
+                $unit = $source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
+                $obj = Join-Path $dir ($unit + '.o')
+                $null = Required $ArmGcc ($flags + @('-c',$source,'-o',$obj)) ($obj + '.compile.log')
+                $commonBySource[$source] = $obj
+            }
+            $engineObjects = @($runtimeSources | Where-Object {$_ -ne $stateSource -and $_ -ne $panicSource} | ForEach-Object {$commonBySource[$_]})
+            foreach ($unit in $portSources + @('integration','common_v2_state')) {
+                $source = if ($portSources -contains $unit) { Join-Path $port "$unit.c" }
                     elseif ($unit -ceq 'integration') { Join-Path $fixture 'integration.c' }
                     else { $v2Path }
                 $obj = Join-Path $dir ($unit + '.o')
-                $null = Required $ArmGcc ($flags + @('-c',$source,'-o',$obj)) ($obj + '.compile.log')
+                $null = Required $ArmGcc ($flags + @("-I$(Split-Path $stateSource)",'-c',$source,'-o',$obj)) ($obj + '.compile.log')
                 $objects[$unit] = $obj
             }
             $macroObject = Join-Path $dir 'macro_visibility.o'
@@ -303,7 +316,7 @@ try {
             $v2Names = @(SymbolNames $v2Symbols)
             Check "$mode/v2-only-common-fixture" (($v2Names -ccontains $v2) -and ($v2Names -cnotcontains $v1)) $v2Symbols
             $archive = Join-Path $dir 'production.a'
-            $production = @($objects.fiber_core) + @($portSources | ForEach-Object { $objects[$_] })
+            $production = $engineObjects + @($portSources | ForEach-Object { $objects[$_] })
             $null = Required $ar (@('rcs',$archive) + $production) (Join-Path $dir 'archive.log')
             $null = Required $ar @('t',$archive) (Join-Path $dir 'archive-members.txt')
             $bootUndefined = Required $nm @('-u',$objects.fiber_port_boot) (Join-Path $dir 'boot.undefined.txt')
@@ -324,7 +337,7 @@ try {
             $dependencyText = (Get-Content -LiteralPath $dependencies -Raw).Replace('\','/')
             Check "$mode/control-original-private-header-resolution" ($dependencyText.Contains(
                 (Join-Path $port 'fiber_port_private.h').Replace('\','/'))) $dependencyText
-            $controlProduction = @($objects.fiber_core,$objects.fiber_port,$mutantObject,$objects.fiber_port_exception)
+            $controlProduction = $engineObjects + @($objects.fiber_port,$mutantObject,$objects.fiber_port_exception)
             $controlArchive = Join-Path $dir 'guard_removed.a'
             $null = Required $ar (@('rcs',$controlArchive)+$controlProduction) (Join-Path $dir 'guard_removed.archive.log')
             $controlUndefined = Required $nm @('-u',$controlArchive) (Join-Path $dir 'guard_removed.undefined.txt')
@@ -340,12 +353,12 @@ try {
             }
             if (!$ControlOnly) {
                 foreach ($version in @(1,2)) {
-                    $state = if ($version -eq 1) { $objects.fiber_runtime_state } else { $objects.common_v2_state }
+                    $state = if ($version -eq 1) { $commonBySource[$stateSource] } else { $objects.common_v2_state }
                     foreach ($start in @(0,1)) {
                         foreach ($kind in @('direct','archive')) {
                             $name = "$kind-v$version-start$start"
                             $selected = if ($kind -ceq 'archive') { @($archive) } else { $production }
-                            $linked = LinkProbe $name $flags (@($entries[$start],$state,$objects.fiber_panic,$objects.integration) + $selected) $dir
+                            $linked = LinkProbe $name $flags (@($entries[$start],$state,$commonBySource[$panicSource],$objects.integration) + $selected) $dir
                             $negative = $version -eq 2
                             $accepted = if ($negative) { (ExactMissingV1 $linked.Result) -and !(Test-Path -LiteralPath $linked.Elf) }
                                 else { $linked.Result.Code -eq 0 }
@@ -371,7 +384,7 @@ try {
             foreach ($kind in @('direct','archive')) {
                 $controlObjects = if ($kind -ceq 'archive') { @($controlArchive) } else { $controlProduction }
                 $name = "guard-removed-$kind-v2-init-only"
-                $linked = LinkProbe $name $flags (@($entries[0],$objects.common_v2_state,$objects.fiber_panic,$objects.integration) + $controlObjects) $dir
+                $linked = LinkProbe $name $flags (@($entries[0],$objects.common_v2_state,$commonBySource[$panicSource],$objects.integration) + $controlObjects) $dir
                 $exposesGap = ($linked.Result.Code -eq 0) -and !(ExactMissingV1 $linked.Result)
                 Check "$mode/$name/oracle-rejects-guard-removal" $exposesGap $linked.Result
                 $cases.Add([pscustomobject]@{Kind='guard-removal-control';Mode=$mode;Link=$kind;Version=2;Start=$false;

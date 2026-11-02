@@ -13,6 +13,9 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('state','optional_configuration')
+$runtimeSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
 $fixture=Join-Path $PSScriptRoot 'fixtures\m55_secure_running'
 if(!$ArmGcc -or !(Test-Path -LiteralPath $ArmGcc -PathType Leaf)){throw 'Supply existing -ArmGcc'}
 if(!$QemuRoot.StartsWith('/')){throw 'Explicit existing absolute WSL -QemuRoot required'}
@@ -152,12 +155,14 @@ $attacks[263]='query-7:psplim:L:3:1'
 $cases=@(0..4)+@($attacks.Keys|Sort-Object)
 if($PSBoundParameters.ContainsKey('DevelopmentCases')){foreach($n in $DevelopmentCases){if($n -notin $cases){throw "Unknown case $n"}};$cases=@($DevelopmentCases|Sort-Object -Unique)}
 $inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$objcopy,$ar,$rsp,$inventory)+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
     @(Get-ChildItem $fixture -Recurse -File|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $CmsisCore -File -Filter '*.h'|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $FreeRtosRoot 'include'),$refns,$refs -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)
 if(!$DevelopmentReferenceOnly){
     if(!(Test-Path (Join-Path $ns 'fiber_port_pendsv.c'))){throw 'Actual staged PendSV has not landed; use -DevelopmentReferenceOnly for the established reference probe'}
     $inputs+=@((Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
+        @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem (Join-Path $repo 'fiber') -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem (Join-Path $repo 'fiber/port') -File -Filter '*.h'|Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem $ns,$secure -File|Where-Object {$_.Extension -in @('.h','.c','.ld')}|Select-Object -ExpandProperty FullName)
@@ -327,8 +332,9 @@ function BuildFiber([hashtable]$Mode,[string]$Parent){
     foreach($name in @('nonsecure.c','startup.S','windows.S','support.c','control_injection.S')){
         $nfixture+=Compile ('n-'+$name) (Join-Path $fixture $name) $nf $dir
     }
-    foreach($name in @('fiber_runtime_state.c','fiber_runtime_context_configuration.c')){
-        $nfixture+=Compile $name (Join-Path $repo ('fiber/'+$name)) $nf $dir
+    foreach($source in $runtimeSources){
+        $name=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
+        $nfixture+=Compile $name $source $nf $dir
     }
     $nobjects=@()
     foreach($name in @('fiber_port_boot.c','fiber_port_runtime.c','fiber_port_secure_context.c','fiber_port_svc.c','fiber_port_pendsv.c')){

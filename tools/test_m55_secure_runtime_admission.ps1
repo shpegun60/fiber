@@ -13,6 +13,7 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $admissionLiveRepo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $admissionLiveRepo 'tools/runtime_sources.ps1')
 if(!$ArmGcc -or !(Test-Path -LiteralPath $ArmGcc -PathType Leaf)){throw 'Supply existing -ArmGcc'}
 if(!$QemuRoot.StartsWith('/')){throw 'Explicit existing absolute WSL -QemuRoot required; no provisioning'}
 if(!$CmsisCore){$CmsisCore=Join-Path $admissionLiveRepo '../../../Drivers/CMSIS/Include'}
@@ -79,6 +80,8 @@ try{
         (Join-Path $admissionLiveRepo 'tools/fixtures/cm33_secure_guards/aircr_rsp.py'),
         (Join-Path $admissionLiveRepo 'tools/fixtures/arm_control/qemu.sh'),
         (Join-Path $admissionLiveRepo 'fiber/port/fiber_port_context_cohort_expectation.c'))+
+        @(Get-RuntimeSourceInputs -RepositoryRoot $admissionLiveRepo -Roles @('engine','state','panic','legacy_compat','optional_configuration'))+
+        @(Get-ChildItem (Join-Path $admissionLiveRepo 'context') -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem (Join-Path $admissionLiveRepo 'fiber') -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem (Join-Path $admissionLiveRepo 'fiber/port') -File -Filter '*.h'|Select-Object -ExpandProperty FullName)+
         @(Get-ChildItem (Join-Path $admissionLiveRepo 'tools/fixtures/m55_secure_runtime') -Recurse -File|Select-Object -ExpandProperty FullName)

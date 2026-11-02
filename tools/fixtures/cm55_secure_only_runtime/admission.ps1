@@ -72,17 +72,18 @@ function PortableDefaultAdmission {
     $expected=@('fiber_init','fiber_current','fiber_schedule','fiber_start','fiber_scheduler_set_pick_next',$storageCohort)
     Check "$portableName/exact-five-public-imports-and-storage-cohort" ($actual.Count -eq 6 -and
         @(Compare-Object ($expected | Sort-Object) $actual).Count -eq 0) $u
-    $portableCommon=@()
+    $portableCommon=@();$portablePublicObjects=@()
     $portableCommonFlags=@($portableFlags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})
-    foreach($unit in @('fiber_core.c','fiber_runtime_state.c','fiber_panic.c')) {
+    foreach($source in $runtimeSources) {
+        $unit=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
         $o=Join-Path $portableDir ($unit.Replace('.c','.o'))
-        Compile (Join-Path $repo ('fiber/'+$unit)) $o $portableCommonFlags
+        Compile $source $o $portableCommonFlags
         $portableCommon+=$o
+        if($source -cin $runtimePublicSources){$portablePublicObjects+=$o}
     }
-    $commonDefinitions=Defined $portableCommon[0]
     foreach($public in @('fiber_init','fiber_current','fiber_schedule','fiber_start','fiber_scheduler_set_pick_next')) {
-        Check "$portableName/exact-common-public-owner-$public" ([regex]::Matches($commonDefinitions,
-            '(?m)^[0-9a-f]+\s+T\s+'+[regex]::Escape($public)+'\r?$').Count -eq 1) $commonDefinitions
+        $owners=@($portableCommon | Where-Object {(Defined $_) -match ('(?m)^[0-9a-f]+\s+T\s+'+[regex]::Escape($public)+'\r?$')})
+        Check "$portableName/exact-common-public-owner-$public" ($owners.Count -eq 1 -and $owners[0] -cin $portablePublicObjects) $owners
     }
     $portableExpectation=Join-Path $portableDir 'expectation.o'
     Compile (Join-Path $repo 'fiber/port/fiber_port_context_cohort_expectation.c') $portableExpectation $portableFlags

@@ -58,6 +58,10 @@ def capture(args):
     def inventory():
         files = {p for directory in (repo, repo / "fiber", repo / "fiber/port")
                  for p in directory.iterdir() if p.is_file() and p.suffix.lower() in (".c", ".h", ".inc")}
+        reader = load(repo / "tools/runtime_sources.py", "c55s_snapshot_runtime_sources")
+        files.update(reader.get_runtime_source_inputs(repo,
+                     ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")))
+        files.update((repo / "context").glob("*.h"))
         files.update(p for p in (repo / "fiber/port/ARM_CM55").rglob("*")
                      if p.is_file() and p.suffix.lower() in (".c", ".h", ".ld"))
         for directory in (repo / FIXTURE, repo / SHARED.parent):
@@ -163,8 +167,11 @@ def main():
         positive.track(Path(__file__).with_name("README.md"))
         port_sources, common_sources = positive.source_paths(profile)
         expectation = repo / "fiber/port/fiber_port_context_cohort_expectation.c"
+        reader = load(repo / "tools/runtime_sources.py", "c55s_selected_runtime_sources")
+        selected_common = list(reader.get_runtime_source_paths(repo,
+                              ("engine", "state", "optional_configuration", "panic", "legacy_compat")))
         require([p.name for p in port_sources] == EXPECTED_SOURCES and
-                [p.name for p in common_sources] == list(module.COMMON_SOURCES) + [expectation.name],
+                common_sources == selected_common + [expectation],
                 "Actual C55S common source inventory omits/adds a required TU")
         macros = positive.run([positive.gcc, *positive.flags(profile, "O2", False, "baseline"),
                                "-E", "-dM", expectation], "actual C55S manifest preprocessing")

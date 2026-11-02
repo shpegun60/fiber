@@ -5,6 +5,7 @@ gate compiles the C55S sources independently; no sibling object/provider is used
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -27,6 +28,13 @@ def require(condition, message):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def runtime_reader(repo):
+    spec = importlib.util.spec_from_file_location('c55s_runtime_sources', Path(repo) / 'tools/runtime_sources.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def save(path, value):
@@ -142,8 +150,12 @@ class Proof:
                       ('g++', 'gcc-ar', 'gcc-nm', 'objdump', 'readelf')}
         self.ns_sources = [self.ns / n for n in ('fiber_port.c', 'fiber_port_boot.c', 'fiber_port_runtime.c',
                            'fiber_port_secure_context.c', 'fiber_port_svc.c', 'fiber_port_pendsv.c')]
-        self.common_sources = [self.common / n for n in ('fiber_core.c', 'fiber_runtime_state.c',
-                               'fiber_runtime_context_configuration.c', 'fiber_panic.c')]
+        self.runtime_sources = runtime_reader(self.repo)
+        self.common_roles = ('engine', 'state', 'optional_configuration', 'panic', 'legacy_compat')
+        self.common_sources = list(self.runtime_sources.get_runtime_source_paths(self.repo, self.common_roles))
+        state = self.runtime_sources.get_runtime_source_paths(self.repo, ('state',))
+        require(len(state) == 1, 'Expected exactly one runtime state owner')
+        self.state_source = state[0]
 
     def run(self, argv, allowed=False):
         argv = list(map(str, argv))
@@ -160,7 +172,7 @@ class Proof:
 
     def compile(self, source, output, options, private=False, secure=False, cxx=False, public=False, extra=(), allowed=False):
         flags = [*self.base, '-std=gnu++17' if cxx else '-std=gnu11', *options,
-                 '-I' + str(self.repo), '-I' + str(self.common), '-I' + str(self.common / 'port'),
+                 '-I' + str(self.repo), '-I' + str(self.common), '-I' + str(self.repo / 'context'), '-I' + str(self.common / 'port'),
                  '-I' + str(self.fixture.parent), '-I' + str(self.secure if secure else self.ns),
                  '-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV81M_MAINLINE=1']
         if private:
@@ -346,15 +358,19 @@ class Proof:
         require(found, 'constructor lacks exact generated cold reverse-v1 read')
 
     def constructor(self, d, common, port, options, hooks):
-        text = self.common_sources[1].read_text()
-        anchor = 'const unsigned char ' + REVERSE + ' =\n\t\t(unsigned char)FIBER_RUNTIME_PORT_ABI_VERSION;'
-        require(text.count(anchor) == 1, 'marker-only pre-v1 common model boundary drift')
+        text = self.state_source.read_text()
+        anchors = re.findall(r'const unsigned char ' + REVERSE + r' =\n[ \t]+\(unsigned char\)FIBER_RUNTIME_PORT_ABI_VERSION;', text)
+        require(len(anchors) == 1, 'marker-only pre-v1 common model boundary drift')
+        anchor = anchors[0]
         source, obj = d / 'pre-v1-common-state.c', d / 'pre-v1-common-state.o'
         source.write_text(text.replace(anchor, ''))
         self.compile(source, obj, options)
         require(not any(n == REVERSE for n, t in self.nm(obj) + self.nm(obj, True)), 'pre-v1 model still has marker')
         current = self.archive(d / 'libcommon-current.a', common)
-        stale = self.archive(d / 'libcommon-pre-v1.a', [common[0], obj, *common[2:]])
+        require(len(common) == len(self.common_sources) and self.common_sources.count(self.state_source) == 1,
+                'Missing/ambiguous state object mapping')
+        stale = self.archive(d / 'libcommon-pre-v1.a', [obj if source == self.state_source else current
+                                                    for source, current in zip(self.common_sources, common)])
         full_port = self.archive(d / 'libport-current.a', port)
         boot = self.ns_sources[1].read_text()
         retain = 'FIBER_RUNTIME_PORT_ABI_RETAIN_V1();'

@@ -45,10 +45,10 @@ function CompilerAdversarial {
                 if($lto){$flags+=@('-flto','-ffat-lto-objects')}
                 $units=@(
                     @{Name='boot';Source=(Join-Path $port 'fiber_port_boot.c');Common=$false},
-                    @{Name='runtime';Source=(Join-Path $port 'fiber_port.c');Common=$false},
-                    @{Name='core';Source=(Join-Path $repo 'fiber/fiber_core.c');Common=$true},
-                    @{Name='state';Source=(Join-Path $repo 'fiber/fiber_runtime_state.c');Common=$true},
-                    @{Name='panic';Source=(Join-Path $repo 'fiber/fiber_panic.c');Common=$true})
+                    @{Name='runtime';Source=(Join-Path $port 'fiber_port.c');Common=$false})
+                foreach($source in $runtimeSources) {
+                    $units+=@{Name=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_');Source=$source;Common=$true}
+                }
                 $baselineObjects=@()
                 foreach($unit in $units) {
                     $f=if($unit.Common){@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})}else{$flags}
@@ -212,15 +212,21 @@ function CompilerAdversarial {
                 # registration call. The exact normal-body predicate must
                 # reject its native output, even though raw cold hooks are
                 # legitimate elsewhere in the same relocatable group.
-                $core=[IO.File]::ReadAllText((Join-Path $repo 'fiber/fiber_core.c'))
+                $owners=@($units | Where-Object {$_.Common -and
+                    (Defined (Join-Path $dir ($_.Name+'.o'))) -match '(?m)^[0-9a-f]+\s+T\s+fiber_current\r?$'})
+                Check "$mode/cold-edge-control-unique-actual-owner" ($owners.Count -eq 1) $owners
+                $owner=$owners[0]
+                $core=[IO.File]::ReadAllText($owner.Source)
                 $needle='return fiber_internal_runtime_load_current_context();'
                 Check "$mode/cold-edge-control-exact-source-anchor" ([regex]::Matches($core,[regex]::Escape($needle)).Count -eq 1) $needle
                 $c=Join-Path $controlDir 'sensitive-cold-edge.c'
                 [IO.File]::WriteAllText($c,$core.Replace($needle,('fiber_scheduler_set_pick_next(0, 0);'+[Environment]::NewLine+$needle)))
                 $f=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})+@('-finstrument-functions')
-                $o=Join-Path $controlDir 'sensitive-cold-edge.o';Compile $c $o $f
+                $o=Join-Path $controlDir 'sensitive-cold-edge.o';Compile $c $o ($f+@("-I$(Split-Path $owner.Source)"))
                 $native=Join-Path $controlDir 'sensitive-cold-edge-native.o'
-                $null=Need $ArmGcc ($nativeFlags+@('-finstrument-functions',$baselineObjects[0],$baselineObjects[1],$o,$baselineObjects[3],$baselineObjects[4],'-o',$native)) ($native+'.link.log')
+                $ownerObject=Join-Path $dir ($owner.Name+'.o')
+                $mutantObjects=@($baselineObjects | ForEach-Object {if($_ -eq $ownerObject){$o}else{$_}})
+                $null=Need $ArmGcc ($nativeFlags+@('-finstrument-functions')+$mutantObjects+@('-o',$native)) ($native+'.link.log')
                 $d=Need $objdump @('-drwC',$native) ($native+'.disassembly.txt')
                 $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <fiber_current>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
                 Check "$mode/compiled-sensitive-cold-edge-control-rejected" ($body.Success -and

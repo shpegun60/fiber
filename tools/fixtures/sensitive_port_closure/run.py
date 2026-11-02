@@ -8,6 +8,7 @@ if not __debug__ or sys.flags.optimize:
 import argparse
 import csv
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -34,7 +35,8 @@ FORWARD = set("fiber_port_context_init fiber_port_runtime_memory_barrier fiber_p
               "fiber_port_runtime_select_first fiber_port_runtime_start_first fiber_port_runtime_schedule".split())
 PUBLIC_HOT = {"fiber_current", "fiber_start", "fiber_schedule"}
 COMMON_COLD = {"fiber_init", "fiber_scheduler_set_pick_next", "fiber_internal_scheduler_store_pick_next"}
-COMMON_SOURCES = ("fiber_core.c", "fiber_runtime_state.c", "fiber_runtime_context_configuration.c", "fiber_panic.c")
+COMMON_ROLES = ("engine", "state", "optional_configuration", "panic", "legacy_compat")
+VALIDATION_ROLES = ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")
 ANNOTATION_REMOVAL = (
     "-DFIBER_API_ATTR_SENSITIVE=FIBER_API_NOINLINE FIBER_API_NOIPA FIBER_API_NOCLONE FIBER_API_NOICF FIBER_API_USED",
     "-DFIBER_API_ATTR_INLINE_SENSITIVE=",
@@ -48,6 +50,13 @@ def require(condition, message):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def runtime_reader(repo):
+    spec = importlib.util.spec_from_file_location("closure_runtime_sources", Path(repo) / "tools/runtime_sources.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_json(path, value):
@@ -387,7 +396,7 @@ class Audit:
         value = digest(path)
         previous = self.inputs.setdefault(str(path), value)
         require(previous == value, "Input changed during proof: " + str(path))
-        if path.suffix.lower() in (".c", ".h", ".s", ".ld", ".inc", ".py", ".ps1", ".md") and str(path) not in self.input_copies:
+        if path.suffix.lower() in (".c", ".h", ".s", ".ld", ".inc", ".py", ".ps1", ".md", ".json") and str(path) not in self.input_copies:
             target = self.build / "input-bytes" / (value + path.suffix.lower())
             target.parent.mkdir(exist_ok=True)
             data = path.read_bytes()
@@ -427,7 +436,7 @@ class Audit:
         directory = self.repo / "fiber/port" / p["directory"]
         if p["name"] == "CM7" and self.a.cm7_prefix_root:
             result += ["-I" + str(Path(self.a.cm7_prefix_root).resolve())]
-        for path in (self.fixture, directory, self.repo / "fiber/port", self.repo / "fiber", self.repo, Path(self.a.cmsis_core)):
+        for path in (self.fixture, directory, self.repo / "fiber/port", self.repo / "fiber", self.repo / "context", self.repo, Path(self.a.cmsis_core)):
             result += ["-I" + str(path)]
         return result + ["-include", self.fixture / "main.h"]
 
@@ -439,7 +448,8 @@ class Audit:
         require(actual == p["sources"], "Exact port C inventory changed: " + p["name"] + repr(actual))
         if p["kind"] == "companion":
             return [directory / n for n in p["sources"]], []
-        common = [self.repo / "fiber" / n for n in COMMON_SOURCES]
+        reader = runtime_reader(self.repo)
+        common = list(reader.get_runtime_source_paths(self.repo, COMMON_ROLES))
         common += [self.repo / "fiber/port/fiber_port_context_cohort_expectation.c"]
         return [directory / n for n in p["sources"]], common
 
@@ -498,6 +508,10 @@ class Audit:
         return dis
 
     def preflight(self):
+        for path in runtime_reader(self.repo).get_runtime_source_inputs(self.repo, VALIDATION_ROLES):
+            self.track(path)
+        for path in (self.repo / "context").glob("*.h"):
+            self.track(path)
         if self.a.input_snapshot:
             self.track(self.a.input_snapshot)
             self.snapshot = json.loads(Path(self.a.input_snapshot).read_text(encoding="ascii"))
@@ -684,9 +698,16 @@ class Audit:
                     "Counterfeit gcov-shaped initializer inherited cold registration allowance")
             self.controls.append(dict(case=label, kind="compiled-counterfeit-registration", expected="unclassified-common-initializer"))
         if bundle == "raw":
-            mutation_source = (next(s for s in port_sources if s.name == "fiber_secure_context_pool.c")
-                               if p["kind"] == "companion" else self.repo / "fiber/fiber_core.c")
-            mutation_root = "fiber_secure_context_pool_boot_initialize" if p["kind"] == "companion" else "fiber_current"
+            if p["kind"] == "companion":
+                mutation_source = next(s for s in port_sources if s.name == "fiber_secure_context_pool.c")
+                mutation_root = "fiber_secure_context_pool_boot_initialize"
+            else:
+                engines = runtime_reader(self.repo).get_runtime_source_paths(self.repo, ("engine",))
+                require(len(engines) == 1, "Expected one engine annotation-control owner")
+                mutation_source = engines[0]
+                roots = re.findall(r"\b(fiber_current|ctxrt_v1_current)\s*\(void\)\s*\{", mutation_source.read_text())
+                require(len(roots) == 1, "Engine current annotation-control definition changed")
+                mutation_root = roots[0]
             mutant = self.compile(mutation_source, directory / "removed-annotations.o", flags, ANNOTATION_REMOVAL)
             dis = self.lower(p, [mutant], directory / "removed-annotations-native.o", flags, lto, section_mode)
             mutation = inspect(directory / "removed-annotations-native.o", dis, {mutation_root}, True)
@@ -816,6 +837,8 @@ def run_immutable(args):
     def inventory():
         files = {p.resolve() for directory in (repo, repo / "fiber", repo / "fiber/port")
                  for p in directory.iterdir() if p.is_file() and p.suffix.lower() in suffixes}
+        files.update(runtime_reader(repo).get_runtime_source_inputs(repo, VALIDATION_ROLES))
+        files.update((repo / "context").glob("*.h"))
         for name in {Path(p["directory"]).parts[0] for p in selected}:
             files.update(p.resolve() for p in (repo / "fiber/port" / name).rglob("*")
                          if p.is_file() and p.suffix.lower() in suffixes)

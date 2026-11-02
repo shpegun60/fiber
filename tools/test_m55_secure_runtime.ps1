@@ -15,6 +15,10 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('engine','state','panic','legacy_compat','optional_configuration')
+$runtimeSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
+$runtimeStateSource=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'state')[0]
 $fixture=Join-Path $PSScriptRoot 'fixtures\m55_secure_runtime'
 if(!$ArmGcc -or !(Test-Path -LiteralPath $ArmGcc -PathType Leaf)){throw 'Supply existing -ArmGcc'}
 if(!$QemuRoot.StartsWith('/')){throw 'Explicit existing absolute WSL -QemuRoot required'}
@@ -193,6 +197,8 @@ function VariantCases([hashtable]$Mode){
 }
 $inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$objcopy,$readelf,$ar,$rsp,$inventory,
     (Join-Path $repo 'fiber/port/fiber_port_context_cohort_expectation.c'))+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
+    @(Get-ChildItem (Join-Path $repo 'context') -File|Where-Object {$_.Extension -in @('.c','.h')}|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $fixture -Recurse -File|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $CmsisCore -File -Filter '*.h'|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $FreeRtosRoot 'include'),$refns,$refs -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)
@@ -287,7 +293,7 @@ function Definitions([string]$Object){
     $text=Command $nm @('-g','--defined-only',$Object) ($Object+'.defined.nm')
     return @([regex]::Matches($text,'(?m)^[0-9a-f]+\s+[A-Z]\s+(\S+)\r?$')|ForEach-Object {$_.Groups[1].Value})
 }
-function VerifyRoles([string[]]$PortObjects,[string[]]$CommonObjects,[string[]]$FixtureObjects){
+function VerifyRoles([string[]]$PortObjects,[string[]]$CommonObjects,[string[]]$FixtureObjects,[hashtable]$CommonSources){
     $owners=@{}
     foreach($object in $PortObjects){
         $names=@(Definitions $object)
@@ -300,14 +306,15 @@ function VerifyRoles([string[]]$PortObjects,[string[]]$CommonObjects,[string[]]$
     foreach($object in $CommonObjects){
         $names=@(Definitions $object)
         foreach($name in ($public+$reverse+@('fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor'))){
-            if($name -cin $names){Check "unique actual common owner $name" (!$commonOwners.ContainsKey($name));$commonOwners[$name]=(Split-Path $object -Leaf)}
+            if($name -cin $names){Check "unique actual common owner $name" (!$commonOwners.ContainsKey($name));$commonOwners[$name]=$object}
         }
         Check "$object no generic provider in common" (@($names|Where-Object {$_ -in $generic}).Count -eq 0)
         $deps=Get-Content ([IO.Path]::ChangeExtension($object,'.d')) -Raw
         Check "$object common remains independent of selected/CMSIS headers" ($deps -notmatch '(fiber_port_(private|types|traits|selected|context_cohort)\.h|[/\\]ARM_CM[0-9]|core_cm[0-9]+\.h)')
     }
-    foreach($name in $public){Check "real public common-core owner $name" ($commonOwners[$name] -ceq 'fiber_core.c.o')}
-    foreach($name in ($reverse+@('fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor'))){Check "real common-state owner $name" ($commonOwners[$name] -ceq 'fiber_runtime_state.c.o')}
+    $publicSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles @('engine','legacy_compat'))
+    foreach($name in $public){Check "real public engine/legacy role owner $name" ($commonOwners.ContainsKey($name) -and $CommonSources[$commonOwners[$name]] -cin $publicSources)}
+    foreach($name in ($reverse+@('fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor'))){Check "real state role owner $name" ($commonOwners.ContainsKey($name) -and $CommonSources[$commonOwners[$name]] -ceq $runtimeStateSource)}
     foreach($object in $FixtureObjects){
         $names=@(Definitions $object)
         Check "$object fixture owns no generic/public/reverse/cohort provider" (@($names|Where-Object {$_ -in ($generic+$public+$reverse) -or $_ -like 'fiber_port_*cohort*' -or $_ -like 'fiber_internal_runtime_*'}).Count -eq 0)
@@ -447,10 +454,12 @@ function BuildFiber([hashtable]$Mode,[string]$Parent){
         $nfixture+=Compile ('n-'+$name) (Join-Path $fixture $name) $nf $dir
     }
     $applicationObjects=@($nfixture)
-    $commonObjects=@()
-    foreach($name in @('fiber_core.c','fiber_runtime_state.c','fiber_runtime_context_configuration.c','fiber_panic.c')){
+    $commonObjects=@();$commonSources=@{}
+    foreach($source in $runtimeSources){
+        $name=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
         $cf=@($nf|Where-Object {$_ -notin @("-I$fixture","-I$ns","-I$CmsisCore")})
-        $commonObjects+=Compile $name (Join-Path $repo ('fiber/'+$name)) $cf $dir
+        $object=Compile $name $source $cf $dir
+        $commonObjects+=$object;$commonSources[$object]=$source
     }
     $expectation=Compile 'selected-build-expectation' (Join-Path $repo 'fiber/port/fiber_port_context_cohort_expectation.c') $nf $dir
     $nobjects=@()
@@ -461,14 +470,14 @@ function BuildFiber([hashtable]$Mode,[string]$Parent){
         $nobjects+=$object
     }
     $nraw=@($nobjects)
-    VerifyRoles $nraw $commonObjects $applicationObjects
+    VerifyRoles $nraw $commonObjects $applicationObjects $commonSources
     if($Mode.ContainsKey('Archive')){$nobjects=@(MakeArchive 'ns-staged-components' $nobjects $dir)}
     $commonList=@($commonObjects)
     if($Mode.ContainsKey('Archive')){$commonList=@(MakeArchive 'actual-common' $commonObjects $dir)}
     $nlink=$nf+$link+@('-T',(Join-Path $fixture 'nonsecure.ld'),'-T',(Join-Path $ns 'fiber_port_first_start_contract.ld'))
     $model=@{Secure=$s;Directory=$dir;SFlags=$sf;NFlags=$nf;Hostile=$hostile;
         SRaw=$sraw;NRaw=$nraw;NList=$nobjects;SFixture=$sfixture;AppObjects=$applicationObjects;
-        CommonRaw=$commonObjects;CommonList=$commonList;Expectation=$expectation;SLink=$slink;NLink=$nlink;Import=$import}
+        CommonRaw=$commonObjects;CommonSources=$commonSources;CommonList=$commonList;Expectation=$expectation;SLink=$slink;NLink=$nlink;Import=$import}
     $n=Link 'nonsecure' $nlink (NonsecureMembers $model) $dir
     InspectRuntime $n $Mode $dir
     $pd=[regex]::Match($n.Dis,'(?ms)^[0-9a-f]+ <PendSV_Handler>:\r?\n(.*?)(?=^[0-9a-f]+ <|\z)').Groups[1].Value
@@ -538,17 +547,19 @@ function RemoveFunction([string]$Text,[string]$Name){
 }
 function ReverseNegatives([hashtable]$Model,[hashtable]$Mode){
     $dir=Join-Path $Model.Directory 'reverse';$null=New-Item -ItemType Directory -Path $dir
-    $original=@($Model.CommonRaw|Where-Object {(Split-Path $_ -Leaf) -ceq 'fiber_runtime_state.c.o'})
-    $names=@(Definitions $original[0])
     foreach($missing in @('fiber_internal_runtime_port_abi_v1_anchor')+$reverse){
-        $text=Get-Content (Join-Path $repo 'fiber/fiber_runtime_state.c') -Raw
+        $original=@($Model.CommonRaw|Where-Object {$missing -cin @(Definitions $_)})
+        Check "$missing unique actual source owner" ($original.Count -eq 1)
+        $names=@(Definitions $original[0])
+        $ownerSource=$Model.CommonSources[$original[0]]
+        $text=Get-Content $ownerSource -Raw
         if($missing -ceq 'fiber_internal_runtime_port_abi_v1_anchor'){
             $pattern='const unsigned char fiber_internal_runtime_port_abi_v1_anchor\s*=\s*\(unsigned char\)FIBER_RUNTIME_PORT_ABI_VERSION;'
             Check 'unique actual reverse ABI anchor definition' ([regex]::Matches($text,$pattern).Count -eq 1)
             $text=[regex]::Replace($text,$pattern,'')
         }else{$text=RemoveFunction $text $missing}
         $source=Join-Path $dir ($missing+'.c');[IO.File]::WriteAllText($source,$text)
-        $flags=@($Model.NFlags|Where-Object {$_ -notin @("-I$fixture","-I$ns","-I$CmsisCore")})+@("-I$repo/fiber")
+        $flags=@($Model.NFlags|Where-Object {$_ -notin @("-I$fixture","-I$ns","-I$CmsisCore")})+@("-I$repo/fiber","-I$(Split-Path $ownerSource)")
         $object=Compile $missing $source $flags $dir
         $actual=@(Definitions $object)
         Check "$missing removal preserves every other real common definition" (!(Compare-Object @($names|Where-Object {$_ -cne $missing}) $actual))
@@ -560,7 +571,9 @@ function ReverseNegatives([hashtable]$Model,[hashtable]$Mode){
         'fiber_internal_runtime_load_current_context','fiber_internal_scheduler_store_pick_next',
         'fiber_internal_scheduler_is_configured','fiber_internal_runtime_close_context_configuration',
         'fiber_internal_runtime_context_configuration_is_open')+$reverse
-    $objects=@($Model.CommonRaw|Where-Object {$_ -cne $original[0]})
+    $stateObjects=@($Model.CommonRaw|Where-Object {$Model.CommonSources[$_] -eq $runtimeStateSource})
+    Check 'one actual state role object' ($stateObjects.Count -eq 1)
+    $objects=@($Model.CommonRaw|Where-Object {$_ -cne $stateObjects[0]})
     $archive=MakeArchive 'absent-real-common-state' $objects $dir
     RejectUndefined 'absent-real-common-state' $Model.NLink (NonsecureMembers $Model @{Common=@($archive)}) $expected $dir
 }
@@ -588,12 +601,13 @@ function ComponentNegatives([hashtable]$Model,[hashtable]$Mode){
         RejectUndefined ('without-'+$item.File) $flags $members $item.Missing $dir
     }
     foreach($item in @(
-        @{File='fiber_runtime_context_configuration.c.o';Missing=@('fiber_internal_runtime_context_configuration_abi_v1_anchor','fiber_internal_runtime_require_context_configuration_open')},
-        @{File='fiber_core.c.o';Missing=($public+@('fiber_internal_task_return'))})){
-        $objects=@($Model.CommonRaw|Where-Object {(Split-Path $_ -Leaf) -cne $item.File})
-        Check "$($item.File) removes exactly one real common module" ($objects.Count -eq 3)
-        $archive=MakeArchive ('without-'+$item.File) $objects $dir
-        RejectUndefined ('without-'+$item.File) $Model.NLink (NonsecureMembers $Model @{Common=@($archive)}) $item.Missing $dir
+        @{Name='configuration';Missing=@('fiber_internal_runtime_context_configuration_abi_v1_anchor','fiber_internal_runtime_require_context_configuration_open')},
+        @{Name='public-engine';Missing=($public+@('fiber_internal_task_return'))})){
+        $removed=@($Model.CommonRaw|Where-Object {$names=@(Definitions $_);@($item.Missing|Where-Object {$_ -cin $names}).Count -gt 0})
+        Check "$($item.Name) has actual compiled common owners" ($removed.Count -gt 0)
+        $objects=@($Model.CommonRaw|Where-Object {$_ -cnotin $removed})
+        $archive=MakeArchive ('without-'+$item.Name) $objects $dir
+        RejectUndefined ('without-'+$item.Name) $Model.NLink (NonsecureMembers $Model @{Common=@($archive)}) $item.Missing $dir
     }
 }
 function ProviderNegatives([hashtable]$Model,[hashtable]$Mode){

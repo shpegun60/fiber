@@ -11,6 +11,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('engine','state','panic','legacy_compat')
+$runtimeSources = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
+$runtimeStateSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'state')[0]
+$runtimePanicSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'panic')[0]
 $fixture = Join-Path $PSScriptRoot 'fixtures\cm33f_mpu_runtime'
 $component = Join-Path $PSScriptRoot 'fixtures\cm33f_mpu_running_execution'
 $bootstrap = Join-Path $PSScriptRoot 'fixtures\cm33f_mpu_first_start_execution'
@@ -47,6 +52,8 @@ $referenceChecked = $false
 $failure = ''
 $inputs = @($PSCommandPath,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles) +
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $fixture -File -Recurse | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $port -File -Recurse | Where-Object {$_.Extension -in @('.c','.h','.S','.ld')} | Select-Object -ExpandProperty FullName) +
     @('main.h','report.h','startup.S','secure.c','secure.ld','qemu.sh' | ForEach-Object {Join-Path $bootstrap $_}) +
@@ -266,14 +273,16 @@ try {
                             CompileUnit (Join-Path $port $unit) $object $flags
                             $portObjects+=$object
                         }
-                        $commonObjects=@()
+                        $commonObjects=@();$commonBySource=@{}
                         $commonFlags=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})+@('-mgeneral-regs-only')
-                        foreach($unit in @('fiber_core.c','fiber_runtime_state.c','fiber_panic.c')) {
+                        foreach($source in $runtimeSources) {
+                            $unit=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
                             $object=Join-Path $dir ($unit.Replace('.c','.o'))
-                            CompileUnit (Join-Path $repo ('fiber/'+$unit)) $object $commonFlags
+                            CompileUnit $source $object $commonFlags
                             $deps=[IO.File]::ReadAllText([IO.Path]::ChangeExtension($object,'.d'))
                             Check "$mode/common-free-of-selected-CMSIS-$unit" ($deps -notmatch '(fiber_port_(private|types|selected|context_cohort)\.h|core_cm[0-9]+\.h)') $deps
                             $commonObjects+=$object
+                            $commonBySource[$source]=$object
                         }
                         $portArchive=Join-Path $dir 'libport.a';$commonArchive=Join-Path $dir 'libcommon.a'
                         Archive $portArchive $portObjects;Archive $commonArchive $commonObjects
@@ -373,7 +382,7 @@ try {
                             Check "$name/default-common-panic-link" ($defaultLink.Code -eq 0) $defaultLink.Text
                             InspectImage ($name+'-default-panic') $defaultElf
                             $defaultSymbols=[IO.File]::ReadAllText($defaultElf+'.symbols.txt')
-                            $weakInput=Defined $commonObjects[2]
+                            $weakInput=Defined $commonBySource[$runtimePanicSource]
                             $oracleInput=Defined $defaultOracle
                             Check "$name/sole-weak-input-panic" ($weakInput -match '(?m)^[0-9a-f]+\s+W\s+fiber_panic\r?$' -and
                                 $oracleInput -notmatch '(?m)\bfiber_panic\r?$') $weakInput
@@ -398,13 +407,14 @@ try {
                                 $bad=LinkImage (Join-Path $caseDir ("duplicate-$isSvc.elf")) ($members+@($duplicate)) $flags (Join-Path $fixture 'nonsecure.ld')
                                 Check "$name/duplicate-$symbol-rejected" ($bad.Code -ne 0 -and $bad.Text -match ('multiple definition of [^\r\n]*\b'+$symbol+'\b')) $bad.Text
                             }
-                            $stateText=[IO.File]::ReadAllText((Join-Path $repo 'fiber/fiber_runtime_state.c'))
+                            $stateText=[IO.File]::ReadAllText($runtimeStateSource)
                             Check "$name/single-v1-definition-control" ([regex]::Matches($stateText,'fiber_internal_runtime_port_abi_v1_anchor').Count -eq 1) $stateText
                             $badStateSource=Join-Path $caseDir 'v2-state.c'
                             [IO.File]::WriteAllText($badStateSource,$stateText.Replace('fiber_internal_runtime_port_abi_v1_anchor','fiber_internal_runtime_port_abi_v2_anchor'))
                             $badState=Join-Path $caseDir 'v2-state.o'
-                            CompileUnit $badStateSource $badState $commonFlags
-                            $bad=LinkImage (Join-Path $caseDir 'missing-v1.elf') (@($fixtureObjects)+@($expectation,$commonObjects[0],$badState,$commonObjects[2])+$portObjects) $flags (Join-Path $fixture 'nonsecure.ld')
+                            CompileUnit $badStateSource $badState ($commonFlags+@("-I$(Split-Path $runtimeStateSource)"))
+                            $badCommon=@($commonObjects | ForEach-Object {if($_ -eq $commonBySource[$runtimeStateSource]){$badState}else{$_}})
+                            $bad=LinkImage (Join-Path $caseDir 'missing-v1.elf') (@($fixtureObjects)+@($expectation)+$badCommon+$portObjects) $flags (Join-Path $fixture 'nonsecure.ld')
                             ExpectUndefined "$name/missing-v1-exact-rejection" $bad 'fiber_internal_runtime_port_abi_v1_anchor'
                             $svcText=[IO.File]::ReadAllText((Join-Path $port 'fiber_port_svc.c'))
                             Check "$name/single-provider-removal-control" ([regex]::Matches($svcText,'FIBER_PORT_CONTEXT_COHORT_DEFINE\(\);').Count -eq 1) $cohort

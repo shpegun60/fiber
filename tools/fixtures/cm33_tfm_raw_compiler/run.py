@@ -76,6 +76,9 @@ def immutable_run(args):
     root = build / 'immutable-inputs'
     files = {p for directory in (repo, repo / 'fiber', repo / 'fiber/port')
              for p in directory.iterdir() if p.is_file() and p.suffix.lower() in ('.c', '.h', '.inc')}
+    files.update(load(repo / 'tools/runtime_sources.py').get_runtime_source_inputs(repo,
+                 ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')))
+    files.update((repo / 'context').glob('*.h'))
     files.update(p for p in (repo / PORT).iterdir() if p.is_file() and p.suffix.lower() in ('.c', '.h'))
     for name in ('cm33_tfm_raw_compiler', 'sensitive_port_closure', 'constructor_r9'):
         files.update(p for p in (repo / 'tools/fixtures' / name).rglob('*') if p.is_file())

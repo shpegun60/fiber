@@ -74,20 +74,26 @@ def run_r9(p, Elf):
         objects = []
         for source in p.common_sources + p.sources:
             actual = source
-            if mutant == "caller-r9-scratch" and source.name == "fiber_core.c":
+            if mutant == "caller-r9-scratch" and source == p.common_owner("engine"):
                 text = source.read_text()
-                call = "fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);"
-                require(text.count(call) == 1, "R9 caller mutant anchor drift")
+                calls = [call for call in ("fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);",
+                                          "fiber_port_context_init(context, stack_begin, stack_end, entry, arg);")
+                         if call in text]
+                require(len(calls) == 1 and text.count(calls[0]) == 1, "R9 caller mutant anchor drift")
+                call = calls[0]
                 text = text.replace(call,
                     'register uint32_t scratch __asm("r9") = 0xdeadc0deu;\n\t'
                     '__asm volatile("" : "+r"(scratch) :: "memory");\n\t' + call + '\n\t'
                     '__asm volatile("" : "+r"(scratch) :: "memory");')
                 actual = d / source.name
                 actual.write_text(text)
-            if mutant == "caller-r9-broken" and source.name == "fiber_core.c":
+            if mutant == "caller-r9-broken" and source == p.common_owner("engine"):
                 text = source.read_text()
-                call = "fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);"
-                require(text.count(call) == 1, "R9 caller-preservation mutant anchor drift")
+                calls = [call for call in ("fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);",
+                                          "fiber_port_context_init(context, stack_begin, stack_end, entry, arg);")
+                         if call in text]
+                require(len(calls) == 1 and text.count(calls[0]) == 1, "R9 caller-preservation mutant anchor drift")
+                call = calls[0]
                 # Deliberately violate AAPCS: omit the R9 clobber/preservation declaration.
                 text = text.replace(call, '__asm volatile("mov r9, %0" :: "r"(0xdeadc0deu) : "memory");\n\t' + call)
                 actual = d / source.name

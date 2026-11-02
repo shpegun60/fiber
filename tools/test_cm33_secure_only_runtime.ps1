@@ -14,6 +14,12 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('engine','state','panic','legacy_compat')
+$runtimeSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
+$runtimePublicSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles @('engine','legacy_compat'))
+$runtimeStateSource=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'state')[0]
+$runtimePanicSource=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'panic')[0]
 $sourceIdentityScript=Join-Path $PSScriptRoot 'fixtures/source_export_identity/identity.ps1'
 . $sourceIdentityScript
 $fixture=Join-Path $PSScriptRoot 'fixtures/cm33_secure_only_runtime'
@@ -50,6 +56,8 @@ $repositoryMetadataBefore=$null;$repositoryMetadataAfter=$null
 $inputs=@($PSCommandPath,$sourceIdentityScript,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
     (Join-Path $repo 'tools/fixtures/portable_application.c'),
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem -LiteralPath $fixture -File -Recurse | Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem -LiteralPath $port -File | Where-Object {$_.Extension -in @('.c','.h','.S','.ld')} | Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $repo 'fiber') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName)+
@@ -225,12 +233,12 @@ function LinkControls {
         $bad=Link (Join-Path $controlDir "duplicate-$svc.elf") ($members+@($duplicate)) $flags
         Check "$name/duplicate-$symbol" ($bad.Code -ne 0 -and $bad.Text -match ('multiple definition of [^\r\n]*\b'+$symbol+'\b')) $bad.Text
     }
-    $stateText=[IO.File]::ReadAllText((Join-Path $repo 'fiber/fiber_runtime_state.c'))
+    $stateText=[IO.File]::ReadAllText($runtimeStateSource)
     Check "$name/single-v1-source-mutation" ([regex]::Matches($stateText,'fiber_internal_runtime_port_abi_v1_anchor').Count -eq 1) 'Current-source definition rename only'
     $badStateSource=Join-Path $controlDir 'v2-state.c'
     [IO.File]::WriteAllText($badStateSource,$stateText.Replace('fiber_internal_runtime_port_abi_v1_anchor','fiber_internal_runtime_port_abi_v2_anchor'))
-    $badState=Join-Path $controlDir 'v2-state.o';Compile $badStateSource $badState $commonFlags
-    $badCommon=@($commonObjects[0],$badState,$commonObjects[2])
+    $badState=Join-Path $controlDir 'v2-state.o';Compile $badStateSource $badState ($commonFlags+@("-I$(Split-Path $runtimeStateSource)"))
+    $badCommon=@($commonObjects | ForEach-Object {if($_ -eq $commonBySource[$runtimeStateSource]){$badState}else{$_}})
     $bad=Link (Join-Path $controlDir 'missing-v1.elf') (@($fixtureObjects)+@($expectation)+$badCommon+$portObjects) $flags
     UndefinedFailure "$name/missing-v1" $bad 'fiber_internal_runtime_port_abi_v1_anchor'
     $runtimeText=[IO.File]::ReadAllText((Join-Path $port 'fiber_port.c'))
@@ -268,7 +276,7 @@ function LinkControls {
     $elf=Join-Path $defaultDir 'secure.elf'
     $result=Link $elf (@($fixtureObjects | Select-Object -First 5)+@($oracle,$expectation,'-Wl,--start-group',$commonArchive,$portArchive,'-Wl,--end-group')) $flags
     Check "$name/default-weak-panic-link" ($result.Code -eq 0) $result.Text;Inspect "$name/default-weak-panic" $elf
-    $weak=Defined $commonObjects[2];$oracleSymbols=Defined $oracle
+    $weak=Defined $commonBySource[$runtimePanicSource];$oracleSymbols=Defined $oracle
     Check "$name/real-weak-common-panic-input" ($weak -match '(?m)^[0-9a-f]+\s+W\s+fiber_panic\r?$' -and $oracleSymbols -notmatch '\bfiber_panic\b') $weak
     $dump=[IO.File]::ReadAllText($elf+'.disassembly.txt')
     $body=[regex]::Matches($dump,'(?ms)^[0-9a-f]+ <fiber_panic>:\r?\n(.*?)(?=^[0-9a-f]+ <|\z)')
@@ -418,17 +426,19 @@ try {
                     foreach($unit in @('fiber_port_boot.c','fiber_port.c')) {
                         $o=Join-Path $dir ($unit.Replace('.c','.o'));Compile (Join-Path $port $unit) $o $flags;$portObjects+=$o
                     }
-                    $commonObjects=@();$commonFlags=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})
-                    foreach($unit in @('fiber_core.c','fiber_runtime_state.c','fiber_panic.c')) {
-                        $o=Join-Path $dir ($unit.Replace('.c','.o'));Compile (Join-Path $repo ('fiber/'+$unit)) $o $commonFlags
+                    $commonObjects=@();$commonBySource=@{};$commonFlags=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})
+                    foreach($source in $runtimeSources) {
+                        $unit=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
+                        $o=Join-Path $dir ($unit.Replace('.c','.o'));Compile $source $o $commonFlags
                         $deps=[IO.File]::ReadAllText([IO.Path]::ChangeExtension($o,'.d'))
                         Check "$mode/common-not-CMSIS-or-private-$unit" ($deps -notmatch '(fiber_port_(private|types|selected|context_cohort)\.h|core_cm[0-9]+\.h)') $deps
                         $commonObjects+=$o
+                        $commonBySource[$source]=$o
                     }
-                    $coreDefinitions=Defined $commonObjects[0]
                     foreach($public in @('fiber_init','fiber_current','fiber_schedule','fiber_start','fiber_scheduler_set_pick_next')) {
-                        Check "$mode/exact-common-public-owner-$public" ([regex]::Matches($coreDefinitions,
-                            '(?m)^[0-9a-f]+\s+T\s+'+[regex]::Escape($public)+'\r?$').Count -eq 1) $commonObjects[0]
+                        $owners=@($commonObjects | Where-Object {(Defined $_) -match ('(?m)^[0-9a-f]+\s+T\s+'+[regex]::Escape($public)+'\r?$')})
+                        $publicObjects=@($runtimePublicSources | ForEach-Object {$commonBySource[$_]})
+                        Check "$mode/exact-common-public-owner-$public" ($owners.Count -eq 1 -and $owners[0] -cin $publicObjects) $owners
                     }
                     $commonArchive=Join-Path $dir 'libcommon.a';$portArchive=Join-Path $dir 'libport.a'
                     Archive $commonArchive $commonObjects;Archive $portArchive $portObjects

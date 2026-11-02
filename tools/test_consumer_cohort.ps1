@@ -7,6 +7,10 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $Repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('engine','state','panic','legacy_compat')
+$runtimeSources = @(Get-RuntimeSourcePaths -RepositoryRoot $Repo -Roles $runtimeRoles)
+$noCmsisRoles = $runtimeRoles + @('optional_configuration')
 
 if ([string]::IsNullOrWhiteSpace($ArmGcc)) {
     $command = Get-Command arm-none-eabi-gcc.exe -ErrorAction SilentlyContinue
@@ -70,6 +74,18 @@ $Storage = Join-Path $PSScriptRoot "fixtures/consumer_cohort_storage.c"
 $Driver = Join-Path $PSScriptRoot "fixtures/consumer_cohort_driver.c"
 $Linker = Join-Path $PSScriptRoot "fixtures/consumer_cohort_runtime.ld"
 $Profile = Join-Path $Repo "fiber/port/ARM_CM33_MPU/non_secure"
+$sourceInputs = @($PSCommandPath,$ArmGcc,$Cxx,$Ar,$Nm,$Dump,$Storage,$Driver,$Linker,
+    (Join-Path $Repo 'mcu_core.h'),(Join-Path $Repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $Repo -Roles $noCmsisRoles) +
+    @(Get-ChildItem (Join-Path $Repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem (Join-Path $Repo 'fiber') -Recurse -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem $CmsisCore -Recurse -File -Filter '*.h' | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem (Join-Path $PSScriptRoot 'fixtures/consumer_cohort') -Recurse -File | Select-Object -ExpandProperty FullName)
+function HashSourceInputs {
+    @($sourceInputs | Sort-Object -Unique | ForEach-Object {Get-FileHash -LiteralPath $_ -Algorithm SHA256} | Select-Object Path,Hash)
+}
+$before = HashSourceInputs
+$before | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $Build 'inputs-before.json') -Encoding ASCII
 
 function Get-StorageIdentity {
     param([string[]]$Flags)
@@ -152,9 +168,8 @@ foreach ($profileInfo in $PublicProfiles) {
 }
 
 $NoCmsisFlags = $PublicBase + @("-mcpu=cortex-m33", "-DFIBER_PORT_ARMV8M_MAINLINE=1")
-foreach ($source in @("fiber_core.c", "fiber_runtime_state.c", "fiber_panic.c",
-        "fiber_runtime_context_configuration.c")) {
-    $path = Join-Path $Repo ("fiber/" + $source)
+foreach ($path in @(Get-RuntimeSourcePaths -RepositoryRoot $Repo -Roles $noCmsisRoles)) {
+    $source = $path.Substring($Repo.Length+1).Replace('\','_').Replace('/','_')
     $null = Invoke-Tool $ArmGcc ($NoCmsisFlags + @("-std=gnu11", "-c", $path,
         "-o", (Join-Path $Build ("common-" + $source + ".o"))))
     $dependencies = Invoke-Tool $ArmGcc ($NoCmsisFlags + @("-std=gnu11", "-MM", $path))
@@ -181,10 +196,11 @@ foreach ($mode in $modes) {
     $null = New-Item -ItemType Directory -Path $dir
     $base = $RuntimeBase + $mode.Flags
     $commonObjects = @()
-    foreach ($source in @("fiber_core.c", "fiber_runtime_state.c", "fiber_panic.c")) {
+    foreach ($path in $runtimeSources) {
+        $source = $path.Substring($Repo.Length+1).Replace('\','_').Replace('/','_')
         $object = Join-Path $dir ($source + ".o")
         $null = Invoke-Tool $ArmGcc ($base + @("-std=gnu11", "-c",
-            (Join-Path $Repo ("fiber/" + $source)), "-o", $object))
+            $path, "-o", $object))
         $commonObjects += $object
     }
     $driverObject = Join-Path $dir "driver.o"
@@ -287,6 +303,10 @@ foreach ($mode in $modes) {
     Write-Host "consumer cohort $($mode.Name): matching and stale C/C++ links checked"
 }
 $Results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Build "results.json") -Encoding ASCII
+$after = HashSourceInputs
+$after | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $Build 'inputs-after.json') -Encoding ASCII
+$inputDrift = @(Compare-Object $before $after -Property Path,Hash)
+if ($inputDrift.Count) {throw 'Consumer cohort inputs changed during run'}
 Get-ChildItem $Build -Recurse -File | Where-Object { $_.Name -ne "sha256.csv" } |
     Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash |
     Export-Csv -LiteralPath (Join-Path $Build "sha256.csv") -NoTypeInformation -Encoding ASCII

@@ -3381,3 +3381,24 @@ the four existing common objects. Receipt:
 SHA-256 `FA0AAD6F342C1FB28DE95D7DFE874212C5B1A11B71E0E4568DD3729CEBF2160E`.
 Its 456 before/after inputs and 432 artifacts independently rehash unchanged.
 The production source-role mapping has not changed in this checkpoint.
+
+The standalone recipes are subsequently migrated to the same roles, including
+owner-specific mutations and explicit source-to-object maps. They still use
+the old-owner mapping at this proof-plumbing checkpoint. Historical embedded
+source/provenance goldens are not regenerated.
+
+Focused PowerShell replays pass public-storage consumers, reverse constructor,
+scalar/NTZ security and four Secure-only admission/compiler gates under
+`C:/fr-source-recipe-frozen-6a3d9ce2/`. The consumer replay includes 150 public
+compiles, ten invalid manifests and 256 GC links. A narrow first-start replay
+passes eleven launches and 306 checks with zero drift, explicitly
+`CompleteSuite=false`:
+`C:/fr-source-recipe-19-4d271bf9/fiber-m55-secure-first-start-c0a6ef015da94a819c5af6644799614b/results.json`,
+SHA-256 `5DAEC7BF9B7EEC0430F37849BEC3EB409C81818DAB42728DC002506FF698D1C4`.
+
+The migrated Python facade gate again passes its 190 host scenarios, 30 public
+compiles, 40 actual-backend ELF links, 125 causal controls and 46 diagnostic
+controls. Frozen receipt/source inventory:
+`%TEMP%/fiber-python-runtime-recipes-qualified-1a19e6b7b07/migration-freeze.json`.
+Other bounded replays continue against that immutable old-owner export; these
+focused results do not establish post-inversion ownership or a combined PASS.

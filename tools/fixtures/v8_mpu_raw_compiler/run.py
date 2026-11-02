@@ -70,6 +70,12 @@ def make_snapshot(args):
     root.mkdir()
     files = set(repo.glob('*.h')) | set((repo / 'fiber').rglob('*.h'))
     files |= set((repo / 'fiber').glob('*.c')) | set(cmsis.rglob('*.h'))
+    spec = importlib.util.spec_from_file_location('v8_mpu_runtime_sources', repo / 'tools/runtime_sources.py')
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    files.update(reader.get_runtime_source_inputs(repo,
+                 ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')))
+    files.update((repo / 'context').glob('*.h'))
     files |= {repo / 'fiber/port/fiber_port_context_cohort_expectation.c'}
     for p in admitted:
         files |= {f for f in (repo / 'fiber/port' / p['directory']).iterdir() if f.is_file()}

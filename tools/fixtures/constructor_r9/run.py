@@ -13,6 +13,7 @@ if not __debug__ or sys.flags.optimize:
 import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -46,6 +47,16 @@ from unicorn.arm_const import (
 SEEDS = (0x13579BDF, 0x2468ACE1, 0x90ABCDEF, 0x0BADCAFE)
 HOSTILE = ("-finstrument-functions", "-fstack-protector-all", "-fprofile-arcs",
            "-ftest-coverage", "-fsanitize-coverage=trace-pc")
+
+COMMON_ROLES = ("engine", "state", "optional_configuration", "legacy_compat")
+VALIDATION_ROLES = ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")
+
+
+def runtime_reader(repo):
+    spec = importlib.util.spec_from_file_location("r9_runtime_sources", Path(repo) / "tools/runtime_sources.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 MODES = ("O2", "Os", "O2-lto", "Os-lto", "O2-hostile", "Os-hostile",
          "O2-lto-hostile", "Os-lto-hostile")
 FRAME_BAD = 0xDEADC0DE
@@ -550,7 +561,7 @@ class Suite:
                 "-ffunction-sections", "-fdata-sections", "-Wall", "-Wextra", "-Werror", "-Wundef",
                 "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_" + profile["architecture"] + "=1",
                 "-I" + str(self.fixture), "-I" + str(port), "-I" + str(self.repo / "fiber"),
-                "-I" + str(self.repo), "-I" + self.a.cmsis_core,
+                "-I" + str(self.repo), "-I" + str(self.repo / "context"), "-I" + self.a.cmsis_core,
                 "-DR9_CORE=" + str(profile["core"]), "-DR9_FPU=" + str(profile["fp"]),
                 "-DR9_MPU=" + str(int(profile["frame"] == "mpu0"))]
         base += ["-DR9_RESERVED=" + str(int(reserved))]
@@ -561,8 +572,11 @@ class Suite:
             base += ["-Werror=implicit-function-declaration"]
         if reserved:
             base += ["-ffixed-r9"]
-        common = [self.repo / "fiber" / name for name in
-                  ("fiber_core.c", "fiber_runtime_state.c", "fiber_runtime_context_configuration.c")]
+        runtime = runtime_reader(self.repo)
+        common = list(runtime.get_runtime_source_paths(self.repo, COMMON_ROLES))
+        engines = runtime.get_runtime_source_paths(self.repo, ("engine",))
+        require(len(engines) == 1, "Constructor control requires one actual engine owner")
+        engine = engines[0]
         expected_sources = source_group(profile)
         require(sorted(p.name for p in port.glob("*.c")) == expected_sources, "Selected source inventory drift: " + str(port))
         sources = common + [port / name for name in expected_sources]
@@ -571,14 +585,17 @@ class Suite:
         for source in sources:
             original = source
             text = source.read_text()
-            if mutant == "caller-scratch" and source.name == "fiber_core.c":
-                call = "fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);"
-                require(text.count(call) == 1, "Caller control anchor drift")
+            if mutant == "caller-scratch" and source == engine:
+                calls = [call for call in ("fiber_port_context_init(ctx, stack_begin, stack_end, entry, arg);",
+                                          "fiber_port_context_init(context, stack_begin, stack_end, entry, arg);")
+                         if call in text]
+                require(len(calls) == 1 and text.count(calls[0]) == 1, "Caller control anchor drift")
+                call = calls[0]
                 text = text.replace(call, 'register uint32_t scratch __asm("r9") = 0xDEADC0DEu;\n'
                     '\t__asm volatile("" : "+r"(scratch) :: "memory");\n\t' + call +
                     '\n\t__asm volatile("" : "+r"(scratch) :: "memory");')
                 replacement_count += 1
-            if mutant == "wrong-frame" and source.name != "fiber_core.c":
+            if mutant == "wrong-frame" and source not in common:
                 pattern = (r"(const uint32_t initial_r9\s*=\s*)(fiber_port_read_r9\(\))" if profile["frame"] == "mpu0" else
                            r"(frame\[fiber_portFRAME_R9\]\s*=\s*|\*\(--sp\)\s*=\s*)((?:fiber_port|fiber_arm_cm7_r0p1)_read_r9\(\))")
                 text, count = re.subn(pattern, lambda m: m[1] + "0xDEADC0DEu", text)
@@ -664,8 +681,8 @@ def snapshot(repo, fixture, selected, cmsis):
     files = set(fixture.rglob("*"))
     files.add(repo / "tools/test_constructor_r9.ps1")
     files.update((repo / "fiber").glob("*.h"))
-    files.update(repo / "fiber" / name for name in
-                 ("fiber_core.c", "fiber_runtime_state.c", "fiber_runtime_context_configuration.c"))
+    files.update(runtime_reader(repo).get_runtime_source_inputs(repo, VALIDATION_ROLES))
+    files.update((repo / "context").glob("*.h"))
     files.update((repo / "fiber/port").glob("*.h"))
     files.update(Path(cmsis).rglob("*.h"))
     files.update((repo / "mcu_core.h", repo / "basic_types.h"))

@@ -9,6 +9,10 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('engine','legacy_compat')
+$coldCommonSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
+$coldCommonNames=@($coldCommonSources | ForEach-Object {$_.Substring($repo.Length+1).Replace('\','_').Replace('/','_')+'.o'})
 $fixture=Join-Path $PSScriptRoot 'fixtures\cm33f_secure_manifest'
 $port=Join-Path $repo 'fiber\port\ARM_CM33F'
 $ns=Join-Path $port 'non_secure'
@@ -118,7 +122,9 @@ print(image.value)
 print(sys.version)
 '@) (Join-Path $out 'python.txt')
 $inputs=@($PSCommandPath,$ArmGcc,$gxx,$nm,$ar,$objdump,$readelf,
-    (($pythonInfo.Text -split "`n")[0].Trim()))
+    (($pythonInfo.Text -split "`n")[0].Trim()))+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
+    @(Get-ChildItem (Join-Path $repo 'context') -File|Where-Object {$_.Extension -in @('.c','.h')}|Select-Object -ExpandProperty FullName)
 foreach ($tool in @('cc1','cc1plus','lto1','lto-wrapper','as','ld','collect2')) {
     $r=Run $ArmGcc @("-print-prog-name=$tool") (Join-Path $out ("tool-$tool.txt"))
     $inputs+=(Resolve-Path -LiteralPath $r.Text.Trim()).Path
@@ -252,12 +258,14 @@ try {
             $null=New-Item -ItemType Directory -Path $cd
             $cf=$flags
             if($reserved){$cf+=@('-ffixed-r9')}
-            $objects=@()
-            foreach ($source in @((Join-Path $ns 'fiber_port_boot.c'),(Join-Path $ns 'fiber_port_secure_context.c'),
-                (Join-Path $repo 'fiber\fiber_core.c'),(Join-Path $fixture 'probe.c'))) {
-                $object=Join-Path $cd ([IO.Path]::GetFileNameWithoutExtension($source)+'.o')
+            $objects=@();$coldCommonObjects=@()
+            foreach ($source in (@((Join-Path $ns 'fiber_port_boot.c'),(Join-Path $ns 'fiber_port_secure_context.c'))+
+                $coldCommonSources+@((Join-Path $fixture 'probe.c')))) {
+                $isCommon=$source -in $coldCommonSources
+                $objectName=if($isCommon){$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')+'.o'}else{[IO.Path]::GetFileNameWithoutExtension($source)+'.o'}
+                $object=Join-Path $cd $objectName
                 $unitFlags=$cf
-                if([IO.Path]::GetFileName($source) -eq 'fiber_core.c') {
+                if($isCommon) {
                     # fiber_init/task_return are unchanged actual functions.
                     # Only other, discarded APIs carry this placement macro;
                     # prevent LTO merging them into attachment's section. No
@@ -266,6 +274,7 @@ try {
                 }
                 Compile $source $object $unitFlags
                 $objects+=$object
+                if($isCommon){$coldCommonObjects+=$object}
             }
             $elf=Join-Path $cd 'constructor.elf'
             $coldLink=$cf+@('-save-temps=obj','-nostdlib','-Wl,--gc-sections','-Wl,--no-undefined',
@@ -287,7 +296,7 @@ try {
                     $hostileCold+=$object
                 }
                 $he=Join-Path $cd 'constructor-hostile.elf'
-                $null=Run $ArmGcc ($coldLink+$hostileCold+@((Join-Path $cd 'fiber_core.o'),
+                $null=Run $ArmGcc ($coldLink+$hostileCold+$coldCommonObjects+@(
                     (Join-Path $cd 'probe.o'),(Join-Path $dir 'public.c.c++.o'),'-o',$he)) ($he+'.log')
                 Elf $he
                 Check ($name+'/raw-hostile-NS-no-instrumentation') ((Get-Content -LiteralPath ($he+'.nm') -Raw) -notmatch '__cyg_profile|__stack_chk|__ubsan|__asan|__gcov|__sanitizer')
@@ -440,8 +449,8 @@ try {
     $link=$nf+@('-nostdlib','-Wl,--gc-sections','-Wl,--no-undefined',
         '-Wl,-u,fiber_port_secure_context_attach','-Wl,-u,fixture_task',
         '-Wl,-u,c3fs_consumer_storage','-T',(Join-Path $fixture 'image.ld'))
-    $actualCold=@((Join-Path $cold 'fiber_port_boot.o'),(Join-Path $cold 'fiber_port_secure_context.o'),
-        (Join-Path $cold 'fiber_core.o'))
+    $actualCold=@((Join-Path $cold 'fiber_port_boot.o'),(Join-Path $cold 'fiber_port_secure_context.o'))+
+        @($coldCommonNames | ForEach-Object {Join-Path $cold $_})
     $r=Run $nm @('-u',(Join-Path $cold 'fiber_port_boot.o')) (Join-Path $out 'actual-cold-undefined.txt')
     $cohort=@([regex]::Matches($r.Text,'(?m)\bU\s+(fiber_port_context_cohort_\S+)') | ForEach-Object {$_.Groups[1].Value})
     Check 'actual-cold-one-context-expectation' ($cohort.Count -eq 1)

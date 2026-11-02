@@ -12,6 +12,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('state','optional_configuration')
+$runtimeStateSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'state')[0]
+$runtimeConfigurationSource = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles 'optional_configuration')[0]
 $fixture = Join-Path $PSScriptRoot 'fixtures\m55_secure_attachment'
 $ns = Join-Path $repo 'fiber\port\ARM_CM55\non_secure'
 $secure = Join-Path $repo 'fiber\port\ARM_CM55\secure'
@@ -116,6 +120,8 @@ $queries = @('fiber_secure_gateway_c55s_v1_abi_version','fiber_secure_gateway_c5
     'fiber_secure_context_gateway_c55s_v1_max_contexts','fiber_secure_context_gateway_c55s_v1_max_stack_bytes')
 $inputPaths = @($PSCommandPath,$ArmGcc,$nm,$objdump,$objcopy,$rsp,$inspect,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles) +
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem (Join-Path $repo 'fiber') -File | Where-Object {$_.Extension -in @('.h','.c')} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem (Join-Path $repo 'fiber\port') -File | Where-Object {$_.Extension -eq '.h'} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $ns,$secure -File | Where-Object {$_.Extension -in @('.h','.c','.ld')} | Select-Object -ExpandProperty FullName) +
@@ -199,8 +205,8 @@ try {
         $nobjects=@{}
         foreach ($unit in @(@{Name='boot';Path=(Join-Path $ns 'fiber_port_boot.c');Hostile=$true},
                 @{Name='attach';Path=(Join-Path $ns 'fiber_port_secure_context.c');Hostile=$true},
-                @{Name='configuration';Path=(Join-Path $repo 'fiber\fiber_runtime_context_configuration.c')},
-                @{Name='state';Path=(Join-Path $repo 'fiber\fiber_runtime_state.c')},
+                @{Name='configuration';Path=$runtimeConfigurationSource},
+                @{Name='state';Path=$runtimeStateSource},
                 @{Name='fixture';Path=(Join-Path $fixture 'nonsecure.c')},
                 @{Name='startup';Path=(Join-Path $fixture 'startup.S')},
                 @{Name='doubles';Path=(Join-Path $fixture 'query_doubles.c')})) {
@@ -245,11 +251,11 @@ try {
         $withoutConfig=@($common | Where-Object {$_ -ne $nobjects.configuration})+@($nobjects.doubles)
         RejectLink ($mode.Name+'-missing-configuration') $nlink $withoutConfig $dir @($anchor,'fiber_internal_runtime_require_context_configuration_open')
         $staleSource=Join-Path $dir 'stale-configuration.c'
-        $configText=Get-Content (Join-Path $repo 'fiber\fiber_runtime_context_configuration.c') -Raw
+        $configText=Get-Content $runtimeConfigurationSource -Raw
         Check "$($mode.Name) unique actual anchor definition" ([regex]::Matches($configText,[regex]::Escape($anchor)).Count -eq 1)
         [IO.File]::WriteAllText($staleSource,$configText.Replace($anchor,'fiber_internal_runtime_context_configuration_abi_v2_anchor'))
         $stale=Join-Path $dir 'stale-configuration.o'
-        $null=Recorded $ArmGcc ($nflags+@("-I$repo/fiber",'-c',$staleSource,'-o',$stale)) (Join-Path $dir 'stale-configuration-compile.log')
+        $null=Recorded $ArmGcc ($nflags+@("-I$(Split-Path $runtimeConfigurationSource)","-I$repo/fiber",'-c',$staleSource,'-o',$stale)) (Join-Path $dir 'stale-configuration-compile.log')
         RejectLink ($mode.Name+'-stale-configuration') $nlink ($withoutConfig+@($stale)) $dir @($anchor)
         $cohortNames=@(UndefinedNames $nobjects.boot (Join-Path $dir 'boot-undefined.txt') |
             Where-Object {$_ -like 'fiber_port_context_cohort_*'})

@@ -13,6 +13,9 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('engine','state','legacy_compat','optional_configuration')
+$runtimeSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
 $fixture=Join-Path $PSScriptRoot 'fixtures\cm33_secure_origin'
 $rsp=Join-Path $PSScriptRoot 'fixtures\cm33_secure_guards\aircr_rsp.py'
 $inventory=Join-Path $PSScriptRoot 'fixtures\arm_control\qemu.sh'
@@ -125,6 +128,9 @@ function Build([hashtable]$Mode,[string]$Dir,[switch]$Stale){
         $null=New-Item -ItemType Directory -Path $selected -Force
         Get-ChildItem $secure -File|Where-Object {$_.Extension -in @('.h','.c')}|ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $selected $_.Name)}
         Copy-Item -LiteralPath (Join-Path $repo 'fiber\fiber_api_attributes.h') -Destination (Join-Path $Dir 'mirror\fiber\fiber_api_attributes.h')
+        $contextMirror=Join-Path $Dir 'mirror\context'
+        $null=New-Item -ItemType Directory -Path $contextMirror -Force
+        Get-ChildItem (Join-Path $repo 'context') -File -Filter '*.h' | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $contextMirror $_.Name)}
         $contract=Join-Path $selected 'fiber_secure_gateway_contract.h'
         $text=Get-Content $contract -Raw
         Check 'one exact stale layout substitution' ([regex]::Matches($text,'0x00020001u').Count -eq 1)
@@ -141,7 +147,10 @@ function Build([hashtable]$Mode,[string]$Dir,[switch]$Stale){
     $s=Link 'secure' $sflags $sobjects $Dir
     $nfixture=@()
     foreach($name in @('nonsecure.c','startup.S','windows.S','support.c')){$nfixture+=Compile ('n-'+$name) (Join-Path $fixture $name) $nf $Dir}
-    foreach($name in @('fiber_core.c','fiber_runtime_state.c','fiber_runtime_context_configuration.c')){$nfixture+=Compile $name (Join-Path $repo ('fiber/'+$name)) $nf $Dir}
+    foreach($source in $runtimeSources){
+        $name=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
+        $nfixture+=Compile $name $source $nf $Dir
+    }
     $nobjects=@()
     foreach($name in @('fiber_port.c','fiber_port_boot.c','fiber_port_secure_context.c','fiber_port_svc.c')){$nobjects+=Compile $name (Join-Path $ns $name) $nf $Dir}
     $nflags=$nf+$link+@('-T',(Join-Path $fixture 'nonsecure.ld'))
@@ -210,6 +219,8 @@ if($DevelopmentModes){foreach($name in $DevelopmentModes){if($name -notin $modes
 $cases=@(0..4)+@(10..13)
 if($PSBoundParameters.ContainsKey('DevelopmentCases')){foreach($n in $DevelopmentCases){if($n -notin $cases){throw "Unknown case $n"}};$cases=@($DevelopmentCases|Sort-Object -Unique)}
 $inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$objcopy,$rsp,$inventory,(Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $fixture -Recurse -File|Where-Object FullName -notmatch '__pycache__'|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $CmsisCore -Recurse -File -Filter '*.h'|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $repo 'fiber') -File|Where-Object {$_.Extension -in @('.c','.h')}|Select-Object -ExpandProperty FullName)+

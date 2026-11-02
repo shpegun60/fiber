@@ -13,6 +13,9 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles=@('state','optional_configuration')
+$runtimeSources=@(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
 $fixture=Join-Path $PSScriptRoot 'fixtures\m55_secure_first_start'
 $ns=Join-Path $repo 'fiber\port\ARM_CM55\non_secure'
 $secure=Join-Path $repo 'fiber\port\ARM_CM55\secure'
@@ -191,6 +194,8 @@ if($PSBoundParameters.ContainsKey('DevelopmentCases')){
 }
 $inputPaths=@($PSCommandPath,$ArmGcc,$nm,$ar,$objdump,$objcopy,$rsp,$inspect,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles)+
+    @(Get-ChildItem (Join-Path $repo 'context') -File|Where-Object {$_.Extension -in @('.c','.h')}|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $repo 'fiber') -File|Where-Object {$_.Extension -in @('.h','.c')}|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem (Join-Path $repo 'fiber\port') -File|Where-Object {$_.Extension -eq '.h'}|Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem $ns,$secure -File|Where-Object {$_.Extension -in @('.h','.c','.ld')}|Select-Object -ExpandProperty FullName)+
@@ -340,10 +345,12 @@ function BuildFiber([hashtable]$Mode,[string]$Parent){
     $nfixture=@()
     foreach($u in @(@{Name='ns-fixture';Source=(Join-Path $fixture 'nonsecure.c')},
             @{Name='ns-startup';Source=(Join-Path $fixture 'startup.S')},
-            @{Name='ns-support';Source=(Join-Path $fixture 'support.c')},
-            @{Name='common-state';Source=(Join-Path $repo 'fiber\fiber_runtime_state.c')},
-            @{Name='common-configuration';Source=(Join-Path $repo 'fiber\fiber_runtime_context_configuration.c')})){
+            @{Name='ns-support';Source=(Join-Path $fixture 'support.c')})){
         $nfixture+=Compile $u.Name $u.Source $nflags $dir
+    }
+    foreach($source in $runtimeSources){
+        $name=$source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
+        $nfixture+=Compile $name $source $nflags $dir
     }
     $nobjects=@{}
     foreach($u in @(@{Name='boot';Source=(Join-Path $ns 'fiber_port_boot.c')},

@@ -1,6 +1,7 @@
 """Finite additive Context facade qualification; no packages or target execution."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,8 +12,7 @@ import subprocess
 import sys
 import time
 
-COMMON = ["fiber_core.c", "fiber_runtime_state.c", "fiber_panic.c",
-          "fiber_runtime_context_configuration.c", "fiber_context_compat.c"]
+COMMON_ROLES = ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")
 API = ["ctxrt_v1_init", "ctxrt_v1_current", "ctxrt_v1_set_dispatcher",
        "ctxrt_v1_start", "ctxrt_v1_yield"]
 LEGACY = ["fiber_init", "fiber_current", "fiber_scheduler_set_pick_next",
@@ -35,6 +35,25 @@ def require(condition, message):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def runtime_reader(repo):
+    spec = importlib.util.spec_from_file_location("facade_runtime_sources", Path(repo) / "tools/runtime_sources.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def role_owner(repo, role):
+    sources = runtime_reader(repo).get_runtime_source_paths(repo, (role,))
+    require(len(sources) == 1, "Expected one actual facade test role owner: " + role)
+    return sources[0]
+
+
+def api_owner(repo):
+    bridge = runtime_reader(repo).get_runtime_source_paths(repo, ("facade_bridge",))
+    require(len(bridge) <= 1, "Facade bridge must have at most one API owner")
+    return bridge[0] if bridge else role_owner(repo, "engine")
 
 
 class StaleLinkDiagnosticError(RuntimeError):
@@ -179,16 +198,14 @@ class Suite:
 
     def snapshot(self):
         paths = set((self.repo / "fiber").glob("*.h"))
-        paths.update((self.repo / "fiber" / name) for name in COMMON)
+        paths.update(runtime_reader(self.repo).get_runtime_source_inputs(self.repo, COMMON_ROLES))
         paths.update((self.repo / "fiber/port").glob("*.h"))
         paths.add(self.repo / "fiber/port/fiber_port_context_cohort_expectation.c")
         for _, directory, *_ in PROFILES:
             port = self.repo / "fiber/port" / directory
             paths.update(port.glob("*.h"))
             paths.update(port.glob("*.c"))
-        for name in ["context.h", "context_api_types.h", "context_api_decl.h",
-                     "context_api_attributes.h"]:
-            paths.add(self.repo / "context" / name)
+        paths.update((self.repo / "context").glob("*.h"))
         paths.update(p for p in (self.repo / "tools/fixtures/context_facade").glob("*") if p.is_file())
         paths.add(self.repo / "tools/test_context_facade.ps1")
         for source in sorted(paths):
@@ -220,7 +237,7 @@ class Suite:
                 if compiler == "arm" and program == "ld":
                     self.linker = path
             probe = self.run(compiler, ["-###", "-flto", "-nostdlib", "-r", "-x", "c",
-                                       str(self.root / "fiber/fiber_context_compat.c")]).stderr
+                                       str(api_owner(self.root))]).stderr
             matches = re.findall(r'(?:^|\s)-plugin\s+(?:"([^"]+)"|(\S+))', probe)
             require(len(matches) == 1, "Expected one driver-selected LTO plugin: " + compiler)
             used = Path(next(part for part in matches[0] if part)).resolve()
@@ -236,7 +253,7 @@ class Suite:
         arch = profile[3] if profile else "ARMV6M"
         flags = ["-Wall", "-Wextra", "-Werror", "-Wundef", "-ffunction-sections",
                  "-fdata-sections", "-fno-common", "-I" + str(root),
-                 "-I" + str(root / "fiber"), "-I" + str(root / "fiber/port"),
+                 "-I" + str(root / "fiber"), "-I" + str(root / "context"), "-I" + str(root / "fiber/port"),
                  "-I" + str(root / "fiber/port" / directory),
                  "-I" + str(root / "tools/fixtures/context_facade"),
                  "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_" + arch + "=1"]
@@ -297,9 +314,11 @@ class Suite:
     def host_build(self, root, directory, mode, modern_cxx=False):
         directory.mkdir(parents=True)
         flags = self.flags(root=root) + mode
-        objects = [self.compile(root / "fiber" / name, directory / (name + ".o"), flags) for name in COMMON]
+        sources = runtime_reader(root).get_runtime_source_paths(root, COMMON_ROLES)
+        require(len({source.name for source in sources}) == len(sources), "Ambiguous common object basenames")
+        objects = [self.compile(source, directory / (source.name + ".o"), flags) for source in sources]
         if "-flto" not in mode:
-            sections = self.run("hostdump", ["-h", str(directory / "fiber_runtime_state.c.o")]).stdout
+            sections = self.run("hostdump", ["-h", str(directory / (role_owner(root, "state").name + ".o"))]).stdout
             require(re.search(r"\.bss\.fiber_runtime_current_context_slot\s+00000008\b", sections),
                     "Host current slot object is not one 64-bit pointer")
         fixture = root / "tools/fixtures/context_facade"
@@ -335,24 +354,38 @@ class Suite:
         return root
 
     def host_controls(self):
-        start_guards = ("FIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');\n"
-                        "\tFIBER_REQUIRE(fiber_current() == 0, 'k');")
+        engine = role_owner(self.root, "engine")
+        state = role_owner(self.root, "state")
+        api = api_owner(self.root)
+        engine_relative, state_relative, api_relative = (p.relative_to(self.root) for p in (engine, state, api))
+        text = engine.read_text()
+        guards = re.findall(r"(FIBER_REQUIRE\(fiber_internal_scheduler_is_configured\(\) != 0u, 'K'\);)"
+                            r"(\s+)(FIBER_REQUIRE\((?:fiber_current|ctxrt_v1_current)\(\) == 0, 'k'\);)", text)
+        require(len(guards) == 1, "Actual engine start-precedence mutation anchor changed")
+        first, whitespace, second = guards[0]
+        api_text = api.read_text()
+        current_calls = [call for call in ("return fiber_current();", "return fiber_internal_runtime_load_current_context();")
+                         if call in api_text]
+        set_calls = [call for call in ("fiber_scheduler_set_pick_next(dispatch, user);",
+                                      "fiber_internal_scheduler_store_pick_next(dispatch, user);") if call in api_text]
+        yield_calls = [call for call in ("fiber_schedule();", "fiber_port_runtime_schedule();") if call in api_text]
+        require(len(current_calls) == len(set_calls) == len(yield_calls) == 1, "Actual Context API mutation owner changed")
         mutants = [
-            ("start-precedence", "fiber/fiber_core.c", start_guards,
-             "FIBER_REQUIRE(fiber_current() == 0, 'k');\n\tFIBER_REQUIRE(fiber_internal_scheduler_is_configured() != 0u, 'K');", 4,
+            ("start-precedence", engine_relative, first + whitespace + second,
+             second + whitespace + first, 4,
              "test >= 0 && test < 19 && panic_code == expected[test]"),
-            ("configuration-close", "fiber/fiber_core.c",
-             "\tfiber_internal_runtime_close_context_configuration();", "\t/* removed by control */", 8,
+            ("configuration-close", engine_relative,
+             "fiber_internal_runtime_close_context_configuration();", "/* removed by control */", 8,
              "fiber_internal_runtime_context_configuration_is_open() == 0"),
-            ("facade-current", "fiber/fiber_context_compat.c", "return fiber_current();", "return 0;", 8,
+            ("facade-current", api_relative, current_calls[0], "return 0;", 8,
              "modern_current() == ctx && legacy_current() == ctx"),
-            ("facade-user", "fiber/fiber_context_compat.c",
-             "fiber_scheduler_set_pick_next(dispatch, user);", "(void)user; fiber_scheduler_set_pick_next(dispatch, 0);", 8,
+            ("facade-user", api_relative,
+             set_calls[0], "(void)user; " + set_calls[0].replace("dispatch, user", "dispatch, 0"), 8,
              "current == expected_current && user == expected_user"),
-            ("facade-yield", "fiber/fiber_context_compat.c", "    fiber_schedule();", "    /* removed by control */", 21, "0"),
-            ("task-return", "fiber/fiber_core.c", "fiber_panic('R');", "fiber_panic('N');", 22,
+            ("facade-yield", api_relative, yield_calls[0], "/* removed by control */", 21, "0"),
+            ("task-return", engine_relative, "fiber_panic('R');", "fiber_panic('N');", 22,
              "test >= 0 && test < 19 && panic_code == expected[test]"),
-            ("dispatcher-replacement", "fiber/fiber_runtime_state.c",
+            ("dispatcher-replacement", state_relative,
              "fiber_internal_runtime_scheduler_pick_next = pick_next;",
              "if (fiber_internal_runtime_scheduler_pick_next == 0) fiber_internal_runtime_scheduler_pick_next = pick_next;",
              36, "replacement_hook_count == 1"),
@@ -503,8 +536,11 @@ class Suite:
         directory = parent / mode
         directory.mkdir()
         flags = self.flags(profile) + opts
-        common = [self.compile(self.root / "fiber" / name, directory / (name + ".o"), flags) for name in COMMON]
-        compat = self.symbols(common[-1]) if "-flto" not in opts else []
+        common_sources = runtime_reader(self.root).get_runtime_source_paths(self.root, COMMON_ROLES)
+        require(len({source.name for source in common_sources}) == len(common_sources), "Ambiguous common object basenames")
+        common_by_source = {source: self.compile(source, directory / (source.name + ".o"), flags) for source in common_sources}
+        common = list(common_by_source.values())
+        compat = self.symbols(common_by_source[api_owner(self.root)]) if "-flto" not in opts else []
         require(not any(r[1] in "bBdDgGsS" for r in compat), "Facade introduced writable state")
         ports = [self.compile(path, directory / (path.name + ".o"), flags, cmsis=True)
                  for path in sorted((self.root / "fiber/port" / profile[1]).glob("*.c"))]
@@ -576,17 +612,19 @@ class Suite:
                                          "ExpectedMissing": expected, "StaleInput": str(wrong.relative_to(self.build))})
         # A real common anchor rename must fail with the old backend, even with
         # all component archives present and after LTO/section GC.
-        root = self.mutation(profile[0] + "-" + mode + "-reverse", "fiber/fiber_runtime_state.c",
+        state = role_owner(self.root, "state")
+        relative = state.relative_to(self.root)
+        root = self.mutation(profile[0] + "-" + mode + "-reverse", relative,
                              "const unsigned char fiber_internal_runtime_port_abi_v1_anchor =",
                              "const unsigned char fiber_internal_runtime_port_abi_v2_anchor =")
-        wrong = self.compile(root / "fiber/fiber_runtime_state.c", directory / "stale-reverse.o",
+        wrong = self.compile(root / relative, directory / "stale-reverse.o",
                              self.flags(profile, root) + opts)
         # The real constructor is the old reverse-v1 consumer in this pair;
         # the mutated common object provides only v2 and imports no v1 itself.
         old_consumer = next(x for x in ports if x.name == "fiber_port_boot.c.o")
         expected = self.expected_missing(old_consumer, "fiber_internal_runtime_port_abi_")
         _, result = self.link(profile, flags, directory, "stale-reverse", [driver, expectation] + consumers +
-                              [wrong] + [x for x in common if x.name != "fiber_runtime_state.c.o"] + ports, True)
+                              [wrong] + [obj for source, obj in common_by_source.items() if source != state] + ports, True)
         require(self.require_unresolved(result, expected) ==
                 "fiber_internal_runtime_port_abi_v1_anchor", "Stale reverse ABI accepted")
         self.results["Controls"].append({"Name": "stale-reverse-v1", "Profile": profile[0], "Mode": mode,
@@ -597,7 +635,7 @@ class Suite:
         raw = ["-finstrument-functions", "-fstack-protector-all", "-fprofile-arcs", "-ftest-coverage",
                "-fsanitize=undefined", "-fsanitize-coverage=trace-pc"]
         flags = self.flags(profile, root) + opts + raw
-        obj = self.compile(root / "fiber/fiber_context_compat.c", directory / (label + ".o"), flags)
+        obj = self.compile(api_owner(root), directory / (label + ".o"), flags)
         if "-flto" in opts:
             lowered = directory / (label + "-native.o")
             self.run("arm", flags + ["-nostdlib", "-r", "-flinker-output=nolto-rel", str(obj), "-o", str(lowered)])
@@ -646,11 +684,17 @@ class Suite:
             # Remove the actual canonical bundle on declarations AND definitions.
             root = self.build / "mutants" / (profile[0] + "-attrs-" + mode)
             shutil.copytree(self.root, root)
-            for relative in ["context/context_api_decl.h", "fiber/fiber_context_compat.c"]:
+            for relative in [Path("context/context_api_decl.h"), api_owner(root).relative_to(root)]:
                 path = root / relative
                 body = path.read_text(encoding="utf-8")
-                require(body.count("CTXRT_API_ATTR_SENSITIVE") == 5, "Attribute mutation surface changed")
-                path.write_text(body.replace("CTXRT_API_ATTR_SENSITIVE", ""), encoding="utf-8")
+                pattern = re.compile(r"((?:CTXRT_[A-Z_]+\s+)+)((?:void|CtxrtContextV1\s*\*)\s*"
+                                     r"(ctxrt_v1_(?:init|current|set_dispatcher|start|yield))\s*\()")
+                found = pattern.findall(body)
+                require(len(found) == 5 and {item[2] for item in found} == set(API) and
+                        all(item[0].split().count("CTXRT_API_ATTR_SENSITIVE") == 1 for item in found),
+                        "Attribute mutation surface changed")
+                mutated = pattern.sub(lambda match: match[1].replace("CTXRT_API_ATTR_SENSITIVE", "") + match[2], body)
+                path.write_text(mutated, encoding="utf-8")
             badtext, badundefined = self.attribute_object(root, profile, directory / "control", opts, "unprotected")
             require("__cyg_profile_func_enter" in badtext + badundefined and
                     "__cyg_profile_func_exit" in badtext + badundefined,

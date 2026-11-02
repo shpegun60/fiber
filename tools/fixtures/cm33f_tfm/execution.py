@@ -63,21 +63,25 @@ class Execution:
             options.append('-flto')
         if reserved:
             options.append('-ffixed-r9')
-        objects = []
+        objects, source_objects = [], {}
         for source in self.p.common_sources + self.p.sources:
             obj = d / (source.stem + '.o')
             common = source in self.p.common_sources
             self.p.compile(source, obj, options, selected=not common, cpu=not common)
             objects.append(obj)
+            require(source not in source_objects, 'Duplicate actual execution source owner')
+            source_objects[source] = obj
         for name in ('startup.S', 'tasks.S'):
             obj = d / (name + '.o')
             self.p.compile(self.f / name, obj, options, selected=False, cpu=False)
             objects.append(obj)
+            source_objects[self.f / name] = obj
         if lazy is None:
             obj = d / 'default_policy.o'
             self.p.compile(self.p.fixture / 'default_policy.c', obj, options)
             objects.append(obj)
-        value = dict(directory=d, objects=objects, options=options, key=key)
+            source_objects[self.p.fixture / 'default_policy.c'] = obj
+        value = dict(directory=d, objects=objects, source_objects=source_objects, options=options, key=key)
         self.groups[key] = value
         return value
 
@@ -90,8 +94,11 @@ class Execution:
         self.p.compile(source, obj, group['options'], extra=['-DEXEC_CASE=' + str(case)])
         objects = list(group['objects'])
         if replacement:
-            position, changed = replacement
-            objects[position] = changed
+            original, changed = replacement
+            require(original in group['source_objects'], 'Mutation has no actual execution source owner')
+            owned = group['source_objects'][original]
+            require(objects.count(owned) == 1, 'Mutation must replace exactly one owned execution object')
+            objects = [changed if obj == owned else obj for obj in objects]
         objects.append(obj)
         elf = d / 'nonsecure.elf'
         self.p.run([self.p.a.arm_gcc, *self.p.flags[:4], '-ffunction-sections', '-fdata-sections', *group['options'], '-nostdlib',
@@ -254,26 +261,26 @@ class Execution:
         abi, opt, lto, lazy, reserved = group['key']
         self.p.flags[2] = '-mfloat-abi=' + abi
         tests = [
-            ('lost-high-save', 3, self.p.sources[0], 'vstmdb r0!, {s16-s31}', 'sub r0, r0, #64', 0, range(316, 332)),
-            ('lost-high-restore', 3, self.p.sources[0], 'vldmia r0!, {s16-s31}', 'add r0, r0, #64', 0, range(316, 332)),
-            ('clobber-restored-r4', 3, self.p.sources[0], 'ldmia r0!, {r2-r11}',
+            ('lost-high-save', self.p.sources[0], 'vstmdb r0!, {s16-s31}', 'sub r0, r0, #64', 0, range(316, 332)),
+            ('lost-high-restore', self.p.sources[0], 'vldmia r0!, {s16-s31}', 'add r0, r0, #64', 0, range(316, 332)),
+            ('clobber-restored-r4', self.p.sources[0], 'ldmia r0!, {r2-r11}',
              'ldmia r0!, {r2-r11}\\nmovs r4,#0', 0, (200,)),
-            ('lost-auto-tfm-init', 3, self.p.sources[0], 'fiber_port_tfm_require_initialized();', '(void)0;', 0, (141,)),
-            ('lost-init-control-readback', 5, self.p.sources[2],
+            ('lost-auto-tfm-init', self.p.sources[0], 'fiber_port_tfm_require_initialized();', '(void)0;', 0, (141,)),
+            ('lost-init-control-readback', self.p.sources[2],
              "FIBER_REQUIRE(fiber_port_cpu_control() == before->control, 'l');", '(void)before;', 3, None),
-            ('lost-init-cpacr-readback', 5, self.p.sources[2],
+            ('lost-init-cpacr-readback', self.p.sources[2],
              "FIBER_REQUIRE(fiber_portCPACR_REG == before->cpacr, 'e');", '(void)before;', 4, None),
-            ('lost-init-fpccr-readback', 5, self.p.sources[2],
+            ('lost-init-fpccr-readback', self.p.sources[2],
              "FIBER_REQUIRE(fiber_portFPCCR_REG == before->fpccr, 'E');", '(void)before;', 5, None),
         ]
         if reserved:
-            tests = [('wrong-reserved-r9-seed', 3, self.p.sources[0],
+            tests = [('wrong-reserved-r9-seed', self.p.sources[0],
                       'frame[fiber_portFRAME_R9] = fiber_port_read_r9();',
                       'frame[fiber_portFRAME_R9] = 0u;', 0, (163,))]
         else:
-            tests += [('caller-r9-corruption', 7, self.f / 'startup.S', ' bl fiber_init\n',
+            tests += [('caller-r9-corruption', self.f / 'startup.S', ' bl fiber_init\n',
                        ' bl fiber_init\n eor r9,r9,#1\n', 0, (161,))]
-        for name, index, original, old, new, case, failed_checks in tests:
+        for name, original, old, new, case, failed_checks in tests:
             target = self.groups[(abi, opt, lto, 0, 0)] if name.startswith('lost-high-') else group
             text = original.read_text()
             require(text.count(old) == (2 if name == 'clobber-restored-r4' else 1),
@@ -285,7 +292,7 @@ class Execution:
             obj = source.with_suffix('.o')
             assembly = source.suffix == '.S'
             self.p.compile(source, obj, target['options'], selected=not assembly, cpu=not assembly)
-            elf = self.image(target, case, name=name, replacement=(index, obj))
+            elf = self.image(target, case, name=name, replacement=(original, obj))
             item = self.run_image(elf, case, expected=False)
             result = item['result']
             if failed_checks is not None:

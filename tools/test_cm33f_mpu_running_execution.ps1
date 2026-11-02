@@ -11,6 +11,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('engine','state','panic','legacy_compat')
+$runtimeSources = @(Get-RuntimeSourcePaths -RepositoryRoot $repo -Roles $runtimeRoles)
 $fixture = Join-Path $PSScriptRoot 'fixtures\cm33f_mpu_running_execution'
 $bootstrap = Join-Path $PSScriptRoot 'fixtures\cm33f_mpu_first_start_execution'
 $port = Join-Path $repo 'fiber\port\ARM_CM33F_MPU\non_secure'
@@ -44,6 +47,8 @@ $referenceChecked = $false
 $failure = ''
 $inputs = @($PSCommandPath,$ArmGcc,$nm,$objdump,$readelf,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $repo -Roles $runtimeRoles) +
+    @(Get-ChildItem (Join-Path $repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $fixture -File -Recurse | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $port -File -Recurse | Where-Object {$_.Extension -in @('.c','.h','.S','.ld')} | Select-Object -ExpandProperty FullName) +
     @('main.h','report.h','startup.S','secure.c','secure.ld','qemu.sh' | ForEach-Object {Join-Path $bootstrap $_}) +
@@ -182,10 +187,11 @@ try {
                         $null = RequireCommand $ArmGcc ($flags + @('-save-temps=obj','-MD','-c',(Join-Path $port $unit),'-o',$object)) (Join-Path $dir ($unit+'.log'))
                         $portObjects += $object
                     }
-                    foreach ($unit in @('fiber_core.c','fiber_runtime_state.c','fiber_panic.c')) {
+                    foreach ($source in $runtimeSources) {
+                        $unit = $source.Substring($repo.Length+1).Replace('\','_').Replace('/','_')
                         $object = Join-Path $dir $unit.Replace('.c','.o')
                         $null = RequireCommand $ArmGcc ($flags + @('-mgeneral-regs-only','-save-temps=obj','-MD','-c',
-                            (Join-Path $repo ('fiber/'+$unit)),'-o',$object)) (Join-Path $dir ($unit+'.log'))
+                            $source,'-o',$object)) (Join-Path $dir ($unit+'.log'))
                         $portObjects += $object
                     }
                     $cases = @(@{Id=0;FP=0;Name='basic';Marker='PASS:C3FP-RUNNING-EXECUTION'},

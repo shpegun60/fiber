@@ -7,6 +7,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $Repo 'tools/runtime_sources.ps1')
+$runtimeRoles = @('engine','state','panic','legacy_compat','optional_configuration')
+$runtimeSources = @(Get-RuntimeSourcePaths -RepositoryRoot $Repo -Roles $runtimeRoles)
 if (!$ArmGcc) {
     $found = Get-Command arm-none-eabi-gcc.exe -ErrorAction SilentlyContinue
     if ($found) { $ArmGcc = $found.Source }
@@ -31,6 +34,19 @@ $Bin = Split-Path $ArmGcc
 $Ar = Join-Path $Bin 'arm-none-eabi-gcc-ar.exe'
 $Nm = Join-Path $Bin 'arm-none-eabi-gcc-nm.exe'
 $Objcopy = Join-Path $Bin 'arm-none-eabi-objcopy.exe'
+$sourceInputs = @($PSCommandPath,$ArmGcc,$HostGcc,$Ar,$Nm,$Objcopy,
+    (Join-Path $Repo 'mcu_core.h'),(Join-Path $Repo 'basic_types.h')) +
+    @(Get-RuntimeSourceInputs -RepositoryRoot $Repo -Roles $runtimeRoles) +
+    @(Get-ChildItem (Join-Path $Repo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem (Join-Path $Repo 'fiber') -Recurse -File | Where-Object {$_.Extension -in @('.c','.h')} | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem $CmsisCore -Recurse -File -Filter '*.h' | Select-Object -ExpandProperty FullName) +
+    @(Get-ChildItem (Join-Path $PSScriptRoot 'fixtures/v8_scalar_ntz_security') -Recurse -File | Select-Object -ExpandProperty FullName) +
+    @('v8_scalar_ntz_state_host.c','portable_application.c','v8_scalar_security_link_probe.c','arm_cm33_secure_gateway_non_secure.ld' | ForEach-Object {Join-Path $PSScriptRoot ('fixtures/'+$_)})
+function HashSourceInputs {
+    @($sourceInputs | Sort-Object -Unique | ForEach-Object {Get-FileHash -LiteralPath $_ -Algorithm SHA256} | Select-Object Path,Hash)
+}
+$before = HashSourceInputs
+$before | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $BuildRoot 'inputs-before.json') -Encoding ASCII
 
 function Run-Tool {
     param([string]$Tool, [string[]]$Arguments, [switch]$MayFail)
@@ -425,11 +441,13 @@ foreach ($mode in @('normal', 'lto')) {
     $ldText = $ldText.Replace('*(.text*)', 'KEEP(*(.fiber_port_context_cohort_expectation)) *(.text*)')
     [IO.File]::WriteAllText($ld, $ldText)
     $prefix = @()
-    foreach ($source in @('fiber/fiber_core.c', 'fiber/fiber_runtime_state.c', 'fiber/fiber_panic.c',
-            'fiber/fiber_runtime_context_configuration.c', 'fiber/port/fiber_port_context_cohort_expectation.c',
-            'tools/fixtures/portable_application.c', 'tools/fixtures/v8_scalar_security_link_probe.c')) {
-        $obj = Join-Path $dir ((Split-Path $source -Leaf) + '.o')
-        $null = Run-Tool $ArmGcc ($flags + @('-c', (Join-Path $Repo $source), '-o', $obj))
+    $sources = $runtimeSources + @('fiber/port/fiber_port_context_cohort_expectation.c',
+        'tools/fixtures/portable_application.c', 'tools/fixtures/v8_scalar_security_link_probe.c' |
+        ForEach-Object { Join-Path $Repo $_ })
+    foreach ($source in $sources) {
+        $name = $source.Substring($Repo.Length+1).Replace('\','_').Replace('/','_')
+        $obj = Join-Path $dir ($name + '.o')
+        $null = Run-Tool $ArmGcc ($flags + @('-c', $source, '-o', $obj))
         $prefix += $obj
     }
     $members = @()
@@ -490,4 +508,8 @@ foreach ($mode in @('normal', 'lto')) {
         Write-Output "PASS actual CM33 archive $mode $variant"
     }
 }
+$after = HashSourceInputs
+$after | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $BuildRoot 'inputs-after.json') -Encoding ASCII
+$inputDrift = @(Compare-Object $before $after -Property Path,Hash)
+if ($inputDrift.Count) {throw 'V8 scalar/NTZ/security inputs changed during run'}
 Write-Output "PASS v8 scalar/NTZ/security focused regressions. Artifacts: $BuildRoot"

@@ -75,6 +75,8 @@ if($RunProof) {
     $ErrorActionPreference='Stop'
     Set-StrictMode -Version 2.0
     $liveRepo=(Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+    . (Join-Path $liveRepo 'tools/runtime_sources.ps1')
+    $recipeRoles=@('engine','state','panic','legacy_compat')
     if(!$ProofBuildRoot){$ProofBuildRoot=[IO.Path]::GetTempPath()}
     $proof=Join-Path $ProofBuildRoot ('source-export-identity-'+[guid]::NewGuid().ToString('N'))
     $null=New-Item -ItemType Directory -Path $proof
@@ -116,6 +118,8 @@ if($RunProof) {
             (Get-Item (Join-Path $liveRepo 'tools/test_cm55_secure_only_runtime.ps1')),
             (Get-Item (Join-Path $liveRepo 'tools/fixtures/portable_application.c')),
             (Get-Item (Join-Path $liveRepo 'mcu_core.h')),(Get-Item (Join-Path $liveRepo 'basic_types.h')))+
+            @(Get-RuntimeSourceInputs -RepositoryRoot $liveRepo -Roles $recipeRoles | ForEach-Object {Get-Item -LiteralPath $_})+
+            @(Get-ChildItem (Join-Path $liveRepo 'context') -File | Where-Object {$_.Extension -in @('.c','.h')})+
             @(Get-ChildItem (Join-Path $liveRepo 'fiber') -File | Where-Object {$_.Extension -in @('.c','.h')})+
             @(Get-ChildItem (Join-Path $liveRepo 'fiber/port') -File | Where-Object {$_.Extension -in @('.c','.h')})+
             @(Get-ChildItem (Join-Path $liveRepo 'fiber/port/ARM_CM33_SECURE_ONLY/secure'),
@@ -199,7 +203,7 @@ if($RunProof) {
                 $admitMutant=Join-Path $toolControl 'removed-existence-guard.ps1'
                 [IO.File]::WriteAllText($admitMutant,$setup)
                 . $admit
-                $inputs=@((Join-Path $snapshot 'fiber/fiber_core.c'),$fixtureToolPath);$before=HashInputs
+                $inputs=@(Get-RuntimeSourcePaths -RepositoryRoot $snapshot -Roles 'engine')+@($fixtureToolPath);$before=HashInputs
                 $sourceBefore=Write-SourceExportManifest $snapshot $before $toolControl before
                 $stream=[IO.File]::Open($fixtureToolPath,[IO.FileMode]::Append,[IO.FileAccess]::Write)
                 try {$stream.WriteByte(0)} finally {$stream.Dispose()}
