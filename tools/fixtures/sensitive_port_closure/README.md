@@ -44,8 +44,11 @@ cohort TU are compiled, without fixture replacements for production functions.
 Port-only, common-only and whole selected/common native groups are inspected.
 Paired Secure companion groups are compiled separately with real `-mcmse`.
 The C55S staged group is a component compiler audit, not runtime activation.
-Its private staged cohort does not implement the generic storage-expectation
-TU, so that TU is not included in this role. Paired Secure pool roles have
+Its complete source group now includes the standard storage-expectation TU
+and must define all eight forward operations, like other runtime groups.
+`c55s_raw_admission/run.py` supplies compiled missing-operation causal controls;
+removing the old exemptions does not change RuntimeSelectable zero.
+Paired Secure pool roles have
 explicit three-slot/1024-byte-stack fixture manifests, never production defaults.
 The incomplete ARM_CM33F Secure FP source group is explicitly excluded; the
 receipt contains the exact admitted C inventories, CPU/FP/MPU dialect and role.

@@ -443,9 +443,7 @@ class Audit:
         if p["kind"] == "companion":
             return [directory / n for n in p["sources"]], []
         common = [self.repo / "fiber" / n for n in COMMON_SOURCES]
-        # C55S has a private staged cohort, not the complete generic storage ABI.
-        if p["kind"] != "paired-staged":
-            common += [self.repo / "fiber/port/fiber_port_context_cohort_expectation.c"]
+        common += [self.repo / "fiber/port/fiber_port_context_cohort_expectation.c"]
         return [directory / n for n in p["sources"]], common
 
     def dependencies(self, source, flags, target):
@@ -637,7 +635,7 @@ class Audit:
                 present = {f["name"] for f in Elf(target).functions}
                 roots = {n for n in present if not cold_name(n) and not n.startswith(("_sub_I_", "_sub_D_"))}
             groups[group] = inspect(target, dis, roots, common)
-            if group == "port" and p["kind"] not in ("companion", "paired-staged"):
+            if group == "port" and p["kind"] != "companion":
                 require(FORWARD <= set(groups[group]["functions"]), "Actual forward ABI functions missing")
             write_json(directory / (group + "-classification.json"), groups[group])
         if p["name"] in ("CM0", "CM0MPU", "CM3") and opt == "O2" and lto and section_mode == "unsectioned" and bundle == "baseline":

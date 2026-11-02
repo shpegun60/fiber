@@ -51,6 +51,14 @@ recorded before/after with no drift; the diagnostic is not a PASS gate.
 Receipt SHA256:
 `ACC34F5FAE75D55F4F260AC9EAAAC1C2C87E40FA58298D28B30D8A3E61B97599`.
 
+The diagnostic records the original C fixture hash but did not contemporaneously
+archive its bytes; the current fixture is the maintained extended version below.
+The original classifier bytes do survive in the earlier immutable capture
+`%TEMP%/fiber-sensitive-port-closure-c119d2f8e42441af96ec4d16ca3ba1cf/immutable-inputs/repo/tools/fixtures/sensitive_port_closure/run.py`,
+SHA256 `C4E1B1210B68D5F1C25560AC023014E336AC90746E6F4F538773962818B06562`.
+Do not infer a complete original source archive from the diagnostic receipt.
+The maintained repair has its own captured inputs and same-object causal controls.
+
 At the diagnostic checkpoint the fixture was the only new C source; production
 and shared proof scripts were unchanged. The diagnostic used instrumentation only, to
 isolate the missing graph edge; the maintained combined raw families still

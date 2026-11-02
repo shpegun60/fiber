@@ -3008,3 +3008,34 @@ mismatch. Receipt:
 SHA-256 4F9A97D1433714B4F32FBDD38115E113CFE37DE817AA7D44062601878B042B99.
 This does not upgrade other tuples, the aggregate or external callback/memory
 implementations to a new qualification claim.
+
+### Staged C55S Compiler-Group Admission
+
+The raw gate still treated C55S as the earlier incomplete component: it omitted
+the standard build expectation TU and exempted the port from eight-operation
+presence checking. Both obsolete exemptions are removed, with no production
+or activation changes. Twelve positive O2/Os ordinary/native-LTO cells now
+retain the four-byte exact-cohort expectation and all eight actual definitions.
+Twelve actual runtime-TU schedule-renaming mutants reproduce false PASS under
+the exact two-exemption counterfactual runner and fail under the repaired gate
+with only the intended missing-operation diagnostic. Sixty positive controls
+remain active; no helper/import allowance is widened.
+
+Parent rehashes 69 consumed inputs, 4,282 artifacts and three owned files with
+zero mismatch. The complete focused receipt is
+%TEMP%/fiber-c55s-raw-admission-8b47614f18be49618c67bd1acbe4e24e/results.json,
+SHA-256 1FDA2A399E37C82D1707802BFEA3FED9C976B1B4D644A5C8A073BDE78EC5FDA7.
+RuntimeSelectable remains zero; source-group admission is not Secure/exception
+execution, hardware qualification or a new global raw PASS. Earlier receipts
+retain their captured-runner boundaries.
+
+### 129fc5d Combined-Matrix Replay
+
+The immutable 956-file snapshot passes initial gates and O2 closed analysis for
+A30, C3SO, C5SO, both C3FT FP ABIs and the auxiliary C3FP running cohort. It then
+stops at the C5TF wrapper-policy source relation: that fixture still requires
+CMSIS reader names on the CM33 side after CM33 gained canonical local readers.
+This is a maintained cross-profile test dependency, not evidence that changing
+register semantics is permissible. Preserve C:/fq-31f2e2afed/matrix-result.json
+and C:/fqm-31f2e2afed: FAIL, source drift zero, later gates NOT_RUN. A repaired
+comparison needs exact spelling/count controls and a new complete replay.
