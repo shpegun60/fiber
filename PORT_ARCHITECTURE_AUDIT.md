@@ -2908,3 +2908,27 @@ repair; it does not acquire that newer invariant retroactively. These results
 do not close global raw qualification, real Secure TF-M/PSA execution, external
 callback/memory-helper closure or hardware validation. Exact receipt hashes
 and the preserved pre-repair FAIL remain in the selected-port leaf ledger.
+
+### Scalar Host Reader Repair
+
+The ac087c6 combined-matrix failure is reproduced by the source-extracted host
+fixture: selected functions use port-local register readers while the model
+only exposes CMSIS spellings. Both current reader dialects now map to the
+original mutable register state, preserving host-width PSP values. No runtime
+source or expected register semantics change. Twelve compiled zero-reader
+mutants must fail with the exact reader diagnostic; the existing assertions
+remain and Handler-entry CONTROL source checks gain stale-Thread controls.
+
+The immutable maintained replay passes fourteen host runs / 29,411 checks,
+twelve reader mutants, eight INNER-shareability mutants, 52 ARM objects and
+eight archive cases. Parent rehashes 148 captured inputs, 439 recorded artifacts
+and both owned fixture files without mismatch. Evidence:
+
+```text
+%TEMP%/fiber-v8-scalar-reader-repair-b5e4981da5bf49c6a36a4204ab9214e9/results.json
+SHA-256: 2B8AAB0C94F6E6AEE791636B0C8D311464AFC72BA6FA659ABF54D8DA72EDB831
+```
+
+This is source-derived C-state, code-generation and archive evidence, not
+physical exception execution. The earlier aggregate remains FAIL and its
+later gates remain NOT_RUN until a fresh immutable aggregate reaches them.

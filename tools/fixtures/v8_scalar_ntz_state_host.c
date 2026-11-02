@@ -28,7 +28,54 @@ static uintptr_t live_psp;
 #define __get_FAULTMASK() faultmask
 #define __get_PSPLIM() psplim
 #define __get_PSP() live_psp
+#define fiber_port_cpu_read_ipsr() __get_IPSR()
+#define fiber_port_cpu_read_control() __get_CONTROL()
+#define fiber_port_cpu_read_primask() __get_PRIMASK()
+#define fiber_port_cpu_read_faultmask() __get_FAULTMASK()
+#define fiber_port_cpu_read_psplim() __get_PSPLIM()
+#define fiber_port_cpu_read_psp() __get_PSP()
+#define fiber_port_cpu_ipsr() __get_IPSR()
+#define fiber_port_cpu_control() __get_CONTROL()
+#define fiber_port_cpu_primask() __get_PRIMASK()
+#define fiber_port_cpu_faultmask() __get_FAULTMASK()
+#define fiber_port_cpu_psplim() __get_PSPLIM()
+#define fiber_port_cpu_psp() __get_PSP()
 #define fiber_port_basepri_read() basepri
+
+/* Both naming dialects observe the same mutable model, including host-width PSP. */
+#define CHECK_LOCAL_READER(reader, expected) do { \
+    if ((uintptr_t)reader() != (uintptr_t)(expected)) { \
+        fprintf(stderr, "local CPU reader mismatch: %s\n", #reader); exit(1); \
+    } \
+    ++checks; \
+} while (0)
+
+static void test_local_cpu_readers(void) {
+    const uint32_t old[] = {ipsr, control, primask, faultmask, psplim};
+    const uintptr_t old_psp = live_psp;
+    for (unsigned phase = 0; phase < 2; ++phase) {
+        ipsr = phase ? 0u : 14u;
+        control = phase ? 2u : 3u;
+        primask = phase ? 0u : 1u;
+        faultmask = phase ? 1u : 0u;
+        psplim = phase ? 0x20002000u : 0x20001000u;
+        live_psp = phase ? (uintptr_t)0x20003000u : UINTPTR_MAX - 31u;
+        CHECK_LOCAL_READER(fiber_port_cpu_read_ipsr, ipsr);
+        CHECK_LOCAL_READER(fiber_port_cpu_read_control, control);
+        CHECK_LOCAL_READER(fiber_port_cpu_read_primask, primask);
+        CHECK_LOCAL_READER(fiber_port_cpu_read_faultmask, faultmask);
+        CHECK_LOCAL_READER(fiber_port_cpu_read_psplim, psplim);
+        CHECK_LOCAL_READER(fiber_port_cpu_read_psp, live_psp);
+        CHECK_LOCAL_READER(fiber_port_cpu_ipsr, ipsr);
+        CHECK_LOCAL_READER(fiber_port_cpu_control, control);
+        CHECK_LOCAL_READER(fiber_port_cpu_primask, primask);
+        CHECK_LOCAL_READER(fiber_port_cpu_faultmask, faultmask);
+        CHECK_LOCAL_READER(fiber_port_cpu_psplim, psplim);
+        CHECK_LOCAL_READER(fiber_port_cpu_psp, live_psp);
+    }
+    ipsr = old[0]; control = old[1]; primask = old[2];
+    faultmask = old[3]; psplim = old[4]; live_psp = old_psp;
+}
 
 typedef struct { uintptr_t stack_base, stack_top; void *begin; } FiberPortBoot;
 typedef struct {
@@ -285,6 +332,7 @@ static void test_lazy_map(void) {
 #endif
 
 int main(void) {
+    test_local_cpu_readers();
 #if TEST_MPU
     test_mpu_shareability_encoding();
     test_regions(); test_frames();

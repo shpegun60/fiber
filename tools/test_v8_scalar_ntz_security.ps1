@@ -81,6 +81,16 @@ function Test-PrivilegedSvcControlReadback {
     return [regex]::Matches($Instructions,
         'movs\s+(?<cr>r[12]),\s*#2\s+msr\s+control,\s*\k<cr>\s+isb\s+mrs\s+\k<cr>,\s*control\s+and\s+\k<cr>,\s*\k<cr>,\s*#(?:3|7)\s+cmp\s+\k<cr>,\s*#2\s+bne\b').Count -eq 1
 }
+function Test-ScalarEntryControlSource {
+    param([string]$Function)
+    return [regex]::Matches($Function,
+        'FIBER_REQUIRE\(fiber_port_cpu_read_control\(\)\s*==\s*1u,\s*''l''\)').Count -eq 1
+}
+function Test-ScalarSvcEntryControlSource {
+    param([string]$Function)
+    return [regex]::Matches($Function,
+        '(?s)else if \(exc_return == fiber_portINITIAL_EXC_RETURN\)\s*\{\s*FIBER_REQUIRE\(fiber_port_cpu_read_control\(\) == 1u, ''l''\)').Count -eq 1
+}
 function Assert-ScalarControlSource {
     param([string]$Runtime, [string]$Boot, [string]$Profile)
     foreach ($name in @('fiber_port_restore_first_context_from_svc', 'PendSV_Handler')) {
@@ -96,13 +106,22 @@ function Assert-ScalarControlSource {
     }
     foreach ($name in @('fiber_port_pendsv_validate_save_current',
             'fiber_port_scheduler_pick_next_from_pendsv', 'fiber_port_mpu_switch_to_context')) {
-        if ((Actual-Function $Runtime $name) -notmatch 'FIBER_REQUIRE\(__get_CONTROL\(\)\s*==\s*1u,\s*''l''\)') {
+        $body = Actual-Function $Runtime $name
+        if (!(Test-ScalarEntryControlSource $body)) {
             throw "$Profile/$name must retain exception-entry Handler CONTROL 1 before any restore MSR"
+        }
+        $stale = [regex]::Replace($body, '(fiber_port_cpu_read_control\(\)\s*==\s*)1u', '${1}3u')
+        if ($stale -eq $body -or (Test-ScalarEntryControlSource $stale)) {
+            throw "$Profile/$name assertion accepts saved Thread CONTROL 3 at Handler entry"
         }
     }
     $svc = Actual-Function $Runtime 'fiber_port_svc_dispatch'
-    if ($svc -notmatch '(?s)else if \(exc_return == fiber_portINITIAL_EXC_RETURN\)\s*\{\s*FIBER_REQUIRE\(__get_CONTROL\(\) == 1u, ''l''\)') {
+    if (!(Test-ScalarSvcEntryControlSource $svc)) {
         throw "$Profile runtime SVC lost its exception-entry CONTROL 1 check"
+    }
+    $stale = [regex]::Replace($svc, '(fiber_port_cpu_read_control\(\)\s*==\s*)1u', '${1}3u')
+    if ($stale -eq $svc -or (Test-ScalarSvcEntryControlSource $stale)) {
+        throw "$Profile runtime SVC assertion accepts saved Thread CONTROL 3 at Handler entry"
     }
     foreach ($name in @('fiber_port_validate_running_context_frame', 'fiber_port_context_validate_restore')) {
         if ((Actual-Function $Runtime $name) -notmatch 'image->control\s*==\s*fiber_portINITIAL_CONTROL_UNPRIVILEGED') {
@@ -151,6 +170,7 @@ $Base = @('-mthumb', '-std=gnu11', '-ffreestanding', '-fno-builtin', '-fno-commo
     '-DFIBER_SCHEDULER_BASEPRI=0x10', "-I$Repo", "-I$CmsisCore", "-I$Repo/fiber", "-I$Repo/fiber/port")
 $profiles = @('ARM_CM33_NTZ', 'ARM_CM33F_NTZ', 'ARM_CM55_NTZ', 'ARM_CM55F_NTZ',
     'ARM_CM55_MVEF_NTZ', 'ARM_CM33', 'ARM_CM33_TFM', 'ARM_CM33_MPU', 'ARM_CM55_MPU')
+$readerControls = @()
 foreach ($profile in $profiles) {
     $is55 = $profile.StartsWith('ARM_CM55')
     $core = if ($is55) { 55 } else { 33 }
@@ -239,6 +259,37 @@ foreach ($profile in $profiles) {
                 "-I$dir", (Join-Path $PSScriptRoot 'fixtures/v8_scalar_ntz_state_host.c'), '-o', $exe)
             Write-Output "$profile regions=$regions lazy=$lazy $((Run-Tool $exe @()).Text)"
         }
+        if (!$readerControls.Count) {
+            $fixture = Join-Path $PSScriptRoot 'fixtures/v8_scalar_ntz_state_host.c'
+            $fixtureText = [IO.File]::ReadAllText($fixture)
+            foreach ($prefix in @('fiber_port_cpu_read_', 'fiber_port_cpu_')) {
+              foreach ($register in @('IPSR', 'CONTROL', 'PRIMASK', 'FAULTMASK', 'PSPLIM', 'PSP')) {
+                $reader = $prefix + $register.ToLowerInvariant()
+                $anchor = '(?m)^#define ' + [regex]::Escape($reader) + '\(\) __get_' + $register + '\(\)\r?$'
+                if ([regex]::Matches($fixtureText, $anchor).Count -ne 1) {
+                    throw "Missing exact host-reader mutation anchor: $reader"
+                }
+                $mutantText = [regex]::Replace($fixtureText, $anchor, "#define $reader() 0u")
+                $mutantDir = Join-Path $dir ('reader-mutant-' + $reader)
+                $null = New-Item -ItemType Directory -Force -Path $mutantDir
+                $mutantSource = Join-Path $mutantDir 'host.c'
+                [IO.File]::WriteAllText($mutantSource, $mutantText)
+                $mutantExe = Join-Path $mutantDir 'host.exe'
+                $null = Run-Tool $HostGcc @('-std=c11', '-O2', '-Wall', '-Wextra', '-Wno-unused-variable',
+                    '-Wno-unused-function', '-Werror', "-DTEST_MPU=$mpu", "-DTEST_FP=$fp", '-DFIBER_FPU_LAZY=0',
+                    "-I$dir", $mutantSource, '-o', $mutantExe)
+                $negative = Run-Tool $mutantExe @() -MayFail
+                [IO.File]::WriteAllText((Join-Path $mutantDir 'host.log'), $negative.Text)
+                if ($negative.Code -ne 1 -or $negative.Text.Trim() -cne "local CPU reader mismatch: $reader") {
+                    throw "Wrong host-reader observation was not rejected exactly: $reader/$($negative.Code)/$($negative.Text)"
+                }
+                $readerControls += [pscustomobject]@{ Reader = $reader; ExitCode = $negative.Code; Diagnostic = $negative.Text.Trim() }
+                [IO.File]::WriteAllText((Join-Path $BuildRoot 'reader-controls.json'),
+                    (ConvertTo-Json -InputObject $readerControls -Depth 4))
+                Write-Output "PASS exact host-reader counterexample: $reader"
+              }
+            }
+        }
         if ($mpu) {
             # Mutate only the extracted dictionary. The same raw-numeric fixture
             # must reject SH=1 even when the implementation calls it INNER.
@@ -303,6 +354,7 @@ foreach ($profile in $profiles) {
         }
     }
 }
+if ($readerControls.Count -ne 12) { throw 'The exact twelve local-reader controls did not all execute' }
 
 # A15: fresh runtime/boot/attachment/common plus only a stale actual handler.
 # Matching links and strong vector checks distinguish extraction from identity.
