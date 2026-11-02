@@ -3128,3 +3128,22 @@ The final artifact manifest is stable before/after that rehash, SHA-256
 BA4D9A44117586A52EDD4396B17775D8F33230DDA6F524CD22ED6130F77FE3AB.
 Early parent counts observed the still-writing CSV and are not the final
 inventory. The preceding combined-matrix FAIL is not relabeled by this PASS.
+
+### Secure-Only Export Identity
+
+The reachable C3SO/C5SO runtime wrappers also used mandatory local HEAD reads
+for receipt attribution only. Both now retain optional exact-root Git metadata
+and a sorted, root-independent SHA-256 source-byte manifest. They never invent
+a commit identity or attribute an enclosing repository's HEAD to an export.
+Existing copied inputs, dependency admission and final drift rejection remain
+authoritative; the FreeRTOS Git/pin checks are unchanged.
+
+Read-only no-Git exports pass the actual AdmissionOnly QEMU gates: C3SO has
+5,529 checks / 25 executions, C5SO 5,538 / 25, both with zero drift. The helper
+proof adds 129 checks, including changed/removed inputs, causal removal of
+actual wrapper drift guards, and invalid/foreign Git provenance. Parent rehashes
+95 captured source files and 3,218 artifacts without mismatch. Receipt:
+%TEMP%/source-export-identity-e8a335a8eae34b7b9e7bfa0f2e55a557/receipt.json,
+SHA-256 9A430332E7923D79EC29F7368731890BBE5CB44192E268027DBECC8AEB298782.
+These focused receipts retain CompleteSuite=false. No production source,
+activation flag, full runtime suite or hardware claim changes here.

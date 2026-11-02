@@ -14,6 +14,8 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$sourceIdentityScript=Join-Path $PSScriptRoot 'fixtures/source_export_identity/identity.ps1'
+. $sourceIdentityScript
 $fixture=Join-Path $PSScriptRoot 'fixtures/cm33_secure_only_runtime'
 $port=Join-Path $repo 'fiber/port/ARM_CM33_SECURE_ONLY/secure'
 if($AdmissionOnly -and $CompilerAdversarialOnly){throw 'Choose only one focused phase'}
@@ -44,8 +46,8 @@ $checks=New-Object System.Collections.Generic.List[object]
 $runs=New-Object System.Collections.Generic.List[object]
 $compilerCases=New-Object System.Collections.Generic.List[object]
 $verdict='FAIL';$failure='';$referenceChecked=$false
-$repositoryHeadBefore='';$repositoryHeadAfter=''
-$inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
+$repositoryMetadataBefore=$null;$repositoryMetadataAfter=$null
+$inputs=@($PSCommandPath,$sourceIdentityScript,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
     (Join-Path $repo 'tools/fixtures/portable_application.c'),
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
     @(Get-ChildItem -LiteralPath $fixture -File -Recurse | Select-Object -ExpandProperty FullName)+
@@ -338,6 +340,7 @@ if(!(Test-Path -LiteralPath $libgcov -PathType Leaf)){throw 'Missing raw coverag
 $inputs+=(Resolve-Path -LiteralPath $libgcov).Path
 $before=HashInputs
 $before | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'inputs-before.json') -Encoding ASCII
+$sourceIdentityBefore=Write-SourceExportManifest $repo $before $out before
 $copyRoot=Join-Path $out 'input-copies';$null=New-Item -ItemType Directory -Path $copyRoot
 $copyMap=@();$i=0
 foreach($row in $before) {
@@ -349,7 +352,10 @@ foreach($row in $before) {
 $copyMap | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'input-copy-map.json') -Encoding ASCII
 try {
     Write-Host "C3SO runtime evidence: $out"
-    $repositoryHeadBefore=(Need 'git' @('-C',$repo,'rev-parse','HEAD') (Join-Path $out 'repository-head-before.txt')).Trim()
+    $repositoryMetadataBefore=Get-SourceExportHeadMetadata $repo {
+        param([string[]]$GitArguments)
+        Recorded 'git' $GitArguments (Join-Path $out ('repository-metadata-before-'+[guid]::NewGuid().ToString('N')+'.log'))
+    }
     $null=Need $ArmGcc @('--version') (Join-Path $out 'compiler.txt')
     $head=(Need 'git' @('-C',$FreeRtosRoot,'rev-parse','HEAD') (Join-Path $out 'reference-head.txt')).Trim()
     Check 'reference/exact-identity-pin' ($head -ceq $pin) $head
@@ -466,12 +472,16 @@ try {
     $null=Need 'wsl.exe' @('-d',$WslDistro,'--exec','bash',$qemuScript,'verify',$QemuRoot,$wslOut) (Join-Path $out 'qemu-inputs-verify.log')
     $finalHead=(Need 'git' @('-C',$FreeRtosRoot,'rev-parse','HEAD') (Join-Path $out 'reference-head-after.txt')).Trim()
     Check 'reference/pin-stable-through-qualification' ($finalHead -ceq $pin) $finalHead
-    $repositoryHeadAfter=(Need 'git' @('-C',$repo,'rev-parse','HEAD') (Join-Path $out 'repository-head-after.txt')).Trim()
+    $repositoryMetadataAfter=Get-SourceExportHeadMetadata $repo {
+        param([string[]]$GitArguments)
+        Recorded 'git' $GitArguments (Join-Path $out ('repository-metadata-after-'+[guid]::NewGuid().ToString('N')+'.log'))
+    }
     $verdict='PASS'
 } catch {
     $failure=$_.Exception.Message;[IO.File]::WriteAllText((Join-Path $out 'failure.txt'),$failure);throw
 } finally {
     $after=HashInputs;$after | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'inputs-after.json') -Encoding ASCII
+    $sourceIdentityAfter=Write-SourceExportManifest $repo $after $out after
     $drift=@(Compare-Object @($before | ForEach-Object {$_.Path+'='+$_.Hash}) @($after | ForEach-Object {$_.Path+'='+$_.Hash}))
     if($drift.Count){$verdict='FAIL'}
     $checks.ToArray() | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $out 'checks.json') -Encoding ASCII
@@ -481,8 +491,14 @@ try {
         Executed=@($runs | Where-Object {$_.Executed}).Count;CompileOnly=@($runs | Where-Object {!$_.Executed}).Count;
         ReferencePin=$pin;ReferenceIdentityChecked=$referenceChecked;ReferenceAssemblyCompared=$false;ReferenceExecuted=$false;
         ExpectedRuntimeSelectable=$ExpectedRuntimeSelectable;QemuRoot=$QemuRoot;
-        RepositoryHEADBefore=$repositoryHeadBefore;RepositoryHEADAfter=$repositoryHeadAfter;
-        RepositoryInputMode='Explicit hashed worktree inputs; HEAD attribution is not a clean-tree claim';
+        RepositoryHEADBefore=$(if($null -ne $repositoryMetadataBefore){$repositoryMetadataBefore.Head});
+        RepositoryHEADAfter=$(if($null -ne $repositoryMetadataAfter){$repositoryMetadataAfter.Head});
+        RepositoryMetadataBefore=$repositoryMetadataBefore;RepositoryMetadataAfter=$repositoryMetadataAfter;
+        RepositoryInputMode='Explicit hashed source bytes; optional exact-root HEAD is not a clean-tree claim or source identity';
+        SourceIdentitySchema=$sourceIdentityBefore.Schema;
+        SourceIdentityKind=$sourceIdentityBefore.IdentityKind;
+        SourceManifestSHA256Before=$sourceIdentityBefore.ManifestSHA256;SourceManifestSHA256After=$sourceIdentityAfter.ManifestSHA256;
+        SourceManifestStable=($sourceIdentityBefore.ManifestSHA256 -ceq $sourceIdentityAfter.ManifestSHA256);
         CompilerAdversarialBoundary='All port/common objects raw-compiled; whole-port and common-sensitive bodies checked; executions use raw port and real neutral common objects';
         CompilerCounterflagsAccepted=$false;CommonColdExports=@('fiber_init','fiber_scheduler_set_pick_next');
         ColdOnlyCommonHelper='fiber_internal_scheduler_store_pick_next';
