@@ -2559,3 +2559,28 @@ production executable code or hardware qualification changes in this slice.
 receipt.json SHA-256:
   6654D36F9E9C2082C942D913BAE657F2591C5076DEB78AEF6D965501A7C5A8A6
 ```
+
+### C55S Complete Staged Common Runtime Replay
+
+The maintained two-image AN547 suite now passes its complete 2,490-launch
+inventory plus one actual priority-mask probe: 14,998 assertions, eighty
+variants and 640 positive Secure-origin switches. It exercises real common
+lifecycle/reverse state, all eight forward operations and the production
+twelve-entry Secure companion without forced includes or fabricated runtime
+providers. Direct/archive/GC/LTO, exact cohort/reverse/provider failures,
+vectors, both NS/common r9 ABIs and named hostile builds have separate oracles.
+
+Parent independently rehashes 160 inputs and 44,204 artifacts with no mismatch.
+The Secure side uses standard CMSE ABI, not reserved-r9. Hostile cases budget
+generic stack-check probes with 8 KiB task stacks; the retained failed 4 KiB
+development run prevents a claim that raw flags eliminate probes or preserve
+minimum-stack safety. Documented integration counterflags remain required.
+This is staged QEMU runtime proof, not physical hardware, whole-reference
+equivalence, every model/geometry or automatic public activation. C55S remains
+`RuntimeSelectable=0` pending its independent admission/freeze gates.
+
+```text
+  %TEMP%/fiber-m55-secure-runtime-5e37cf63fd6d49de9471276f511e8027
+results.json SHA-256:
+  2EE13B8DD7019AAFF4C1D0B43385B5DE7588EFC618218722226B0F2FB496E2FC
+```
