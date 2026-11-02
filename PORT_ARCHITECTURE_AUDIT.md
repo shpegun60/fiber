@@ -2608,3 +2608,17 @@ receipt.json SHA-256:
 Exact 88-source archive SHA-256:
   8C9A44E0AB58927D11897D3B00152663DEA3EF7A2E74FA92A8C0AF2F81A5B38C
 ```
+
+### Central Staged-Proof Dispatch
+
+The central matrix now invokes the maintained C3FS initializer, complete C55S
+runtime and C5SO runtime under its explicit architecture-execution guard. C3FT
+consumer/adapter checks run unconditionally, with actual CPU execution only
+when QEMU is explicitly supplied; the C3FS manifest/pool gate is also included.
+All staged expectations remain zero. No development subset is used by these
+dispatches, and no source layout or runtime-selection policy is changed.
+
+The independent matrix policy runner passes 41 admission/dispatch checks.
+This is infrastructure proof, not a fresh combined-matrix or CPU receipt. The
+profile execution receipts above remain separate until a new immutable-source
+combined run completes. The earlier retained combined failure is not relabeled.

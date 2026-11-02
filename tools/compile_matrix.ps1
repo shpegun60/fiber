@@ -22162,6 +22162,11 @@ try {
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
             -WslDistro $ControlWslDistro `
             -BuildRoot (Join-Path $buildRoot "audit-cm33-secure-origin-qemu")
+        Write-Host "== audit / staged CM33F paired Secure initializer =="
+        & (Join-Path $RepoRoot "tools\test_cm33f_secure_initialize.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
+            -WslDistro $ControlWslDistro `
+            -BuildRoot (Join-Path $buildRoot "audit-cm33f-secure-initialize-qemu")
         Write-Host "== audit / executed default M55 Secure-private pool =="
         & (Join-Path $RepoRoot "tools\test_m55_secure_pool_qemu.ps1") `
             -ArmGcc $gcc -QemuRoot $ControlQemuRoot `
@@ -22187,6 +22192,11 @@ try {
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
             -WslDistro $ControlWslDistro `
             -BuildRoot (Join-Path $buildRoot "audit-c55s-first-start-qemu")
+        Write-Host "== audit / staged M55 Secure complete common runtime =="
+        & (Join-Path $RepoRoot "tools\test_m55_secure_runtime.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
+            -WslDistro $ControlWslDistro `
+            -BuildRoot (Join-Path $buildRoot "audit-c55s-runtime-qemu")
         Write-Host "== audit / executed staged CM33F MPU first basic restore =="
         & (Join-Path $RepoRoot "tools\test_cm33f_mpu_first_start_execution.ps1") `
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
@@ -22209,6 +22219,12 @@ try {
             -QemuRoot $ControlQemuRoot `
             -WslDistro $ControlWslDistro -ExpectedRuntimeSelectable 0 `
             -BuildRoot (Join-Path $buildRoot "audit-cm33-secure-only-runtime-qemu")
+        Write-Host "== audit / staged Secure-only M55 complete common-runtime integration =="
+        & (Join-Path $RepoRoot "tools\test_cm55_secure_only_runtime.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis `
+            -QemuRoot $ControlQemuRoot `
+            -WslDistro $ControlWslDistro -ExpectedRuntimeSelectable 0 `
+            -BuildRoot (Join-Path $buildRoot "audit-cm55-secure-only-runtime-qemu")
     } else {
         Write-Host "NOT_RUN: QEMU architecture/Secure gates (supply -ControlQemuRoot); no emulator proof claimed"
     }
@@ -22225,6 +22241,19 @@ try {
         $cm55TfmArguments.WslDistro = $ControlWslDistro
     }
     & (Join-Path $RepoRoot "tools\test_cm55_tfm.ps1") @cm55TfmArguments
+
+    Write-Host "== audit / staged CM33F TF-M target, adapter and optional FP execution =="
+    $cm33fTfmArguments = @{
+        ArmGcc = $gcc
+        CmsisCore = $cmsis
+        ExpectedRuntimeSelectable = 0
+        BuildRoot = (Join-Path $buildRoot "audit-cm33f-tfm")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ControlQemuRoot)) {
+        $cm33fTfmArguments.QemuRoot = $ControlQemuRoot
+        $cm33fTfmArguments.WslDistro = $ControlWslDistro
+    }
+    & (Join-Path $RepoRoot "tools\test_cm33f_tfm.ps1") @cm33fTfmArguments
 
     Write-Host "== common-runtime / no-cmsis =="
     Test-CommonRuntimeWithoutCmsis -RepositoryRoot $RepoRoot -Compiler $gcc `
@@ -22283,6 +22312,10 @@ try {
     & (Join-Path $RepoRoot "tools\test_cm55_secure_only.ps1") `
         -ArmGcc $gcc -CmsisCore $cmsis `
         -BuildRoot (Join-Path $buildRoot "staged-cm55-secure-only")
+    Write-Host "== ARM_CM33F paired Secure staged manifest/pool contract =="
+    & (Join-Path $RepoRoot "tools\test_cm33f_secure_manifest.ps1") `
+        -ArmGcc $gcc -CmsisCore $cmsis `
+        -BuildRoot (Join-Path $buildRoot "staged-cm33f-secure-manifest")
     Write-Host "== ARM_CM33_MPU layout/trait contract =="
     Test-ArmCm33MpuLayoutContract -RepositoryRoot $RepoRoot `
         -Compiler $gcc -Nm $nm -CmsisPath $cmsis `

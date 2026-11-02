@@ -55,9 +55,52 @@ foreach ($case in $cases) {
     }
     Check $case.Name $passed
 }
+# Guard complete dispatch, independently of the expensive execution itself.
+$commands = @($ast.FindAll({param($node)
+    $node -is [Management.Automation.Language.CommandAst] -and
+    $node.InvocationOperator -eq [Management.Automation.Language.TokenKind]::Ampersand
+}, $true))
+foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime',
+        'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
+    $needle = '"tools\' + $runner + '.ps1"'
+    $dispatch = @($commands | Where-Object {$_.Extent.Text.Contains($needle)})
+    Check ($runner + '/one-dispatch') ($dispatch.Count -eq 1)
+    $text = $dispatch[0].Extent.Text
+    Check ($runner + '/real-tool-inputs') ($text -cmatch '-ArmGcc \$gcc' -and
+        $text -cmatch '-CmsisCore \$cmsis')
+    Check ($runner + '/explicit-execution-inputs') ($text -cmatch
+        '-QemuRoot \$ControlQemuRoot' -and $text -cmatch '-WslDistro \$ControlWslDistro')
+    Check ($runner + '/no-development-subset') ($text -notmatch
+        '-(?:Development\w*|Smoke|CompilerAdversarialOnly|AdmissionOnly)\b')
+    $parent = $dispatch[0].Parent
+    $guarded = $false
+    while ($null -ne $parent) {
+        if ($parent -is [Management.Automation.Language.IfStatementAst] -and
+            $parent.Clauses[0].Item1.Extent.Text -ceq
+                '-not [string]::IsNullOrWhiteSpace($ControlQemuRoot)') {
+            $guarded = $true
+        }
+        $parent = $parent.Parent
+    }
+    Check ($runner + '/inside-explicit-qemu-guard') $guarded
+    if ($runner -match 'secure_only') {
+        Check ($runner + '/staged-not-promoted') ($text -cmatch
+            '-ExpectedRuntimeSelectable 0\b')
+    }
+}
+$tfmDispatch = @($commands | Where-Object {
+    $_.Extent.Text.Contains('"tools\test_cm33f_tfm.ps1"')
+})
+Check 'C3FT/one-dispatch' ($tfmDispatch.Count -eq 1)
+Check 'C3FT/exact-argument-binding' ($tfmDispatch[0].Extent.Text -cmatch
+    '@cm33fTfmArguments$')
+Check 'C3FT/staged-base-arguments' ($source -cmatch
+    '(?s)\$cm33fTfmArguments = @\{\s+ArmGcc = \$gcc\s+CmsisCore = \$cmsis\s+ExpectedRuntimeSelectable = 0\s+BuildRoot = \(Join-Path \$buildRoot "audit-cm33f-tfm"\)\s+\}')
+Check 'C3FT/optional-execution-forwarding' ($source -cmatch
+    '(?s)if \(-not \[string\]::IsNullOrWhiteSpace\(\$ControlQemuRoot\)\) \{\s+\$cm33fTfmArguments.QemuRoot = \$ControlQemuRoot\s+\$cm33fTfmArguments.WslDistro = \$ControlWslDistro\s+\}')
 $result = [pscustomobject]@{
     Status='PASS';Checks=$checks.Count;Cases=$checks.ToArray()
-    Scope='Configuration admission only; no compiler, QEMU or board execution'
+    Scope='Configuration admission and complete staged-runner dispatch only; no compiler, QEMU or board execution'
     Inputs=@((Get-FileHash -LiteralPath $PSCommandPath),
         (Get-FileHash -LiteralPath $matrixPath)) | Select-Object Path,Hash
 }
