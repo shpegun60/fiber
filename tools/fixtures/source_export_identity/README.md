@@ -13,6 +13,12 @@ Nothing substitutes a revision string for those checks. The source-only
 from those same input snapshots; external tool, CMSIS and FreeRTOS inputs remain
 in the complete input manifests.
 
+Both wrappers resolve `lto-wrapper` with GCC's `-print-prog-name=lto-wrapper`
+and `liblto_plugin.dll` with `-print-file-name=liblto_plugin.dll`. Both files must
+exist and are included in the complete before/after input hashes, as well as
+`CompilerLtoToolsBefore/After` in the receipt. They are tool provenance, not
+source identity; paths outside the source root do not enter its source digest.
+
 Canonical source-manifest bytes are UTF-8 without BOM, with LF line endings:
 
 ```text
@@ -72,6 +78,14 @@ foreign-root rejection, malformed HEAD, failed/unavailable Git and actual
 broken Git metadata. Metadata-result controls use an explicit injected Git
 runner; the actual source-root attribution probe and broken-metadata control
 use real Git. Source HEAD is never a prerequisite even for this proof.
+
+The proof independently resolves those two LTO dependencies through the actual
+GCC and requires their exact paths and hashes in both wrapper input snapshots
+and receipt tool lists. Disposable byte-for-byte copies exercise each wrapper's
+actual drift-failure guards, missing-file existence admission and hash-input
+rejection. Guard-removal controls accept the corresponding bad input. A changed
+external tool must not change the source-only digest. Installed tools are never
+modified, copied tools are never executed, and installed hashes are rechecked.
 
 The evidence retains source-copy mappings, full child receipts, commands,
 checks, source manifests and artifact SHA256 hashes, including failures.

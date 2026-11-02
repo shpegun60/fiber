@@ -81,7 +81,7 @@ if($RunProof) {
     $proofCommands=Join-Path $proof 'commands.jsonl'
     $proofChecks=New-Object System.Collections.Generic.List[object]
     $proofInputs=New-Object System.Collections.Generic.List[object]
-    $proofVerdict='FAIL';$proofFailure='';$proofReceipts=@()
+    $proofVerdict='FAIL';$proofFailure='';$proofReceipts=@();$proofLtoTools=@()
     function ProofCheck([string]$Name,[bool]$Passed,[object]$Evidence) {
         $proofChecks.Add([pscustomobject]@{Name=$Name;Passed=$Passed;Evidence=$Evidence})
         if(!$Passed){throw "Source export identity proof failed: $Name"}
@@ -100,6 +100,15 @@ if($RunProof) {
             if(!$required -or !(Test-Path -LiteralPath $required)){throw 'Supply existing compiler, CMSIS and FreeRTOS paths'}
         }
         if(!$ProofQemuRoot -or !$ProofQemuRoot.StartsWith('/')){throw 'Supply existing absolute WSL -ProofQemuRoot'}
+        foreach($query in @(
+            @{Name='lto-wrapper';Argument='-print-prog-name=lto-wrapper'},
+            @{Name='liblto_plugin.dll';Argument='-print-file-name=liblto_plugin.dll'})) {
+            $result=ProofRun $ProofArmGcc @($query.Argument) (Join-Path $proof ($query.Name+'-path.txt'))
+            ProofCheck "tools/GCC-located-$($query.Name)" ($result.Code -eq 0 -and
+                (Test-Path -LiteralPath $result.Text.Trim() -PathType Leaf)) $result.Text
+            $resolved=(Resolve-Path -LiteralPath $result.Text.Trim()).Path
+            $proofLtoTools+=@([pscustomobject]@{Name=$query.Name;Path=$resolved;SHA256=(Get-FileHash -LiteralPath $resolved).Hash})
+        }
         $snapshot=Join-Path $proof 'source'
         $null=New-Item -ItemType Directory -Path $snapshot
         $sourceFiles=@((Get-Item -LiteralPath $PSCommandPath),
@@ -173,6 +182,47 @@ if($RunProof) {
             finally {[IO.File]::Move($saved,$b)}
             ProofCheck "$profile/real-byte-gate-rejects-removed-input" $missingRejected 'Actual wrapper HashInputs, isolated mutable fixture only'
             [IO.File]::WriteAllText($b,'extern unsigned a;')
+            foreach($tool in $proofLtoTools) {
+                $toolControl=Join-Path $control ($profile+'-'+$tool.Name)
+                $null=New-Item -ItemType Directory -Path $toolControl
+                $fixtureToolPath=Join-Path $toolControl ([IO.Path]::GetFileName($tool.Path))
+                [IO.File]::Copy($tool.Path,$fixtureToolPath)
+                ProofCheck "$profile/$($tool.Name)/tool-copy-matches-installed-bytes" (
+                    (Get-FileHash -LiteralPath $fixtureToolPath).Hash -ceq $tool.SHA256) $fixtureToolPath
+                $marker=if($tool.Name -eq 'lto-wrapper'){'Missing compiler subprocess: $program'}else{'Missing compiler LTO plugin: liblto_plugin.dll'}
+                $admission=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.IfStatementAst] -and
+                    $n.Extent.Text.Contains($marker)},$true))
+                ProofCheck "$profile/$($tool.Name)/exact-real-existence-guard" ($admission.Count -eq 1) $wrapper
+                $setup=if($tool.Name -eq 'lto-wrapper'){'$path=$fixtureToolPath;$program=''lto-wrapper'''}else{'$ltoPlugin=$fixtureToolPath'}
+                $admit=Join-Path $toolControl 'actual-admission.ps1'
+                [IO.File]::WriteAllText($admit,$setup+"`n"+$admission[0].Extent.Text)
+                $admitMutant=Join-Path $toolControl 'removed-existence-guard.ps1'
+                [IO.File]::WriteAllText($admitMutant,$setup)
+                . $admit
+                $inputs=@((Join-Path $snapshot 'fiber/fiber_core.c'),$fixtureToolPath);$before=HashInputs
+                $sourceBefore=Write-SourceExportManifest $snapshot $before $toolControl before
+                $stream=[IO.File]::Open($fixtureToolPath,[IO.FileMode]::Append,[IO.FileAccess]::Write)
+                try {$stream.WriteByte(0)} finally {$stream.Dispose()}
+                $out=$toolControl;$verdict='PASS';$mutationRejected=$false
+                try {. $gate} catch {$mutationRejected=$_.Exception.Message -match '^C[35]SO inputs changed during run:'}
+                ProofCheck "$profile/$($tool.Name)/actual-tool-drift-rejected" ($mutationRejected -and $verdict -ceq 'FAIL') $drift
+                $verdict='PASS';. $mutant
+                ProofCheck "$profile/$($tool.Name)/removed-drift-guards-causal-control" ($verdict -ceq 'PASS' -and $drift.Count -ne 0) $mutant
+                $sourceAfter=Write-SourceExportManifest $snapshot $after $toolControl after
+                ProofCheck "$profile/$($tool.Name)/tool-drift-does-not-relabel-source-bytes" (
+                    $sourceBefore.ManifestSHA256 -ceq $sourceAfter.ManifestSHA256) $sourceAfter.ManifestSHA256
+                $removed=$fixtureToolPath+'.removed';[IO.File]::Move($fixtureToolPath,$removed)
+                try {
+                    $missingRejected=$false
+                    try {. $admit} catch {$missingRejected=$_.Exception.Message -match '^Missing compiler (subprocess: lto-wrapper|LTO plugin: liblto_plugin\.dll)$'}
+                    ProofCheck "$profile/$($tool.Name)/actual-missing-admission-rejected" $missingRejected $admit
+                    . $admitMutant
+                    ProofCheck "$profile/$($tool.Name)/removed-existence-guard-causal-control" (!(Test-Path -LiteralPath $fixtureToolPath)) $admitMutant
+                    $missingRejected=$false
+                    try {$null=HashInputs} catch {$missingRejected=$_.Exception.Message -match 'cannot find|does not exist|not exist'}
+                    ProofCheck "$profile/$($tool.Name)/actual-missing-input-hash-rejected" $missingRejected $fixtureToolPath
+                } finally {[IO.File]::Move($removed,$fixtureToolPath)}
+            }
         }
         $noGit=Get-SourceExportHeadMetadata $snapshot {throw 'No-root-metadata must not invoke Git'}
         ProofCheck 'head/no-root-metadata-is-null' ($null -eq $noGit.Head -and $noGit.Status -ceq 'NoRootGitMetadata') $noGit
@@ -216,6 +266,18 @@ if($RunProof) {
                 $receipt.SourceManifestStable -and $null -eq $receipt.RepositoryHEADBefore -and $null -eq $receipt.RepositoryHEADAfter -and
                 $receipt.RepositoryMetadataBefore.Status -ceq 'NoRootGitMetadata' -and $receipt.RepositoryMetadataAfter.Status -ceq 'NoRootGitMetadata' -and
                 $receipt.ReferenceIdentityChecked) $receipts[0].FullName
+            $childBefore=Get-Content (Join-Path $receipts[0].DirectoryName 'inputs-before.json') -Raw | ConvertFrom-Json
+            $childAfter=Get-Content (Join-Path $receipts[0].DirectoryName 'inputs-after.json') -Raw | ConvertFrom-Json
+            ProofCheck "$profile/receipt-exact-two-LTO-tools" ($receipt.CompilerLtoToolsBefore.Count -eq 2 -and
+                $receipt.CompilerLtoToolsAfter.Count -eq 2) $receipts[0].FullName
+            foreach($tool in $proofLtoTools) {
+                foreach($census in @(
+                    @{Name='inputs-before';Rows=$childBefore},@{Name='inputs-after';Rows=$childAfter},
+                    @{Name='receipt-before';Rows=$receipt.CompilerLtoToolsBefore},@{Name='receipt-after';Rows=$receipt.CompilerLtoToolsAfter})) {
+                    $matches=@($census.Rows | Where-Object {$_.Path -ceq $tool.Path -and $_.Hash -ceq $tool.SHA256})
+                    ProofCheck "$profile/$($tool.Name)/actual-path-and-hash-in-$($census.Name)" ($matches.Count -eq 1) $tool.Path
+                }
+            }
             $identity=Get-Content (Join-Path $receipts[0].DirectoryName 'source-manifest-before.json') -Raw | ConvertFrom-Json
             ProofCheck "$profile/source-manifest-includes-wrapper-and-shared-helper" (
                 @($identity.Files | Where-Object {$_.Path -ceq "tools/test_${profile}_secure_only_runtime.ps1"}).Count -eq 1 -and
@@ -227,10 +289,13 @@ if($RunProof) {
         foreach($row in $proofInputs) {
             ProofCheck 'snapshot/immutable-source-bytes-stable' ((Get-FileHash -LiteralPath $row.Snapshot).Hash -ceq $row.SHA256) $row.Snapshot
         }
+        foreach($tool in $proofLtoTools) {
+            ProofCheck 'tools/installed-LTO-bytes-unchanged' ((Get-FileHash -LiteralPath $tool.Path).Hash -ceq $tool.SHA256) $tool.Path
+        }
         $proofVerdict='PASS'
     } catch {$proofFailure=$_.Exception.Message;throw}
     finally {
-        @{Verdict=$proofVerdict;Failure=$proofFailure;Checks=$proofChecks.ToArray();Receipts=$proofReceipts;
+        @{Verdict=$proofVerdict;Failure=$proofFailure;Checks=$proofChecks.ToArray();Receipts=$proofReceipts;CompilerLtoTools=$proofLtoTools;
             Boundary='Two actual no-Git exported AdmissionOnly QEMU gates; helper provenance and AST-extracted wrapper byte/failure-guard controls; not full runtime or hardware qualification'} |
             ConvertTo-Json -Depth 9 | Set-Content (Join-Path $proof 'receipt.json') -Encoding UTF8
         Get-ChildItem $proof -Recurse -File | Where-Object {$_.Name -ne 'artifacts.sha256.json'} |

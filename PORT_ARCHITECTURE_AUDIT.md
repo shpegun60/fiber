@@ -3147,3 +3147,19 @@ actual wrapper drift guards, and invalid/foreign Git provenance. Parent rehashes
 SHA-256 9A430332E7923D79EC29F7368731890BBE5CB44192E268027DBECC8AEB298782.
 These focused receipts retain CompleteSuite=false. No production source,
 activation flag, full runtime suite or hardware claim changes here.
+
+### Secure-Only LTO Tool Provenance
+
+Both wrappers now include the actual GCC-resolved LTO wrapper and plugin DLL
+in their before/after tool manifests. This closes a provenance omission, not
+a demonstrated runtime defect. Existing receipts retain their captured input
+boundaries; no hash is added retroactively to a completed qualification.
+
+A fresh no-Git export proof passes 183 controls, including copied-tool drift,
+missing tools, causal drift-guard removal and actual receipt admission. C3SO
+and C5SO again pass 25 AdmissionOnly executions each, with 139 and 140 inputs
+respectively. Parent rehashes 95 captured source files and 3,252 artifacts
+without mismatch. Receipt:
+%TEMP%/source-export-identity-cbc2308a81e34be79bb11567344291f7/receipt.json,
+SHA-256 912218ACC3904C70AB422FDE8FF783E3691CB563C583D0374E65291CCDFDB4BD.
+Installed tools are unchanged; full-suite requalification remains separate.

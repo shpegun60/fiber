@@ -328,11 +328,16 @@ function LinkControls {
     Check "$name/compiled-seed-mutant-link" ($result.Code -eq 0) $result.Text;Inspect "$name/compiled-seed-mutant" $elf -Partial
     $null=Execute "$name/compiled-seed-mutant" $elf 'PASS:C3SO-SEED-CORRUPTION-REJECTED' 'CompiledControl'
 }
-foreach($program in @('cc1','as','ld','collect2','lto1')) {
+foreach($program in @('cc1','as','ld','collect2','lto1','lto-wrapper')) {
     $path=(Need $ArmGcc @("-print-prog-name=$program") (Join-Path $out ($program+'-path.txt'))).Trim()
     if(!(Test-Path -LiteralPath $path -PathType Leaf)){throw "Missing compiler subprocess: $program"}
     $inputs+=(Resolve-Path -LiteralPath $path).Path
+    if($program -eq 'lto-wrapper'){$ltoWrapper=(Resolve-Path -LiteralPath $path).Path}
 }
+$ltoPlugin=(Need $ArmGcc @('-print-file-name=liblto_plugin.dll') (Join-Path $out 'liblto_plugin-path.txt')).Trim()
+if(!(Test-Path -LiteralPath $ltoPlugin -PathType Leaf)){throw 'Missing compiler LTO plugin: liblto_plugin.dll'}
+$ltoPlugin=(Resolve-Path -LiteralPath $ltoPlugin).Path
+$inputs+=$ltoPlugin
 $systemInclude=(Need $ArmGcc @('-print-file-name=include') (Join-Path $out 'system-include-path.txt')).Trim()
 $inputs+=@(Get-ChildItem -LiteralPath $systemInclude -File -Recurse | Select-Object -ExpandProperty FullName)
 $libgcov=(Need $ArmGcc @('-mcpu=cortex-m33','-mthumb','-mfloat-abi=soft','-print-file-name=libgcov.a') (Join-Path $out 'libgcov-path.txt')).Trim()
@@ -499,6 +504,8 @@ try {
         SourceIdentityKind=$sourceIdentityBefore.IdentityKind;
         SourceManifestSHA256Before=$sourceIdentityBefore.ManifestSHA256;SourceManifestSHA256After=$sourceIdentityAfter.ManifestSHA256;
         SourceManifestStable=($sourceIdentityBefore.ManifestSHA256 -ceq $sourceIdentityAfter.ManifestSHA256);
+        CompilerLtoToolsBefore=@($before | Where-Object {$_.Path -in @($ltoWrapper,$ltoPlugin)});
+        CompilerLtoToolsAfter=@($after | Where-Object {$_.Path -in @($ltoWrapper,$ltoPlugin)});
         CompilerAdversarialBoundary='All port/common objects raw-compiled; whole-port and common-sensitive bodies checked; executions use raw port and real neutral common objects';
         CompilerCounterflagsAccepted=$false;CommonColdExports=@('fiber_init','fiber_scheduler_set_pick_next');
         ColdOnlyCommonHelper='fiber_internal_scheduler_store_pick_next';

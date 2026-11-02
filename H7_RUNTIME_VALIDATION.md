@@ -1,5 +1,23 @@
 # STM32H7 Runtime Validation Checklist
 
+## E6b8149 Offline Rebuild
+
+Both generated H7 configurations pass a forced `make -B -j4 all` rebuild with
+GNU Arm 14.3 (Debug O2, Release Os). The final ELF audit confirms unique strong
+SVC/PendSV handlers, exact Thumb vector slots 11/14, no undefined symbols, one
+CM7 context cohort and one public storage cohort. The read-only expectation
+section is eight bytes in this application: one four-byte build expectation
+and one four-byte public-consumer storage expectation, each targeting its own
+one-byte provider. The old one-pointer-only assumption is not used.
+
+Archived pre-rebuild and rebuilt `.text`, `.isr_vector` and expectation sections
+are byte-identical in each configuration. This is not an all-profile or
+hardware claim. Evidence:
+`%TEMP%/fiber-h7-rebuild-abeb6274f16140a8a7baade72d71010f/elf-audit2.json`
+and `before-after-sections.json`, with prior/new ELFs, maps and build logs.
+Cube regeneration, flashing and board execution are NOT_RUN. The existing
+hardware checklist remains open.
+
 ## CM7 Transitive-Closure Follow-Up
 
 The later A32/A33 source repair protects the complete CM7 helper chain from
