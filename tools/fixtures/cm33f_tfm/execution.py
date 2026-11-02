@@ -51,12 +51,14 @@ class Execution:
         if key in self.groups:
             return self.groups[key]
         self.p.flags[2] = '-mfloat-abi=' + abi
-        name = '%s-%s%s-lazy%d-%s' % (abi, opt[1:].lower(), '-lto' if lto else '', lazy,
-                                    'reserved' if reserved else 'ordinary')
+        policy = 'default-policy' if lazy is None else 'lazy%d' % lazy
+        name = '%s-%s%s-%s-%s' % (abi, opt[1:].lower(), '-lto' if lto else '', policy,
+                                 'reserved' if reserved else 'ordinary')
         d = self.root / name
         d.mkdir()
-        options = [opt, '-D__NVIC_PRIO_BITS=8', '-DFIBER_FPU_LAZY=' + str(lazy),
-                   '-DEXEC_RESERVED_R9=' + str(reserved), '-I' + str(self.f)]
+        options = [opt, '-D__NVIC_PRIO_BITS=8', '-DEXEC_RESERVED_R9=' + str(reserved), '-I' + str(self.f)]
+        if lazy is not None:
+            options.append('-DFIBER_FPU_LAZY=' + str(lazy))
         if lto:
             options.append('-flto')
         if reserved:
@@ -70,6 +72,10 @@ class Execution:
         for name in ('startup.S', 'tasks.S'):
             obj = d / (name + '.o')
             self.p.compile(self.f / name, obj, options, selected=False, cpu=False)
+            objects.append(obj)
+        if lazy is None:
+            obj = d / 'default_policy.o'
+            self.p.compile(self.p.fixture / 'default_policy.c', obj, options)
             objects.append(obj)
         value = dict(directory=d, objects=objects, options=options, key=key)
         self.groups[key] = value
@@ -88,7 +94,7 @@ class Execution:
             objects[position] = changed
         objects.append(obj)
         elf = d / 'nonsecure.elf'
-        self.p.run([self.p.a.arm_gcc, *self.p.flags[:4], *group['options'], '-nostdlib',
+        self.p.run([self.p.a.arm_gcc, *self.p.flags[:4], '-ffunction-sections', '-fdata-sections', *group['options'], '-nostdlib',
                     '-Wl,--gc-sections', '-Wl,--no-undefined', '-Wl,--fatal-warnings',
                     '-T', self.f / 'nonsecure.ld', '-Wl,-Map=' + str(elf) + '.map',
                     *objects, '-o', elf], 'link real common + complete C3FT execution image')
@@ -110,6 +116,8 @@ class Execution:
             require(definition['bind'] == 1 and definition['type'] == 2,
                     'execution does not retain the exact eight strong forward definitions: ' + symbol)
         require('Tag_CPU_arch: v8-M.mainline' in evidence['attributes'], 'execution is not M33/v8-M')
+        if group['key'][3] is None:
+            self.p.default_policy(elf, 8)
         return elf
 
     @staticmethod
@@ -317,7 +325,7 @@ class Execution:
             for abi in ('softfp', 'hard'):
                 for opt in ('-O2', '-Os'):
                     for lto in (False, True):
-                        for lazy in (0, 1):
+                        for lazy in (0, 1, None):
                             for reserved in (0, 1):
                                 g = self.group(abi, opt, lto, lazy, reserved)
                                 self.run_image(self.image(g, 0), 0)

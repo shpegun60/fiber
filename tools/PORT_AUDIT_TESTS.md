@@ -157,6 +157,7 @@ Additional maintained compiler proofs are independent from the default matrix:
 | `freertos_asm_parity.ps1 -Cm33fTfmOnly` | Focused actual pinned C3FT O2/Os hard/softfp object closure, 77 complete streams, bounded numeric oracles and compiled causal controls. The default parity dispatch includes it. It does not execute real FP exceptions, qualify native LTO or activate the staged profile. |
 | `test_parity_helper_imports.ps1` | Strict-mode imports of compile/disassembly/ordered-parity helpers with absent, false and true optional focused-recording state. Three real ARM probe objects, missing-instruction negatives, and an old-caller-dependency reproduction protect helper reuse without relaxing any production parity assertion. |
 | `test_cm4_raw_compiler.ps1` | Scoped CM4 no-FPU/soft/hard/softfp eager/lazy raw compiler closure, five optimizations and native-LTO layouts, literal-pool reach and compiled naked-body controls, pinned O2/Os reference mechanisms and constructor r9 checks. A scoped PASS does not qualify global raw flags or hardware. |
+| `test_cm33f_tfm.ps1` | Staged C3FT target/host proof plus explicit QEMU execution; unchanged portable C/C++ consumers, exact default-policy observer and constructor-only archive admission. Real common runtime is used; the typed NS provider and Secure bootstrap are fixtures, not a Secure TF-M image. RuntimeSelectable remains separately gated. |
 
 - Public `fiber_core.h` usage automatically emits a caller-storage expectation.
   Direct concrete-type allocators must include the expectation header described

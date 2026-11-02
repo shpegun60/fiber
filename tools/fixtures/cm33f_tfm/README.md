@@ -23,6 +23,40 @@ links. Public/common compilation has no CMSIS include dependency. Exact identity
 76/72-byte context/boot layout, 72-byte initial/212-byte maximum saved image,
 strong handlers/vectors, five public calls and eight forward operations are
 checked. Stale allocating consumers cannot borrow this storage cohort.
+Each stale-consumer include trace must consume exactly its sibling profile's
+two public storage headers, with no private/runtime macro or CMSIS header.
+Only those consumed sibling headers are inputs; unrelated sibling runtime
+edits do not invalidate this public storage-identity test.
+
+The shared `tools/fixtures/portable_application.c` is compiled without source
+changes as C11 and C++17, then linked directly and through the complete static
+archive in every target tuple. The C-only fixture uses `static _Alignas(8)`;
+C++ compilation has a fixture-only `_Alignas(n)` to GCC `aligned(n)` spelling
+bridge, not a required library-user macro. Both final 2048-byte stacks must
+remain 8-byte aligned. Include traces reject CMSIS, device, private runtime and
+optional TF-M headers, and the allocating application's exact undefined set is
+the public five operations plus its derived storage identity. The unchanged
+application has no artificial API root table; LTO may inline ordinary public
+functions. The separate rooted consumer still checks all five named providers.
+
+A public `fiber_init`-only C/C++ consumer also links two actual common/port
+archives with GC in every O2/Os native/LTO tuple. The pre-v1 common model removes
+only the reverse-v1 marker definition from the real common state source; this
+is explicitly not a full historical source checkout. Its negative must report
+only the missing reverse-v1 marker. A matching current-common positive must
+contain the constructor's cold volatile marker read and the readonly one-byte
+value 1, without retaining startup, handlers, scheduling or TF-M entry points.
+The constructor fixtures provide only address predicates, not runtime stubs or
+TF-M provider/root tables.
+The final LTO driver repeats `-ffunction-sections -fdata-sections`; otherwise
+GCC may coalesce unrelated functions and invalidate a constructor-only GC test.
+
+Default-policy objects and final portable/execution ELFs record exact settings:
+eager FP, MSP rewind, boot hash checking, disabled switch-time address mapping
+and permissive hooks, enabled canary, 32-byte redzone, derived BASEPRI and staged
+metadata 0. Static assertions and an actual compiled explicit-lazy control
+check the policy observer. The control rejects a non-default test tuple; it
+does not claim that an explicit lazy policy is invalid in production.
 
 CPU+boot, initializer, wrapper and combined groups have separate exact undefined
 sets. LTO IR observations are supplemented by native lowering. No port object
@@ -65,7 +99,8 @@ only grants NS memory and FP access, delegates lazy/eager selection, and branche
 to the NS image. It is not TF-M. `tfm_ns_interface_init` is a protected, typed NS
 fixture provider: there is no Secure TF-M image or Secure service execution.
 
-The hard/softfp, O2/Os, normal/LTO grid runs both lazy and eager FP policy and
+The hard/softfp, O2/Os, normal/LTO grid runs both explicit lazy/eager FP policy,
+plus a separate no-policy-override default build, and
 ordinary/reserved-R9 modes. Three owners exercise basic and extended frames,
 R4-R11, S0-S31, FPSCR, current-context publication, PSP/PSPLIM, masks, initializer
 order and all four cooperative mutex operations. Finite contention must not

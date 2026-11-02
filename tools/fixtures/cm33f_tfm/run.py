@@ -1,6 +1,6 @@
-"""Independent C3FT target links and source-derived host adapter execution.
+"""Staged C3FT consumer/host proof and explicit optional modeled CPU execution.
 
-Staged target/host qualification only; no emulator, real TF-M, or board execution claim.
+The typed NS provider and test Secure bootstrap are not a real Secure TF-M image.
 """
 import argparse
 import hashlib
@@ -116,6 +116,7 @@ class Proof:
         self.role_proofs = []
         self.role_definitions = []
         self.reference_objects, self.hostile_objects = [], []
+        self.portable_runs, self.constructor_archives, self.default_policies = [], [], []
         self.execution = dict(status="NOT_RUN", reason="Explicit -QemuRoot required; no implicit provisioning")
         self.flags = ["-mcpu=cortex-m33", "-mthumb", "-mfloat-abi=softfp", "-mfpu=fpv5-sp-d16", "-ffreestanding",
                       "-fno-builtin", "-fno-common", "-ffunction-sections", "-fdata-sections",
@@ -154,7 +155,7 @@ class Proof:
     def compile(self, source, output, options, selected=True, port=None, cpu=True,
                 cxx=False, extra=(), allowed=False, manifest_runtime=None):
         flags = self.flags + ["-std=gnu++17" if cxx else "-std=gnu11"]
-        if Path(source).resolve() == self.fixture / "manifest.c":
+        if Path(source).resolve() in (self.fixture / "manifest.c", self.fixture / "default_policy.c"):
             expected = self.a.expected_runtime_selectable if manifest_runtime is None else manifest_runtime
             flags += ["-DFIBER_PROOF_EXPECTED_RUNTIME_SELECTABLE=" + str(expected)]
         if cxx:
@@ -180,7 +181,7 @@ class Proof:
         return result
 
     def link(self, objects, output, options, expected=None, duplicate=False):
-        result = self.run([self.a.arm_gcc, *self.flags[:4], *options, "-nostdlib",
+        result = self.run([self.a.arm_gcc, *self.flags[:4], "-ffunction-sections", "-fdata-sections", *options, "-nostdlib",
                            "-Wl,--gc-sections", "-Wl,--no-undefined", "-Wl,--fatal-warnings",
                            "-T", self.fixture / "production.ld", "-Wl,-Map=" + str(output) + ".map",
                            *objects, "-o", output], "link " + str(output), allowed=expected is not None or duplicate)
@@ -239,7 +240,7 @@ class Proof:
                         loaded.pop(register, None)
         require(found, "missing exact generated cold volatile byte read: %s -> %s" % (function, marker))
 
-    def check_elf(self, path, cohort, label):
+    def check_elf(self, path, cohort, label, public_roots=True):
         elf = Elf(path)
         outputs = self.evidence(path)
         require(not [s for s in elf.symbols if s["section"] == 0 and s["name"]], "unresolved final ELF")
@@ -248,7 +249,13 @@ class Proof:
                 "ELF is not the exact M33/v8.0-M target architecture")
         require(("Tag_ABI_VFP_args" in outputs["attributes"]) == self.flags[2].endswith("hard"),
                 "unexpected hard/softfp argument ABI")
-        for symbol in sorted(FORWARD | PUBLIC | ADAPTER | {"SVC_Handler", "PendSV_Handler", REVERSE, STORAGE, cohort}):
+        # The unchanged portable application has no artificial public root table;
+        # ordinary public functions may legally inline under LTO. Its object U set
+        # is checked separately before linking the actual common implementation.
+        required = FORWARD | ADAPTER | {"SVC_Handler", "PendSV_Handler", REVERSE, STORAGE, cohort}
+        if public_roots:
+            required |= PUBLIC
+        for symbol in sorted(required):
             s = elf.one(symbol)
             require(s["bind"] in (0, 1), "weak provider: " + symbol)
         for name, slot in (("SVC_Handler", 11), ("PendSV_Handler", 14)):
@@ -298,7 +305,127 @@ class Proof:
         require(calls == expected_calls, "generated prestart initialization order changed: " + repr(calls))
         self.positives.append(dict(name=label, elf=str(path), sha256=digest(path),
                                    expectation_bytes=sections[0]["size"], forward_count=len(FORWARD),
+                                   public_symbol_roots=public_roots,
                                    runtimeSelectable=self.a.expected_runtime_selectable))
+
+    def default_policy(self, path, priority_bits):
+        elf = Elf(path)
+        symbol = elf.one("c3ft_default_policy")
+        expected = (0, 1, 1, 0, 0, 1, 32, 2 if priority_bits == 8 else 1 << (8 - priority_bits),
+                    self.a.expected_runtime_selectable)
+        require(symbol["size"] == 36 and not elf.sections[symbol["section"]]["flags"] & 1,
+                "default policy must be exact readonly target data")
+        section = elf.sections[symbol["section"]]
+        offset = symbol["value"] - section["address"]
+        require(section["type"] != 8 and 0 <= offset and offset + 36 <= section["size"],
+                "default policy data outside its exact ELF section")
+        observed = struct.unpack("<9I", elf.payload(section)[offset:offset + 36])
+        require(observed == expected, "default policy changed: " + repr(observed))
+        item = dict(object=str(path), values=observed, expected=expected, priority_bits=priority_bits)
+        self.default_policies.append(item)
+        return item
+
+    def public_compile(self, source, obj, options, cxx=False, alignas_bridge=False, port=None):
+        extra = ["-H"]
+        if cxx and alignas_bridge:
+            extra.append("-D_Alignas(n)=__attribute__((aligned(n)))")
+        result = self.compile(source, obj, options, cpu=False, cxx=cxx, extra=extra, port=port)
+        headers = [Path(x).resolve() for x in re.findall(r"^\.+ (.+)$", result["output"], re.M)]
+        forbidden = {"fiber_portmacro.h", "fiber_port_private.h", "fiber_port_boot.h", "fiber_runtime_state.h",
+                     "fiber_runtime_port_abi.h", "fiber_port_runtime_abi.h", "fiber_port_tfm_abi.h",
+                     "fiber_port_tfm_os_wrapper.h", "main.h", "mcu_core.h"}
+        require(headers and any(h.name == "fiber_core.h" for h in headers) and
+                not any(h.name in forbidden or h.is_relative_to(Path(self.a.cmsis).resolve()) for h in headers),
+                "public consumer acquired CMSIS/device/private/optional header dependencies")
+        if port is not None:
+            consumed = {h for h in headers if h.is_relative_to(port.resolve())}
+            expected = {port.resolve() / name for name in ("fiber_port_types.h", "fiber_port_boot_types.h")}
+            require(consumed == expected, "stale consumer exceeded its exact public storage-header boundary")
+        Path(str(obj) + ".includes.json").write_text(json.dumps(list(map(str, headers)), indent=2) + "\n")
+        return headers
+
+    def default_policy_control(self, d, options):
+        result = self.compile(self.fixture / "default_policy.c", d / "not-default-policy.o", options,
+                              extra=["-DFIBER_FPU_LAZY=1"], allowed=True)
+        errors = re.findall(r'^.*error: (.+)$', result["output"], re.M)
+        require(result["exit"] not in (None, 0) and errors ==
+                ['static assertion failed: "C3FT default policy: FIBER_FPU_LAZY == 0"'],
+                "default-policy observer control failed for an unrelated reason: " + result["output"])
+        self.negatives.append(dict(name="default-policy-observer-" + d.name,
+                                   expected="explicit lazy override is not the default-policy tuple"))
+
+    def portable_application(self, d, fixtures, common_objects, port_objects, options, cohort):
+        source = self.repo / "tools/fixtures/portable_application.c"
+        before = digest(source)
+        for cxx in (False, True):
+            suffix = "cpp" if cxx else "c"
+            app, startup = d / ("portable-" + suffix + ".o"), d / ("portable-startup-" + suffix + ".o")
+            headers = self.public_compile(source, app, options, cxx=cxx, alignas_bridge=True)
+            imports = {n for n, t in self.nm(app, True)}
+            require(imports == PUBLIC | {STORAGE}, "unchanged portable application has non-public dependencies")
+            self.compile(self.fixture / "portable_startup.c", startup, options, selected=False, cpu=False, cxx=cxx)
+            for archived in (False, True):
+                elf = d / ("portable-" + suffix + ("-archive" if archived else "-direct") + ".elf")
+                provider = [d / "libfiber-c3ft.a"] if archived else [*common_objects, *port_objects]
+                self.link([startup, app, *fixtures, *provider], elf, options)
+                self.check_elf(elf, cohort, elf.stem, public_roots=False)
+                self.default_policy(elf, 3)
+                parsed = Elf(elf)
+                for name in ("portable_fixture_stack_1", "portable_fixture_stack_2"):
+                    stacks = [s for s in parsed.symbols if s["section"] and s["name"].endswith(name)]
+                    require(len(stacks) == 1 and stacks[0]["size"] == 2048 and stacks[0]["value"] % 8 == 0,
+                            "unchanged portable application stack size/alignment was lost")
+                self.portable_runs.append(dict(source=str(source), source_sha256=before, elf=str(elf),
+                    language=suffix, archive=archived, headers=list(map(str, headers)),
+                    fixture_only_alignment_bridge=cxx, imports=sorted(imports)))
+        require(digest(source) == before, "shared portable_application.c was modified")
+
+    def constructor_archive(self, d, common_objects, port_objects, options):
+        # This pre-v1 model removes only the marker definition from real common
+        # state. It is not presented as an entire historical source checkout.
+        text = self.common_sources[1].read_text()
+        marker = ("const unsigned char fiber_internal_runtime_port_abi_v1_anchor =\n"
+                  "\t\t(unsigned char)FIBER_RUNTIME_PORT_ABI_VERSION;")
+        require(text.count(marker) == 1, "pre-v1 common archive marker definition drift")
+        stale_source = d / "pre-v1-common-state.c"
+        stale_source.write_text(text.replace(marker, ""))
+        stale_obj = d / "pre-v1-common-state.o"
+        self.compile(stale_source, stale_obj, options, selected=False, cpu=False)
+        require(not any(n == REVERSE for n, kind in self.nm(stale_obj) + self.nm(stale_obj, True)),
+                "pre-v1 archive model must contain neither definition nor dependency on v1")
+        archives = {}
+        for current in (False, True):
+            objects = common_objects if current else [common_objects[0], stale_obj, common_objects[2]]
+            archive = d / ("libcommon-current-v1.a" if current else "libcommon-pre-v1.a")
+            self.run([self.tools["gcc-ar"], "rcs", archive, *objects], "archive real common current/pre-v1")
+            listing = self.run([self.tools["gcc-ar"], "t", archive], "inspect common archive members")["output"].splitlines()
+            require(listing == [o.name for o in objects], "unexpected common archive members")
+            archives[current] = archive
+        hooks = d / "constructor-hooks.o"
+        self.compile(self.fixture / "constructor_hooks.c", hooks, options, selected=False, cpu=False)
+        for cxx in (False, True):
+            suffix = "cpp" if cxx else "c"
+            app = d / ("public-constructor-" + suffix + ".o")
+            self.public_compile(self.fixture / "constructor_public.c", app, options, cxx=cxx)
+            require({n for n, kind in self.nm(app, True)} == {"fiber_init", STORAGE},
+                    "constructor-only consumer must import exactly public fiber_init and its storage identity")
+            for current in (False, True):
+                elf = d / ("public-constructor-" + suffix + ("-current.elf" if current else "-pre-v1.elf"))
+                self.link([app, hooks, "-Wl,--start-group", archives[current], d / "libc3ft.a", "-Wl,--end-group"],
+                          elf, options, expected=None if current else {REVERSE})
+                if current:
+                    parsed = Elf(elf)
+                    out = self.evidence(elf)
+                    self.cold_read(parsed, out["dis"], "fiber_port_context_init", REVERSE)
+                    anchor = parsed.one(REVERSE)
+                    require(anchor["size"] == 1 and parsed.at(anchor["value"], 1) == b"\1" and
+                            not parsed.sections[anchor["section"]]["flags"] & 1, "constructor v1 marker not readonly one-byte 1")
+                    forbidden = ADAPTER | {"tfm_ns_interface_init", "fiber_start", "fiber_schedule", "SVC_Handler", "PendSV_Handler"}
+                    require(not any(parsed.definitions(n) for n in forbidden),
+                            "constructor-only positive accidentally retains runtime/TF-M application roots")
+                self.constructor_archives.append(dict(elf=str(elf), language=suffix, current=current,
+                    common_archive=str(archives[current]), port_archive=str(d / "libc3ft.a"),
+                    expected_missing=[] if current else [REVERSE]))
 
     def role_imports(self, path, expected, role):
         symbols = self.nm(path, True)
@@ -459,15 +586,24 @@ class Proof:
                         self.role_imports(lowered, (CPU_BASE_IMPORTS | {"fiber_current", "tfm_ns_interface_init"}),
                                           "combined group lowered LTO")
                     fixtures = []
-                    for f in ("vectors.c", "provider.c", "memory.c"):
+                    for f in ("vectors.c", "provider.c", "memory.c", "default_policy.c"):
                         o = d / (Path(f).stem + ".o")
-                        self.compile(self.fixture / f, o, options, selected=False, cpu=False)
+                        is_policy = f == "default_policy.c"
+                        self.compile(self.fixture / f, o, options, selected=is_policy, cpu=is_policy)
                         fixtures.append(o)
                     archive = d / "libc3ft.a"
                     self.run([self.tools["gcc-ar"], "rcs", archive, *port_objects], "archive actual C3FT group")
                     complete_archive = d / "libfiber-c3ft.a"
                     self.run([self.tools["gcc-ar"], "rcs", complete_archive, *common_objects, *port_objects],
                              "archive real common plus complete C3FT provider")
+                    policy = fixtures[-1]
+                    if lto:
+                        policy = d / "default-policy-lowered.o"
+                        self.role_group([fixtures[-1]], policy, options, lower=True)
+                    self.default_policy(policy, 3)
+                    self.default_policy_control(d, options)
+                    self.portable_application(d, fixtures, common_objects, port_objects, options, cohort)
+                    self.constructor_archive(d, common_objects, port_objects, options)
                     for cxx in (False, True):
                         suffix = "cpp" if cxx else "c"
                         app = d / ("consumer-" + suffix + ".o")
@@ -491,7 +627,7 @@ class Proof:
         for profile in ("ARM_CM33F_NTZ", "ARM_CM33_TFM", "ARM_CM55_TFM"):
             port = self.common / "port" / profile / "non_secure"
             obj = d / ("stale-" + profile + ("-cpp" if cxx else "-c") + ".o")
-            self.compile(self.fixture / "consumer.c", obj, options, port=port, cpu=False, cxx=cxx)
+            self.public_compile(self.fixture / "consumer.c", obj, options, port=port, cxx=cxx)
             missing = {n for n, t in self.nm(obj, True)}
             token = "fiber_port_storage_cohort_" + profile.lower() + "_v1_r0"
             require(missing == PUBLIC | {token}, "stale consumer not independently identified")
@@ -937,6 +1073,7 @@ class Proof:
             python_binary = Path(sys.base_prefix) / python_binary.name
         paths = {Path(__file__).resolve(), self.repo / "tools/test_cm33f_tfm.ps1", python_binary,
                  Path(self.a.arm_gcc), Path(self.a.host_gcc), *self.tools.values()}
+        paths.add(self.repo / "tools/fixtures/portable_application.c")
         paths.add(self.repo / "tools/fixtures/arm_control/qemu.sh")
         if self.a.qemu_root:
             wsl = shutil.which("wsl.exe")
@@ -951,7 +1088,8 @@ class Proof:
         paths.update((Path(self.a.reference) / "include").glob("*.h"))
         paths.update((Path(self.a.reference) / "portable/GCC/ARM_CM33_NTZ/non_secure").glob("*.h"))
         for old in ("ARM_CM33F_NTZ", "ARM_CM33_TFM", "ARM_CM55_TFM"):
-            paths.update((self.common / "port" / old / "non_secure").glob("*.h"))
+            paths.update(self.common / "port" / old / "non_secure" / name
+                         for name in ("fiber_port_types.h", "fiber_port_boot_types.h"))
         for relative in ("portable/GCC/ARM_CM33_NTZ/non_secure/port.c",
                          "portable/GCC/ARM_CM33_NTZ/non_secure/portasm.c",
                          "portable/ThirdParty/GCC/ARM_TFM/README.md",
@@ -1036,9 +1174,11 @@ class Proof:
             write_json(self.build / "receipt.json", dict(success=success and before == after and reference_error is None,
                 target_positives=self.positives, negatives=self.negatives, host_runs=self.host_runs,
                 role_proofs=self.role_proofs, role_definitions=self.role_definitions,
+                portable_application=self.portable_runs, constructor_archives=self.constructor_archives,
+                default_policies=self.default_policies,
                 reference_objects=self.reference_objects, hostile_objects=self.hostile_objects,
                 execution=self.execution,
-                proof_scope="Staged M33 FP consumer compile/link and source-derived host adapter",
+                proof_scope="Staged M33 FP public/default-policy/archive/host proof with explicit optional modeled CPU execution",
                 input_count=len(before or {}), drift=[] if before == after else
                     [p for p in before or {} if before[p] != (after or {}).get(p)],
                 boundary=("Actual M33 NS common/FP execution with test-only Secure bootstrap and typed NS TF-M provider. No real Secure TF-M image or board proof."

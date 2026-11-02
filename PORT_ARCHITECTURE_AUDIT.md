@@ -2799,3 +2799,31 @@ GPR-only memcpy/memset definitions, matching the existing CM7 fixture pattern.
 Exact construction dependency assertions admit only the newly emitted memset
 alongside memcpy, not arbitrary unresolved helpers. This remains scoped
 compiler/reference/integration evidence, not a global or hardware PASS.
+
+### Staged C3FT Portable And Default Admission
+
+The CM33F TF-M fixture now links unchanged C/C++ public consumers without
+CMSIS/private/optional headers, observes the exact default policy tuple and
+rejects constructor-only incompatible-common archives. It retains real common
+runtime execution rather than replacing public operations with test doubles.
+The fresh complete suite passes 64 target ELFs, sixteen positive constructor
+archive tuples, 312 negatives, 212 host cases, 336 modeled CPU runs, 72 compiled
+mutants and four strict classifier controls. Parent independently verifies
+the seven owned source hashes, the source archive hash and 21,638 entries in
+the original three recorded input/artifact manifests with zero mismatches.
+
+```text
+Root:
+  %TEMP%/fiber-c3ft-readiness-final/cm33f-tfm-85343b9cdce0432e80957fbc163e7f9d
+receipt.json SHA-256:
+  FF3C8C8808C0F6ECE61E541CC7793925E8B19B7471E802B596B4B70C484455DC
+actual-execution/execution.receipt.json SHA-256:
+  5638D385A1A8D5187475E203045BEDC2AB424E76563E81A322A41ED18CCBDB18
+source archive SHA-256:
+  A8A052DB36E306242BFA62220C8888DC26D4FC5F71A07F8691177420FF012457
+```
+
+Production sources and RuntimeSelectable=0 remain unchanged. The Secure
+bootstrap and typed Non-secure provider are fixtures, not a real Secure TF-M
+image, hardware validation or activation approval. Earlier failed receipts
+remain failed; reference parity and fresh combined qualification stay separate.
