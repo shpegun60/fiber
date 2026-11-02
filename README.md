@@ -19,6 +19,11 @@ The immediate [Context/Fiber refactor baseline](CONTEXT_REFACTOR_BASELINE.md)
 is F0, G0, G4, H7 and H7S. Other concrete ports are retained; completing every
 candidate feature combination is no longer a prerequisite to this extraction.
 
+An additive, versioned [Context v1 migration surface](context/README.md) now
+reuses that engine. It adds no second current slot or dispatcher. The existing
+five-call API remains supported; actual ownership inversion and a separate
+Fiber lifecycle consumer are still subsequent steps, not completed work.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and

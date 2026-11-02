@@ -3320,3 +3320,33 @@ SHA-256 `CFAF6DFD33F6EC246C1C86BD477EE6AF36627A55B128558C5484BA817098DE24`.
 The final fixture still omits the PendSV handler and does not execute PendSV.
 No production source or runtime-profile activation changes; a new combined
 run remains required. The earlier combined FAIL receipt is unchanged.
+
+### Additive Context V1 Facade
+
+The first extraction checkpoint adds five `ctxrt_v1_*` operations over the
+unchanged engine, sharing the exact selected storage type and all runtime
+state. No concrete port, frame, handler or existing implementation is changed.
+The compiler-policy/storage physical paths remain explicit migration debt.
+
+The strengthened maintained gate passes 190 host-mock scenarios with 2,410
+assertions, 30 C/C++ public compiles, 40 actual-backend synthetic ELF links,
+50 five-optimization facade-body codegen cells and 125 existing causal controls.
+It additionally passes 46 diagnostic controls, including real links combining
+the expected missing identity with RAM overflow and ten killed counterfeit
+classifiers. Negative admission requires the exact stale-input identity,
+tracked linker, closed diagnostic grammar, exit status and collect2 trailer.
+
+Receipt:
+`%TEMP%/fiber-context-facade-989a7525e3fe40d7bf945b2074a218ac/results.json`,
+SHA-256 `128F059EBAD926F9F3FDB30C3A3DEC4C14907A8509CA2888226287EE17DCDA94`.
+Independent review rehashes 184 input records, 98 captured copies and 10,495
+artifacts with no mismatch or unlisted artifact. Earlier receipt 66eaa0 remains
+weaker historical evidence, not retroactively qualified by classifier repairs.
+
+Scope includes CM0 soft, both CM0+ VTOR capabilities, CM4 hard and CM7 hard
+FPv5-D16. Actual LTO plugins are driver/query matched and hashed. Host execution
+uses a labelled mock port; target links do not execute Cortex-M instructions.
+The body/attribute proof is not transitive hostile-compiler closure through the
+legacy cold init/setter, global five-optimization FreeRTOS equivalence, completed
+ownership inversion, Fiber lifecycle or hardware qualification. The independent
+0372d72 combined matrix remains in progress against its immutable source archive.

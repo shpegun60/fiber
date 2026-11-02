@@ -13,6 +13,13 @@ processor execution-context engine, the stackful Fiber lifecycle, and the
 future C++ kernel. It is a design and migration contract, not a claim that the
 separation is implemented in the current tree.
 
+The first additive implementation is documented in `context/README.md`:
+`CtxrtContextV1` and five `ctxrt_v1_*` operations reuse existing CPU storage and
+delegate one-way to the current engine. They add no runtime state. The
+unversioned names in the conceptual examples below are design vocabulary,
+not a second exported API. Actual ownership inversion and a genuine Fiber
+lifecycle consumer remain separate subsequent implementation steps.
+
 The active v2 five-function public API, eight-function forward port ABI,
 reverse ABI v1, selected-port context layouts, strong handlers, and context
 cohort guards remain unchanged while the remaining CPU ports and hardware
