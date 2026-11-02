@@ -3292,3 +3292,31 @@ remains in progress and is not represented by these focused PASS receipts.
 The maintained concrete-selection test passes 76 C/C++ cases; dispatch policy
 passes 72 checks. A facade is the next mechanical step, not completed Context /
 Fiber separation and not a new full-catalog freeze claim.
+
+### 550b9b1 Combined Replay Result
+
+The independent immutable combined run subsequently finishes with FAIL:
+`C:/fq-91a1d75f7c/matrix-result.json`, source
+`550b9b1fd13038b75c57fceee5e626d006b3e9b3`, 976 files, zero source drift,
+3,049.84 seconds. Result SHA-256:
+`B3D60F3ECB5F24A18CDA69C132F6A2F8F5402111C26C36898DD4C6E6256B7437`.
+The shell-export repair and all 628 existing C3FS initializer CPU cases pass.
+The C55S pool, SG initialization, lifecycle and 892 attachment executions also
+pass. The next narrow C55S first-start fixture fails at link: its selected
+runtime references `fiber_port_arm_cm55_secure_context_pendsv_component_v1_anchor`
+but the fixture link does not provide that component. No first-start CPU
+execution occurs in this receipt. Later combined gates remain NOT_RUN.
+The failure is preserved; neither focused PASS receipts nor the bounded
+refactor scope amendment convert it into a combined software-freeze claim.
+
+The bounded fixture repair includes the actual `fiber_port_pendsv.c` in every
+first-start source group, including compiled mutants. It verifies real anchor
+ownership/import/call retention and forbids a fixture replacement. The focused
+complete replay passes 568 launches, 6,354 checks and 30 compiled mutation
+controls; independent review rehashes all 157 before/after inputs and 12,523
+artifacts without mismatch. Receipt:
+`%TEMP%/fiber-first-start-cold-anchor-cc16e2eb0fb542feabfaecec5fcb3d33/fiber-m55-secure-first-start-3ea12eff274448d1994e46e35213bd39/results.json`,
+SHA-256 `CFAF6DFD33F6EC246C1C86BD477EE6AF36627A55B128558C5484BA817098DE24`.
+The final fixture still omits the PendSV handler and does not execute PendSV.
+No production source or runtime-profile activation changes; a new combined
+run remains required. The earlier combined FAIL receipt is unchanged.

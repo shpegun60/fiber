@@ -1,7 +1,7 @@
 # C55S Staged First Start
 
 This maintained test executes two real AN547 images with the staged C55S
-first-start component, not a generic Fiber scheduler. No PendSV, return SVC72,
+first-start component, not a generic Fiber scheduler. No PendSV execution, return SVC72,
 eight-operation adapter provider, or public runtime-profile promotion is supplied
 or qualified. The fixture task entry reports and stops without returning.
 
@@ -76,6 +76,17 @@ NSC bodies or `-u` roots. NS archive extraction follows real fixture calls and
 the vector table. The exact twelve genuine C55S imports are checked. Omitted
 imports and an actually compiled CM33 Secure provider both fail with the exact
 eleven required missing C55S symbols.
+
+Current first preparation also calls the cold PendSV component anchor. The
+fixture compiles the actual `fiber_port_pendsv.c` in every normal, hostile,
+archive/LTO and compiled-mutant source group; it supplies no replacement anchor.
+The runner checks that this actual object defines the anchor, runtime imports
+it, fixture objects do not define it, and the final preparation body still calls
+it. The real anchor extracts the object from the NS archive and retains its
+common-v1/cohort dependencies. Unused PendSV code is section-GC'd; the final
+image must still omit `PendSV_Handler`, and vector 14 remains the terminal
+fixture fault handler. This dependency repair does not extend execution scope
+to PendSV or the complete runtime.
 
 ## Oracles
 

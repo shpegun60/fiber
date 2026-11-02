@@ -34,7 +34,8 @@ $wsl=(Get-Command wsl.exe -ErrorAction Stop).Source
 $rsp=Join-Path $PSScriptRoot 'fixtures\cm33_secure_guards\aircr_rsp.py'
 $inspect=Join-Path $PSScriptRoot 'fixtures\arm_control\qemu.sh'
 foreach($path in @($nm,$ar,$objdump,$objcopy,$rsp,$inspect,(Join-Path $ns 'fiber_port_private.h'),
-        (Join-Path $ns 'fiber_port_runtime.c'),(Join-Path $ns 'fiber_port_svc.c'),(Join-Path $refs 'secure_context.c'))){
+        (Join-Path $ns 'fiber_port_runtime.c'),(Join-Path $ns 'fiber_port_svc.c'),
+        (Join-Path $ns 'fiber_port_pendsv.c'),(Join-Path $refs 'secure_context.c'))){
     if(!(Test-Path -LiteralPath $path -PathType Leaf)){throw "Missing actual source/tool: $path"}
 }
 if(!$BuildRoot){$BuildRoot=[IO.Path]::GetTempPath()}
@@ -276,6 +277,11 @@ function FiberManifest([hashtable]$S,[hashtable]$N,[switch]$GprMutationControl){
         Check "$($mode.Name) no C call after final GPR transfer" ($tail -notmatch '\bblx?\b')
     }else{Check "$($mode.Name) compiled mutation actually omits r4-r11 load" ($gpr.Count -eq 0)}
     $names=@($N.Symbols -split "`n"|ForEach-Object {if($_ -match '\s+[A-Za-z]\s+(\S+)\r?$'){$Matches[1]}})
+    $anchor='fiber_port_arm_cm55_secure_context_pendsv_component_v1_anchor'
+    Check "$($mode.Name) actual cold PendSV anchor survives GC/LTO" (
+        [regex]::Matches($N.Symbols,'(?m)^[0-9a-f]+\s+(?:[0-9a-f]+\s+)?[Tt]\s+'+$anchor+'\r?$').Count -eq 1)
+    Check "$($mode.Name) first preparation retains actual PendSV anchor call" (
+        (FunctionBody $N.Dis 'fiber_port_prepare_first_start') -match ('\bbl\s+[0-9a-f]+\s+<'+$anchor+'>'))
     foreach($forbidden in @('PendSV_Handler','fiber_port_runtime_prepare_start','fiber_port_runtime_select_first',
             'fiber_port_runtime_start_first','fiber_port_runtime_schedule','fiber_port_require_scheduler_configuration_environment',
             'fiber_init','fiber_start','fiber_yield','fiber_set_scheduler','fiber_request_stop')){
@@ -343,11 +349,22 @@ function BuildFiber([hashtable]$Mode,[string]$Parent){
     foreach($u in @(@{Name='boot';Source=(Join-Path $ns 'fiber_port_boot.c')},
             @{Name='runtime';Source=(Join-Path $ns 'fiber_port_runtime.c')},
             @{Name='context';Source=(Join-Path $ns 'fiber_port_secure_context.c')},
-            @{Name='svc';Source=(Join-Path $ns 'fiber_port_svc.c')})){
+            @{Name='svc';Source=(Join-Path $ns 'fiber_port_svc.c')},
+            @{Name='pendsv';Source=(Join-Path $ns 'fiber_port_pendsv.c')})){
         $nobjects[$u.Name]=Compile ('ns-'+$u.Name) $u.Source ($nflags+$hostile) $dir
         if($hostile.Count){HostileContract ('ns-'+$u.Name) $u.Source $nflags $nobjects[$u.Name] $dir}
     }
-    $nlist=@($nobjects.boot,$nobjects.runtime,$nobjects.context,$nobjects.svc)
+    $anchor='fiber_port_arm_cm55_secure_context_pendsv_component_v1_anchor'
+    $definitions=(Recorded $nm @('-g','--defined-only',$nobjects.pendsv) (Join-Path $dir 'actual-pendsv-definitions.nm')).Text
+    Check "$($Mode.Name) actual PendSV object owns cold anchor" (
+        [regex]::Matches($definitions,'(?m)^[0-9a-f]+\s+T\s+'+$anchor+'\r?$').Count -eq 1)
+    Check "$($Mode.Name) actual runtime imports cold PendSV anchor" (
+        $anchor -cin @(UndefinedSet $nobjects.runtime (Join-Path $dir 'actual-runtime-anchor-imports.nm')))
+    foreach($object in $nfixture){
+        $definitions=(Recorded $nm @('-g','--defined-only',$object) ($object+'.definitions.nm')).Text
+        Check "$($Mode.Name) fixture cannot supply cold PendSV anchor $object" ($definitions -notmatch [regex]::Escape($anchor))
+    }
+    $nlist=@($nobjects.boot,$nobjects.runtime,$nobjects.context,$nobjects.svc,$nobjects.pendsv)
     if($Mode.ContainsKey('Archive')){$nlist=@(Archive 'ns-first-component' $nlist $dir)}
     $nlink=$nflags+$link+@('-T',(Join-Path $fixture 'nonsecure.ld'),'-T',(Join-Path $ns 'fiber_port_first_start_contract.ld'))
     $n=LinkImage 'nonsecure' $nlink ($nfixture+$nlist+@($import)) $dir
@@ -466,7 +483,7 @@ function CompiledControls([hashtable]$Model,[hashtable]$Mode){
         $source=Join-Path $dir 'actual-ns-mutant.c'
         [IO.File]::WriteAllText($source,[regex]::Replace($text,$control.Pattern,$control.Replacement))
         $object=Compile 'mutant' $source ($Model.NFlags+$Model.Hostile) $dir
-        $objects=@($Model.NObjects.boot,$Model.NObjects.runtime,$Model.NObjects.context,$Model.NObjects.svc)|ForEach-Object {
+        $objects=@($Model.NObjects.boot,$Model.NObjects.runtime,$Model.NObjects.context,$Model.NObjects.svc,$Model.NObjects.pendsv)|ForEach-Object {
             if($_ -eq $Model.NObjects[$control.Unit]){$object}else{$_}}
         if($Mode.ContainsKey('Archive')){$objects=@(Archive 'mutant-first-component' $objects $dir)}
         $n=LinkImage 'nonsecure' $Model.NLink ($Model.NFixture+$objects+@($Model.Import)) $dir
@@ -526,7 +543,7 @@ try{
     if($drift.Count){$verdict='FAIL'}
     [pscustomobject]@{Verdict=$verdict;CompleteSuite=(!$DevelopmentModes -and !$PSBoundParameters.ContainsKey('DevelopmentCases') -and !$DevelopmentReferenceOnly);
         Modes=@($modes.Name);Launches=$runs.Count;Checks=$checks.Count;InputCount=$before.Count;InputDrift=$drift.Count;
-        Runs=@($runs.ToArray());Assertions=@($checks.ToArray());Limits=@('staged first component only; no generic runtime or PendSV qualification',
+        Runs=@($runs.ToArray());Assertions=@($checks.ToArray());Limits=@('staged first execution only; actual PendSV object supplies cold anchor, not generic runtime or PendSV execution qualification',
             'actual reference skips saved r4-r11; Fiber deliberately restores them',
             'reference later SVC100 allocation differs from Fiber pre-start request in owned SVC70',
             'QEMU TCG AN547, not hardware')}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $out 'results.json') -Encoding ASCII
