@@ -15,6 +15,48 @@ function Expect-Rejection([string]$Name, [scriptblock]$Action, [string]$Diagnost
     try { & $Action | Out-Null } catch { $caught = $_.Exception.Message }
     Check $Name ($null -ne $caught -and $caught.Contains($Diagnostic))
 }
+function Test-MatrixSuccessPublication([string]$Source) {
+    $errors = $null
+    $tokens = $null
+    $tree = [Management.Automation.Language.Parser]::ParseInput(
+        $Source, [ref]$tokens, [ref]$errors)
+    if ($errors.Count) { return $false }
+    $top = @($tree.EndBlock.Statements)
+    if ($top.Count -lt 3) { return $false }
+    $guard = $top[-3]
+    if ($guard -isnot [Management.Automation.Language.TryStatementAst] -or
+            $null -eq $guard.Finally -or
+            $guard.CatchClauses.Count -ne 0 -or
+            !$guard.Finally.Extent.Text.Contains(
+                'Remove-FiberAutomaticMatrixBuildDirectory $matrixDirectory')) {
+        return $false
+    }
+    # Publish only after the real cleanup/drift finally block has completed.
+    if ($top[-2].Extent.Text -cnotmatch '^Write-Host\s+""$' -or
+            $top[-1].Extent.Text -cnotmatch
+                '^Write-Host\s+"PASS: compile matrix completed\."$') {
+        return $false
+    }
+    $initial = @($top | Where-Object {
+        $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $_.Extent.Text -cmatch '^\$matrixPassed\s*=\s*\$false$' -and
+        $_.Extent.StartOffset -lt $guard.Extent.StartOffset
+    })
+    $success = @($tree.FindAll({param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Extent.Text -cmatch '^\$matrixPassed\s*=\s*\$true$'
+    }, $true))
+    $body = @($guard.Body.Statements)
+    if ($initial.Count -ne 1 -or $success.Count -ne 1 -or !$body.Count -or
+            $success[0].Extent.StartOffset -ne $body[-1].Extent.StartOffset) {
+        return $false
+    }
+    $banners = @($tree.FindAll({param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and
+        $node.Extent.Text -cmatch '^Write-Host\s+"PASS: compile matrix completed\."$'
+    }, $true))
+    return $banners.Count -eq 1
+}
 $explicitPath = Join-Path $out 'explicit-output'
 $explicit = New-FiberMatrixBuildDirectory $explicitPath
 Check 'explicit/exact-path' ($explicit.Path -ceq [IO.Path]::GetFullPath($explicitPath))
@@ -73,8 +115,37 @@ $matrixPath = Join-Path $PSScriptRoot 'compile_matrix.ps1'
 $source = Get-Content -LiteralPath $matrixPath -Raw
 Check 'matrix/explicit-kept' ($source -cmatch
     '\$KeepBuild\s+-or\s+!\$matrixDirectory\.Automatic\s+-or\s+!\$matrixPassed')
-Check 'matrix/success-recorded' ($source -cmatch
-    '(?s)\$matrixPassed\s*=\s*\$true\s+Write-Host\s+""\s+Write-Host\s+"PASS: compile matrix completed\."')
+Check 'matrix/success-recorded' (Test-MatrixSuccessPublication $source)
+$successNeedle = '$matrixPassed = $true'
+$bannerNeedle = 'Write-Host "PASS: compile matrix completed."'
+$initialNeedle = '$matrixPassed = $false'
+$earlySuccess = $source.Insert($source.IndexOf($initialNeedle) +
+    $initialNeedle.Length, ("`n" + $successNeedle))
+$finallyOffset = $source.LastIndexOf("`nfinally {")
+Check 'matrix/success-control-finally-anchor' ($finallyOffset -ge 0)
+$swallowedFailure = $source.Insert($finallyOffset + 1, "catch {}`n")
+$successMutants = @(
+    @{Name='missing-initial-state';Source=$source.Replace('$matrixPassed = $false', '$unused = $false')},
+    @{Name='missing-success-state';Source=$source.Replace($successNeedle, '$unused = $true')},
+    @{Name='early-success-state';Source=$earlySuccess},
+    @{Name='duplicate-banner';Source=($source + "`n" + $bannerNeedle)},
+    @{Name='banner-before-finally';Source=$source.Replace($bannerNeedle, '').Replace(
+        $successNeedle, ($successNeedle + "`n" + $bannerNeedle))},
+    @{Name='conditional-final-banner';Source=$source.Replace($bannerNeedle,
+        ('if ($false) { ' + $bannerNeedle + ' }'))},
+    @{Name='comment-only-banner';Source=$source.Replace($bannerNeedle,
+        ('# ' + $bannerNeedle))},
+    @{Name='swallowed-build-failure';Source=$swallowedFailure}
+)
+foreach ($mutant in $successMutants) {
+    $errors = $null
+    $tokens = $null
+    $null = [Management.Automation.Language.Parser]::ParseInput(
+        $mutant.Source, [ref]$tokens, [ref]$errors)
+    Check ('matrix/success-control-parses-' + $mutant.Name) ($errors.Count -eq 0)
+    Check ('matrix/success-rejects-' + $mutant.Name) (
+        !(Test-MatrixSuccessPublication $mutant.Source))
+}
 Check 'matrix/safe-cleanup-only' ([regex]::Matches($source,
     'Remove-FiberAutomaticMatrixBuildDirectory\s+\$matrixDirectory').Count -eq 1 -and
     $source -cnotmatch 'Remove-Item\s+-LiteralPath\s+\$buildRoot')
@@ -101,13 +172,48 @@ foreach ($auto in @($false,$true)) {
             $buildRoot = $matrixDirectory.Path
             $KeepBuild = $keep
             $matrixPassed = $passed
-            & $cleanupBlock 6>&1 | Out-Null
+            $runtimeSourceInputHashesBefore = [ordered]@{}
+            $runtimeSourceInputHashesBefore[$sentinel] = $sentinelHash
+            . $cleanupBlock 6>&1 | Out-Null
             $expectedKept = $keep -or !$auto -or !$passed
             Check $name ((Test-Path -LiteralPath $buildRoot) -eq $expectedKept)
+            if ($expectedKept) {
+                $afterPath = Join-Path $buildRoot 'runtime-source-inputs-after.json'
+                $after = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
+                Check ($name + '/hash-recorded') (
+                    $after.PSObject.Properties[$sentinel].Value -ceq $sentinelHash)
+            }
             if ($auto -and $expectedKept) {
                 Remove-FiberAutomaticMatrixBuildDirectory $matrixDirectory
             }
         }
+    }
+}
+$driftInput = Join-Path $out 'drift-input.txt'
+foreach ($auto in @($false, $true)) {
+    foreach ($keep in @($false, $true)) {
+        $name = "drift/auto-$auto-keep-$keep"
+        $matrixDirectory = if ($auto) { New-FiberMatrixBuildDirectory } else {
+            New-FiberMatrixBuildDirectory (Join-Path $out ($name.Replace('/','-')))
+        }
+        $buildRoot = $matrixDirectory.Path
+        $KeepBuild = $keep
+        $matrixPassed = $true
+        [IO.File]::WriteAllText($driftInput, 'captured-input')
+        $runtimeSourceInputHashesBefore = [ordered]@{}
+        $runtimeSourceInputHashesBefore[$driftInput] = (Get-FileHash $driftInput).Hash
+        [IO.File]::WriteAllText($driftInput, 'changed-input')
+        $caught = $null
+        try { . $cleanupBlock 6>&1 | Out-Null } catch { $caught = $_.Exception.Message }
+        Check ($name + '/terminal') ($caught -ceq
+            "Common source-inventory input drift: $driftInput")
+        Check ($name + '/not-passed') (!$matrixPassed)
+        Check ($name + '/evidence-kept') (Test-Path -LiteralPath $buildRoot)
+        $afterPath = Join-Path $buildRoot 'runtime-source-inputs-after.json'
+        $after = Get-Content -LiteralPath $afterPath -Raw | ConvertFrom-Json
+        Check ($name + '/changed-hash-recorded') (
+            $after.PSObject.Properties[$driftInput].Value -ceq (Get-FileHash $driftInput).Hash)
+        if ($auto) { Remove-FiberAutomaticMatrixBuildDirectory $matrixDirectory }
     }
 }
 $result = [pscustomobject]@{Status='PASS';Checks=$checks.Count;Cases=$checks.ToArray();

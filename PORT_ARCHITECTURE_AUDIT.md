@@ -3509,3 +3509,36 @@ Receipt: `%TEMP%/fiber-h7-context-switch-qualified-481f3ec8/results.json`,
 SHA-256 `409281A155F210567A8897782B4DC9FB483F9CE59B14C444DCFF02D903B01CA5`.
 Those external build files/ELFs are not contained in this library commit. No
 board was programmed and no new hardware checkpoint is established.
+
+### Aggregate Artifact-Fixture Repair
+
+The immutable compile/link/codegen aggregate for `53b69aa` stops in its first
+artifact-path gate: a stale regex expects the PASS banner immediately after
+the successful try-body assignment, before the new final input-drift check.
+The matrix correctly publishes PASS only after `finally`. Receipt:
+`C:/fcq-a94c7ffba9/matrix-result.json`, SHA-256
+`1BBC8A6589BE8C9119FE3609E80BA279B49FC9FCE3F7AFD69E42F3E26F20DAFF`.
+This is retained as aggregate FAIL with zero source drift; later gates are
+NOT_RUN in that receipt.
+
+The fixture now uses AST structure to require the sole success assignment at
+the end of the real try body, an initial false state and the sole final banner
+after the actual cleanup/drift finally block. Seven parse-valid causal controls
+reject missing/early success state and misplaced, duplicated, conditional or
+comment-only banners. The isolated cleanup fixture also supplies real captured
+input hashes and executes in the same scope as the matrix. All eight existing
+retention combinations remain tested; four input-drift combinations additionally
+require terminal failure, false pass state, retained evidence and changed-hash
+reporting. No runtime or production cleanup behavior changes.
+
+The focused artifact gate passes 65 checks:
+`%TEMP%/matrix-artifact-paths-45033727ef59499ca7b2b2633900d90b/results.json`,
+SHA-256 `AC983971B0EC6BB92DEB0D7A6643EC8ACE5352E52B5D7C46272C31B3B442AB5A`.
+This filesystem/AST result is not a substitute for a fresh aggregate replay.
+Independent review then identifies a proof-only gap: a swallowing catch on
+the main try could still reach the final banner. The current matrix has no
+catch, but the strengthened predicate now forbids one and adds an eighth,
+parse-valid causal mutant. Fresh PASS, 68 checks:
+`%TEMP%/matrix-artifact-paths-4cffad711af644c09346fae89f955572/results.json`,
+SHA-256 `8460ABCBF82FE79EB23A25B304E3FA89FE9E92970C9CA6290040EC7097FED2F4`.
+The earlier 65-check receipt does not cover that added guard.
