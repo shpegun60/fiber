@@ -292,6 +292,77 @@
 extern "C" {
 #endif
 
+/* Protected ordinary-bank equivalents of the CMSIS operations used here. */
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_faultmask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, faultmask" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_read_psplim(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psplim" : "=r"(value) :: "memory");
+	return value;
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE void fiber_port_cpu_wait(void)
+{
+	fiber_portASM volatile("wfe" ::: "memory");
+}
+
+/* Only the system-handler priorities used by this port are addressed. */
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE uint32_t fiber_port_cpu_get_priority(const IRQn_Type irq)
+{
+	return ((uint32_t)SCB->SHPR[((uint32_t)irq & 0xFu) - 4u]) >>
+			(8u - __NVIC_PRIO_BITS);
+}
+
+FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+fiber_portFORCE_INLINE void fiber_port_cpu_set_priority(const IRQn_Type irq,
+		const uint32_t priority)
+{
+	SCB->SHPR[((uint32_t)irq & 0xFu) - 4u] =
+			(uint8_t)((priority << (8u - __NVIC_PRIO_BITS)) & 0xFFu);
+}
+
 /* Preserve r9 because an integration may use it as the platform/static-base
  * register even though the pinned FreeRTOS debug seed uses a marker value. */
 FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY

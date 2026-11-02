@@ -84,12 +84,12 @@ function Test-PrivilegedSvcControlReadback {
 function Test-ScalarEntryControlSource {
     param([string]$Function)
     return [regex]::Matches($Function,
-        'FIBER_REQUIRE\(fiber_port_cpu_read_control\(\)\s*==\s*1u,\s*''l''\)').Count -eq 1
+        'FIBER_REQUIRE\((?:__get_CONTROL|fiber_port_cpu_read_control)\(\)\s*==\s*1u,\s*''l''\)').Count -eq 1
 }
 function Test-ScalarSvcEntryControlSource {
     param([string]$Function)
     return [regex]::Matches($Function,
-        '(?s)else if \(exc_return == fiber_portINITIAL_EXC_RETURN\)\s*\{\s*FIBER_REQUIRE\(fiber_port_cpu_read_control\(\) == 1u, ''l''\)').Count -eq 1
+        '(?s)else if \(exc_return == fiber_portINITIAL_EXC_RETURN\)\s*\{\s*FIBER_REQUIRE\((?:__get_CONTROL|fiber_port_cpu_read_control)\(\) == 1u, ''l''\)').Count -eq 1
 }
 function Assert-ScalarControlSource {
     param([string]$Runtime, [string]$Boot, [string]$Profile)
@@ -110,18 +110,30 @@ function Assert-ScalarControlSource {
         if (!(Test-ScalarEntryControlSource $body)) {
             throw "$Profile/$name must retain exception-entry Handler CONTROL 1 before any restore MSR"
         }
-        $stale = [regex]::Replace($body, '(fiber_port_cpu_read_control\(\)\s*==\s*)1u', '${1}3u')
-        if ($stale -eq $body -or (Test-ScalarEntryControlSource $stale)) {
-            throw "$Profile/$name assertion accepts saved Thread CONTROL 3 at Handler entry"
+        foreach ($reader in @('__get_CONTROL', 'fiber_port_cpu_read_control')) {
+            $dialect = [regex]::Replace($body, '\b(?:__get_CONTROL|fiber_port_cpu_read_control)(?=\(\))', $reader)
+            if (!(Test-ScalarEntryControlSource $dialect)) {
+                throw "$Profile/$name assertion rejects qualified CONTROL reader $reader"
+            }
+            $stale = [regex]::Replace($dialect, '(' + [regex]::Escape($reader) + '\(\)\s*==\s*)1u', '${1}3u')
+            if ($stale -eq $dialect -or (Test-ScalarEntryControlSource $stale)) {
+                throw "$Profile/$name assertion accepts saved Thread CONTROL 3 at Handler entry ($reader)"
+            }
         }
     }
     $svc = Actual-Function $Runtime 'fiber_port_svc_dispatch'
     if (!(Test-ScalarSvcEntryControlSource $svc)) {
         throw "$Profile runtime SVC lost its exception-entry CONTROL 1 check"
     }
-    $stale = [regex]::Replace($svc, '(fiber_port_cpu_read_control\(\)\s*==\s*)1u', '${1}3u')
-    if ($stale -eq $svc -or (Test-ScalarSvcEntryControlSource $stale)) {
-        throw "$Profile runtime SVC assertion accepts saved Thread CONTROL 3 at Handler entry"
+    foreach ($reader in @('__get_CONTROL', 'fiber_port_cpu_read_control')) {
+        $dialect = [regex]::Replace($svc, '\b(?:__get_CONTROL|fiber_port_cpu_read_control)(?=\(\))', $reader)
+        if (!(Test-ScalarSvcEntryControlSource $dialect)) {
+            throw "$Profile runtime SVC assertion rejects qualified CONTROL reader $reader"
+        }
+        $stale = [regex]::Replace($dialect, '(' + [regex]::Escape($reader) + '\(\)\s*==\s*)1u', '${1}3u')
+        if ($stale -eq $dialect -or (Test-ScalarSvcEntryControlSource $stale)) {
+            throw "$Profile runtime SVC assertion accepts saved Thread CONTROL 3 at Handler entry ($reader)"
+        }
     }
     foreach ($name in @('fiber_port_validate_running_context_frame', 'fiber_port_context_validate_restore')) {
         if ((Actual-Function $Runtime $name) -notmatch 'image->control\s*==\s*fiber_portINITIAL_CONTROL_UNPRIVILEGED') {

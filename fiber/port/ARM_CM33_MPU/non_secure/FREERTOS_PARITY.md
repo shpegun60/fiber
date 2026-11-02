@@ -379,3 +379,58 @@ RBAR.SH Inner-shareable is 3, not reserved 1. The private encoder accepts raw
 layout, default MPU image and both callable ABIs are unchanged. Independent
 numeric SH/AP/XN tests, not equality with the copied reference macro, are the
 required regression oracle. See the global assembly-parity rationale.
+
+## A32 Raw CPU Helper Closure
+
+The non-inline boot/runtime helpers and existing port inlines already carry
+the canonical sensitive and general-register bundles. The remaining CMSIS
+register/priority calls are replaced by port-owned, inline-sensitive/GRO
+ordinary-bank primitives: IPSR, CONTROL, PRIMASK, FAULTMASK, PSP, PSPLIM, WFE,
+and byte-wide system-handler SHPR access for SVCall/PendSV only. No Secure-bank
+alias, new register policy, additional callback, or barrier instruction is
+introduced. The existing NVIC shifts/masks and caller sequencing are retained.
+
+Only the macro-header CPU helper block and runtime call spellings change.
+All six naked bodies per group, pre-existing r9/geometry inlines, boot sources,
+seals, MPU images, type/linker layouts, cohort identities, callable ABI and
+runtime-selectable policy remain unchanged.
+
+Preserved pre-fix evidence:
+`%TEMP%/fiber-sensitive-port-closure-c644f15689304aab8763ab766847d506/results.json`
+has 12 passing O2 baseline cells and 12 failing raw cells across the four groups,
+with no build errors or drift. This is a stronger raw-compiler protection gap,
+not a demonstrated runtime failure under the prescribed counterflags.
+
+Maintained proof is `tools/test_v8_mpu_raw_compiler.ps1` and its dedicated fixture.
+`%TEMP%/fiber-v8-mpu-raw-87d4516c00fb4902a55c700c9ffe3778/results.json`
+passes 360 cells and 1,872 controls: all four groups, 8/16 regions, scalar soft
+or FP hard/softfp ABI, O0/Og/O2/Os/O3, baseline/raw, ordinary objects and genuinely
+lowered sectioned/unsectioned slim LTO. The raw bundle enables instrumentation,
+SSP, gcov, UBSAN, trace-PC and `-pg` without protective counterflags. Its 72
+additional O2/Os controls remove only the nine new CPU-inline bundles, retain
+GRO/non-inline bundles, and require an actual instrumentation leak, not a
+build failure. The initial fixture-pattern failure remains separately preserved
+at `%TEMP%/fiber-v8-mpu-raw-2cc31a6cde7d4306bc045cfaddc1f705`.
+
+That full grid retains its pre-section-interior-fix classifier. A separate
+current-classifier replay at
+`%TEMP%/fiber-sensitive-port-closure-ead96695dd954df0ab22261c1aa45293/results.json`
+passes 48 O2/Os cells and 240 controls for the default 8-region ABI configurations.
+It does not retroactively extend the full grid to the newer section-interior
+invariant or independently claim the parent's separate causal counterexample
+test. Both receipts retain their exact classifier bytes and original completion
+artifact manifests.
+
+Pinned O2/Os ordered-mechanism evidence remains:
+`%TEMP%/v8-mpu-owner-ordered-ad96588fcc2748f4aa9558796eb75c19/receipt.json`.
+A retained temporary AST selector replays six unchanged maintained assertion
+blocks and 24 configurations: 288 paired comparisons, zero input drift, with
+full-tree pinned-reference identity checks before/after. This is not a
+closed-body/global-parity or CPU-execution claim.
+
+Ordinary cold common init/registration retains its explicit frozen exception;
+the proof does not pretend all five common operations are sensitive. External
+memory routines and integration callbacks are not supplied or qualified by
+this relocatable-object gate. Normal imports stay classified and exact; no
+private-helper or compiler-hook allowance is added. Existing mandatory
+counterflags and separate state/MPU/FP/runtime/hardware gates are not waived.

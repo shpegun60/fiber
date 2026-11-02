@@ -2961,3 +2961,50 @@ maintained layout/gateway replay passes at
 after updating only exact local-reader spellings in existing ordering guards.
 No full-matrix PASS, new classifier invariant, profile promotion or hardware
 execution is inferred from these focused receipts.
+
+### Four V8 MPU CPU-Helper Closures
+
+CM33 MPU, CM55 MPU, CM55F MPU and CM55 MVE-FP MPU replace the remaining
+instrumentable CMSIS register/wait/priority helpers with canonical local
+inline-sensitive/GRO primitives. No ABI, geometry, policy or activation changes
+are made; all 24 naked bodies remain unchanged. The complete immutable grid
+passes 360 cells / 1,872 controls at five optimizations, 8/16 regions, applicable
+hard/softfp ABIs and ordinary/native-LTO layouts. Parent rehashes 636 consumed
+inputs, 46,843 original artifact entries and all seventeen frozen files without
+mismatch. Leaf ledgers retain exact receipt paths and historical failures.
+
+The independent current-classifier replay covers 48 default-ABI cells and
+240 controls, not the complete 360-cell configuration grid. Parent checks its
+82 inputs and 6,025 artifacts. Unchanged pinned O2/Os ordered mechanisms pass
+288 comparisons, with all 489 recorded manifest entries matching. These are
+not final-LTO closed-body equivalence or hardware proofs.
+
+The maintained FP/MVE host-prefix model gains exactly eight aliases to its
+existing register/priority state. A fresh replay passes 24 host runs / 180,156
+checks, 96 negatives, 24 target objects and sixteen ARM classifiers:
+%TEMP%/fiber-m55-fp-mpu-state-8ce28dcd43cb4a33a85584161b317c50/m55-fp-mpu-state.
+This is saved-representation C-state/codegen evidence, not proof of actual FPCA
+teardown, exception execution or physical MPU isolation.
+
+The scalar host source guard accepts exactly the old CMSIS or new canonical
+CONTROL reader, still requiring Handler CONTROL == 1. Both spellings have
+wrong-Thread-value causal controls. Separate immutable committed/local cohorts
+pass the maintained suite; parent rehashes 269 inputs and 844 artifacts. This
+removes a fixture dependency on uncommitted source spellings, not a CPU-policy
+exception. Its receipt SHA-256 is
+106DEF500C68396A3A9DDE7847E8AF22F0DB1A9664801E59A7DF0315CCDDE429.
+Fresh maintained CM33 layout/protected/runtime and CM55 scalar/FP/MVE layout/
+runtime/archive gates also pass, respectively at
+%TEMP%/fiber-classic-current-integration-9772896124ce4bc69a95e94bf1dfc262
+and %TEMP%/fiber-classic-current-integration-0534e3b9caf242a48d83591e5796d465.
+
+### Current Classifier CM0 And C3TF Replay
+
+A fresh captured run with the ABS32 containment repair passes 36 cells and
+194 controls for CM0 VTOR absent/present and scalar CM33 TF-M at O2/Os,
+normal/native LTO. Parent rehashes 169 inputs and 5,194 artifacts without
+mismatch. Receipt:
+%TEMP%/fiber-sensitive-port-closure-0f2851a2113045f0a287f1a6badc1b50/results.json,
+SHA-256 4F9A97D1433714B4F32FBDD38115E113CFE37DE817AA7D44062601878B042B99.
+This does not upgrade other tuples, the aggregate or external callback/memory
+implementations to a new qualification claim.

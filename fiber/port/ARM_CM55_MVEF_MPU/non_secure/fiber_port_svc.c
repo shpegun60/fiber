@@ -77,17 +77,17 @@ void fiber_port_primask_restore(uint32_t primask)
 	fiber_portASM volatile("msr primask, %0" :: "r"(primask) : "memory");
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == primask, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == primask, 'r');
 }
 
 static FIBER_CM55_MVEF_MPU_SVC
 void fiber_port_require_privileged_thread_start_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
-	FIBER_REQUIRE(__get_CONTROL() == 0u, 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 0u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 }
 
 static FIBER_CM55_MVEF_MPU_SVC
@@ -200,8 +200,8 @@ void fiber_port_configure_first_start_exceptions(void)
 	FIBER_REQUIRE(previous == 0u, 'p');
 
 	const uint32_t lowest_priority = (1u << __NVIC_PRIO_BITS) - 1u;
-	NVIC_SetPriority(SVCall_IRQn, 0u);
-	NVIC_SetPriority(PendSV_IRQn, lowest_priority);
+	fiber_port_cpu_set_priority(SVCall_IRQn, 0u);
+	fiber_port_cpu_set_priority(PendSV_IRQn, lowest_priority);
 	fiber_portSCB_CCR_REG |= fiber_portSCB_CCR_STKALIGN_BIT;
 	/* First selection happens before the first context owns PendSV. Do not let
 	 * inherited pending state cross that ownership boundary. */
@@ -209,8 +209,8 @@ void fiber_port_configure_first_start_exceptions(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 
-	FIBER_REQUIRE(NVIC_GetPriority(SVCall_IRQn) == 0u, 'w');
-	FIBER_REQUIRE(NVIC_GetPriority(PendSV_IRQn) == lowest_priority, 'P');
+	FIBER_REQUIRE(fiber_port_cpu_get_priority(SVCall_IRQn) == 0u, 'w');
+	FIBER_REQUIRE(fiber_port_cpu_get_priority(PendSV_IRQn) == lowest_priority, 'P');
 	FIBER_REQUIRE((fiber_portSCB_CCR_REG &
 			fiber_portSCB_CCR_STKALIGN_BIT) != 0u, 'A');
 	FIBER_REQUIRE((fiber_portNVIC_INT_CTRL_REG &
@@ -341,7 +341,7 @@ const uint32_t *fiber_port_running_svc_core_frame(FiberContext *current,
 	const uintptr_t raw_frame = (uintptr_t)hardware_frame;
 	FIBER_REQUIRE((raw_frame &
 			((uintptr_t)FIBER_PORT_STACK_ALIGNMENT - 1u)) == 0u, 'A');
-	FIBER_REQUIRE(raw_frame == (uintptr_t)__get_PSP(), 'P');
+	FIBER_REQUIRE(raw_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 
 	uintptr_t fp_extension = 0u;
 	if (exc_return == fiber_portINITIAL_EXC_RETURN) {
@@ -368,10 +368,10 @@ const uint32_t *fiber_port_running_svc_core_frame(FiberContext *current,
 	FIBER_REQUIRE(current->protected_context_cursor ==
 			&current->protected_context.words[0], 'P');
 	FIBER_REQUIRE(current->runtime_flags == 0u, 'F');
-	FIBER_REQUIRE(__get_PSPLIM() == (uint32_t)current->boot.stack_base, 'L');
+	FIBER_REQUIRE(fiber_port_cpu_read_psplim() == (uint32_t)current->boot.stack_base, 'L');
 	/* Exception entry cleared SPSEL; EXC_RETURN proves Thread/PSP origin.
 	 * Handler FPCA is not the interrupted Thread's frame identity. */
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 1u, 'l');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 1u, 'l');
 	return (const uint32_t *)raw_frame;
 }
 
@@ -440,10 +440,10 @@ void fiber_port_mpu_program_global_image_while_disabled(FiberContext *first)
 {
 	FiberPortMpuGlobalRegionImage global;
 	FIBER_REQUIRE(first != NULL, 'N');
-	FIBER_REQUIRE(__get_IPSR() == 11u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 11u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_port_require_mpu_geometry();
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
 	fiber_port_mpu_build_global_regions(&global);
@@ -475,10 +475,10 @@ void fiber_port_mpu_validate_active_initial_context(const FiberContext *ctx)
 {
 	FiberPortMpuGlobalRegionImage global;
 	FIBER_REQUIRE(ctx != NULL, 'N');
-	FIBER_REQUIRE(__get_IPSR() == 11u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() != 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 11u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_port_require_mpu_geometry();
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
 	FIBER_REQUIRE((fiber_portSCB_SHCSR_REG &
@@ -521,7 +521,7 @@ void fiber_port_panic_wait(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_port_cpu_wait();
 	}
 }
 
@@ -615,17 +615,17 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 {
 	FiberPortMpuMemoryLayout layout;
 	FIBER_PORT_CONTEXT_COHORT_RETAIN();
-	FIBER_REQUIRE(__get_IPSR() == 11u, 'i');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 11u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
-	FIBER_REQUIRE(__get_FAULTMASK() == 0u, 'f');
+	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	fiber_port_mpu_load_linker_layout(&layout);
 	fiber_port_mpu_linker_layout_check(&layout);
 	fiber_port_validate_first_start_linker_placement(&layout);
 
 	const uint32_t *core_frame;
 	if (exc_return == fiber_portSVC_ORIGIN_EXC_RETURN) {
-		FIBER_REQUIRE(__get_CONTROL() == 0u, 'l');
+		FIBER_REQUIRE(fiber_port_cpu_read_control() == 0u, 'l');
 		fiber_port_fpu_require_ready();
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 		core_frame = hardware_frame;

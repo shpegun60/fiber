@@ -76,6 +76,14 @@ static struct { uint32_t AIRCR; } scb;
 #define __get_IPSR() (ipsr)
 #define __get_PSP() (psp)
 #define __get_PSPLIM() (psplim)
+#define fiber_port_cpu_read_ipsr() __get_IPSR()
+#define fiber_port_cpu_read_control() __get_CONTROL()
+#define fiber_port_cpu_read_primask() __get_PRIMASK()
+#define fiber_port_cpu_read_faultmask() __get_FAULTMASK()
+#define fiber_port_cpu_read_psp() __get_PSP()
+#define fiber_port_cpu_read_psplim() __get_PSPLIM()
+#define fiber_port_cpu_get_priority(irq) NVIC_GetPriority(irq)
+#define fiber_port_cpu_set_priority(irq, priority) NVIC_SetPriority((irq), (priority))
 #define fiber_port_basepri_read() (basepri)
 #define fiber_portCPACR_REG reg_cpacr
 #define fiber_portFPCCR_REG reg_fpccr
