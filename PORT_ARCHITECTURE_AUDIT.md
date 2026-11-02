@@ -2437,3 +2437,37 @@ transfer qualification remain required before activation.
 receipt.json SHA-256:
   AFCDB8AB78AB83050C7FBB709A0B8E15685F20C0CAD487054163D165B068209E
 ```
+
+### Secure-Only Raw Compiler Closure Replay
+
+C3SO and C5SO complete maintained suites now each execute 293 QEMU launches,
+four link-only cases and 48 attributes-only raw compiler cases. They pass
+64,266 and 64,275 checks respectively, including forty compiled attribute
+removals and eight sensitive-to-cold-call controls per profile. Every real port
+object is raw-compiled and its complete native group rejects compiler hooks;
+common sensitive function extents are checked separately from the intentionally
+ordinary `fiber_init` and scheduler-configuration functions. Runtime execution
+pairs the raw port with real neutral common objects, not fake reverse services.
+
+The two smaller manifest gates now admit exactly the observed `memset` import
+in addition to already approved `memcpy`; their exact-set comparisons remain
+unchanged. Fresh O2/Os manifest runs pass for both profiles. This does not admit
+new compiler/internal-helper imports or qualify arbitrary libc implementations.
+
+Parent independently rehashes 30,991 entries across six suite input/artifact
+manifests with zero mismatches. Neither test-only change activates a port:
+both remain `RuntimeSelectable=0`, and hardware evidence remains absent.
+
+```text
+C3SO:
+  %TEMP%/cm33-secure-only-runtime-ec2559e75a2046e5a767eb3324d5b3b3
+receipt.json SHA-256:
+  73EB96649DDB0E515CDEB8DE6BBB9FA4F699549960D41139D2F321D59300BBD3
+C5SO:
+  %TEMP%/cm55-secure-only-runtime-cafbb9960c7d4777b49bcbc588235bd3
+receipt.json SHA-256:
+  83EF5D56FB84093B81275DE06FF4EF4B79DA0F642473BFFB7781829C19E407EA
+Refreshed smaller manifest gates:
+  %TEMP%/cm33-secure-only-974ea1840787494d933aba1776966123
+  %TEMP%/cm55-secure-only-821a91f4e62f4e6e825aad81d32b056d
+```

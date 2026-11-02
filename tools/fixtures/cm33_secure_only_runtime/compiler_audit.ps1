@@ -1,3 +1,7 @@
+function Test-CompilerSensitiveBody([string]$Text,[string]$Hook,[string[]]$ColdFunctions) {
+    $cold='\b(?:'+(($ColdFunctions | ForEach-Object {[regex]::Escape($_)}) -join '|')+')\b'
+    return ($Text -notmatch $Hook -and $Text -notmatch $cold)
+}
 function CompilerAdversarial {
     $families=@(
         @{Name='instrument';Enable=@('-finstrument-functions');Pattern='__cyg_profile_func_(enter|exit)'},
@@ -14,7 +18,12 @@ function CompilerAdversarial {
     $architecture=if($label -eq 'C3SO'){'-DFIBER_PORT_ARMV8M_MAINLINE=1'}else{'-DFIBER_PORT_ARMV81M_MAINLINE=1'}
     # These real common wrappers deliberately have no canonical sensitive
     # declaration. Their raw hooks are inventoried, not relabeled as protected.
-    $ordinary=@('fiber_init','fiber_scheduler_set_pick_next','fiber_internal_scheduler_store_pick_next')
+    $ordinaryExports=@('fiber_init','fiber_scheduler_set_pick_next')
+    $ordinary=$ordinaryExports+@('fiber_internal_scheduler_store_pick_next')
+    $portExpected=@('fiber_addr_plausible_code','fiber_addr_plausible_ram',
+        'fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor',
+        'fiber_internal_runtime_publish_current_context','fiber_internal_runtime_require_current_context',
+        'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_task_return','fiber_panic','memcpy','memset')
     $commonSensitive=@('fiber_current','fiber_start','fiber_schedule','fiber_internal_task_return',
         'fiber_internal_runtime_load_current_context','fiber_internal_scheduler_is_configured',
         'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_runtime_publish_current_context',
@@ -53,6 +62,11 @@ function CompilerAdversarial {
                 $expected=@([regex]::Matches($baselineU,'(?m)^\s*U\s+(\S+)\r?$') | ForEach-Object {$_.Groups[1].Value} | Sort-Object)
                 $integration=@('fiber_addr_plausible_code','fiber_addr_plausible_ram','memcpy','memset')
                 Check "$mode/exact-baseline-integration-dependencies" (@(Compare-Object $integration $expected).Count -eq 0 -and $baselineU -notmatch $hook) $baselineU
+                $portGroup=Join-Path $dir 'baseline-port-only-group.o'
+                $null=Need $ArmGcc ($nativeFlags+@($baselineObjects[0],$baselineObjects[1],'-o',$portGroup)) ($portGroup+'.link.log')
+                $portU=Need $nm @('-u',$portGroup) ($portGroup+'.undefined.txt')
+                $actualPort=@([regex]::Matches($portU,'(?m)^\s*U\s+(\S+)\r?$') | ForEach-Object {$_.Groups[1].Value} | Sort-Object)
+                Check "$mode/exact-baseline-port-reverse-imports" (@(Compare-Object ($portExpected|Sort-Object) $actualPort).Count -eq 0) $portU
                 foreach($family in $families) {
                     $name=$mode+'/'+$family.Name;$familyDir=Join-Path $dir $family.Name;$null=New-Item -ItemType Directory -Path $familyDir
                     $rawFlags=$flags+$family.Enable
@@ -75,17 +89,16 @@ function CompilerAdversarial {
                     $null=Need $ArmGcc ($nativeFlags+$family.Enable+$rawObjects+@('-o',$rawGroup)) ($rawGroup+'.link.log')
                     $null=Need $nm @('-u',$rawGroup) ($rawGroup+'.undefined.txt')
                     $dump=Need $objdump @('-drwC',$rawGroup) ($rawGroup+'.disassembly.txt')
-                    $seen=@{}
+                    $seen=@{};$coldSeen=@{}
                     foreach($body in [regex]::Matches($dump,'(?ms)^[0-9a-f]+ <([^>]+)>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')) {
                         $function=$body.Groups[1].Value;$text=$body.Groups[2].Value
                         $protected=($function -match '^(fiber_port_|fiber_addr_plausible_|SVC_Handler$|PendSV_Handler$)' -or $function -in $commonSensitive)
                         if($protected) {
                             $seen[$function]=$true
-                            Check "$name/protected-body-$function" ($text -notmatch $hook) ($rawGroup+':'+$function)
-                            if($function -in $commonSensitive) {
-                                Check "$name/no-sensitive-to-cold-edge-$function" ($text -notmatch
-                                    '\b(fiber_init|fiber_scheduler_set_pick_next|fiber_internal_scheduler_store_pick_next)\b') ($rawGroup+':'+$function)
-                            }
+                            Check "$name/protected-body-and-no-cold-edge-$function" (Test-CompilerSensitiveBody $text $hook $ordinary) ($rawGroup+':'+$function)
+                        }
+                        if($function -in $ordinaryExports) {
+                            $coldSeen[$function]=$text
                         }
                         if($text -match $hook) {
                             if($function -match '^fiber_') {
@@ -96,6 +109,23 @@ function CompilerAdversarial {
                         }
                     }
                     foreach($function in $commonSensitive) {Check "$name/real-sensitive-common-body-$function" ($seen.ContainsKey($function)) $rawGroup}
+                    foreach($function in $ordinaryExports) {
+                        Check "$name/real-ordinary-cold-export-$function" ($coldSeen.ContainsKey($function)) $rawGroup
+                        if($family.Name -ne 'ubsan') {
+                            Check "$name/raw-hooks-confined-to-ordinary-cold-export-$function" ($coldSeen[$function] -match $family.Pattern) $rawGroup
+                        }
+                    }
+                    # No common cold functions are defined in this group.
+                    # Keep its full reverse/import surface exact; never allow
+                    # unresolved port helpers or arbitrary compiler callbacks.
+                    $rawPortGroup=Join-Path $familyDir 'raw-port-only-group.o'
+                    $null=Need $ArmGcc ($nativeFlags+$family.Enable+@($rawObjects[0],$rawObjects[1],'-o',$rawPortGroup)) ($rawPortGroup+'.link.log')
+                    $portU=Need $nm @('-u',$rawPortGroup) ($rawPortGroup+'.undefined.txt')
+                    $portDump=Need $objdump @('-drwC',$rawPortGroup) ($rawPortGroup+'.disassembly.txt')
+                    $actualPort=@([regex]::Matches($portU,'(?m)^\s*U\s+(\S+)\r?$') | ForEach-Object {$_.Groups[1].Value} | Sort-Object)
+                    Check "$name/raw-port-exact-reverse-imports-and-no-hooks" (@(Compare-Object ($portExpected|Sort-Object) $actualPort).Count -eq 0 -and
+                        $portDump -notmatch $hook) $portU
+
                     # The executable uses raw protected port objects and real
                     # neutral common objects. Neutral means no enable OR disable
                     # flags; unprotected common wrappers are not a false claim.
@@ -125,7 +155,8 @@ function CompilerAdversarial {
                     $log=Execute "$name/raw" $elf ("PASS:"+$label+"-FULL-RUNTIME") 'AttributesOnlyPortProduction'
                     FullTrace "$name/raw" $elf $log $reserved
                     $compilerCases.Add([pscustomobject]@{Mode=$mode;Family=$family.Name;Enable=$family.Enable;RequiredCounterflags=@();
-                        RawAdmission=$true;RawAllGroup=$rawGroup;RawPortNeutralCommonGroup=$executionGroup;ELF=$elf;
+                        RawAdmission=$true;RawAllGroup=$rawGroup;RawPortGroup=$rawPortGroup;PortExpectedUndefined=$portExpected;
+                        RawPortNeutralCommonGroup=$executionGroup;ELF=$elf;
                         PortFlags=$rawFlags;CommonExecutionFlags=$flags;HarnessFlags=$caseFlags;RawPortRuntimeExecuted=$true;
                         CommonRawGeneratedSensitiveBodiesChecked=$commonSensitive;UnprotectedCommonWrappers=$ordinary})
                 }
@@ -177,6 +208,24 @@ function CompilerAdversarial {
                 $d=Need $objdump @('-drwC',$native) ($native+'.disassembly.txt')
                 $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <fiber_port_hash32_accum>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
                 Check "$mode/coverage-attribute-removal-rejected-in-hot-helper-body" ($body.Success -and $body.Value -match '__gcov0[.]fiber_port_hash32_accum') $native
+                # Poison one real sensitive common function with a cold
+                # registration call. The exact normal-body predicate must
+                # reject its native output, even though raw cold hooks are
+                # legitimate elsewhere in the same relocatable group.
+                $core=[IO.File]::ReadAllText((Join-Path $repo 'fiber/fiber_core.c'))
+                $needle='return fiber_internal_runtime_load_current_context();'
+                Check "$mode/cold-edge-control-exact-source-anchor" ([regex]::Matches($core,[regex]::Escape($needle)).Count -eq 1) $needle
+                $c=Join-Path $controlDir 'sensitive-cold-edge.c'
+                [IO.File]::WriteAllText($c,$core.Replace($needle,('fiber_scheduler_set_pick_next(0, 0);'+[Environment]::NewLine+$needle)))
+                $f=@($flags | Where-Object {$_ -notin @("-I$fixture","-I$port","-I$CmsisCore")})+@('-finstrument-functions')
+                $o=Join-Path $controlDir 'sensitive-cold-edge.o';Compile $c $o $f
+                $native=Join-Path $controlDir 'sensitive-cold-edge-native.o'
+                $null=Need $ArmGcc ($nativeFlags+@('-finstrument-functions',$baselineObjects[0],$baselineObjects[1],$o,$baselineObjects[3],$baselineObjects[4],'-o',$native)) ($native+'.link.log')
+                $d=Need $objdump @('-drwC',$native) ($native+'.disassembly.txt')
+                $body=[regex]::Match($d,'(?ms)^[0-9a-f]+ <fiber_current>:\r?\n(.*?)(?=^[0-9a-f]+ <|^Disassembly of section|\z)')
+                Check "$mode/compiled-sensitive-cold-edge-control-rejected" ($body.Success -and
+                    !(Test-CompilerSensitiveBody $body.Groups[1].Value $hook $ordinary)) $native
+
             }
         }
     }

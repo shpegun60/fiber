@@ -42,6 +42,7 @@ $checks=New-Object System.Collections.Generic.List[object]
 $runs=New-Object System.Collections.Generic.List[object]
 $compilerCases=New-Object System.Collections.Generic.List[object]
 $verdict='FAIL';$failure='';$referenceChecked=$false
+$repositoryHeadBefore='';$repositoryHeadAfter=''
 $inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
     @(Get-ChildItem -LiteralPath $fixture -File -Recurse | Select-Object -ExpandProperty FullName)+
@@ -341,6 +342,7 @@ foreach($row in $before) {
 $copyMap | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'input-copy-map.json') -Encoding ASCII
 try {
     Write-Host "C3SO runtime evidence: $out"
+    $repositoryHeadBefore=(Need 'git' @('-C',$repo,'rev-parse','HEAD') (Join-Path $out 'repository-head-before.txt')).Trim()
     $null=Need $ArmGcc @('--version') (Join-Path $out 'compiler.txt')
     $head=(Need 'git' @('-C',$FreeRtosRoot,'rev-parse','HEAD') (Join-Path $out 'reference-head.txt')).Trim()
     Check 'reference/exact-identity-pin' ($head -ceq $pin) $head
@@ -455,6 +457,7 @@ try {
     $null=Need 'wsl.exe' @('-d',$WslDistro,'--exec','bash',$qemuScript,'verify',$QemuRoot,$wslOut) (Join-Path $out 'qemu-inputs-verify.log')
     $finalHead=(Need 'git' @('-C',$FreeRtosRoot,'rev-parse','HEAD') (Join-Path $out 'reference-head-after.txt')).Trim()
     Check 'reference/pin-stable-through-qualification' ($finalHead -ceq $pin) $finalHead
+    $repositoryHeadAfter=(Need 'git' @('-C',$repo,'rev-parse','HEAD') (Join-Path $out 'repository-head-after.txt')).Trim()
     $verdict='PASS'
 } catch {
     $failure=$_.Exception.Message;[IO.File]::WriteAllText((Join-Path $out 'failure.txt'),$failure);throw
@@ -469,6 +472,14 @@ try {
         Executed=@($runs | Where-Object {$_.Executed}).Count;CompileOnly=@($runs | Where-Object {!$_.Executed}).Count;
         ReferencePin=$pin;ReferenceIdentityChecked=$referenceChecked;ReferenceAssemblyCompared=$false;ReferenceExecuted=$false;
         ExpectedRuntimeSelectable=$ExpectedRuntimeSelectable;QemuRoot=$QemuRoot;
+        RepositoryHEADBefore=$repositoryHeadBefore;RepositoryHEADAfter=$repositoryHeadAfter;
+        RepositoryInputMode='Explicit hashed worktree inputs; HEAD attribution is not a clean-tree claim';
+        CompilerAdversarialBoundary='All port/common objects raw-compiled; whole-port and common-sensitive bodies checked; executions use raw port and real neutral common objects';
+        CompilerCounterflagsAccepted=$false;CommonColdExports=@('fiber_init','fiber_scheduler_set_pick_next');
+        ColdOnlyCommonHelper='fiber_internal_scheduler_store_pick_next';
+        CompiledAttributeRemovalControls=@($checks | Where-Object {$_.Name -match 'attribute-removal-rejected-(fiber_port_|in-hot-helper-body$)'}).Count;
+        CompiledColdEdgeControls=@($checks | Where-Object {$_.Name -match '/compiled-sensitive-cold-edge-control-rejected$'}).Count;
+        ProductionSourceHashes=@($before | Where-Object {$_.Path.StartsWith($port+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)});
         Boundary='Actual five-operation common / eight-operation C3SO provider; single-image Secure M33, basic frames only; no NS bootstrap, FP/MPU, FreeRTOS parity/execution, or hardware claim'} |
         ConvertTo-Json -Depth 7 | Set-Content (Join-Path $out 'receipt.json') -Encoding ASCII
     Get-ChildItem -LiteralPath $out -File -Recurse | Where-Object {$_.Name -ne 'artifact-hashes.json'} |

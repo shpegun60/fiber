@@ -35,7 +35,16 @@ port body and the explicitly sensitive common functions. Raw ordinary common
 init/registration wrappers are not part of the frozen sensitive attribute
 contract; their instrumentation is recorded separately in
 `raw-outside-sensitive-functions.json`. This includes the registration-only
-private storage helper, not a new protected public operation.
+private storage helper, not a new protected public operation. Function bodies
+stop at the next symbol or disassembly-section boundary. Each raw cold public
+export must actually retain instrumentation (except UBSAN, which may have no
+applicable checks); this is not a whole-common-object hook rejection.
+
+A separate native raw port-only group has an exact eleven-symbol reverse/import
+surface: the existing frozen common callbacks/anchors, both address-map hooks,
+`memcpy` and `memset`. No unresolved internal port helper is accepted. The raw
+whole common/port group separately checks sensitive bodies and rejects any
+sensitive-to-cold edge, including from a port function.
 
 Each actual adversarial execution links raw port objects with real common
 objects compiled on neutral flags (neither instrumentation enables nor
@@ -46,10 +55,14 @@ whole-port attributes proof and a separate raw common-sensitive generated-code
 proof, not a claim that all ordinary common wrappers resist instrumentation.
 No fake compiler runtime hooks or reverse providers are linked.
 
-Four current-source compiled attribute-removal controls per build mode target
-the hash helper, incoming-r9 inline, CONTROL reader and priority reader. Each
-must acquire actual instrumentation hooks in native output. Separate metadata
-records raw port, common and harness flags. The prior counterflag receipts
+Five current-source compiled attribute-removal controls per build mode include
+the hash helper, incoming-r9 inline, CONTROL reader and priority reader, plus
+removal of only the hash helper's no-profile attribute to expose `__gcov0.*`
+counters. A sixth compiled control adds a cold registration call to the real
+sensitive `fiber_current` body; the production-body oracle must reject it.
+These give 40 attribute-removal and eight cold-edge controls. Separate metadata
+records raw port, common and harness flags, plus repository HEAD attribution
+and exact production C/H hashes. HEAD is not a clean-worktree claim. The prior counterflag receipts
 remain historical; counterflags are not an accepted ABI policy or fallback.
 
 `-CompilerAdversarialOnly` omits the 245 baseline executions and always records

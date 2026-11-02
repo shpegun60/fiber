@@ -99,7 +99,7 @@ try {
     $expectedU = @('fiber_addr_plausible_code','fiber_addr_plausible_ram',
         'fiber_internal_runtime_current_context_slot','fiber_internal_runtime_port_abi_v1_anchor',
         'fiber_internal_runtime_publish_current_context','fiber_internal_runtime_require_current_context',
-        'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_task_return','fiber_panic','memcpy')
+        'fiber_internal_runtime_select_scheduler_candidate','fiber_internal_task_return','fiber_panic','memcpy','memset')
     foreach ($language in 'c','c++') {
         $compiler = if ($language -ceq 'c') {$ArmGcc} else {$gxx}
         $standard = if ($language -ceq 'c') {'-std=c11'} else {'-std=c++17'}
