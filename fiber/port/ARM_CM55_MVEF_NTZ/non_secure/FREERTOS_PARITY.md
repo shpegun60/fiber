@@ -215,3 +215,47 @@ This is complete software evidence, not a hardware-validation claim.
 | `FAP-M55MVE-CONSTRUCTION` | Fiber uses sealed metadata, a C55V cohort anchor, and direct frame-slot checks around the same FreeRTOS basic-frame geometry. |
 | `FAP-M55MVE-SVC` | Fiber retains the FreeRTOS M55 first-start/restore transfer but limits SVC to the configured first-start immediate, adds exact provenance, FPU policy, vector/priority, context, scheduler-state, and special-register readback checks, and forbids VFP/MVE transfer in the basic first image. |
 | `FAP-M55MVE-PENDSV` | Fiber preserves the pinned non-MPU conditional `s16-s31` before/after ten-word PSPLIM/core frame and explicitly rejects a VPR software slot; it adds provenance, frame/metadata, scheduler-state, mask, and special-register checks without changing saved-word ordering. |
+
+## Transitive Compiler-Sensitive Helper Repair
+
+The raw compiler audit confirms that a sensitive caller does not suppress
+instrumentation inside local/CMSIS helpers. This profile now annotates every
+port-owned inline helper with the canonical inline-sensitive/GRO bundle, marks
+its non-inline boot validators sensitive/GRO, and uses local integer MRS,
+system-priority byte access and WFE operations instead of instrumentable CMSIS
+calls. Priority encodings and volatile accesses match the original CMSIS
+operations. No identity, layout, guard order or naked transfer body changes;
+all three naked source bodies remain byte-exact.
+
+A fresh immutable three-profile CM33F/CM55F/MVE-FP NTZ audit passes 90 baseline/
+raw cells and 450 compiled controls at O0/Og/O2/Os/O3, using normal objects and
+sectioned/unsectioned native LTO. Raw cells cover each primary hard-FP profile,
+not every ABI variant. Parent rehashes 74 consumed inputs and 11,187 artifacts
+without mismatch. The pre-repair 36-cell receipt remains FAIL.
+
+Independent hard/softfp ordinary/reserved-r9 construction tests pass 126 ELFs,
+504 calls and 1,008 bounded GPR restore slices across these three profiles.
+All 93 inputs and recorded ELF hashes match. Borrowed R9 in ordinary AAPCS is
+an observation, not an ABI failure. Maintained archive/layout/vector/cohort gates
+pass separately. Fresh pinned O2/Os object pairs pass the unchanged 24 ordered
+construction/start/restore/PendSV mechanisms across these profiles.
+
+This does not establish whole-body equivalence, global final-LTO FreeRTOS
+parity, actual FP/MVE exception execution or hardware support.
+
+```text
+Repaired compiler receipt:
+  %TEMP%/fiber-fp-ntz-repaired-02-7321c225a60246feb56d5209725e44aa
+results.json SHA-256:
+  08D41B31AEF51838F77D2E710D4B2D16D3DABD1C08F5B3A904854E7EAB496752
+Preserved pre-repair:
+  %TEMP%/fiber-fp-ntz-prerepair-ded7a5eaace04fc0ae604afab6022639
+Constructor/R9 receipt:
+  %TEMP%/fiber-fp-ntz-r9-da5b90395a5c4e17a778503a4310306b
+results.json SHA-256:
+  66F045ED3035554F898E68E066B319AF62054E986D8A376DC7FF242DFC8C1D3B
+Focused maintained integration gates:
+  %TEMP%/fiber-fp-ntz-integration-df175db199e843d7a6b1105fbae1e5d8
+Actual pinned ordered-object comparison:
+  %TEMP%/fiber-fp-ntz-reference-ad255696f3ed476ba4536c89046c0459
+```

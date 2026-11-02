@@ -16,14 +16,14 @@ void fiber_port_panic_wait(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_portWAIT_FOR_EVENT();
 	}
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_require_scheduler_configuration_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -49,7 +49,7 @@ void fiber_port_primask_restore(const uint32_t state)
 	fiber_portASM volatile("msr primask, %0" :: "r"(state) : "memory");
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == state, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == state, 'r');
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -137,9 +137,9 @@ void fiber_port_validate_basepri_priority_policy(void)
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_exception_start_configuration(void)
 {
-	FIBER_REQUIRE(NVIC_GetPriority(PendSV_IRQn) ==
+	FIBER_REQUIRE(fiber_port_exception_priority_read(PendSV_IRQn) ==
 			fiber_portLOWEST_EXCEPTION_PRIORITY, 'P');
-	FIBER_REQUIRE(NVIC_GetPriority(SVCall_IRQn) == 0u, 'w');
+	FIBER_REQUIRE(fiber_port_exception_priority_read(SVCall_IRQn) == 0u, 'w');
 	fiber_port_validate_pendsv_vector();
 	fiber_port_validate_svc_vector();
 #ifdef SCB_CCR_STKALIGN_Msk
@@ -157,8 +157,8 @@ void fiber_port_prepare_exception_start(void)
 	const uint32_t primask = fiber_port_primask_save_disable();
 	FIBER_REQUIRE(primask == 0u, 'p');
 
-	NVIC_SetPriority(PendSV_IRQn, fiber_portLOWEST_EXCEPTION_PRIORITY);
-	NVIC_SetPriority(SVCall_IRQn, 0u);
+	fiber_port_exception_priority_write(PendSV_IRQn, fiber_portLOWEST_EXCEPTION_PRIORITY);
+	fiber_port_exception_priority_write(SVCall_IRQn, 0u);
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVCLEAR_BIT;
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
@@ -196,7 +196,7 @@ void fiber_port_runtime_start_first(FiberContext *const first)
 	fiber_port_require_start_interrupt_state();
 	const uint32_t primask = fiber_port_primask_save_disable();
 	FIBER_REQUIRE(primask == 0u, 'p');
-	FIBER_REQUIRE(__get_PRIMASK() == 1u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 1u, 'p');
 	fiber_port_validate_exception_start_configuration();
 	fiber_port_fpu_require_ready();
 	fiber_port_start_first_context(msp_top);

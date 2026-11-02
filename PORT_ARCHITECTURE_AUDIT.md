@@ -2709,3 +2709,25 @@ not the modified live document, satisfy the original receipt hashes.
 Both repairs leave production sources and RuntimeSelectable flags unchanged.
 The failed combined receipt remains FAIL; a fresh combined run is required.
 Exact tuple hashes and limits are retained in FREERTOS_ASM_PARITY.md.
+
+### FP NTZ Transitive Helper Repair
+
+CM33F, CM55F and M55 MVE-FP NTZ now keep the complete inline CPU/helper and
+non-inline boot-validation chain inside canonical sensitive/GRO attributes.
+Port-local MRS, system-exception priority byte accesses and WFE retain the
+original register semantics; all nine naked transfer bodies are source-exact.
+
+The fresh immutable primary hard-FP audit passes ninety baseline/raw cells at
+O0/Og/O2/Os/O3 with 450 compiled controls, normal and both native-LTO text
+layouts. Parent independently rehashes 74 consumed inputs and 11,187 artifacts
+without mismatch. The preserved pre-repair receipt remains FAIL; an initial
+repair compile attempt with a wrong CMSIS member spelling also remains FAIL.
+Neither is relabeled after the corrected fresh run.
+
+The separate hard/softfp, ordinary/reserved-r9 constructor suite passes 126
+ELFs, 504 calls and 1,008 bounded GPR restore slices; 93 inputs and every
+recorded ELF hash match. Five maintained runtime/layout/archive/vector/cohort
+gates and twenty-four unchanged ordered assertions against actual pinned
+FreeRTOS O2/Os objects also pass. Exact roots/hashes are in the three leaf
+ledgers. These focused repairs do not close global A32, final-LTO reference
+parity, actual FP/MVE exception execution or hardware validation.
