@@ -2535,3 +2535,27 @@ CM3 focused constructor replay:
 Parent CM3 maintained compiler replay, PASS:
   %TEMP%/fiber-sensitive-port-closure-7f5c68febefb4c1291019568470c23ec
 ```
+
+### C3FS Actual Paired Initializer Replay
+
+The separate maintained initializer gate now executes two real M33 images,
+generated SG veneers and the unchanged production pool/gateway objects on
+AN505. The complete hard/softfp, O2/Os, normal/LTO and named raw-hostile replay
+passes 628 CPU launches, 24 compiled controls and 1,960 fault-classifier
+mutations. Twenty-four actual pinned reference objects are retained separately;
+this is not FreeRTOS scheduler execution or whole-port equivalence.
+
+Parent independently rehashes 12,251 entries across three input/artifact
+manifests without mismatch. Exact Secure UDF/frame/status oracles distinguish
+terminal fail-closed cases from false admission, timeouts and unrelated faults.
+Named destination-register readback injections remain explicit corruptions,
+not observations of a coherent alternate CPU state. FP access is exercised,
+but FP preservation, allocation/load/save and full Fiber runtime are not.
+The staged profile remains `RuntimeSelectable=0`; no public identity, layout,
+production executable code or hardware qualification changes in this slice.
+
+```text
+  %TEMP%/cm33f-secure-initialize-fb5733242101497bb6294c25eaa5759e
+receipt.json SHA-256:
+  6654D36F9E9C2082C942D913BAE657F2591C5076DEB78AEF6D965501A7C5A8A6
+```

@@ -165,5 +165,9 @@ The Secure pool/initializer extension preserves this NS context identity, cold
 handle0 rules, sealed request and RuntimeSelectable0. The new initializer import
 declaration does not make attachment call it. Private Secure cohort generation2
 rejects stale metadata-only backing; it is not a public context-layout bump.
-The initializer's system-register/MMIO fault-model execution does not qualify
-SG transitions, lazy FP preservation or a complete paired runtime.
+The initializer's isolated system-register/MMIO fault-model execution does not
+qualify SG transitions, lazy FP preservation or a complete paired runtime. The
+separate `test_cm33f_secure_initialize.ps1` uses real AN505 SG/exception/FP state;
+its explicit readback corruption injections are not independent bank models.
+FPCA is shared, unlike FPCCR.LSPACT. No initializer result constitutes an
+allocation/load/save or paired FP-preservation result.
