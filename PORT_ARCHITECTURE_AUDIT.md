@@ -2471,3 +2471,35 @@ Refreshed smaller manifest gates:
   %TEMP%/cm33-secure-only-974ea1840787494d933aba1776966123
   %TEMP%/cm55-secure-only-821a91f4e62f4e6e825aad81d32b056d
 ```
+
+### A32/A33 CM3 Helper And Literal-Reach Repair
+
+CM3 now protects its complete selected-port helper chain with canonical
+attributes and local integer CPU primitives. The prior immutable baseline
+exposes raw hooks and actual unsectioned native-LTO literal-range failures.
+Fresh repaired-source closure passes thirty cells and 120 compiled controls
+over all five optimization levels, normal/native LTO and both LTO text layouts.
+Parent rehashes all 59 inputs and 3,716 recorded artifacts without mismatch.
+
+Frame geometry and executable naked transfer instructions are unchanged.
+Terminal `.ltorg` bounds pseudo-LDR reach without a fall-through data path.
+Natural post-repair pool removal happens to link; a separately compiled
+8,192-byte unreachable layout-pressure positive/removal pair proves range
+sensitivity. The leaf ledger records that distinction instead of claiming
+every pool-removal build must fail.
+
+Fresh O2/Os pinned-reference ordered checks pass the three CM3 transfer
+mechanisms; the independent classic regression executes 842 checks in 84 ARM
+ELFs. Eleven architecture/boundary source gates also pass. These focused
+receipts do not qualify every helper against the reference, replace a complete
+constructor-r9 replay or imply a board run/global matrix PASS.
+
+```text
+  %TEMP%/fiber-cm3-raw-repaired-19294e064859413e9fc2e1c3714fbf5b
+audit/results.json SHA-256:
+  33F25FA1845EC5533C370BAB6D2382314F734BC9BE7DF59F4EC7045C1EACBBEE
+Exact forty repository-local compiler-proof inputs:
+  %TEMP%/fiber-qualified-repo-inputs-51557fd475124d1095c29cf4587354c9
+Source ZIP SHA-256:
+  1BF101F4DD065A71073ABDC3BE082BB63E6CC23F96A1F006CA0039EF62C48CE4
+```

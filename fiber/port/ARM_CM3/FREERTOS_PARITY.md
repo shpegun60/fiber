@@ -116,6 +116,45 @@ parity ledger.
 
 ## Remaining Evidence
 
+The selected CM3 compiler-sensitive helper chain now uses the same canonical
+inline/non-inline bundles as the hardened CM7 profile. Port-local MRS, barrier,
+WFE and NVIC byte-priority primitives replace CMSIS inline function calls that
+could retain raw instrumentation. Their register operations and startup/switch
+ordering remain unchanged. The three naked transfer blocks also bound literal
+reach with `.ltorg` after their final unconditional panic-loop branches; no
+executable transfer instruction or frame/layout identity changes.
+
+A fresh immutable attributes-only audit passes all thirty requested cells:
+O0/Og/O2/Os/O3, baseline/raw flags, normal objects and sectioned/unsectioned
+native LTO, with 120 compiled controls and zero input drift. Fresh O2/Os pinned
+FreeRTOS comparisons pass first-start, SVC restore and PendSV ordered-mechanism
+checks. These are not complete instruction/body equivalence claims. The classic
+execution regression separately passes 84 ARM ELFs and 842 guard checks.
+
+The old unsectioned O2 native-LTO baseline has two actual literal-range errors.
+After the attribute repair, removing only the new pools happens to link in the
+natural tested layout. A separate compiled layout-pressure probe therefore
+places 8,192 unreachable bytes after each terminal pool: retained pools link;
+removing only those pools fails specifically on literal reach, not undefined
+symbols. Neither the synthetic gap nor control mutations enter production.
+
+```text
+Raw compiler closure:
+  %TEMP%/fiber-cm3-raw-repaired-19294e064859413e9fc2e1c3714fbf5b/audit
+results.json SHA-256:
+  33F25FA1845EC5533C370BAB6D2382314F734BC9BE7DF59F4EC7045C1EACBBEE
+Pinned reference ordered-mechanism checks:
+  %TEMP%/fiber-cm3-parity-parent-o2-0d8bf9331bdc490dbb1ffb2e1d8ff575
+  %TEMP%/fiber-cm3-parity-parent-os-f87ce3cc8a6b453d857442a15c37d9ed
+Classic execution regression:
+  %TEMP%/fiber-classic-audit-7e0519889e1541dc8824727a7ac25086
+```
+
+The raw audit is an additional proof, not permission to drop the documented
+mandatory integration counterflags. External hooks and memory-function bodies
+retain their own general-register/instrumentation-safe integration obligations.
+The complete constructor-r9 replay for this changed codegen remains separate.
+
 ```text
 STM32F1-class normal switching
 first SVC and later PendSV handler provenance
