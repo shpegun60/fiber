@@ -35,7 +35,7 @@
 #  error "[fiber]: selected ARMv7E-M core has no concrete fiber port"
 # endif
 #else
-# include "transitional_v8m/fiber_port_types.h"
+# error "[fiber]: ARMv8-M requires a concrete build-selected port; select its include path and source group"
 #endif
 
 /* Bind caller-owned storage without adding private-runtime dependencies to the

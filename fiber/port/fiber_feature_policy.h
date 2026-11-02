@@ -18,9 +18,8 @@
 /*
  * The active context-switch implementation can save the classic extended FP
  * state with s16-s31 when the hardware exception frame reports FP state.
- * MVE-FP shares that model in FreeRTOS. MVE without scalar FP is not treated as
- * supported here; runtime policy validation rejects it unless explicitly
- * allowed for bring-up experiments.
+ * MVE-FP shares that model in FreeRTOS. Feature-bearing v8-M profiles supply
+ * their own concrete policy; this helper does not enable experimental runtimes.
  */
 FIBER_STATIC_ASSERT((FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 0) ||
                  (FIBER_PORT_HAS_EXTENDED_FP_CONTEXT == 1),
@@ -38,54 +37,6 @@ FIBER_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
 FIBER_STATIC_ASSERT((FIBER_PORT_USES_PSPLIM_REGISTER == 0) ||
                  (FIBER_PORT_HAS_PSPLIM == 1),
                  "[fiber]: PSPLIM register access requires port PSPLIM support");
-
-/*
- * Optional security/architecture policy knobs. They default to "do not claim
- * support" for scenarios whose FreeRTOS ports carry extra context slots or
- * security-domain state that this port does not save yet.
- */
-#ifndef FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 0
-#endif
-
-#ifndef FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME 0
-#endif
-
-#ifndef FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME 0
-#endif
-
-#ifndef FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME 0
-#endif
-
-#ifndef FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME 0
-#endif
-
-#ifndef FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME
-# define FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME 0
-#endif
-
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME must be 0 or 1");
-FIBER_STATIC_ASSERT((FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME == 0) ||
-                 (FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME == 1),
-                 "[fiber]: FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME must be 0 or 1");
 
 FIBER_STATIC_ASSERT((FIBER_PORT_HAS_PAC == 0) || (FIBER_PORT_HAS_PAC == 1),
                  "[fiber]: FIBER_PORT_HAS_PAC must be 0 or 1");
@@ -113,12 +64,6 @@ FIBER_STATIC_ASSERT((FIBER_ENABLE_BTI_CONTEXT == 0) ||
 
 #if FIBER_ENABLE_BTI_CONTEXT
 # error "[fiber]: BTI context policy is not implemented yet"
-#endif
-
-#if defined(FIBER_TZ_NS) && (FIBER_TZ_NS+0)
-# if !defined(__ARM_FEATURE_CMSE) || (__ARM_FEATURE_CMSE < 3)
-#  error "[fiber]: FIBER_TZ_NS requires a Secure CMSE build targeting the Non-secure bank"
-# endif
 #endif
 
 #endif /* FIBER_FIBER_FEATURE_POLICY_H_ */

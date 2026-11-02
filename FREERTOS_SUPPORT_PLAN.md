@@ -1,5 +1,10 @@
 # FreeRTOS-Style Cortex-M Support Plan
 
+The current [bounded refactor baseline](CONTEXT_REFACTOR_BASELINE.md) is
+F0/G0/G4/H7/H7S. The broader catalog below remains future backend work.
+`transitional_v8m` is retired: architecture detection alone cannot select a
+v8-M runtime, and former experimental runtime/security opt-ins are errors.
+
 ## Goal
 
 Make `fiber` match the FreeRTOS Cortex-M CPU-port behavior where it matters for
@@ -52,12 +57,11 @@ queues, task policy, and public APIs are not imported. The portable Fiber and
 C++ Kernel layers consume the Context dispatcher surface and remain independent
 of every concrete `portable/` implementation.
 
-`STM32_PORT_FREEZE_INVENTORY.md` is the current execution ledger for this plan.
-It records fourteen runtime-capable concrete profiles, including the explicitly
-build-selected `ARM_CM0_MPU`, `ARM_CM33_MPU/non_secure`, and scalar
-`ARM_CM55_NTZ/non_secure` runtimes with their archive/linker proofs, then the
-remaining CM33 security/FP-MPU, M55/N6 feature cohorts, and announced CM85/V8
-work, planning ranges, and the exact gate before Context extraction.
+`STM32_PORT_FREEZE_INVENTORY.md` and `STM32_PROFILE_BACKLOG.md` retain the broader
+profile inventory, recorded evidence and outstanding feature work. The current
+bounded Context/Fiber extraction sequence is defined by
+`CONTEXT_REFACTOR_BASELINE.md`, not by completing that entire catalog first.
+This scope decision neither completes the catalog nor upgrades any receipt.
 
 The required common-core boundary before production ports are added in bulk is
 defined in `V2_OPAQUE_CONTEXT_CONTRACT.md`. `fiber_api_types.h` exposes only
@@ -67,9 +71,10 @@ CPU state. The current physical `sp + FiberPortBoot` shape is transitional, but
 common runtime sources now operate through the callable port ABI and do not
 access that layout.
 
-## Current Baseline
+## Existing H7 Baseline
 
-Primary target, pending a fresh hardware run after the current hardening diff:
+Historical primary embedding target, pending a fresh hardware run after the
+current hardening diff; the bounded refactor additionally targets F0/G0/G4/H7S:
 
 - STM32H7 / Cortex-M7.
 
@@ -85,7 +90,7 @@ Implemented and aligned with the FreeRTOS non-MPU PendSV pattern:
 - `FIBER_FPU_LAZY = 0` keeps FP stacking deterministic by default.
 - The initial stacked `PC` has bit 0 clear; Thumb state comes from `xPSR.T`.
 - initial `EXC_RETURN` is selected-port-owned. The concrete CM7 value is fixed
-  at `0xFFFFFFFDu`; only transitional v8-M bring-up still accepts an input.
+  at `0xFFFFFFFDu`; the former transitional bring-up override is gone.
 - First-fiber start uses SVC and enters the first fiber by exception return.
   The direct boot trampoline has been removed; each selected port must provide
   an SVC first-start symbol.
@@ -195,7 +200,7 @@ Closed hardening items from the FreeRTOS comparison:
 | Cortex-M55F MPU | Explicit build-selected `ARM_CM55F_MPU/non_secure` slice 4 completes the scalar-FP/no-MVE/no-TrustZone/no-PAC `C55P` 8/16-region protected cohort from the `configENABLE_MPU=1`, `configENABLE_FPU=1` branch of `GCC/ARM_CM55_NTZ/non_secure`. Its exact overlapping 54-word backing store uses words 0-20 for basic first start and words 0-53 for an extended FP save. Boot owns construction; the mandatory SVC object owns the seven remaining forward operations, public SVC-71 yield, strong SVC, the private handler-bundle coordinator, and runtime cohort definition. The separate protected PendSV component retains reverse/cohort identities, is forced from the archive through that component anchor, validates before cursor access, preserves the FreeRTOS `s16-s31` plus copied `s0-s15/FPSCR` order, selects under BASEPRI, and replaces MAIR0/context regions with PRIMASK asserted. Separate hard/softfp `-O2`/`-Os` construction/SVC/PendSV parity plus representative archive extraction under hard-float `-O2`, softfp `-Os`, and hard-float `-O2` LTO, external cohort, stale 8/16 archive, protected placement, vector, and duplicate-handler proofs pass. It remains outside global auto/profile selection and exposes no heterogeneous MPU API or hardware claim. | Validate M55F MPU runtime and isolation. Keep MVE, TrustZone/SecureContext, TF-M, PAC, and BTI separate. |
 | Cortex-M55 MVE-FP MPU | Explicit build-selected `ARM_CM55_MVEF_MPU/non_secure` slice 4 completes the separate `C55W` 8/16-region protected MVE-FP/no-TrustZone/no-PAC cohort from `configENABLE_MPU=1`, `configENABLE_FPU=1`, `configENABLE_MVE=1` in `GCC/ARM_CM55_NTZ/non_secure`. It requires `-march=armv8.1-m.main+mve.fp`, records MVE in its exact cohort, and retains the same overlapping 54-word protected backing image as C55P without a VPR software slot. Boot owns sealed construction; the mandatory SVC/runtime object defines the cohort, owns the other seven forward operations, public SVC-71 yield, SVC #70 first start, private SVC #72 task return, strong slot 11, and a private PendSV bundle anchor. The separate PendSV component owns strong slot 14, preflights before cursor access, preserves the exact `s16-s31` plus copied `s0-s15/FPSCR` move order, selects through reverse ABI v1 under BASEPRI, and replaces MAIR0/context regions with PRIMASK asserted. Hard/softfp `-O2`/`-Os` construction/SVC/PendSV parity, exact external cohort, stale 8/16 archive rejection, normal/LTO archive extraction, placement, slots 11/14, invalid-manifest, and duplicate-handler proofs pass. It deliberately has no global selector route, optional MPU API, or hardware claim. | Keep TrustZone/SecureContext, TF-M, PAC, and BTI separate; validate matching M55 hardware and MPU isolation. |
 | Cortex-M55 MPU | Explicit build-selected `ARM_CM55_MPU/non_secure` slice 5 completes the no-FPU/no-MVE/no-TrustZone/no-PAC `C55M` protected 8/16-region layout from the `configENABLE_MPU=1` branch of `GCC/ARM_CM55_NTZ/non_secure`: MAIR0, per-context RBAR/RLAR pairs, a 20-active-word protected image plus one-past cursor, exact cohort identity, sealed unprivileged construction, linker-boundary validation, a four-region MPU image, all eight forward operations, strict first-start SVC, public SVC-71 yield, and protected PendSV. PendSV preflights the running frame before cursor access, saves the complete basic frame to privileged storage, selects under BASEPRI via reverse ABI v1, replaces MAIR0/context pairs with PRIMASK asserted, publishes current while MPU access is disabled, then restores the inverse image. `-O2`/`-Os` parity plus normal/LTO archive, external cohort, stale 8/16 archive, section-isolation, vector-slot, and duplicate-SVC/PendSV proofs pass. It remains outside global auto/profile selection and exposes no heterogeneous-MPU API or hardware claim. M55-only RLAR.PXN is retained for a later configurable-region ABI. | Validate M55 MPU runtime and isolation. Keep FPU, MVE, TrustZone/SecureContext, TF-M, PAC, and BTI separate. |
-| Cortex-M55 feature cohorts / STM32N6 | Scalar, scalar-FP, MVE-FP, no-feature MPU, scalar-FP MPU `C55P`, and MVE-FP MPU `C55W` are complete explicit build-selected software cohorts. C55W now has all eight forward operations, public SVC-71 yield, split-handler archive extraction, and full compile/assembly/archive/ELF evidence while retaining no VPR state. `transitional_v8m` remains only for unported v8-M roles. | Complete TrustZone/SecureContext or TF-M, and PAC/BTI cohorts, then validate matching hardware. |
+| Cortex-M55 feature cohorts / STM32N6 | Scalar, scalar-FP, MVE-FP, no-feature MPU, scalar-FP MPU `C55P`, and MVE-FP MPU `C55W` are complete explicit build-selected software cohorts. C55W now has all eight forward operations, public SVC-71 yield, split-handler archive extraction, and full compile/assembly/archive/ELF evidence while retaining no VPR state. Unported roles have no transitional runtime fallback. | Retain TrustZone/SecureContext, TF-M and PAC/BTI feature work and matching hardware validation in the broader backlog; it is not a prerequisite for the bounded classic-baseline extraction. |
 | Cortex-M85/MVE/PACBTI | No concrete selected port. The pinned FreeRTOS graph contains CM85 Non-secure, Secure companion, NTZ, MPU, and TF-M variants; ST now lists the preannounced STM32V8 Cortex-M85 series. | Include the exact STM32V8 profile before an all-announced-STM32 freeze, or record an explicit preannouncement deferral. |
 
 ## Priority Roadmap
@@ -251,10 +256,10 @@ Closed hardening items from the FreeRTOS comparison:
    - Cortex-M55 without FPU
    - Cortex-M55F
    - Cortex-M55 MVE-FP
-   - ARMv8-M/ARMv8.1-M
-     `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` compile mode
-   - ARMv8-M/ARMv8.1-M Secure-to-Non-secure bank compile mode with
-     `FIBER_TZ_NS=1` and `-mcmse`
+   - exact build-selected ARMv8-M/ARMv8.1-M runtime groups, with generic
+     architecture-only runtime selection and retired bring-up flags rejected
+   - separately identified paired Secure and Secure-only manifests; no generic
+     Secure-to-Non-secure bank override
    - build-selected portmacro mode with `FIBER_PORT_BUILD_SELECTED=1`
    - Cortex-M7/Cortex-M7F build-selected source group
      `fiber/port/ARM_CM7/r0p1/fiber_port.c`, including the port-owned errata
@@ -354,11 +359,9 @@ Closed hardening items from the FreeRTOS comparison:
    no longer include the selected complete port contract or contain
    architecture-specific switch assembly.
 
-   Move out of common code:
+   The former common frame/PendSV fallbacks and direct startup trampoline have
+   been removed; do not reintroduce them. Keep these mechanics out of common code:
 
-   - transitional fallback `fiber_port_init_context_frame()`;
-   - any transitional common PendSV implementation;
-   - direct startup trampoline mechanics;
    - SVC first-start mechanics;
    - CONTROL/PSP/MSP programming;
    - PendSV/SVC priority setup and vector routing validation;
@@ -453,9 +456,9 @@ Closed hardening items from the FreeRTOS comparison:
    must preserve current scheduler critical-section placement; callback-wrapper
    redesign is a separate behavior change.
 
-   A transitional fallback may exist only under an explicitly transitional
-   directory such as `port/transitional_v8m`. A port cannot be claimed as
-   FreeRTOS-level while it depends on transitional PendSV or frame layout.
+   No transitional runtime fallback remains or may be selected. A missing
+   concrete profile must fail selection, not use a generic PendSV or frame
+   layout. Future feature work requires its own exact header/source manifest.
 
    The `fiber/port` helper-root convention is reserved for reusable helper code, not
    selected-port fallback behavior.
@@ -520,12 +523,12 @@ Closed hardening items from the FreeRTOS comparison:
    PSPLIM-slot and Non-secure context identity, build the matching initial
    context, and implement SVC first start plus PendSV switching. Static archive,
    external cohort expectation, vector, section-GC, normal/LTO, and
-   duplicate-handler evidence is complete. Global auto/profile selection still
-   deliberately routes ARMv8-M Baseline through `transitional_v8m`.
+   duplicate-handler evidence is complete. Global architecture-only runtime
+   selection is now rejected; use the concrete build-selected manifest.
    FreeRTOS has a PSPLIM slot in the CM23 NTZ context layout, but it also gates
    actual PSPLIM register access through target/security configuration because
    Non-secure Cortex-M23 does not have a Non-secure PSPLIM register. The
-   transitional fiber baseline path still has no PSPLIM slot. The concrete NTZ
+   former transitional baseline had no PSPLIM slot. The concrete NTZ
    profile has the slot, seeds its initial value from `stack_base`, keeps
    `FIBER_PORT_USES_PSPLIM_REGISTER == 0`, and is intentionally ABI-distinct
    from that fixture. Its PendSV save path writes zero into the ignored slot,

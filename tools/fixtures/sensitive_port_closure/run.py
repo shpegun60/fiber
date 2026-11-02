@@ -337,7 +337,6 @@ def profiles():
         ("C55S", "ARM_CM55/non_secure", 55, "ARMV81M_MAINLINE", 0, 0, "cortex-m55", "soft", "", "paired-staged"),
         ("C3SO", "ARM_CM33_SECURE_ONLY/secure", 33, "ARMV8M_MAINLINE", 0, 0, "cortex-m33", "soft", "", "secure-only"),
         ("C5SO", "ARM_CM55_SECURE_ONLY/secure", 55, "ARMV81M_MAINLINE", 0, 0, "cortex-m55", "soft", "", "secure-only"),
-        ("TRANSITIONAL", "transitional_v8m", 33, "ARMV8M_MAINLINE", 0, 0, "cortex-m33", "soft", "", "transitional"),
         ("C33S_GATEWAY", "ARM_CM33/secure", 33, "ARMV8M_MAINLINE", 0, 0, "cortex-m33", "soft", "", "companion"),
         ("C55S_GATEWAY", "ARM_CM55/secure", 55, "ARMV81M_MAINLINE", 0, 0, "cortex-m55", "soft", "", "companion"),
     )
@@ -356,8 +355,6 @@ def profiles():
             sources += ["fiber_port_secure_context.c", "fiber_port_svc.c"]
             if kind == "paired-staged":
                 sources += ["fiber_port_runtime.c", "fiber_port_pendsv.c"]
-        elif kind == "transitional":
-            sources = ["fiber_port_boot.c", "fiber_port_exception.c", "fiber_port_transitional_v8m.c"]
         elif kind == "companion":
             sources = ["fiber_secure_gateway.c", "fiber_secure_context_gateway.c", "fiber_secure_context_pool.c"]
         region_macro = {"C3FP": "CM33F", "CM33MPU": "CM33", "CM55MPU": "CM55", "CM55FMPU": "CM55F",

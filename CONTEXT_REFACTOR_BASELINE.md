@@ -1,0 +1,92 @@
+# Context Refactor Baseline
+
+## Scope Decision
+
+On 2026-11-02 the implementation priority changes from completing every
+candidate feature combination before extraction to a bounded usable baseline.
+The immediate target is a clean Context engine consumed by Fiber for:
+
+| STM32 target | Existing backend | Required mechanics |
+| --- | --- | --- |
+| F0 | ARM_CM0 | M0 Thumb-1, PRIMASK, device vector-source policy |
+| G0 | ARM_CM0 | M0+ Thumb-1, PRIMASK, device VTOR capability |
+| G4 | ARM_CM4 | M4F basic/extended FP state and BASEPRI |
+| H7 | ARM_CM7/r0p1 | M7 FP state, BASEPRI and applicable errata policy |
+| H7S | ARM_CM7/r0p1 | Same CPU engine with separate board/startup/linker integration |
+
+These are CPU-profile mappings, not blanket hardware validation of every device
+or an SMP claim for dual-core parts. F0, not H0, is the confirmed target.
+
+This decision supersedes the universal pre-extraction prerequisite in the older
+port-freeze roadmap. It does not declare the full STM32 catalog complete, erase
+remaining proofs, or redefine a failed qualification as PASS. All existing
+concrete profiles remain in the repository and their applicable regression
+gates remain enabled. Additional feature combinations stay visible in
+`STM32_PROFILE_BACKLOG.md`; they no longer block this bounded extraction.
+
+## Architecture That Must Scale
+
+The dependency direction remains normative:
+
+```text
+selected CPU backend
+    -> portable Context runtime
+    -> Fiber lifecycle
+    -> C++ Task/Kernel and scheduler policies
+```
+
+The backend owns complete opaque context storage, stack/frame construction,
+SVC/PendSV, masks, special registers, exception configuration and feature state.
+Context owns one current slot, one dispatcher/user pair, first-selection and
+configuration lifecycle, publication and CPU-transfer orchestration. It never
+knows a Fiber or Task representation. Fiber contains a context and adapts its
+lifecycle to the dispatcher; scheduler policy stays above Fiber.
+
+MPU, TrustZone/SecureContext, TF-M, FPU/MVE and future applicable PAC/BTI state
+remain selected-profile responsibilities. Keep the frozen eight-operation
+forward ABI, reverse-v1 ownership, optional extension ABIs and exact cohort
+guards while extracting. An unsupported extension has no public stub. A new
+profile must not require a processor-family conditional in Context or Fiber.
+Static-lifetime/single-core limits remain explicit; dynamic reclamation or SMP
+requires a separately reviewed contract, not an implicit extension.
+
+## Mechanical Order
+
+1. Retire `transitional_v8m`: reject ambiguous v8-M runtime selection and obsolete
+   opt-ins, migrate applicable tests to concrete profiles, retain stale-object
+   negatives, and delete the fallback source group. No concrete assembly changes.
+2. Record a hash-backed baseline with exact successful and unavailable evidence.
+   Complete the current combined replay; preserve earlier FAIL receipts. Board
+   unavailability is recorded, not reported as hardware PASS.
+3. Introduce an internal versioned Context facade over the existing engine.
+   A facade alone is not completed separation and adds no second runtime state.
+4. Move actual current/dispatcher/start/panic ownership into Context and invert
+   the compatibility bridge. Preserve reverse symbols, context identity and
+   selected-port mechanics until their own explicit migration checkpoint.
+5. Implement a genuine Fiber consumer with context containment and lifecycle.
+   The existing five-call API remains a compatibility surface until replacement
+   consumers and migration tests are complete.
+6. Add C++ kernel policy separately. No tick, queue, priority or ISR preemption
+   implementation is smuggled into this mechanical refactor.
+
+## Evidence Boundary
+
+Every extraction checkpoint must retain the applicable constructor, consumer,
+frame, dispatcher-order, attribute, ABI, exact-cohort, archive/GC/LTO and vector
+positive/negative tests. Compare generated backend instructions and frame bytes
+against the captured pre-extraction source, independently of the pinned FreeRTOS
+comparison. Preserve FP eager/lazy, reserved-r9 and M7 errata variants.
+
+The required O0/Og/O2/Os/O3 and final-linked-LTO coverage remains visible work;
+O2/Os parity or raw-compiler inventories must not be relabeled as that global
+gate. Extend the focused classic-baseline checks before accepting affected
+generated-code transformations. Hardware results remain separate. A bounded
+extraction checkpoint is not an all-profile software freeze or a CI claim.
+
+## Remaining Catalog
+
+The broader through-M55 feature backlog, conditional M85 work and global
+optimization/CI qualification are retained, not removed. Staged artifacts remain
+staged until independently admitted. Existing NS/Secure pairs are not promoted
+by this scope decision. New backends and optional features must later pass the
+same Context conformance boundary without changing portable Fiber ownership.

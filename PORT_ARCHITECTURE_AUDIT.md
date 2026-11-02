@@ -3236,3 +3236,59 @@ eleven scripts and 35 checks:
 The central matrix dispatches this guard before parity; its configuration suite
 now passes 69 checks. These are export/configuration proofs, not ARM execution,
 and do not relabel the failed aggregate or promote a staged profile.
+
+### LF Export Actual Initializer Replay
+
+A separate full replay of the previously failing existing initializer gate now
+passes on the immutable 550b9b1 source archive: 628 actual AN505 CPU cases,
+864 checks, 24 controls, DevelopmentOnly=false and zero input drift. Parent
+rehashes all 2,119 recorded inputs and 8,013 artifacts without mismatch; the
+artifact manifest is stable. Receipt:
+`C:/fq-init-550b9b1-a/cm33f-secure-initialize-f243f2081fb14608be4eaf992a4df651/receipt.json`,
+SHA-256 `FE41ACC2E703517828B9CA9D60EC29AE8EF98D5349E4185FAB365BBAC38876A5`.
+Artifact-manifest SHA-256:
+`979C154EC770BC2ADFC0B88DF6B0F303023F6557F287ED328B5F0F20861DE248`.
+This closes the export launch failure for its captured initializer suite only.
+It does not implement allocation, FP save/load, a complete C3FS runtime, or
+hardware qualification, and does not replace the separate combined-matrix result.
+
+### Concrete Selection And Bounded Refactor Baseline
+
+The 2026-11-02 scope amendment is recorded in `CONTEXT_REFACTOR_BASELINE.md`.
+The immediate targets are F0/G0/G4/H7/H7S; the remaining concrete feature
+profiles and qualification backlog are retained. `transitional_v8m` is removed,
+v8-M public selection requires a concrete build-selected profile, and retired
+opt-ins are rejected even when set to zero. No concrete context layout,
+save/restore instruction or handler implementation changes in this checkpoint.
+
+The focused matrix replay covers six concrete v8-M selections, 36 selection
+probes, four matching and sixteen stale-cohort links with/without LTO, and 36
+classic namespace/mode cells. Evidence is under
+`%TEMP%/fiber-matrix-retirement-focus-cc7685e2aae4420c86a8b860440e64f5/`.
+The separate consumer/constructor replay passes 150 C/C++ public compiles,
+ten invalid manifests, 256 storage links and 32 constructor links plus eight
+controls: `%TEMP%/fiber-transitional-retirement-72799cba8beb43b6ba88791eecb2d5df/attempt4/results.json`,
+SHA-256 `A1591EDA20612F2623FA48D787ECB99EBBCD1002E3B9EE3BE8501D155ADB3A37`.
+
+Primary raw codegen inventory passes 90 cells and 457 controls across
+O0/Og/O2/Os/O3 and ordinary/native-LTO layouts, limited to CM0 soft, CM4 hard
+FPv4-SP-D16 and CM7 soft. Receipt:
+`%TEMP%/fiber-primary-raw-retirement-fa56bd60185249e5820d8aa18e9123d6/results.json`,
+SHA-256 `13D5555CDEDA96FED7426E9050EB56CADAEE90AE9CF370A4962A48340A8A68FB`.
+Independent rehash covers 21,139 hash checks across 17,337 distinct files with
+zero mismatch. This is raw closure evidence, not global five-optimization
+pinned FreeRTOS equivalence or hardware validation.
+
+Actual external H7S Boot Debug/O2 and Release/Os force rebuilds pass with strong
+handlers, correct slots 11/14, one private/storage cohort, an eight-byte readonly
+expectation and no undefined symbols. Both complete ELFs are byte-identical to
+their archived pre-cleanup builds. All 2,126 inputs and 410 artifacts rehash
+without mismatch. Receipt:
+`%TEMP%/fiber-h7-header-retirement-8027a66e12524ae6b9a1801c4944c14c/`,
+SHA-256 `9C98BE8B8C4BC0B23EEF20B428C58F2D2603C4620C701B45F6D1F716151DE65C`.
+No board was programmed. The independent combined immutable 550b9b1 matrix
+remains in progress and is not represented by these focused PASS receipts.
+
+The maintained concrete-selection test passes 76 C/C++ cases; dispatch policy
+passes 72 checks. A facade is the next mechanical step, not completed Context /
+Fiber separation and not a new full-catalog freeze claim.

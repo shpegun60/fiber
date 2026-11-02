@@ -9,6 +9,25 @@
 
 #include "fiber_static_assert.h"
 
+/* Architecture detection is not a security/feature runtime selection. */
+#if defined(FIBER_TRANSITIONAL_V8M_RUN_NONSECURE) || \
+    defined(FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK)
+# error "[fiber]: transitional v8-M settings are retired; select a concrete port"
+#endif
+
+#if defined(FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME) || \
+    defined(FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME) || \
+    defined(FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME) || \
+    defined(FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME) || \
+    defined(FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME) || \
+    defined(FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME)
+# error "[fiber]: unvalidated runtime opt-ins are retired; select a concrete supported port"
+#endif
+
+#ifdef FIBER_TZ_NS
+# error "[fiber]: retired FIBER_TZ_NS cannot target the Non-secure register bank; select a concrete security profile"
+#endif
+
 /*
  * FreeRTOS-style explicit profile selection. AUTO keeps the small-library
  * convenience path and derives the profile from compiler-provided

@@ -15,6 +15,10 @@ context through SVC and an exception return.
 
 ## Architecture Direction
 
+The immediate [Context/Fiber refactor baseline](CONTEXT_REFACTOR_BASELINE.md)
+is F0, G0, G4, H7 and H7S. Other concrete ports are retained; completing every
+candidate feature combination is no longer a prerequisite to this extraction.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
@@ -121,8 +125,8 @@ non-MPU PendSV save/select/restore path plus `runtime_schedule`. The ignored
 initial PSPLIM slot contains `stack_base`; every ordinary PendSV save replaces
 it with zero without accessing PSPLIM. An exact build-selected M23 manifest now
 has static-archive, cohort, vector, section-GC, and normal/LTO ELF coverage.
-Auto/profile selection deliberately remains on `transitional_v8m`, and this
-profile still has no hardware claim. See
+Automatic architecture detection does not select this runtime: use its exact
+build-selected manifest. This profile still has no hardware claim. See
 `fiber/port/ARM_CM23_NTZ/non_secure/FREERTOS_PARITY.md`.
 
 `ARM_CM33F_MPU/non_secure` now supplies a complete explicit build-selected
@@ -356,10 +360,6 @@ Cortex-M4/F:   fiber/port/ARM_CM4/fiber_port.c
 Cortex-M7/F:   fiber/port/ARM_CM7/r0p1/fiber_port.c
                fiber/port/ARM_CM7/r0p1/fiber_port_boot.c
                fiber/port/ARM_CM7/r0p1/fiber_port_exception.c
-v8-M fixture:  fiber/port/transitional_v8m/fiber_port_transitional_v8m.c
-               fiber/port/transitional_v8m/fiber_port_boot.c
-               fiber/port/transitional_v8m/fiber_port_exception.c
-
 M23 NTZ runtime:
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_types.h
                fiber/port/ARM_CM23_NTZ/non_secure/fiber_port_boot_types.h
@@ -559,8 +559,9 @@ guard, and re-audit the embedding ELF after integrating these repairs.
 Do not add every port source directory to a production target. The compile
 matrix deliberately compiles selector-guarded alternatives to audit selection,
 then relocatably links the result to prove a single complete port ABI.
-`transitional_v8m` is a compile-only bring-up fixture, not a production port.
-It will be deleted when concrete v8-M and ARMv8.1-M ports replace it.
+The former `transitional_v8m` bring-up source group is removed. v8-M/v8.1-M
+runtime consumption requires a concrete build-selected profile; missing profile
+selection is a compile error, not an experimental runtime fallback.
 
 The port header boundary is split in two layers: `fiber/port/fiber_port_select.h`
 selects the Cortex-M profile, while `fiber/port/fiber_port_selected.h` completes
@@ -745,9 +746,9 @@ The selectable profile names are `FIBER_PORT_PROFILE_ARMV6M`,
 `FIBER_PORT_PROFILE_ARMV8M_BASELINE`, `FIBER_PORT_PROFILE_ARMV8M_MAINLINE`, and
 `FIBER_PORT_PROFILE_ARMV81M_MAINLINE`. Leave `FIBER_PORT_PROFILE` undefined for
 auto-detection. These names select architecture classes, not concrete MPU, NTZ,
-paired SecureContext or TF-M implementations. In auto/profile mode the public
-facade routes all v8-M/v8.1-M classes to the non-production
-`transitional_v8m` bring-up port, not to the concrete runtimes listed above.
+paired SecureContext or TF-M implementations. Architecture-only detection may
+still be used by configuration probes. Public v8-M/v8.1-M runtime consumption
+without a concrete build-selected profile is a compile error.
 
 Concrete production profiles outside the classic privileged routes require the
 build-selected workflow: `FIBER_PORT_BUILD_SELECTED=1`, exactly one matching
@@ -1035,26 +1036,11 @@ restore `PRIMASK`. Returning with changed `PRIMASK`, `FAULTMASK`, `BASEPRI`, or
 `CONTROL` is a panic condition; PSPLIM-owning ports also preserve and validate
 `PSPLIM` across the callback.
 
-The v8-M feature policy remains intentionally strict for future ports. The
-transitional M23/M33/M55/MVE-FP profiles have compile-covered SVC first-start
-mechanics, but runtime use remains policy-gated until the extra context state
-their FreeRTOS ports require is implemented and validated. The separate exact
-build-selected M23 and M33 NTZ ports do have complete strong SVC/PendSV runtime
-objects, but remain hardware-unvalidated and do not make the broader
-transitional profile safe:
-
-```c
-#define FIBER_ALLOW_UNVALIDATED_ARMV8M_BASELINE_RUNTIME 1
-#define FIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME 1
-#define FIBER_ALLOW_UNVALIDATED_ARMV81M_RUNTIME 1
-#define FIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME 1
-#define FIBER_ALLOW_UNVALIDATED_MVE_RUNTIME 1
-#define FIBER_ALLOW_UNVALIDATED_PACBTI_RUNTIME 1
-```
-
-Use those only for bring-up experiments after the selected port policy is
-understood. They do not add FreeRTOS-level PSPLIM/CONTROL/secure-context/PAC-key
-handling.
+Each concrete v8-M profile owns its exact feature and security contract. The
+former `FIBER_ALLOW_UNVALIDATED_*_RUNTIME`, `FIBER_TRANSITIONAL_V8M_*` and
+`FIBER_TZ_NS` inputs are retired and rejected even when defined as zero. They
+cannot enable missing state handling or choose a security domain. Select an
+implemented concrete profile and its matching source/linker manifest instead.
 
 ## H7 Lazy-FPU Mode
 
@@ -1103,9 +1089,8 @@ for SVC, enables IRQ and fault exceptions, clears BASEPRI in the SVC handler,
 then restores PSP and returns through the selected context's `EXC_RETURN`.
 
 The concrete CM7 port fixes its initial `EXC_RETURN` at `0xFFFFFFFDu`; it is not
-an application override. The non-production v8-M fallback uses explicitly
-scoped `FIBER_TRANSITIONAL_V8M_*` bring-up inputs, which do not provide
-production TrustZone or Non-secure support.
+an application override. Concrete v8-M profiles similarly fix their own
+EXC_RETURN and security-bank contract; no generic fallback remains.
 
 Cortex-M23, no-FPU Cortex-M33, and FPU Cortex-M33F each have an exact
 build-selected Non-secure non-MPU runtime profile with

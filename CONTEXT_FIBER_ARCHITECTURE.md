@@ -2,6 +2,12 @@
 
 ## Status
 
+The 2026-11-02 [bounded refactor baseline](CONTEXT_REFACTOR_BASELINE.md) supersedes
+the earlier requirement to finish every candidate STM32 feature combination
+before extraction. F0/G0/G4/H7/H7S are the immediate acceptance targets; existing
+concrete ports and the full feature backlog remain retained. This amendment
+changes sequencing, not the layering, opaque-context or proof contracts below.
+
 This document freezes the intended post-port-freeze separation between the
 processor execution-context engine, the stackful Fiber lifecycle, and the
 future C++ kernel. It is a design and migration contract, not a claim that the
@@ -562,8 +568,9 @@ evidence.
 The following order is mandatory. Port completion and architectural extraction
 must not be combined into one behavior-changing step.
 
-1. Complete every architecturally distinct STM32 execution profile required
-   from the pinned local FreeRTOS reference. Do not duplicate GCC, IAR, or Arm
+1. Complete the execution profiles required by the currently approved
+   [bounded baseline](CONTEXT_REFACTOR_BASELINE.md). Broader profile completion
+   continues independently in the retained backlog. Do not duplicate GCC, IAR, or Arm
    Compiler ports when they implement the same processor-state mechanics. A
    compiler-specific implementation is separate only when its ABI or generated
    context mechanics are materially different.
@@ -611,8 +618,8 @@ The separation must not be implemented as one behavior-changing rename.
 
 ### Slice 1: Complete Existing Port Freeze
 
-- finish every architecturally distinct STM32 Cortex-M execution profile needed
-  from the pinned local FreeRTOS reference under its current v2 name;
+- qualify the approved bounded baseline under current v2 names; retain the
+  broader profile backlog without making it an extraction prerequisite;
 - do not duplicate GCC, IAR, or Arm Compiler directories when they implement the
   same processor state contract; record and test a compiler-specific difference
   when it changes generated context mechanics;

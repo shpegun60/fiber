@@ -372,21 +372,14 @@ FreeRTOS secure_context.* -> future port-local v8-M secure context files
 Splitting exception setup into `fiber_port_exception.c` is organizational only;
 it remains part of the selected port source group and parity ledger.
 
-## Transitional v8-M Policy
+## Retired Transitional v8-M Policy
 
-`port/transitional_v8m` exists only to keep M23/M33/M55 selection and ABI
-compile-covered while native ports are implemented. It may use:
-
-```text
-FIBER_TRANSITIONAL_V8M_RUN_NONSECURE
-FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK
-FIBER_ALLOW_UNVALIDATED_*
-```
-
-It is not production support. Missing CONTROL, PSPLIM, secure-context, MVE,
-PAC-key, or BTI policy remains fail-closed at startup. Each future native port
-must replace transitional traits with a profile-specific frame layout and a
-FreeRTOS parity ledger.
+The former `port/transitional_v8m` source group is removed. Its two role inputs,
+the six unvalidated-runtime opt-ins and `FIBER_TZ_NS` are rejected at compile
+time, including explicit zero values. Architecture detection remains distinct
+from runtime selection: v8-M consumers require a concrete build-selected
+profile with its own frame, feature/security contract and FreeRTOS ledger.
+Missing profiles cannot be enabled through a generic experimental switch.
 
 ## Port Completion Checklist
 

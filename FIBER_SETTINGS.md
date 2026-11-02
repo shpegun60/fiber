@@ -92,14 +92,11 @@ SVC/PendSV routing is not configurable. The selected port owns strong
 vector slots 11 and 14 resolve to them. The removed `FIBER_*_WIRED` and
 `FIBER_*_VECTOR_DIRECT` names are compile errors.
 
-The non-production `transitional_v8m` port additionally accepts explicitly
-named bring-up inputs:
-
-- `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE`
-- `FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK`
-
-They do not provide a production support claim. Runtime still requires the
-corresponding `FIBER_ALLOW_UNVALIDATED_*` opt-in.
+The former `transitional_v8m` source group and its bring-up inputs are retired.
+`FIBER_TRANSITIONAL_V8M_*`, the six `FIBER_ALLOW_UNVALIDATED_*_RUNTIME` names
+and `FIBER_TZ_NS` are compile errors, including definitions with value zero.
+v8-M runtime consumers must use an implemented concrete build-selected profile,
+its include path, complete source group and matching integration manifest.
 
 ## Mandatory Port Facts
 

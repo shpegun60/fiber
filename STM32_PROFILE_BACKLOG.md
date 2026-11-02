@@ -2,6 +2,11 @@
 
 ## Purpose And Baseline
 
+The [2026-11-02 scope decision](CONTEXT_REFACTOR_BASELINE.md) prioritizes a usable
+Context/Fiber separation for F0/G0/G4/H7/H7S. The candidate combinations below
+remain future backend work, not a prerequisite to that bounded extraction.
+Existing concrete profiles are retained; no missing feature is claimed complete.
+
 This is the implementation backlog accompanying
 [`STM32_PORT_FREEZE_INVENTORY.md`](STM32_PORT_FREEZE_INVENTORY.md), not a new
 support declaration or a replacement for a profile's `FREERTOS_PARITY.md`.

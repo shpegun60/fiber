@@ -68,6 +68,14 @@ Check 'shell-export/before-parity' ($shellDispatch[0].Extent.StartOffset -lt
     $source.IndexOf('foreach ($parityOptimization'))
 Check 'shell-export/dedicated-artifacts' ($shellDispatch[0].Extent.Text.Contains(
     '-BuildRoot (Join-Path $buildRoot "audit-shell-exports")'))
+$selectionDispatch = @($commands | Where-Object {
+    $_.Extent.Text.Contains('"tools\test_concrete_port_selection.ps1"')
+})
+Check 'concrete-selection/one-dispatch' ($selectionDispatch.Count -eq 1)
+Check 'concrete-selection/before-parity' ($selectionDispatch[0].Extent.StartOffset -lt
+    $source.IndexOf('foreach ($parityOptimization'))
+Check 'concrete-selection/compiler-and-artifacts' ($selectionDispatch[0].Extent.Text -cmatch
+    '-ArmGcc \$gcc -BuildRoot \(Join-Path \$buildRoot "audit-concrete-selection"\)')
 foreach ($runner in @('test_cm33f_secure_initialize', 'test_m55_secure_runtime_admission',
         'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
     $needle = '"tools\' + $runner + '.ps1"'

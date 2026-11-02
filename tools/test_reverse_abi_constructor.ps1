@@ -147,14 +147,14 @@ function AuditConstructors {
         'ARM_CM55_TFM/non_secure/fiber_port_boot.c',
         'ARM_CM55F_NTZ/non_secure/fiber_port_boot.c','ARM_CM55_MVEF_NTZ/non_secure/fiber_port_boot.c',
         'ARM_CM55_MPU/non_secure/fiber_port_boot.c','ARM_CM55F_MPU/non_secure/fiber_port_boot.c',
-        'ARM_CM55_MVEF_MPU/non_secure/fiber_port_boot.c','transitional_v8m/fiber_port_boot.c')
+        'ARM_CM55_MVEF_MPU/non_secure/fiber_port_boot.c')
     $portRoot = Join-Path $repo 'fiber/port'
     $actual = @(Get-ChildItem -LiteralPath $portRoot -File -Recurse -Filter '*.c' | Where-Object {
         (Get-Content -LiteralPath $_.FullName -Raw) -match
             '(?m)^[ \t]*void[ \t]+fiber_port_context_init[ \t]*\([^;{}]*\)\s*\{'
     } | ForEach-Object { $_.FullName.Substring($portRoot.Length+1).Replace('\','/') })
     $difference = @(Compare-Object ($expected|Sort-Object) ($actual|Sort-Object))
-    Check 'source-audit/exact-27-constructor-inventory' ($actual.Count -eq 27 -and !$difference.Count) ($difference|Out-String)
+    Check 'source-audit/exact-26-constructor-inventory' ($actual.Count -eq 26 -and !$difference.Count) ($difference|Out-String)
     $guard = '(?m)^[ \t]*FIBER_RUNTIME_PORT_ABI_RETAIN_V1[ \t]*\([ \t]*\)[ \t]*;'
     foreach ($relative in $expected) {
         $path = Join-Path $portRoot $relative
@@ -419,7 +419,7 @@ try {
         ProductionPortSourceTransformation=$false;ControlPortSourceTransformation='Exactly one current constructor RETAIN call deleted';
         GuardRemovalManifestHash=$(if(Test-Path -LiteralPath (Join-Path $out 'guard-removal.json')){
             (Get-FileHash -LiteralPath (Join-Path $out 'guard-removal.json') -Algorithm SHA256).Hash}else{''});
-        ConstructorSourceAudit=$(if($ControlOnly){'NOT_RUN'}else{'22 expected definitions; direct cold read; r9 capture order'});
+        ConstructorSourceAudit=$(if($ControlOnly){'NOT_RUN'}else{'26 concrete expected definitions; direct cold read; r9 capture order'});
         ObjectVisibilityScope='Actual CM7 constructor and direct reverse-header macro; other profile compilation belongs to aggregate';Evidence=$out} |
         ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out 'receipt.json') -Encoding ASCII
     if ($drift.Count) { throw "Input drift: $out" }

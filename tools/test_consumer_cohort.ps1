@@ -80,7 +80,7 @@ function Get-StorageIdentity {
     return $identities[0].Groups[1].Value
 }
 
-# Compile all public complete types with no CMSIS include directory, in C/C++.
+# Compile admitted concrete public types with no CMSIS include directory, in C/C++.
 # Only the selected public type directory and compiler architecture are supplied.
 $PublicProfiles = @(
     @("ARM_CM0", "cortex-m0", "ARMV6M", ""),
@@ -102,8 +102,7 @@ $PublicProfiles = @(
     @("ARM_CM55/non_secure", "cortex-m55+nomve+nofp", "ARMV81M_MAINLINE", ""),
     @("ARM_CM55_MPU/non_secure", "cortex-m55+nomve+nofp", "ARMV81M_MAINLINE", "FIBER_PORT_CM55_MPU_TOTAL_REGIONS"),
     @("ARM_CM55F_MPU/non_secure", "cortex-m55+nomve+nofp", "ARMV81M_MAINLINE", "FIBER_PORT_CM55F_MPU_TOTAL_REGIONS"),
-    @("ARM_CM55_MVEF_MPU/non_secure", "cortex-m55+nomve+nofp", "ARMV81M_MAINLINE", "FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS"),
-    @("transitional_v8m", "cortex-m33", "ARMV8M_MAINLINE", "")
+    @("ARM_CM55_MVEF_MPU/non_secure", "cortex-m55+nomve+nofp", "ARMV81M_MAINLINE", "FIBER_PORT_CM55_MVEF_MPU_TOTAL_REGIONS")
 )
 $invalidManifests = 0
 foreach ($profileInfo in $PublicProfiles) {

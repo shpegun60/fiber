@@ -2,6 +2,11 @@
 
 ## Status
 
+The current extraction scope is the
+[bounded F0/G0/G4/H7/H7S baseline](CONTEXT_REFACTOR_BASELINE.md). It supersedes
+this document's earlier universal pre-extraction completion requirement, not
+the retained catalog or per-profile evidence obligations.
+
 This document is the current planning ledger for completing the selected-port
 baseline before the Context/Fiber extraction defined in
 `CONTEXT_FIBER_ARCHITECTURE.md`.

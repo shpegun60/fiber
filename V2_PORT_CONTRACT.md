@@ -1,5 +1,11 @@
 # Fiber v2 Port Contract
 
+Current sequencing is defined by
+[`CONTEXT_REFACTOR_BASELINE.md`](CONTEXT_REFACTOR_BASELINE.md): qualify
+F0/G0/G4/H7/H7S for Context/Fiber extraction while retaining the broader feature
+backlog. The former `transitional_v8m` group is removed; older migration and
+validation records below are historical, not permission to select that runtime.
+
 ## Purpose
 
 `v2` is the branch for turning `fiber` into a FreeRTOS-style cooperative
@@ -107,8 +113,9 @@ a successful compile alone is not an acceptable parity proof.
 the selected Fiber artifact with the same compiler, CPU/FPU ABI, and
 optimization flags. Every pair is checked at both `-O2` and `-Os`. A
 difference is accepted only through a documented
-`FAP-*` rationale ID. `transitional_v8m` is excluded from production parity,
-and an incomplete profile is checked only for the mechanisms it actually owns.
+`FAP-*` rationale ID. The removed `transitional_v8m` group is not a production
+backend; its retained receipts are historical. An incomplete concrete profile
+is checked only for the mechanisms it actually owns.
 
 Selected ports are the source of CPU facts. Selected-port implementation and
 compile-time validators consume those traits; layout-free common runtime code
@@ -270,16 +277,6 @@ fiber/
         fiber_port_boot.c
         fiber_port_exception.c
         FREERTOS_PARITY.md
-    transitional_v8m/
-      fiber_port_types.h
-      fiber_port_boot_types.h
-      fiber_port_boot.h
-      fiber_portmacro.h
-      fiber_port_private.h
-      fiber_port_transitional_v8m.h
-      fiber_port_transitional_v8m.c
-      fiber_port_boot.c
-      fiber_port_exception.c
     ARM_CMxx/
       # One exact directory for each ARM_CM23, ARM_CM33, ARM_CM35P,
       # ARM_CM52, ARM_CM55, and ARM_CM85 reference profile.
@@ -317,9 +314,9 @@ runtime directory. The final tree must not implement production v8-M profiles
 through a single architecture-class folder. Shared implementations may be
 factored or mechanically synchronized, but every concrete profile keeps its
 own selected `fiber_portmacro.h`, exact build manifest, context identity,
-feature policy, and `FREERTOS_PARITY.md` ledger. The current `ARM_CM4` and
-`transitional_v8m` directories remain migration artifacts; they do not replace
-the final `ARM_CM4F`/`ARM_CM4_MPU` and exact v8-M/v8.1-M profile groups.
+feature policy, and `FREERTOS_PARITY.md` ledger. The current `ARM_CM4` remains
+the concrete classic M4/F group; the generic transitional v8-M group is removed
+and cannot substitute for an exact v8-M/v8.1-M runtime.
 
 An `_NTZ` source directory may be reused by more than one exact build profile,
 as FreeRTOS does for non-TrustZone Non-secure and selected TF-M targets. Those
@@ -457,12 +454,10 @@ must reject any nonzero public BASEPRI setting rather than silently ignoring it.
 It is not a source-revision fingerprint. Refreshed hardware evidence remains
 separate. No global selected internal-type facade is part of the frozen design.
 
-Temporary transitional fallback code is allowed only while splitting ports. It
-must live under an explicitly transitional directory such as
-`port/transitional_v8m`, be clearly marked, be compile-covered, and be tracked
-as debt. A port cannot be claimed as FreeRTOS-level while it depends on a
-transitional PendSV or frame builder. Delete this directory when concrete v8-M
-Baseline, v8-M Mainline, and ARMv8.1-M source groups replace its coverage.
+Unimplemented runtime profiles fail closed at compile time. The former generic
+transitional source group and its experimental opt-ins are removed. Deliberate
+test-only prototypes do not participate in production selection or provide a
+runtime support claim. A concrete profile must own its actual frame and handlers.
 
 The `fiber/port` helper-root convention is reserved for reusable helper code, not selected-port
 fallback behavior.
@@ -474,7 +469,7 @@ Port selection must be deterministic and auditable.
 Required rules:
 
 - support automatic selection from compiler-provided architecture macros for
-  small-library convenience;
+  unambiguous classic profiles; v8-M architecture detection is not runtime selection;
 - support explicit architecture-class selection through `FIBER_PORT_PROFILE`
   for compile tests, bring-up, and unambiguous classic profiles;
 - support build-system selected production mode through
@@ -520,16 +515,17 @@ FIBER_PORT_PROFILE_ARMV8M_MAINLINE
 FIBER_PORT_PROFILE_ARMV81M_MAINLINE
 ```
 
-Future splits may add more specific profiles, for example a Cortex-M7 r0p1
-profile or ARMv8-M Secure/Non-secure profiles, when the implementation needs a
-separate source path rather than only a policy gate.
+The v8-M/v8.1-M values remain architecture-class detection and test inputs.
+Without an exact `FIBER_PORT_BUILD_SELECTED=1` header/source manifest, they
+cannot select a runtime. Security, privilege and feature roles require their
+own concrete profile rather than an architecture-class fallback.
 
 `FIBER_PORT_SELECTION_ALLOW_MISMATCH` exists only for unusual toolchains or
 bring-up experiments where compiler architecture macros are missing or known to
 be wrong. Normal production builds should leave it disabled. The older
 `FIBER_PORT_PROFILE_ALLOW_MISMATCH` spelling is kept as a compatibility alias.
 
-`FIBER_PORT_BUILD_SELECTED` is the planned FreeRTOS-like production path. In
+`FIBER_PORT_BUILD_SELECTED` is the explicit FreeRTOS-like production path. In
 that mode the build chooses the port instead of asking `fiber_port_select.h` to
 auto-detect it:
 
@@ -652,7 +648,8 @@ Current boundary:
 
 ```text
 Port selection for STM32 Cortex-M classes:
-  implemented for auto and explicit profile modes
+  classic runtime auto/profile modes; v8-M detection without a runtime fallback
+  exact v8-M/v8.1-M runtimes require a concrete build-selected manifest
 
 Full FreeRTOS-level port behavior for every STM32 Cortex-M scenario:
   not complete yet
@@ -663,7 +660,7 @@ Backlog required before stronger parity claims:
 | Area | Current v2 status | Required future work |
 | --- | --- | --- |
 | Cortex-M7 r0p0/r0p1 | Concrete `ARM_CM7/r0p1` sources own frame/SVC/PendSV/exception mechanics and always compile the errata workaround. Runtime startup validates the M7 CPUID and immutable port trait. | Re-run current H7 validation and validate on an affected r0p0/r0p1 core before claiming hardware errata parity. |
-| ARMv8-M Baseline / M23 | Exact build-selected `ARM_CM23_NTZ/non_secure` slices 1-5 define the Non-secure PSPLIM-slot policy, sealed frame, strong SVC first start, and exact non-MPU PendSV save/select/restore plus `runtime_schedule`. Its static archive, external cohort expectation, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. Auto/profile selection remains deliberately transitional. | Validate the concrete Non-secure profile on hardware before any support claim. Secure, MPU, and companion roles remain separate profiles. |
+| ARMv8-M Baseline / M23 | Exact build-selected `ARM_CM23_NTZ/non_secure` slices 1-5 define the Non-secure PSPLIM-slot policy, sealed frame, strong SVC first start, and exact non-MPU PendSV save/select/restore plus `runtime_schedule`. Its static archive, external cohort expectation, vector, section-GC, normal/LTO, and duplicate-handler proofs pass. Architecture-only runtime selection is rejected; no transitional fallback remains. | Validate the concrete Non-secure profile on hardware before any support claim. Secure, MPU, and companion roles remain separate profiles. |
 | ARMv8-M Mainline / M33 | Exact build-selected `ARM_CM33_NTZ/non_secure` slices 1-4 freeze the privileged non-MPU/no-FPU NTZ layout and traits and implement sealed construction, strong fail-closed SVC/PendSV handlers, exact live-PSPLIM save/restore, all eight forward operations, paired generated-assembly parity, and normal/LTO archive/vector/ELF proofs. It deliberately provides no global auto-selection or hardware claim. | Validate the concrete NTZ runtime on Cortex-M33 hardware. SecureContext, TF-M, MPU, and M33F remain distinct exact profiles. |
 | ARMv8-M Mainline / M33 TF-M | Exact build-selected `ARM_CM33_TFM/non_secure` freezes distinct C3TF identity over the unchanged NTZ frame, retains the eight-operation runtime and strong handlers, and binds the pinned TF-M v2.0.0 init/mutex surface without fiber SecureContext. Independent `-O2`/`-Os` CPU parity, normal/LTO archive/vector, exact dependency, missing-interface, and exclusion proofs pass. | Validate a matching TF-M Secure image, generated veneers, concurrent PSA use, and hardware security-domain behavior. Add FPU/MPU/MVE TF-M roles only as separate exact profiles. |
 | ARMv8-M Mainline / M33F | Exact build-selected `ARM_CM33F_NTZ/non_secure` slices 1-4 freeze the FPU cohort independently from `ARM_CM33_NTZ`: FPU/compiler/CMSIS agreement, exact basic/extended EXC_RETURN set, 72-byte initial frame, 212-byte maximum, distinct `C3FN` identity, sealed construction, CPACR/FPCCR prepare/readback, strict first-start SVC, and FreeRTOS-shaped FP PendSV (`s16-s31`, ten-word PSPLIM/core frame, scheduler BASEPRI bridge, restore). Paired hard-float/softfp construction/SVC/PendSV generated-code checks plus normal/LTO archive/vector proofs retain both strong handlers in slots 11/14, all eight forward operations, and reject competing handler ownership. `FIBER_PORT_RUNTIME_SELECTABLE` is one only when this exact profile is explicitly build-selected. | Validate FPU first-start, basic/extended FP switching, vector/priority readback, and long-run stress on concrete Non-secure hardware before support. |
@@ -674,14 +671,15 @@ Backlog required before stronger parity claims:
 | ARMv8.1-M / M55F MPU | Explicit build-selected `ARM_CM55F_MPU/non_secure` slice 4 completes a separate `C55P` scalar-FP/no-MVE/no-TrustZone/no-PAC 8/16-region protected cohort from the pinned FreeRTOS MPU+FPU branch. `FiberPortProtectedContext` is the exact shared 54-word privileged backing store: basic first-start data uses words 0-20, while an extended FP save later uses words 0-53. Boot owns construction; the mandatory SVC object owns the seven remaining forward operations, public SVC #71 yield, strong SVC, and a private bundle coordinator that extracts the separate strong PendSV component. PendSV preflights before cursor access, preserves the pinned `s16-s31` and copied low-FP ordering, selects through reverse ABI v1 under BASEPRI, replaces MAIR0/context regions with PRIMASK asserted, publishes current with MPU disabled, and restores the inverse image. Separate hard/softfp `-O2`/`-Os` construction/SVC/PendSV parity plus representative archive proof under hard-float `-O2`, softfp `-Os`, and hard-float `-O2` LTO, external cohort, stale 8/16 archive, protected placement, vector, and duplicate-handler proofs pass. It deliberately has no optional MPU API, global selector route, or hardware claim. | Validate M55F MPU execution and isolation. MVE, TrustZone/SecureContext, TF-M, PAC, and BTI remain distinct profiles. |
 | ARMv8.1-M / M55 MVE-FP MPU | Explicit build-selected `ARM_CM55_MVEF_MPU/non_secure` slice 4 completes the separate `C55W` MVE-FP/no-TrustZone/no-PAC 8/16-region protected runtime from the pinned FreeRTOS MPU+FPU+MVE branch. It requires `-march=armv8.1-m.main+mve.fp`, has distinct exact MVE identity, and uses the same deliberate 54-word overlapping basic/extended protected backing image as C55P with no VPR software slot. Boot owns sealed construction; the mandatory SVC/runtime object defines the exact cohort, owns the seven remaining forward operations, public SVC #71 yield, first SVC #70, private task-return SVC #72, strong slot 11, and a private bundle coordinator that extracts the separate PendSV component. The strong slot-14 component validates before protected-cursor access, preserves `s16-s31` plus copied `s0-s15/FPSCR`, selects under BASEPRI through reverse ABI v1, replaces MAIR0/context MPU state with PRIMASK asserted, publishes common current state, and restores the inverse image. Hard/softfp `-O2`/`-Os` construction/SVC/PendSV parity, normal/LTO archive extraction, external cohort, stale 8/16 archive, placement, slots 11/14, and duplicate-handler proofs pass. It has no selector route, optional MPU API, or hardware claim. | Validate M55 MVE-FP MPU execution and isolation. Keep TrustZone/SecureContext, TF-M, PAC, and BTI separate. |
 | ARMv8.1-M / M55 MPU | Explicit build-selected `ARM_CM55_MPU/non_secure` slice 5 completes the no-FPU/no-MVE/no-TrustZone/no-PAC `C55M` 8/16-region protected context. `fiber_port_boot.c` owns sealed construction, exact RBAR/RLAR encoding, linker-boundary validation, and a four-region image; `fiber_port.c` owns the seven remaining forward operations, strong SVC/PendSV handlers, FreeRTOS-shaped first MPU activation/restore, public SVC 71 yield, and protected PendSV save/select/MAIR0-plus-context-MPU replacement/restore. PendSV preflights the live image before cursor access, calls reverse-ABI policy under BASEPRI, preserves scheduler CPU/MPU state, holds PRIMASK across the disabled-MPU interval, and publishes the selected context while MPU access is disabled. Paired `-O2`/`-Os` assembly plus normal/LTO archive, external-cohort, stale 8/16 archive, protected-placement, slot 11/14, and duplicate-SVC/PendSV proofs pass. It deliberately has no global auto/profile selector, optional heterogeneous-MPU API, or hardware claim. M55-only RLAR.PXN remains available for a future configurable-region ABI. | Validate MPU runtime and isolation. FPU, MVE, TrustZone/SecureContext, TF-M, PAC, and BTI remain separate cohorts. |
-| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, concrete CM7, M23 NTZ, M33 NTZ, M33F NTZ, M33 SecureContext, M33 TF-M, scalar M55 NTZ, scalar-FP M55 NTZ, M55 MVE-FP, M55 MPU, scalar-FP M55 MPU, and MVE-FP M55 MPU runtimes have separate source groups. `ARM_CM55/non_secure` now also has a staged full eight-operation C55S runtime source group with strong handlers, bound to its paired `ARM_CM55/secure` twelve-entry companion; runtime selection remains zero pending independent admission/freeze gates. Global v8-M auto/profile routing and unported M55/security roles still use `transitional_v8m`. | Replace remaining transitional v8-M roles with one concrete runtime source group per runtime-image security/profile ABI, binding its identity-matched Secure artifact or TF-M component where required. |
+| Source layout | ARMv6-M, ARMv7-M, Cortex-M4 ARMv7E-M, concrete CM7, M23 NTZ, M33 NTZ, M33F NTZ, M33 SecureContext, M33 TF-M, scalar M55 NTZ, scalar-FP M55 NTZ, M55 MVE-FP, M55 MPU, scalar-FP M55 MPU, and MVE-FP M55 MPU runtimes have separate source groups. `ARM_CM55/non_secure` now also has a staged full eight-operation C55S runtime source group with strong handlers, bound to its paired `ARM_CM55/secure` twelve-entry companion; runtime selection remains zero pending independent admission/freeze gates. v8-M runtime selection without an exact build-selected manifest is an error; removed transitional sources cannot supply unported roles. | Retain remaining feature roles in the backlog and implement each as a concrete runtime-image security/profile ABI, binding its matching Secure artifact or TF-M component where required. They do not block the bounded baseline merely by remaining unimplemented. |
 | Hardware evidence | H7/M7 has the strongest historical hardware evidence, but the latest mandatory-validation hardening is pending a fresh board run. Other profiles are unsupported unless separately ported and recorded. | Promote each profile only after board-level smoke/runtime/FPU/security/performance validation as appropriate. |
 
 Do not describe a profile as FreeRTOS-level only because it has selection logic.
 Every runtime-selected profile has compile/link-covered SVC/PendSV symbols;
 the concrete M33 NTZ profile now has the same software-side proof boundary but
 remains build-selected and hardware-unvalidated.
-Transitional v8-M runtime remains fail-closed without explicit bring-up opt-in.
+The transitional v8-M runtime is removed. Former runtime/security opt-in macros
+are compile errors whenever defined, including when their value is zero.
 Passing compile checks does not prove exception return,
 security-domain behavior, FPU/MVE context behavior, or
 real interrupt-mask timing on hardware.
@@ -1416,11 +1414,11 @@ Required gates:
 Current v2 policy:
 
 - `FIBER_PORT_USES_PSPLIM_REGISTER` is the actual PSPLIM access gate.
-- ARMv8-M Baseline/Mainline, ARMv8.1-M, TrustZone/Non-secure bank targeting,
-  MVE, and PAC/BTI runtime use is blocked by default unless the matching
-  `FIBER_ALLOW_UNVALIDATED_*` opt-in is set for bring-up.
-- The opt-in only allows experiments; it does not add the FreeRTOS-style
-  CONTROL/PSPLIM/secure-context/PAC-key context slots.
+- ARMv8-M/v8.1-M runtime use requires an exact build-selected concrete profile
+  whose manifest owns security-domain, PSPLIM, FP/MVE and applicable PAC/BTI state.
+- The former `FIBER_ALLOW_UNVALIDATED_*`, transitional bank-targeting and
+  `FIBER_TZ_NS` switches are retired, including definitions with value zero.
+  They cannot supply missing state slots or bypass concrete-profile admission.
 
 ARMv8-M support claims must name the exact domain:
 
@@ -1533,10 +1531,9 @@ that feature profile.
 Minimum evidence for stronger labels:
 
 - `compile-only`: compile matrix entry, target flags, and warnings recorded;
-- `security-compile-only`: ARMv8-M/ARMv8.1-M
-  `FIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1` and Secure-to-Non-secure bank
-  scenarios compile with the selected toolchain, without claiming runtime
-  security-domain behavior;
+- `security-compile-only`: an exact build-selected ARMv8-M/ARMv8.1-M security
+  profile and its required companion artifacts compile with the recorded
+  toolchain/manifest, without claiming runtime security-domain behavior;
 - `smoke-tested`: board name, core, clock/config summary, and basic switch proof
   recorded;
 - `runtime-validated`: long run counters, current tracking, scheduler hook
@@ -1549,6 +1546,10 @@ Minimum evidence for stronger labels:
   threshold, and failure state recorded.
 
 ## v2 Initial Milestones
+
+This is the historical migration sequence, not the current source inventory.
+References below to transitional paths or opt-ins describe those checkpoints;
+the fallback is now removed and those settings cannot select a runtime.
 
 1. Create this contract on the `v2` branch.
 2. Add deterministic port-selection and feature-normalization headers.
@@ -1565,9 +1566,9 @@ Minimum evidence for stronger labels:
 9. Validate the SVC start path on STM32H7 after every behavior change.
 10. Split ARMv6-M and ARMv7-M support from the transitional fallback path.
     Done for Cortex-M0/M0+ and Cortex-M3 source layouts, including SVC
-    first-start. Remaining v8-M code lives under `port/transitional_v8m`, not
-    `fiber_core.c`, and must be split into concrete v8-M ports before support
-    claims are upgraded.
+    first-start. At that checkpoint, remaining v8-M code lived under
+    `port/transitional_v8m`, not `fiber_core.c`, pending concrete v8-M ports.
+    That fallback has since been removed, not promoted to a production backend.
 11. Add conservative ARMv8-M/ARMv8.1-M feature policy gates. Done for compile
     selection, PSPLIM register access, MVE, TrustZone opt-in, and PAC/BTI
     rejection.

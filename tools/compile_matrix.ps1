@@ -534,8 +534,7 @@ function Test-ContextPortBoundary {
         "fiber\port\ARM_CM0\fiber_port.c",
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
-        "fiber\port\ARM_CM7\r0p1\fiber_port.c",
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+        "fiber\port\ARM_CM7\r0p1\fiber_port.c"
     )
     $slotOwnerSources = @($portSources) + @(
         "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
@@ -751,10 +750,8 @@ function Test-ContextPortBoundary {
             "FIBER_REQUIRE($ipsrRead == 0u, 'i');",
             "fiber_internal_runtime_require_current_context();"
         )
-        if ($relativePath -notmatch 'transitional_v8m') {
-            $scheduleSteps +=
-                "FIBER_REQUIRE(($controlRead & 3u) == 2u, 'l');"
-        }
+        $scheduleSteps +=
+            "FIBER_REQUIRE(($controlRead & 3u) == 2u, 'l');"
         $scheduleSteps += "FIBER_REQUIRE($primaskRead == 0u, 'p');"
         $lastScheduleIndex = -1
         foreach ($step in $scheduleSteps) {
@@ -790,18 +787,16 @@ function Test-ContextPortBoundary {
             throw "Schedule adapter must issue exactly one request after all validation: $path"
         }
 
-        if ($relativePath -notmatch 'transitional_v8m') {
-            $exceptionPath = Join-Path (Split-Path -Parent $path) `
-                "fiber_port_exception.c"
-            $exceptionSource = Get-Content -LiteralPath $exceptionPath -Raw
-            if ($exceptionSource -match '\(rd\s*&\s*lowest\)\s*==\s*lowest') {
-                throw "Selected port still accepts a masked-only PendSV priority readback: $exceptionPath"
-            }
-            $exactPriorityChecks = [regex]::Matches($exceptionSource,
-                "FIBER_REQUIRE\(rd == lowest, 'P'\);")
-            if ($exactPriorityChecks.Count -ne 2) {
-                throw "Selected port must verify exact PendSV priority during setup and runtime: $exceptionPath"
-            }
+        $exceptionPath = Join-Path (Split-Path -Parent $path) `
+            "fiber_port_exception.c"
+        $exceptionSource = Get-Content -LiteralPath $exceptionPath -Raw
+        if ($exceptionSource -match '\(rd\s*&\s*lowest\)\s*==\s*lowest') {
+            throw "Selected port still accepts a masked-only PendSV priority readback: $exceptionPath"
+        }
+        $exactPriorityChecks = [regex]::Matches($exceptionSource,
+            "FIBER_REQUIRE\(rd == lowest, 'P'\);")
+        if ($exactPriorityChecks.Count -ne 2) {
+            throw "Selected port must verify exact PendSV priority during setup and runtime: $exceptionPath"
         }
     }
 }
@@ -813,8 +808,7 @@ function Test-SelectedPortPrivateDeclarations {
         "fiber\port\ARM_CM0\fiber_port_private.h",
         "fiber\port\ARM_CM3\fiber_port_private.h",
         "fiber\port\ARM_CM4\fiber_port_private.h",
-        "fiber\port\ARM_CM7\r0p1\fiber_port_private.h",
-        "fiber\port\transitional_v8m\fiber_port_private.h"
+        "fiber\port\ARM_CM7\r0p1\fiber_port_private.h"
     )
     $requiredPrivateSymbols = @(
         "fiber_port_init_context_frame",
@@ -861,10 +855,7 @@ function Test-SelectedPortPrivateDeclarations {
         "fiber\port\ARM_CM4\fiber_port_exception.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
-        "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c",
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_exception.c"
+        "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c"
     )
     foreach ($relativePath in $implementationSources) {
         $path = Join-Path $RepositoryRoot $relativePath
@@ -883,10 +874,7 @@ function Test-SelectedPortPrivateDeclarations {
         "fiber\port\ARM_CM4\fiber_portmacro.h",
         "fiber\port\ARM_CM4\fiber_port_boot.h",
         "fiber\port\ARM_CM7\r0p1\fiber_portmacro.h",
-        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.h",
-        "fiber\port\transitional_v8m\fiber_portmacro.h",
-        "fiber\port\transitional_v8m\fiber_port_boot.h",
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.h"
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.h"
     )
     foreach ($relativePath in $legacyDeclarationHeaders) {
         $path = Join-Path $RepositoryRoot $relativePath
@@ -911,8 +899,7 @@ function Test-SelectedPortIntegrityPreflight {
         "fiber\port\ARM_CM0\fiber_port_boot.c",
         "fiber\port\ARM_CM3\fiber_port_boot.c",
         "fiber\port\ARM_CM4\fiber_port_boot.c",
-        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c"
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c"
     )
 
     foreach ($relativePath in $bootSources) {
@@ -1067,8 +1054,7 @@ function Test-SelectedPortExceptionFrameGeometry {
         "fiber\port\ARM_CM0\fiber_port_boot.c",
         "fiber\port\ARM_CM3\fiber_port_boot.c",
         "fiber\port\ARM_CM4\fiber_port_boot.c",
-        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c"
+        "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c"
     )
 
     foreach ($relativePath in $bootSources) {
@@ -1257,8 +1243,7 @@ function Test-PendSvSaveValidationOrdering {
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
-        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c"
     )
 
     foreach ($relativePath in $portSources) {
@@ -1335,8 +1320,7 @@ function Test-ScheduleValidationOwnership {
         "fiber\port\ARM_CM3\fiber_port.c",
         "fiber\port\ARM_CM4\fiber_port.c",
         "fiber\port\ARM_CM7\r0p1\fiber_port.c",
-        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+        "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c"
     )
 
     foreach ($relativePath in $portSources) {
@@ -1652,6 +1636,8 @@ function Invoke-CompilerProbe {
         [string]$LogPath
     )
 
+    [ordered]@{ Compiler = $Compiler; Arguments = $Arguments } |
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath ($LogPath + ".command.json") -Encoding ASCII
     $previousErrorAction = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
@@ -2142,8 +2128,7 @@ function Test-StrongHandlerSourceOwnership {
         [pscustomobject]@{ Source = "fiber\port\ARM_CM0\fiber_port.c"; Private = "fiber\port\ARM_CM0\fiber_port_private.h"; Exception = "fiber\port\ARM_CM0\fiber_port_exception.c"; Macro = "fiber\port\ARM_CM0\fiber_portmacro.h" },
         [pscustomobject]@{ Source = "fiber\port\ARM_CM3\fiber_port.c"; Private = "fiber\port\ARM_CM3\fiber_port_private.h"; Exception = "fiber\port\ARM_CM3\fiber_port_exception.c"; Macro = "fiber\port\ARM_CM3\fiber_portmacro.h" },
         [pscustomobject]@{ Source = "fiber\port\ARM_CM4\fiber_port.c"; Private = "fiber\port\ARM_CM4\fiber_port_private.h"; Exception = "fiber\port\ARM_CM4\fiber_port_exception.c"; Macro = "fiber\port\ARM_CM4\fiber_portmacro.h" },
-        [pscustomobject]@{ Source = "fiber\port\ARM_CM7\r0p1\fiber_port.c"; Private = "fiber\port\ARM_CM7\r0p1\fiber_port_private.h"; Exception = "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c"; Macro = "fiber\port\ARM_CM7\r0p1\fiber_portmacro.h" },
-        [pscustomobject]@{ Source = "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"; Private = "fiber\port\transitional_v8m\fiber_port_private.h"; Exception = "fiber\port\transitional_v8m\fiber_port_exception.c"; Macro = "fiber\port\transitional_v8m\fiber_portmacro.h" }
+        [pscustomobject]@{ Source = "fiber\port\ARM_CM7\r0p1\fiber_port.c"; Private = "fiber\port\ARM_CM7\r0p1\fiber_port_private.h"; Exception = "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c"; Macro = "fiber\port\ARM_CM7\r0p1\fiber_portmacro.h" }
     )
 
     foreach ($port in $ports) {
@@ -2786,8 +2771,8 @@ SECTIONS
 #define __VTOR_PRESENT 1U
 #define __NVIC_PRIO_BITS 4U
 #define __Vendor_SysTickConfig 0U
-#define __FPU_PRESENT 0U
-#define __FPU_USED 0U
+#define __FPU_PRESENT 1U
+#define __FPU_USED 1U
 #define __DSP_PRESENT 1U
 #define __SAUREGION_PRESENT 0U
 #define __ICACHE_PRESENT 0U
@@ -2799,7 +2784,7 @@ typedef enum IRQn {
     SVCall_IRQn = -5, DebugMonitor_IRQn = -4,
     PendSV_IRQn = -2, SysTick_IRQn = -1, DummyDevice_IRQn = 0
 } IRQn_Type;
-#include "core_cm33.h"
+#include "core_cm55.h"
 #endif
 "@
     $commonSources = @(
@@ -2808,9 +2793,9 @@ typedef enum IRQn {
         "fiber\fiber_panic.c"
     )
     $portSources = @{
-        Runtime = "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
-        Boot = "fiber\port\transitional_v8m\fiber_port_boot.c"
-        Exception = "fiber\port\transitional_v8m\fiber_port_exception.c"
+        Runtime = "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c"
+        Boot = "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_boot.c"
+        Svc = "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_svc.c"
     }
     $portableSource = "tools\fixtures\portable_application.c"
     $expectationSource =
@@ -2824,8 +2809,8 @@ typedef enum IRQn {
         "-mgeneral-regs-only"
     )
     $variants = @(
-        [pscustomobject]@{ Name = "secure"; Nonsecure = 0 },
-        [pscustomobject]@{ Name = "nonsecure"; Nonsecure = 1 }
+        [pscustomobject]@{ Name = "basepri16"; Basepri = 16 },
+        [pscustomobject]@{ Name = "basepri32"; Basepri = 32 }
     )
 
     foreach ($useLto in @($false, $true)) {
@@ -2844,8 +2829,10 @@ typedef enum IRQn {
         $ltoArgs = if ($useLto) { @("-flto") } else { @() }
         $objectNm = if ($useLto) { $GccNm } else { $Nm }
         $baseArgs = @(
-            "-mcpu=cortex-m33",
+            "-mcpu=cortex-m55+nomve",
             "-mthumb",
+            "-mfpu=fpv5-d16",
+            "-mfloat-abi=hard",
             "-Os",
             "-std=gnu11",
             "-ffreestanding",
@@ -2862,9 +2849,10 @@ typedef enum IRQn {
         ) + $ltoArgs
 
         $startupObject = Join-Path $probeDir "startup.o"
-        & $Compiler @($baseArgs + @(
-            "-c", $startupPath, "-o", $startupObject))
-        if ($LASTEXITCODE -ne 0) {
+        $result = Invoke-CompilerProbe -Compiler $Compiler `
+            -Arguments ($baseArgs + @("-c", $startupPath, "-o", $startupObject)) `
+            -LogPath (Join-Path $probeDir "startup.log")
+        if ($result.ExitCode -ne 0) {
             throw "Context-cohort startup fixture compile failed ($mode)"
         }
 
@@ -2872,10 +2860,10 @@ typedef enum IRQn {
         foreach ($source in $commonSources) {
             $object = Join-Path $probeDir `
                 (($source -replace '[\\/]', '_') + ".o")
-            & $Compiler @($baseArgs + @(
-                "-c", (Join-Path $RepositoryRoot $source),
-                "-o", $object))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($baseArgs + @("-c", (Join-Path $RepositoryRoot $source), "-o", $object)) `
+                -LogPath ($object + ".log")
+            if ($result.ExitCode -ne 0) {
                 throw "Context-cohort common compile failed ($mode): $source"
             }
             $commonObjects += $object
@@ -2887,50 +2875,57 @@ typedef enum IRQn {
             New-Item -ItemType Directory -Path $variantDir | Out-Null
             $variantArgs = $baseArgs + @(
                 "-DFIBER_PORT_BUILD_SELECTED=1",
-                "-DFIBER_PORT_ARMV8M_MAINLINE=1",
-                "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=$($variant.Nonsecure)",
-                "-DFIBER_ALLOW_UNVALIDATED_ARMV8M_MAINLINE_RUNTIME=1",
-                "-DFIBER_ALLOW_UNVALIDATED_TRUSTZONE_RUNTIME=1",
-                "-I$(Join-Path $RepositoryRoot 'fiber\port\transitional_v8m')"
+                "-DFIBER_PORT_ARMV81M_MAINLINE=1",
+                "-DFIBER_SCHEDULER_BASEPRI=$($variant.Basepri)",
+                "-I$(Join-Path $RepositoryRoot 'fiber\port\ARM_CM55F_NTZ\non_secure')"
             )
             $objects = @{}
             foreach ($role in $portSources.Keys) {
                 $source = $portSources[$role]
                 $object = Join-Path $variantDir `
                     (($source -replace '[\\/]', '_') + ".o")
-                & $Compiler @($variantArgs + $portCounterFlags + @(
-                    "-c", (Join-Path $RepositoryRoot $source),
-                    "-o", $object))
-                if ($LASTEXITCODE -ne 0) {
+                $result = Invoke-CompilerProbe -Compiler $Compiler `
+                    -Arguments ($variantArgs + $portCounterFlags + @(
+                        "-c", (Join-Path $RepositoryRoot $source), "-o", $object)) `
+                    -LogPath ($object + ".log")
+                if ($result.ExitCode -ne 0) {
                     throw "Context-cohort $($variant.Name) port compile failed ($mode): $source"
                 }
                 $objects[$role] = $object
             }
 
             $portableObject = Join-Path $variantDir "portable-application.o"
-            & $Compiler @($variantArgs + @(
-                "-c", (Join-Path $RepositoryRoot $portableSource),
-                "-o", $portableObject))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($variantArgs + @("-c", (Join-Path $RepositoryRoot $portableSource), "-o", $portableObject)) `
+                -LogPath (Join-Path $variantDir "portable.log")
+            if ($result.ExitCode -ne 0) {
                 throw "Context-cohort portable application compile failed ($mode / $($variant.Name))"
             }
 
             $expectationObject = Join-Path $variantDir "expectation.o"
-            & $Compiler @($variantArgs + @(
-                "-c", (Join-Path $RepositoryRoot $expectationSource),
-                "-o", $expectationObject))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($variantArgs + @("-c", (Join-Path $RepositoryRoot $expectationSource), "-o", $expectationObject)) `
+                -LogPath (Join-Path $variantDir "expectation.log")
+            if ($result.ExitCode -ne 0) {
                 throw "Context-cohort expectation compile failed ($mode / $($variant.Name))"
             }
 
-            $defined = @(& $objectNm -g --defined-only $objects.Runtime)
+            $result = Invoke-CompilerProbe -Compiler $objectNm `
+                -Arguments @("-g", "--defined-only", $objects.Boot) `
+                -LogPath (Join-Path $variantDir "provider-nm.log")
+            if ($result.ExitCode -ne 0) { throw "Context-cohort provider symbol scan failed ($mode)" }
+            $defined = @($result.Output -split '\r?\n')
             $cohortDefinitions = @($defined | ForEach-Object {
                 if ($_ -match
                         '\s[DR]\s+(fiber_port_context_cohort_\S+)$') {
                     $Matches[1]
                 }
             })
-            $undefined = @(& $objectNm -u $expectationObject)
+            $result = Invoke-CompilerProbe -Compiler $objectNm `
+                -Arguments @("-u", $expectationObject) `
+                -LogPath (Join-Path $variantDir "expectation-nm.log")
+            if ($result.ExitCode -ne 0) { throw "Context-cohort expectation symbol scan failed ($mode)" }
+            $undefined = @($result.Output -split '\r?\n')
             $cohortExpectations = @($undefined | ForEach-Object {
                 if ($_ -match
                         '\bU\s+(fiber_port_context_cohort_\S+)$') {
@@ -2949,13 +2944,15 @@ typedef enum IRQn {
             $compiled[$variant.Name] = $objects
         }
 
-        if ($compiled.secure.Cohort -eq $compiled.nonsecure.Cohort) {
-            throw "Secure and Non-secure transitional profiles must have distinct exact cohort symbols ($mode)"
+        if ($compiled.basepri16.Cohort -eq $compiled.basepri32.Cohort) {
+            throw "M55F BASEPRI 16/32 policies must have distinct exact cohort symbols ($mode)"
         }
 
         $linkBase = @(
-            "-mcpu=cortex-m33",
-            "-mthumb"
+            "-mcpu=cortex-m55+nomve",
+            "-mthumb",
+            "-mfpu=fpv5-d16",
+            "-mfloat-abi=hard"
         ) + $ltoArgs + @(
             "-nostdlib",
             "-Wl,--gc-sections",
@@ -2967,39 +2964,42 @@ typedef enum IRQn {
             $objects = $compiled[$variant.Name]
             $archivePath = Join-Path $probeDir `
                 "positive-$($variant.Name).a"
-            & $Ar rcs $archivePath @($commonObjects + @(
-                $objects.Runtime, $objects.Boot, $objects.Exception))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Ar `
+                -Arguments (@("rcs", $archivePath) + $commonObjects + @(
+                    $objects.Runtime, $objects.Boot, $objects.Svc)) `
+                -LogPath ($archivePath + ".log")
+            if ($result.ExitCode -ne 0) {
                 throw "Context-cohort positive archive creation failed ($mode / $($variant.Name))"
             }
-            & $Compiler @($linkBase + @(
-                $objects.Portable,
-                $objects.Expectation,
-                $archivePath,
-                "-o", (Join-Path $probeDir `
-                    "positive-$($variant.Name).elf")))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Compiler `
+                -Arguments ($linkBase + @($objects.Portable,
+                    $objects.Expectation, $archivePath, "-o",
+                    (Join-Path $probeDir "positive-$($variant.Name).elf"))) `
+                -LogPath (Join-Path $probeDir "positive-$($variant.Name).log")
+            if ($result.ExitCode -ne 0) {
                 throw "Matching real selected-port cohort failed link ($mode / $($variant.Name))"
             }
         }
 
         $negativeCases = @(
-            [pscustomobject]@{ Name = "stale-runtime-secure"; Runtime = "secure"; Boot = "nonsecure"; Exception = "nonsecure"; Expected = "nonsecure"; Missing = "nonsecure" },
-            [pscustomobject]@{ Name = "stale-boot-secure"; Runtime = "nonsecure"; Boot = "secure"; Exception = "nonsecure"; Expected = "nonsecure"; Missing = "secure" },
-            [pscustomobject]@{ Name = "stale-exception-secure"; Runtime = "nonsecure"; Boot = "nonsecure"; Exception = "secure"; Expected = "nonsecure"; Missing = "secure" },
-            [pscustomobject]@{ Name = "stale-complete-secure"; Runtime = "secure"; Boot = "secure"; Exception = "secure"; Expected = "nonsecure"; Missing = "nonsecure" },
-            [pscustomobject]@{ Name = "stale-runtime-nonsecure"; Runtime = "nonsecure"; Boot = "secure"; Exception = "secure"; Expected = "secure"; Missing = "secure" },
-            [pscustomobject]@{ Name = "stale-boot-nonsecure"; Runtime = "secure"; Boot = "nonsecure"; Exception = "secure"; Expected = "secure"; Missing = "nonsecure" },
-            [pscustomobject]@{ Name = "stale-exception-nonsecure"; Runtime = "secure"; Boot = "secure"; Exception = "nonsecure"; Expected = "secure"; Missing = "nonsecure" },
-            [pscustomobject]@{ Name = "stale-complete-nonsecure"; Runtime = "nonsecure"; Boot = "nonsecure"; Exception = "nonsecure"; Expected = "secure"; Missing = "secure" }
+            [pscustomobject]@{ Name = "stale-runtime-basepri16"; Runtime = "basepri16"; Boot = "basepri32"; Svc = "basepri32"; Expected = "basepri32"; Missing = "basepri16" },
+            [pscustomobject]@{ Name = "stale-boot-basepri16"; Runtime = "basepri32"; Boot = "basepri16"; Svc = "basepri32"; Expected = "basepri32"; Missing = "basepri32" },
+            [pscustomobject]@{ Name = "stale-svc-basepri16"; Runtime = "basepri32"; Boot = "basepri32"; Svc = "basepri16"; Expected = "basepri32"; Missing = "basepri16" },
+            [pscustomobject]@{ Name = "stale-complete-basepri16"; Runtime = "basepri16"; Boot = "basepri16"; Svc = "basepri16"; Expected = "basepri32"; Missing = "basepri32" },
+            [pscustomobject]@{ Name = "stale-runtime-basepri32"; Runtime = "basepri32"; Boot = "basepri16"; Svc = "basepri16"; Expected = "basepri16"; Missing = "basepri32" },
+            [pscustomobject]@{ Name = "stale-boot-basepri32"; Runtime = "basepri16"; Boot = "basepri32"; Svc = "basepri16"; Expected = "basepri16"; Missing = "basepri16" },
+            [pscustomobject]@{ Name = "stale-svc-basepri32"; Runtime = "basepri16"; Boot = "basepri16"; Svc = "basepri32"; Expected = "basepri16"; Missing = "basepri32" },
+            [pscustomobject]@{ Name = "stale-complete-basepri32"; Runtime = "basepri32"; Boot = "basepri32"; Svc = "basepri32"; Expected = "basepri16"; Missing = "basepri16" }
         )
         foreach ($case in $negativeCases) {
             $archivePath = Join-Path $probeDir ($case.Name + ".a")
-            & $Ar rcs $archivePath @($commonObjects + @(
-                $compiled[$case.Runtime].Runtime,
-                $compiled[$case.Boot].Boot,
-                $compiled[$case.Exception].Exception))
-            if ($LASTEXITCODE -ne 0) {
+            $result = Invoke-CompilerProbe -Compiler $Ar `
+                -Arguments (@("rcs", $archivePath) + $commonObjects + @(
+                    $compiled[$case.Runtime].Runtime,
+                    $compiled[$case.Boot].Boot,
+                    $compiled[$case.Svc].Svc)) `
+                -LogPath ($archivePath + ".log")
+            if ($result.ExitCode -ne 0) {
                 throw "Context-cohort stale archive creation failed ($mode / $($case.Name))"
             }
 
@@ -3018,6 +3018,60 @@ typedef enum IRQn {
                     [regex]::Escape($missingSymbol))) {
                 throw "Stale selected-port object cohort must fail on $missingSymbol ($mode / $($case.Name)).`n$($result.Output)"
             }
+        }
+    }
+}
+
+function Test-V8MatrixSelection {
+    param(
+        [string]$Compiler,
+        [string[]]$CpuArguments,
+        [string[]]$IncludeArguments,
+        [string]$CompilerOnlyPortMacro,
+        [string]$ArchitectureProfile,
+        [string]$ProbeDirectory
+    )
+
+    $selectorPath = Join-Path $ProbeDirectory "selector-only.c"
+    $publicPath = Join-Path $ProbeDirectory "unselected-public.c"
+    $selectorSource = @"
+#include "fiber/port/fiber_port_select.h"
+_Static_assert($CompilerOnlyPortMacro == 1,
+    "[fiber matrix]: compiler-only architecture detection changed");
+"@
+    Set-Content -LiteralPath $selectorPath -Value $selectorSource -Encoding ASCII
+    Set-Content -LiteralPath $publicPath -Encoding ASCII -Value @'
+#include "main.h"
+#include "fiber/fiber_core.h"
+FiberContext unselected_public_context;
+'@
+    $forceMacro = $ArchitectureProfile -replace '^FIBER_PORT_PROFILE_', 'FIBER_FORCE_PORT_'
+    $diagnostic = "ARMv8-M requires a concrete build-selected port"
+    $cases = @(
+        [pscustomobject]@{ Name = "selector-only"; Source = $selectorPath; Defines = @(); Diagnostic = "" },
+        [pscustomobject]@{ Name = "auto-public"; Source = $publicPath; Defines = @(); Diagnostic = $diagnostic },
+        [pscustomobject]@{ Name = "explicit-public"; Source = $publicPath; Defines = @("-DFIBER_PORT_PROFILE=$ArchitectureProfile"); Diagnostic = $diagnostic },
+        [pscustomobject]@{ Name = "force-public"; Source = $publicPath; Defines = @("-D$forceMacro=1"); Diagnostic = $diagnostic },
+        [pscustomobject]@{ Name = "profile-mismatch-public"; Source = $publicPath; Defines = @("-DFIBER_PORT_PROFILE=$ArchitectureProfile", "-DFIBER_PORT_PROFILE_ALLOW_MISMATCH=1"); Diagnostic = $diagnostic },
+        [pscustomobject]@{ Name = "selection-mismatch-public"; Source = $publicPath; Defines = @("-DFIBER_PORT_PROFILE=$ArchitectureProfile", "-DFIBER_PORT_SELECTION_ALLOW_MISMATCH=1"); Diagnostic = $diagnostic }
+    )
+    foreach ($case in $cases) {
+        $arguments = $CpuArguments + @("-mthumb", "-std=c11",
+            "-ffreestanding", "-Werror", "-fsyntax-only") +
+            $IncludeArguments + $case.Defines + @($case.Source)
+        [ordered]@{ Compiler = $Compiler; Arguments = $arguments } |
+            ConvertTo-Json -Depth 4 -Compress |
+            Add-Content -LiteralPath (Join-Path $ProbeDirectory "selection-commands.jsonl") -Encoding ASCII
+        $result = Invoke-CompilerProbe -Compiler $Compiler -Arguments $arguments `
+            -LogPath (Join-Path $ProbeDirectory ($case.Name + ".log"))
+        if ($case.Diagnostic) {
+            if (($result.ExitCode -eq 0) -or
+                    ($result.Output -notmatch [regex]::Escape($case.Diagnostic))) {
+                throw "V8 matrix public selection must fail on its concrete-selection diagnostic ($($case.Name)).`n$($result.Output)"
+            }
+        }
+        elseif ($result.ExitCode -ne 0) {
+            throw "V8 matrix selector-only detection failed.`n$($result.Output)"
         }
     }
 }
@@ -21962,9 +22016,6 @@ $selectorPortSources = @(
     "fiber\port\ARM_CM7\r0p1\fiber_port.c",
     "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c",
     "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c",
-    "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
-    "fiber\port\transitional_v8m\fiber_port_boot.c",
-    "fiber\port\transitional_v8m\fiber_port_exception.c",
     "fiber\port\ARM_CM0\fiber_port.c",
     "fiber\port\ARM_CM0\fiber_port_boot.c",
     "fiber\port\ARM_CM0\fiber_port_exception.c",
@@ -21976,29 +22027,6 @@ $selectorPortSources = @(
     "fiber\port\ARM_CM4\fiber_port_exception.c"
 )
 
-# Generic Cortex-M55 selector coverage must compile only the selected v8-M
-# fallback group. Concrete ARM_CM7 sources include CMSIS before the selector;
-# that injects __CORTEX_M == 55 and deliberately upgrades detection to v8.1-M.
-# It is not the source group selected by a plain -mcpu=cortex-m55 build, whose
-# compiler-only predefines may still report ARMv8-M Mainline.
-$selectorPortSourcesByConfig = @{
-    "cortex-m55" = @(
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_exception.c"
-    )
-    "cortex-m55f" = @(
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_exception.c"
-    )
-    "cortex-m55-mve-fp" = @(
-        "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c",
-        "fiber\port\transitional_v8m\fiber_port_boot.c",
-        "fiber\port\transitional_v8m\fiber_port_exception.c"
-    )
-}
-
 $mandatoryPortRuntimeSources = @(
     "fiber\port\ARM_CM0\fiber_port.c",
     "fiber\port\ARM_CM3\fiber_port.c",
@@ -22006,8 +22034,13 @@ $mandatoryPortRuntimeSources = @(
     "fiber\port\ARM_CM7\r0p1\fiber_port.c",
     "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c",
     "fiber\port\ARM_CM33_NTZ\non_secure\fiber_port.c",
-    "fiber\port\ARM_CM33_TFM\non_secure\fiber_port.c",
-    "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"
+    "fiber\port\ARM_CM33F_NTZ\non_secure\fiber_port.c",
+    "fiber\port\ARM_CM55_NTZ\non_secure\fiber_port.c",
+    "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c",
+    "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_svc.c",
+    "fiber\port\ARM_CM55_MVEF_NTZ\non_secure\fiber_port.c",
+    "fiber\port\ARM_CM55_MVEF_NTZ\non_secure\fiber_port_svc.c",
+    "fiber\port\ARM_CM33_TFM\non_secure\fiber_port.c"
 )
 
 $configs = @(
@@ -22026,8 +22059,8 @@ $configs = @(
     [pscustomobject]@{ Name = "cortex-m23";         CpuArgs = @("-mcpu=cortex-m23");             Core = "core_cm23.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 0; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m33";         CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
     [pscustomobject]@{ Name = "cortex-m33f";        CpuArgs = @("-mcpu=cortex-m33");             Core = "core_cm33.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
-    [pscustomobject]@{ Name = "cortex-m55";         CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @() },
-    [pscustomobject]@{ Name = "cortex-m55f";        CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-sp-d16", "-mfloat-abi=hard") },
+    [pscustomobject]@{ Name = "cortex-m55";         CpuArgs = @("-mcpu=cortex-m55");             Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 0; FpuUsed = 0; DspPresent = 1; Extra = @("-mfloat-abi=soft") },
+    [pscustomobject]@{ Name = "cortex-m55f";        CpuArgs = @("-mcpu=cortex-m55+nomve");       Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfpu=fpv5-d16", "-mfloat-abi=hard") },
     [pscustomobject]@{ Name = "cortex-m55-mve-fp";  CpuArgs = @("-march=armv8.1-m.main+mve.fp"); Core = "core_cm55.h";    PriorityBits = 4; VtorPresent = 1; FpuPresent = 1; FpuUsed = 1; DspPresent = 1; Extra = @("-mfloat-abi=hard") }
 )
 
@@ -22047,11 +22080,7 @@ $portProfiles = @{
     "cortex-m23"        = "FIBER_PORT_PROFILE_ARMV8M_BASELINE"
     "cortex-m33"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
     "cortex-m33f"       = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
-    # GCC may expose plain -mcpu=cortex-m55 as ARMv8-M Mainline before a
-    # selected port includes CMSIS. The generic selector test intentionally
-    # covers that compiler-only result; concrete M55 ports use build-selected
-    # ARMv8.1-M contracts instead.
-    "cortex-m55"        = "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"
+    "cortex-m55"        = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
     "cortex-m55f"       = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
     "cortex-m55-mve-fp" = "FIBER_PORT_PROFILE_ARMV81M_MAINLINE"
 }
@@ -22069,18 +22098,12 @@ $portIncludeDirs = @{
     "FIBER_PORT_PROFILE_ARMV6M"           = "fiber\port\ARM_CM0"
     "FIBER_PORT_PROFILE_ARMV7M"           = "fiber\port\ARM_CM3"
     "FIBER_PORT_PROFILE_ARMV7EM"          = "fiber\port\ARM_CM4"
-    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = "fiber\port\transitional_v8m"
-    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = "fiber\port\transitional_v8m"
-    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = "fiber\port\transitional_v8m"
 }
 
 $buildSelectedPortSourcesByProfile = @{
     "FIBER_PORT_PROFILE_ARMV6M"           = @("fiber\port\ARM_CM0\fiber_port.c", "fiber\port\ARM_CM0\fiber_port_boot.c", "fiber\port\ARM_CM0\fiber_port_exception.c")
     "FIBER_PORT_PROFILE_ARMV7M"           = @("fiber\port\ARM_CM3\fiber_port.c", "fiber\port\ARM_CM3\fiber_port_boot.c", "fiber\port\ARM_CM3\fiber_port_exception.c")
     "FIBER_PORT_PROFILE_ARMV7EM"          = @("fiber\port\ARM_CM4\fiber_port.c", "fiber\port\ARM_CM4\fiber_port_boot.c", "fiber\port\ARM_CM4\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV8M_BASELINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV8M_MAINLINE"  = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
-    "FIBER_PORT_PROFILE_ARMV81M_MAINLINE" = @("fiber\port\transitional_v8m\fiber_port_transitional_v8m.c", "fiber\port\transitional_v8m\fiber_port_boot.c", "fiber\port\transitional_v8m\fiber_port_exception.c")
 }
 
 $buildSelectedPortIncludeDirsByConfig = @{
@@ -22090,6 +22113,10 @@ $buildSelectedPortIncludeDirsByConfig = @{
     "cortex-m7f-prio8" = "fiber\port\ARM_CM7\r0p1"
     "cortex-m23" = "fiber\port\ARM_CM23_NTZ\non_secure"
     "cortex-m33" = "fiber\port\ARM_CM33_NTZ\non_secure"
+    "cortex-m33f" = "fiber\port\ARM_CM33F_NTZ\non_secure"
+    "cortex-m55" = "fiber\port\ARM_CM55_NTZ\non_secure"
+    "cortex-m55f" = "fiber\port\ARM_CM55F_NTZ\non_secure"
+    "cortex-m55-mve-fp" = "fiber\port\ARM_CM55_MVEF_NTZ\non_secure"
 }
 
 $buildSelectedPortSourcesByConfig = @{
@@ -22099,6 +22126,21 @@ $buildSelectedPortSourcesByConfig = @{
     "cortex-m7f-prio8" = @("fiber\port\ARM_CM7\r0p1\fiber_port.c", "fiber\port\ARM_CM7\r0p1\fiber_port_boot.c", "fiber\port\ARM_CM7\r0p1\fiber_port_exception.c")
     "cortex-m23" = @("fiber\port\ARM_CM23_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM23_NTZ\non_secure\fiber_port_boot.c")
     "cortex-m33" = @("fiber\port\ARM_CM33_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM33_NTZ\non_secure\fiber_port_boot.c")
+    "cortex-m33f" = @("fiber\port\ARM_CM33F_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM33F_NTZ\non_secure\fiber_port_boot.c")
+    "cortex-m55" = @("fiber\port\ARM_CM55_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM55_NTZ\non_secure\fiber_port_boot.c")
+    "cortex-m55f" = @("fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_boot.c", "fiber\port\ARM_CM55F_NTZ\non_secure\fiber_port_svc.c")
+    "cortex-m55-mve-fp" = @("fiber\port\ARM_CM55_MVEF_NTZ\non_secure\fiber_port.c", "fiber\port\ARM_CM55_MVEF_NTZ\non_secure\fiber_port_boot.c", "fiber\port\ARM_CM55_MVEF_NTZ\non_secure\fiber_port_svc.c")
+}
+
+# Compiler-only detection is not a concrete runtime selection. GCC's scalar
+# M55 targets report v8-M Mainline until CMSIS supplies the core identity.
+$v8SelectorOnlyPortMacros = @{
+    "cortex-m23" = "FIBER_PORT_ARMV8M_BASELINE"
+    "cortex-m33" = "FIBER_PORT_ARMV8M_MAINLINE"
+    "cortex-m33f" = "FIBER_PORT_ARMV8M_MAINLINE"
+    "cortex-m55" = "FIBER_PORT_ARMV8M_MAINLINE"
+    "cortex-m55f" = "FIBER_PORT_ARMV8M_MAINLINE"
+    "cortex-m55-mve-fp" = "FIBER_PORT_ARMV81M_MAINLINE"
 }
 
 $matrixDirectory = New-FiberMatrixBuildDirectory -RequestedPath $BuildRoot
@@ -22185,6 +22227,16 @@ $selectedPortUndefinedSymbols = @(
     "memset"
 )
 
+# These FP constructors initialize records field-by-field. The strict
+# default still imports the two application-owned address-map hooks.
+$selectedPortNoMemoryUndefinedSymbols = @($selectedPortUndefinedSymbols |
+    Where-Object { $_ -notin @("memcpy", "memset") })
+$selectedPortUndefinedSymbolsByConfig = @{
+    "cortex-m33f" = $selectedPortNoMemoryUndefinedSymbols
+    "cortex-m55f" = $selectedPortNoMemoryUndefinedSymbols
+    "cortex-m55-mve-fp" = $selectedPortNoMemoryUndefinedSymbols
+}
+
 $forbiddenTransitionalReverseSymbols = @(
     "fiber_internal_port_current_context",
     "fiber_internal_port_scheduler_pick_next",
@@ -22207,6 +22259,9 @@ try {
     Write-Host "== audit / shell source-export line endings =="
     & (Join-Path $RepoRoot "tools\test_shell_exports.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-shell-exports")
+    Write-Host "== audit / concrete v8-M build selection and retired settings =="
+    & (Join-Path $RepoRoot "tools\test_concrete_port_selection.ps1") `
+        -ArmGcc $gcc -BuildRoot (Join-Path $buildRoot "audit-concrete-selection")
     Write-Host "== audit / required architecture-execution policy =="
     & (Join-Path $RepoRoot "tools\test_matrix_execution_policy.ps1") `
         -BuildRoot (Join-Path $buildRoot "audit-matrix-execution-policy")
@@ -22616,61 +22671,38 @@ try {
         if ([string]::IsNullOrWhiteSpace($portMacro)) {
             throw "No build-selected FIBER_PORT_* mapping for $profile"
         }
-        $portIncludeDir = $portIncludeDirs[$profile]
-        if ([string]::IsNullOrWhiteSpace($portIncludeDir)) {
-            throw "No build-selected include directory mapping for $profile"
-        }
         if ($buildSelectedPortIncludeDirsByConfig.ContainsKey($cfg.Name)) {
             $portIncludeDir = $buildSelectedPortIncludeDirsByConfig[$cfg.Name]
         }
-
-        $buildSelectedPortSources = $buildSelectedPortSourcesByProfile[$profile]
-        if (($null -eq $buildSelectedPortSources) -or ($buildSelectedPortSources.Count -eq 0)) {
-            throw "No build-selected source group mapping for $profile"
+        else {
+            $portIncludeDir = $portIncludeDirs[$profile]
         }
+        if ([string]::IsNullOrWhiteSpace($portIncludeDir)) {
+            throw "No concrete build-selected include directory mapping for $($cfg.Name)"
+        }
+
         if ($buildSelectedPortSourcesByConfig.ContainsKey($cfg.Name)) {
             $buildSelectedPortSources = $buildSelectedPortSourcesByConfig[$cfg.Name]
+        }
+        else {
+            $buildSelectedPortSources = $buildSelectedPortSourcesByProfile[$profile]
+        }
+        if (($null -eq $buildSelectedPortSources) -or ($buildSelectedPortSources.Count -eq 0)) {
+            throw "No concrete build-selected source group mapping for $($cfg.Name)"
         }
 
         $buildSelectedDefines = @("-DFIBER_PORT_BUILD_SELECTED=1", "-D$portMacro=1")
         $buildSelectedIncludeArgs = @("-I$(Join-Path $RepoRoot $portIncludeDir)")
 
-        $selectorSources = $selectorPortSources
-        if ($selectorPortSourcesByConfig.ContainsKey($cfg.Name)) {
-            $selectorSources = $selectorPortSourcesByConfig[$cfg.Name]
-        }
-
+        $isV8Concrete = $v8SelectorOnlyPortMacros.ContainsKey($cfg.Name)
         $selectionModes = @(
-            [pscustomobject]@{ Name = "auto";           Defines = @(); ExtraArgs = @(); PortSources = $selectorSources },
-            [pscustomobject]@{ Name = "explicit";       Defines = @("-DFIBER_PORT_PROFILE=$profile"); ExtraArgs = @(); PortSources = $selectorSources },
             [pscustomobject]@{ Name = "build-selected"; Defines = $buildSelectedDefines; ExtraArgs = $buildSelectedIncludeArgs; PortSources = $buildSelectedPortSources }
         )
-
-        if (($cfg.Name -eq "cortex-m33") -or
-            ($cfg.Name -eq "cortex-m33f") -or
-            ($cfg.Name -eq "cortex-m55") -or
-            ($cfg.Name -eq "cortex-m55f") -or
-            ($cfg.Name -eq "cortex-m55-mve-fp")) {
-            $selectionModes += [pscustomobject]@{
-                Name = "explicit-nonsecure-exc-return"
-                Defines = @(
-                    "-DFIBER_PORT_PROFILE=$profile",
-                    "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1"
-                )
-                ExtraArgs = @()
-                PortSources = $selectorSources
-            }
-            $selectionModes += [pscustomobject]@{
-                Name = "explicit-secure-target-ns-bank"
-                Defines = @(
-                    "-DFIBER_PORT_PROFILE=$profile",
-                    "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=1",
-                    "-DFIBER_TRANSITIONAL_V8M_TARGET_NS_BANK=1",
-                    "-DFIBER_TZ_NS=1"
-                )
-                ExtraArgs = @("-mcmse")
-                PortSources = $selectorSources
-            }
+        if (-not $isV8Concrete) {
+            $selectionModes = @(
+                [pscustomobject]@{ Name = "auto"; Defines = @(); ExtraArgs = @(); PortSources = $selectorPortSources },
+                [pscustomobject]@{ Name = "explicit"; Defines = @("-DFIBER_PORT_PROFILE=$profile"); ExtraArgs = @(); PortSources = $selectorPortSources }
+            ) + $selectionModes
         }
 
         # Port selection is centralized in fiber_port_selected.h. Test the
@@ -22686,14 +22718,14 @@ try {
 #include "fiber_port_types.h"
 
 _Static_assert(offsetof(FiberContext, sp) == 0u,
-    "[fiber]: transitional FiberContext.sp must remain first");
+    "[fiber]: selected FiberContext.sp must remain first");
 _Static_assert(offsetof(FiberContext, boot) == sizeof(uint32_t *),
-    "[fiber]: transitional FiberContext.boot offset changed");
+    "[fiber]: selected FiberContext.boot offset changed");
 _Static_assert(sizeof(FiberContext) ==
         (offsetof(FiberContext, boot) + sizeof(FiberPortBoot)),
-    "[fiber]: transitional FiberContext has unexpected tail padding");
+    "[fiber]: selected FiberContext has unexpected tail padding");
 _Static_assert(_Alignof(FiberContext) == _Alignof(uint32_t *),
-    "[fiber]: transitional FiberContext alignment changed");
+    "[fiber]: selected FiberContext alignment changed");
 
 int fiber_type_layout_probe(void)
 {
@@ -22771,6 +22803,15 @@ void Error_Handler(void);
 "@
             Set-Content -Path (Join-Path $cfgDir "main.h") -Value $mainHeader -Encoding ASCII
 
+            if ($isV8Concrete) {
+                Test-V8MatrixSelection -Compiler $gcc `
+                    -CpuArguments ($cfg.CpuArgs + $cfg.Extra) `
+                    -IncludeArguments @("-I$cfgDir", "-I$RepoRoot",
+                        "-I$(Join-Path $RepoRoot 'fiber')", "-I$cmsis") `
+                    -CompilerOnlyPortMacro $v8SelectorOnlyPortMacros[$cfg.Name] `
+                    -ArchitectureProfile $profile -ProbeDirectory $cfgDir
+            }
+
             Write-Host ""
             Write-Host "== $($cfg.Name) / $($mode.Name) =="
 
@@ -22838,6 +22879,9 @@ void Error_Handler(void);
                     $objPath
                 )
 
+                [ordered]@{ Compiler = $gcc; Arguments = $args } |
+                    ConvertTo-Json -Depth 4 -Compress |
+                    Add-Content -LiteralPath (Join-Path $cfgDir "commands.jsonl") -Encoding ASCII
                 & $gcc @args
                 if ($LASTEXITCODE -ne 0) {
                     throw "Compile failed for $($cfg.Name) / $($mode.Name): $source"
@@ -22978,27 +23022,28 @@ void Error_Handler(void);
                 }
             }
 
-            if ($runtimeAbiAnchorReferenceCount -ne 1) {
-                throw "Expected one runtime-object v1 anchor undefined-symbol entry for $($cfg.Name) / $($mode.Name); found $runtimeAbiAnchorReferenceCount"
+            $expectedRuntimeObjectReferences = if (
+                    ($cfg.Name -eq "cortex-m55f") -or
+                    ($cfg.Name -eq "cortex-m55-mve-fp")) { 2 } else { 1 }
+            if ($runtimeAbiAnchorReferenceCount -ne $expectedRuntimeObjectReferences) {
+                throw "Expected $expectedRuntimeObjectReferences runtime-object v1 anchor undefined-symbol entries for $($cfg.Name) / $($mode.Name); found $runtimeAbiAnchorReferenceCount"
             }
             if (($constructorDefinitionCount -ne 1) -or
                     ($constructorAbiAnchorReferenceCount -ne 1)) {
                 throw "Expected one active constructor with its own v1 anchor reference for $($cfg.Name) / $($mode.Name)"
             }
-            if ($strongPortPanicReferenceCount -ne 1) {
-                throw "Expected one active selected-port strong panic reference for $($cfg.Name) / $($mode.Name); found $strongPortPanicReferenceCount"
+            if ($strongPortPanicReferenceCount -ne $expectedRuntimeObjectReferences) {
+                throw "Expected $expectedRuntimeObjectReferences active runtime-object strong panic references for $($cfg.Name) / $($mode.Name); found $strongPortPanicReferenceCount"
             }
 
             if ($portCohortDefinitions.Count -ne 1) {
                 throw "Expected one exact selected-port context-cohort definition for $($cfg.Name) / $($mode.Name); found $($portCohortDefinitions.Count)"
             }
-            # The concrete NTZ ports have two mandatory objects: runtime owns
-            # the cohort definition and boot retains it. Other active ports
-            # retain it from both boot and a separate exception object.
-            $expectedPortCohortReferenceCount = if (
-                    ($mode.Name -eq "build-selected") -and
-                    (($cfg.Name -eq "cortex-m23") -or
-                     ($cfg.Name -eq "cortex-m33"))) {
+            # Two-object NTZ groups define the cohort in runtime and retain it
+            # from boot. M55 FP groups define it in boot and retain it from
+            # both runtime and SVC. Classic groups retain it in boot/exception.
+            $expectedPortCohortReferenceCount = if ($isV8Concrete -and
+                    ($expectedRuntimeObjectReferences -eq 1)) {
                 1
             }
             else {
@@ -23036,6 +23081,9 @@ void Error_Handler(void);
                     "-o",
                     $portGroupObject
                 ) + $portObjects
+            [ordered]@{ Compiler = $gcc; Arguments = $portGroupLinkArgs } |
+                ConvertTo-Json -Depth 4 -Compress |
+                Add-Content -LiteralPath (Join-Path $cfgDir "commands.jsonl") -Encoding ASCII
             & $gcc @portGroupLinkArgs
             if ($LASTEXITCODE -ne 0) {
                 throw "Selected-port relocatable link failed for $($cfg.Name) / $($mode.Name)"
@@ -23047,7 +23095,11 @@ void Error_Handler(void);
             }
             $portUndefinedSymbols = @(Get-NmUndefinedSymbolNames `
                 -NmOutput $portUndefinedOutput -Path $portGroupObject)
-            Assert-ExactSymbolSet -Expected $selectedPortUndefinedSymbols `
+            $expectedUndefinedSymbols = $selectedPortUndefinedSymbols
+            if ($selectedPortUndefinedSymbolsByConfig.ContainsKey($cfg.Name)) {
+                $expectedUndefinedSymbols = $selectedPortUndefinedSymbolsByConfig[$cfg.Name]
+            }
+            Assert-ExactSymbolSet -Expected $expectedUndefinedSymbols `
                 -Actual $portUndefinedSymbols `
                 -Description "Selected-port unresolved ABI for $($cfg.Name) / $($mode.Name)"
 
@@ -23100,6 +23152,9 @@ void Error_Handler(void);
                 $linkedObject
             ) + $objects
 
+            [ordered]@{ Compiler = $gcc; Arguments = $linkArgs } |
+                ConvertTo-Json -Depth 4 -Compress |
+                Add-Content -LiteralPath (Join-Path $cfgDir "commands.jsonl") -Encoding ASCII
             & $gcc @linkArgs
             if ($LASTEXITCODE -ne 0) {
                 throw "Relocatable link failed for $($cfg.Name) / $($mode.Name)"
@@ -23111,9 +23166,7 @@ void Error_Handler(void);
             }
 
             $requiredSymbolsForMode = $requiredPortSymbols
-            if ((($cfg.Name -eq "cortex-m23") -or
-                 ($cfg.Name -eq "cortex-m33")) -and
-                    ($mode.Name -eq "build-selected")) {
+            if ($isV8Concrete) {
                 $requiredSymbolsForMode = $requiredForwardPortSymbols
             }
             foreach ($symbol in $requiredSymbolsForMode) {
@@ -23173,81 +23226,6 @@ void Error_Handler(void);
         }
         }
 
-        # Transitional v8-M inputs are port-local bring-up policy. Prove that
-        # malformed values and Non-secure-bank access without CMSE fail closed.
-        $v8ProbeCfg = $configs | Where-Object { $_.Name -eq "cortex-m33" }
-        $v8ProbeProfile = $portProfiles["cortex-m33"]
-        $v8ProbeDir = Join-Path (Join-Path $buildRoot "cortex-m33") "explicit"
-        $v8NegativeCases = @(
-            [pscustomobject]@{ Name = "invalid-run-nonsecure"; Define = "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=2"; Diagnostic = "FIBER_TRANSITIONAL_V8M_RUN_NONSECURE must be 0 or 1" },
-            [pscustomobject]@{ Name = "invalid-target-ns-bank"; Define = "-DFIBER_TRANSITIONAL_V8M_TARGET_NS_BANK=2"; Diagnostic = "FIBER_TRANSITIONAL_V8M_TARGET_NS_BANK must be 0 or 1" },
-            [pscustomobject]@{ Name = "target-ns-bank-without-cmse"; Define = "-DFIBER_TRANSITIONAL_V8M_TARGET_NS_BANK=1"; Diagnostic = "requires a Secure CMSE level 3 build" }
-        )
-
-        foreach ($case in $v8NegativeCases) {
-            Write-Host "== cortex-m33 / transitional-contract-$($case.Name) =="
-            $objectPath = Join-Path $v8ProbeDir ($case.Name + ".o")
-            $args = $v8ProbeCfg.CpuArgs + @("-mthumb") + $v8ProbeCfg.Extra + @(
-                "-std=gnu11",
-                "-ffreestanding",
-                "-fno-common",
-                "-Wall",
-                "-Wextra",
-                "-Wundef",
-                "-Werror=undef",
-                "-Werror=implicit-function-declaration",
-                "-Werror=return-type",
-                "-DFIBER_PORT_PROFILE=$v8ProbeProfile",
-                $case.Define,
-                "-I$v8ProbeDir",
-                "-I$RepoRoot",
-                "-I$(Join-Path $RepoRoot 'fiber')",
-                "-I$cmsis",
-                "-c",
-                (Join-Path $RepoRoot "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"),
-                "-o",
-                $objectPath
-            )
-
-            $result = Invoke-CompilerProbe -Compiler $gcc -Arguments $args `
-                -LogPath (Join-Path $v8ProbeDir ($case.Name + ".log"))
-            if ($result.ExitCode -eq 0) {
-                throw "Invalid transitional v8-M setting unexpectedly compiled: $($case.Name)"
-            }
-            $normalizedOutput = $result.Output -replace '\s+', ' '
-            $normalizedDiagnostic = $case.Diagnostic -replace '\s+', ' '
-            if ($normalizedOutput -notmatch [regex]::Escape($normalizedDiagnostic)) {
-                throw "Invalid transitional v8-M setting failed for the wrong reason: $($case.Name)`n$($result.Output)"
-            }
-        }
-
-        Write-Host "== cortex-m33 / transitional-contract-normalized-role-token =="
-        $normalizedRoleArgs = $v8ProbeCfg.CpuArgs + @("-mthumb") +
-            $v8ProbeCfg.Extra + @(
-                "-std=gnu11",
-                "-ffreestanding",
-                "-fno-common",
-                "-Wall",
-                "-Wextra",
-                "-Wundef",
-                "-Werror=undef",
-                "-Werror=implicit-function-declaration",
-                "-Werror=return-type",
-                "-DFIBER_PORT_PROFILE=$v8ProbeProfile",
-                "-DFIBER_TRANSITIONAL_V8M_RUN_NONSECURE=(1)",
-                "-I$v8ProbeDir",
-                "-I$RepoRoot",
-                "-I$(Join-Path $RepoRoot 'fiber')",
-                "-I$cmsis",
-                "-c",
-                (Join-Path $RepoRoot "fiber\port\transitional_v8m\fiber_port_transitional_v8m.c"),
-                "-o",
-                (Join-Path $v8ProbeDir "normalized-role-token.o")
-            )
-        & $gcc @normalizedRoleArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "Valid parenthesized transitional v8-M role did not normalize to one cohort token"
-        }
     }
 
     # Compile-time policy probes prove that the concrete CM7 port fails closed
