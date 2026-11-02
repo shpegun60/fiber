@@ -2658,3 +2658,31 @@ Real failed matrix artifacts:
 Replay result:
   C:/fq-e6379d9d53/replay-02/matrix-result.json
 ```
+
+### Secure-Only Selected-Group Admission Replay
+
+C3SO and C5SO add unchanged public portable-application/default-policy links
+without private/CMSIS dependencies in that consumer, plus constructor-only
+incompatible-common static-archive rejection. Each real negative must fail
+solely on the absent v1 anchor; removing only its constructor retain read
+must link and execute the named causal control. Start/handler extraction is
+not used as a substitute for constructor ABI binding.
+
+Fresh complete suites pass 65,798 C3SO and 65,807 C5SO checks. Each executes
+297 QEMU cases, 48 raw compiler cases, eight portable/default links and four
+exact constructor/archive mismatches. Parent independently rehashes 31,725
+entries across six recorded manifests with zero mismatches. Production C/H,
+public layout, flags and `RuntimeSelectable=0` are unchanged. Admission-only
+and compiler-only invocations explicitly cannot qualify a complete suite.
+Reference parity, central integration and hardware remain independent proofs.
+
+```text
+C3SO:
+  %TEMP%/cm33-secure-only-runtime-8be036efd0194792a0e141c4bc353b41
+receipt.json SHA-256:
+  7F66040D18F4D115C26124015493C643F8089F45F3F3D3AC3747F3912CEFCECC
+C5SO:
+  %TEMP%/cm55-secure-only-runtime-d3e6ba0905e74145b75f8a586497c147
+receipt.json SHA-256:
+  BCD43BE5923245906E8608911227C3BD2EB321D2D6217B85EF4C9F0FC564F3D2
+```

@@ -71,6 +71,12 @@ remain historical; counterflags are not an accepted ABI policy or fallback.
 bundle and is not claimed. Independent whole-group/callgraph auditing and
 profile promotion remain parent-owned.
 
+`-AdmissionOnly` runs the four reserved-r9 default-policy lifecycle/link-control
+cases (including portable/default and constructor archive proofs), skips the
+raw compiler grid and other lifecycle cases, and records `CompleteSuite=false`.
+It cannot be combined with `-CompilerAdversarialOnly`; neither focused mode is
+a complete-runtime receipt.
+
 ## Execution Boundary
 
 The single ELF starts Secure on QEMU `mps3-an547` (Cortex-M55), with vectors at
@@ -107,6 +113,22 @@ faults, nonzero exits, timeouts, and diagnostic substrings cannot count as PASS.
 
 ## Build Controls And Provenance
 
+The four O2/Os, normal/LTO admission cases additionally compile the unchanged
+`tools/fixtures/portable_application.c`. They rebuild the actual common and
+selected-port objects without scheduler BASEPRI, rewind or validation policy
+overrides. Direct and ordinary archive final links check the five public
+imports plus the exact storage cohort, public-only compiler dependencies,
+strong vectors, live v1/private/storage providers and scalar generated code.
+A retained seven-word policy section proves the actual compiled defaults:
+priority-derived nonzero BASEPRI, rewind=1, map-on-switch=0, boot hash=1,
+canary=1, permissive hooks=0, and the expected runtime-selection metadata.
+The application translation unit gets no fixture or CMSIS include path.
+These eight final ELFs are explicitly link-only evidence, not new executions.
+LTO may inline the ordinary cold `fiber_init` and registration wrappers; all
+five definitions are checked in their real common owner and all five imports
+in the unchanged application input. The sensitive public bodies and port
+constructor remain required in each final ELF.
+
 The gate checks the exact eight generic providers and their production owners,
 real private and public storage cohort objects in read-only Secure flash,
 strong vector bindings, direct and ordinary archive extraction with weak
@@ -120,6 +142,13 @@ Constructor-only execution has no first-start or production handler roots.
 The unmodified constructor rejects a v2-only common object. A compiled
 current-source control removing only its v1 read must link and execute with
 that same object; this proves sensitivity without opaque prebuilt archives.
+The same four build modes also place the real common objects (renaming only
+the common anchor definition to v2) and the real selected-port objects in
+ordinary static archives. The constructor-only archive link must fail solely
+on the missing v1 anchor, diagnosed in `fiber_port_context_init`; no failed
+ELF is admitted. Removing only the constructor's anchor read in a compiled
+port-archive control must instead link and execute. Its final symbols must
+contain neither the v1 object nor first-start/production-handler roots.
 A separately compiled single-store r9 seed-corruption mutant must reach the
 constructor's exact one-shot panic before first selection, only in reserved
 ABI modes. These are labeled controls, not unmodified production executions.

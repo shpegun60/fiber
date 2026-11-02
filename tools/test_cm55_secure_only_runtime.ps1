@@ -8,6 +8,7 @@ param(
     [ValidateSet(0,1)][int]$ExpectedRuntimeSelectable=0,
     [ValidateSet('AttributesOnly')][string]$AdversarialAdmission='AttributesOnly',
     [switch]$CompilerAdversarialOnly,
+    [switch]$AdmissionOnly,
     [ValidateRange(1,60)][int]$TimeoutSeconds=10
 )
 $ErrorActionPreference='Stop'
@@ -15,6 +16,7 @@ Set-StrictMode -Version 2.0
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $fixture=Join-Path $PSScriptRoot 'fixtures/cm55_secure_only_runtime'
 $port=Join-Path $repo 'fiber/port/ARM_CM55_SECURE_ONLY/secure'
+if($AdmissionOnly -and $CompilerAdversarialOnly){throw 'Choose only one focused phase'}
 if (!$ArmGcc -or !(Test-Path -LiteralPath $ArmGcc -PathType Leaf)) {throw 'Supply existing -ArmGcc'}
 if (!$QemuRoot -or !$QemuRoot.StartsWith('/')) {throw 'Supply explicit existing absolute WSL -QemuRoot; no provisioning'}
 if (!$CmsisCore) {$CmsisCore=Join-Path $repo '../../../Drivers/CMSIS/Include'}
@@ -44,6 +46,7 @@ $compilerCases=New-Object System.Collections.Generic.List[object]
 $verdict='FAIL';$failure='';$referenceChecked=$false
 $repositoryHeadBefore='';$repositoryHeadAfter=''
 $inputs=@($PSCommandPath,$ArmGcc,$nm,$objdump,$readelf,$ar,$gccnm,
+    (Join-Path $repo 'tools/fixtures/portable_application.c'),
     (Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
     @(Get-ChildItem -LiteralPath $fixture -File -Recurse | Select-Object -ExpandProperty FullName)+
     @(Get-ChildItem -LiteralPath $port -File | Where-Object {$_.Extension -in @('.c','.h','.S','.ld')} | Select-Object -ExpandProperty FullName)+
@@ -75,9 +78,9 @@ function Compile([string]$Source,[string]$Object,[string[]]$Flags) {
     $null=Need $ArmGcc ($Flags+@('-save-temps=obj','-MD','-c',$Source,'-o',$Object)) ($Object+'.log')
 }
 function Archive([string]$Path,[string[]]$Objects) {$null=Need $ar (@('rcs',$Path)+$Objects) ($Path+'.log')}
-function Link([string]$Elf,[string[]]$Members,[string[]]$Flags) {
+function Link([string]$Elf,[string[]]$Members,[string[]]$Flags,[string]$LinkerScript=(Join-Path $fixture 'image.ld')) {
     Recorded $ArmGcc ($Flags+@('-nostdlib','-nostartfiles','-Wl,--gc-sections','-Wl,--no-undefined',
-        '-T',(Join-Path $fixture 'image.ld'),"-Wl,-Map,$Elf.map")+$Members+@('-o',$Elf)) ($Elf+'.link.log')
+        '-T',$LinkerScript,"-Wl,-Map,$Elf.map")+$Members+@('-o',$Elf)) ($Elf+'.link.log')
 }
 function Defined([string]$Object) {Need $gccnm @('--defined-only','-g',$Object) ($Object+'.defined.txt')}
 function UndefinedFailure([string]$Name,[object]$Result,[string]$Symbol) {
@@ -105,7 +108,7 @@ function Execute([string]$Name,[string]$Elf,[string]$Marker,[string]$Kind='Produ
 $generic=@('fiber_port_context_init','fiber_port_runtime_memory_barrier','fiber_port_panic_wait',
     'fiber_port_require_scheduler_configuration_environment','fiber_port_runtime_prepare_start',
     'fiber_port_runtime_select_first','fiber_port_runtime_start_first','fiber_port_runtime_schedule')
-function Inspect([string]$Name,[string]$Elf,[switch]$InitOnly,[switch]$Partial) {
+function Inspect([string]$Name,[string]$Elf,[switch]$InitOnly,[switch]$Partial,[switch]$Portable) {
     $dump=Need $objdump @('-drwC',$Elf) ($Elf+'.disassembly.txt')
     $symbols=Need $nm @('-n','-S',$Elf) ($Elf+'.symbols.txt')
     $u=Need $nm @('-u',$Elf) ($Elf+'.undefined.txt')
@@ -123,6 +126,7 @@ function Inspect([string]$Name,[string]$Elf,[switch]$InitOnly,[switch]$Partial) 
     # Registration has no noIPA requirement and may be inlined by LTO. Its
     # exact common-object owner is checked below; execution checks its effects.
     if(!$lto -and !$InitOnly){$required+='fiber_scheduler_set_pick_next'}
+    if($Portable -and $lto){$required=@($required | Where-Object {$_ -ne 'fiber_init'})}
     if($Partial){$required=@('fiber_port_context_init','SVC_Handler','PendSV_Handler')}
     foreach($symbol in $required) {
         Check "$Name/exact-live-$symbol" ([regex]::Matches($symbols,
@@ -170,6 +174,7 @@ function FullTrace([string]$Name,[string]$Elf,[string]$Log,[int]$Reserved) {
         $trace -notmatch 'taking pending nonsecure exception') $tracePath
 }
 . (Join-Path $fixture 'compiler_audit.ps1')
+. (Join-Path $fixture 'admission.ps1')
 function AuditDependencies {
     $known=@{};foreach($row in $before){$known[[IO.Path]::GetFullPath($row.Path).ToLowerInvariant()]=$true}
     $consumed=@{}
@@ -302,6 +307,8 @@ function LinkControls {
     $controlDir2=Join-Path $initDir 'removed-read-control';$null=New-Item -ItemType Directory -Path $controlDir2
     $copiedElf=Join-Path $controlDir2 'secure.elf';[IO.File]::Copy($controlElf,$copiedElf)
     $null=Execute "$name/removed-constructor-read-control" $copiedElf 'PASS:C5SO-INIT-ONLY' 'CompiledControl'
+    ConstructorArchiveAdmission 'PASS:C5SO-INIT-ONLY'
+    PortableDefaultAdmission
     $bad=Link (Join-Path $initDir 'missing-cohort.elf') (@($initObjects)+@($expectation)+$commonObjects+@($portObjects[0],$badRuntime)) $flags
     UndefinedFailure "$name/init-only-missing-cohort" $bad $cohort
     # Reserved-ABI seed corruption is compiled from the current real builder.
@@ -375,14 +382,16 @@ try {
     Check 'model/actual-M55-part-number' (((Scalar $probeLog 'MODEL_CPUID') -shr 4 -band 0xfff) -eq 0xd22) $probeLog
     @{MPUType=(Scalar $probeLog 'MODEL_MPU_TYPE');PriorityMask=$priorityMask;CmsisPriorityBits=$priorityBits;SecureOnly=$true;MPUEnabled=$false;FloatingPointEnabled=$false} |
         ConvertTo-Json | Set-Content (Join-Path $out 'model.json') -Encoding ASCII
-    CompilerAdversarial
+    if(!$AdmissionOnly){CompilerAdversarial}
     if(!$CompilerAdversarialOnly) {
     foreach($optimization in @('-O2','-Os')) {
         foreach($lto in @(0,1)) {
             foreach($r9Mode in @('reserved','ordinary','reserved-hostile')) {
+                if($AdmissionOnly -and $r9Mode -ne 'reserved'){continue}
                 $reserved=if($r9Mode -eq 'ordinary'){0}else{1}
                 $hostile=$r9Mode -ne 'reserved'
                 foreach($policy in @('default','map','no-rewind')) {
+                    if($AdmissionOnly -and $policy -ne 'default'){continue}
                     if($hostile -and $policy -ne 'default'){continue}
                     $mode="$($optimization.Substring(1))-lto$lto-$r9Mode-$policy"
                     Write-Host "C5SO $mode"
@@ -435,7 +444,7 @@ try {
                     $m=[regex]::Matches($definitions,'(?m)^[0-9a-f]+\s+[RD]\s+(fiber_port_storage_cohort_\S+)\r?$')
                     Check "$mode/sole-real-public-storage-provider" ($m.Count -eq 1) $definitions;$storageCohort=$m[0].Groups[1].Value
                     $expectation=Join-Path $dir 'expectation.o';Compile (Join-Path $repo 'fiber/port/fiber_port_context_cohort_expectation.c') $expectation $flags
-                    $cases=if($policy -eq 'default'){@(0)+@(1..15)+@(18,19)}elseif($policy -eq 'map'){@(0,17)}else{@(0)}
+                    $cases=if($AdmissionOnly){@(0)}elseif($policy -eq 'default'){@(0)+@(1..15)+@(18,19)}elseif($policy -eq 'map'){@(0,17)}else{@(0)}
                     foreach($case in $cases) {
                         $name="$mode-case$case";$caseDir=Join-Path $dir "case$case";$null=New-Item -ItemType Directory -Path $caseDir
                         $caseFlags=$flags+@("-DEXEC_CASE=$case",'-DEXEC_WEAK_STARTUP=1');$fixtureObjects=@()
@@ -471,7 +480,7 @@ try {
     if($drift.Count){$verdict='FAIL'}
     $checks.ToArray() | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $out 'checks.json') -Encoding ASCII
     $runs.ToArray() | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out 'runs.json') -Encoding ASCII
-    @{Verdict=$verdict;CompleteSuite=($verdict -eq 'PASS' -and !$CompilerAdversarialOnly);CompilerAdversarialOnly=[bool]$CompilerAdversarialOnly;
+    @{Verdict=$verdict;CompleteSuite=($verdict -eq 'PASS' -and !$CompilerAdversarialOnly -and !$AdmissionOnly);CompilerAdversarialOnly=[bool]$CompilerAdversarialOnly;AdmissionOnly=[bool]$AdmissionOnly;
         AdversarialAdmission=$AdversarialAdmission;CompilerAdversarialCases=$compilerCases.Count;Evidence=$out;Checks=$checks.Count;Drift=$drift;Failure=$failure;
         Executed=@($runs | Where-Object {$_.Executed}).Count;CompileOnly=@($runs | Where-Object {!$_.Executed}).Count;
         ReferencePin=$pin;ReferenceIdentityChecked=$referenceChecked;ReferenceAssemblyCompared=$false;ReferenceExecuted=$false;
@@ -483,6 +492,8 @@ try {
         ColdOnlyCommonHelper='fiber_internal_scheduler_store_pick_next';
         CompiledAttributeRemovalControls=@($checks | Where-Object {$_.Name -match 'attribute-removal-rejected-(fiber_port_|in-hot-helper-body$)'}).Count;
         CompiledColdEdgeControls=@($checks | Where-Object {$_.Name -match '/compiled-sensitive-cold-edge-control-rejected$'}).Count;
+        PortableDefaultLinks=@($runs | Where-Object {$_.Kind -eq 'PortableDefaultLinkOnly'}).Count;
+        ConstructorArchiveMismatches=@($checks | Where-Object {$_.Name -match '/init-only-archive-exact-missing-v1$'}).Count;
         ProductionSourceHashes=@($before | Where-Object {$_.Path.StartsWith($port+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)});
         Boundary='Actual five-operation common / eight-operation C5SO provider; single-image Secure M55, basic frames only; no NS bootstrap, FP/MPU, FreeRTOS parity/execution, or hardware claim'} |
         ConvertTo-Json -Depth 7 | Set-Content (Join-Path $out 'receipt.json') -Encoding ASCII
@@ -491,5 +502,5 @@ try {
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'artifact-hashes.json') -Encoding ASCII
     if($drift.Count){throw "C5SO inputs changed during run: $out"}
 }
-$scope=if($CompilerAdversarialOnly){'raw protected-port compiler phase only; CompleteSuite=false'}else{'full runtime'}
+$scope=if($AdmissionOnly){'selected-group admission only; CompleteSuite=false'}elseif($CompilerAdversarialOnly){'raw protected-port compiler phase only; CompleteSuite=false'}else{'full runtime'}
 Write-Host "PASS: C5SO $scope ($($checks.Count) checks); evidence $out"

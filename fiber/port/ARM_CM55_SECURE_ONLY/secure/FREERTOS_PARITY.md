@@ -103,10 +103,17 @@ ZIP SHA-256:
   9C5CECDB38C41824470BBDBCBC3C1D8051E3D153D7D3815DC5B5C8324F945EAF
 ```
 
-Ordered transfer subsets are not closed whole-body parity. Actual Secure-only
-first SVC/PendSV execution, normal/LTO complete common-runtime archive/ELF,
-weak-startup extraction, vector/cohort/reverse/stale/duplicate negatives,
-adversarial compiler flags, dual-r9 ABI modes and compiled oracle controls
-remain required before runtime promotion. AN547 execution is a distinct gate;
-no M33/AN505 receipt is relabeled as M55 evidence. Global all-optimization,
-final-LTO paired parity and hardware qualification remain separate.
+Ordered transfer subsets are not closed whole-body parity. The separate
+`tools/test_cm55_secure_only_runtime.ps1` owns actual AN547 Secure-only
+first SVC/PendSV execution, normal/LTO common-runtime archive/ELF,
+vector/cohort/reverse/stale/duplicate negatives, raw compiler flags, dual-r9
+ABIs and selected-group admission controls. Its fixture README states their
+exact boundaries; these are not claims from the historical subset receipt.
+The first-start veneer clears CONTROL in Thread/MSP mode; SVC restore writes
+CONTROL=2 and checks its low two bits read back as 2 while Handler execution
+still uses physical MSP. Thread uses PSP on exception return, as selected by
+the pinned Secure-only reference's CONTROL.SPSEL write.
+Fresh closed-body parity and final integration acceptance remain separate
+before promotion. No M33/AN505 receipt is relabeled as M55 evidence. Global
+all-optimization, final-LTO paired parity and hardware qualification remain
+separate.

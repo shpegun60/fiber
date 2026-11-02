@@ -47,7 +47,7 @@ frozen generic forward/reverse ABI remain intentional dependencies.
 | --- | --- |
 | `fiber_port_types.h` | Same public 76-byte saved-SP/boot storage; independent `arm_cm33_secure_only_v1_r0` allocating-consumer identity and include/name namespace. No CMSIS dependency. |
 | `fiber_port_boot_types.h` | Same 72-byte immutable boot fields; independent type-header namespace and Secure-only ownership comment. |
-| `fiber_port_boot.h` | Same boot declarations; renamed include guard only. |
+| `fiber_port_boot.h` | Same boot interface; own include guard and canonical sensitive/general-register declarations. |
 | `fiber_port_private.h` | Same private declarations and generic ABI imports; independent guard, plus an explicit initial-r9 argument and sensitive/general-registers-only builder attributes. |
 | `fiber_port_boot.c` | Same structural/hash/address/canary/MSP/restore logic using the Secure bank. Construction captures r9 before integration calls, forwards that value explicitly, and checks its saved slot. |
 | `fiber_port.c` | Same CPU envelope, reverse ABI and strong handlers; role/name substitutions plus four exact exception encodings. The frame builder consumes the captured r9 argument instead of reading a later C callee's temporary register value. No new common-runtime branch. |
@@ -144,7 +144,8 @@ All other instructions in those scalar naked source bodies are retained.
 
 Private inline r9, xPSR, stacked-PC, BASEPRI, scheduler-critical and vector-base
 helpers also retain their baseline algorithms. They access the Secure bank
-through the normal CMSIS/register names; no `*_NS` alias is selected.
+through protected port-local ordinary-register accessors; no `*_NS` alias
+is selected. These helpers no longer rely on unprotected CMSIS function bodies.
 
 ## Generated-Code Comparison And Limits
 
@@ -162,9 +163,11 @@ the initialized GPR image. The reference generic SVC dispatcher and SVC102 are
 replaced by exact owned SVC70. Fiber keeps its validated MSP plan rather than
 the reference VTOR rewind alone, uses reverse ABI instead of a TCB scheduler,
 and adds integrity, bounds, provenance, priority and CPU-state readbacks. The
-reference writes CONTROL.SPSEL in Handler mode; Fiber's first start keeps
-CONTROL clear there and selects PSP through exception return. These are explicit
-adaptations, not identical assembly.
+reference sets CONTROL.SPSEL in Handler mode by ORing bit 1. Fiber clears
+CONTROL in its privileged Thread/MSP entry veneer, then its SVC restore writes
+CONTROL=2 and requires the low two bits to read back as 2 before returning.
+Handler execution still uses physical MSP; the written SPSEL selects Thread
+PSP on exception return. These are explicit adaptations, not identical assembly.
 
 The Secure-only handler always uses the Secure Thread frame. Its S bit is not
 the Non-secure-handler Secure-origin case that skips NS frame accesses in a
@@ -175,8 +178,10 @@ manifest negatives at
 `%TEMP%/cm33-secure-only-12c9aac86bc64e70952af6345846fecf`.
 The preceding `15cff987cf314baba0fd2c6d2a57c297` result qualifies only its
 pre-repair source bytes.
-This is staged compile/symbol/layout/subset evidence only. Closed whole-body
-parity and mutation controls, public common lifecycle execution, final
-archive/vector/cohort/GC/LTO and negative links, hostile flags, and Secure-only
-first-SVC/running execution remain required before promotion. Hardware remains
-unqualified. No existing runtime receipt is transferred to this profile.
+Those historical focused receipts are compile/symbol/layout/subset evidence
+only, not complete-group or closed-body evidence. The separate maintained
+`tools/test_cm33_secure_only_runtime.ps1` owns actual common lifecycle,
+archive/vector/cohort/GC/LTO, compiler and selected-group admission proofs;
+its fixture README states their exact boundaries. Fresh closed-body reference
+parity and final integration acceptance remain separate before promotion.
+Hardware remains unqualified. No other profile's receipt is transferred here.
