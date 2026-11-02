@@ -95,6 +95,15 @@ suite from that isolated tree. `immutable-inputs/manifest.json` and
 Production work outside that snapshot can continue without invalidating it.
 `-DevelopmentProfiles CM33NTZ,CM55NTZ` and `-DevelopmentModes O2-lto` are marked
 `CompleteSuite=false` and cannot be reported as full-suite qualification.
+`-DevelopmentProfiles CM0,CM0MPU` also admits the additional classic MPU
+constructor profile without changing the historical default non-MPU extent.
+CM0MPU uses its real protected 20-word image, one-past cursor, 17 numeric boot
+words and raw canary, with an independent fixed isolation linker map. Its
+256-byte NOLOAD current-slot segment is the only extra allowed RAM load segment;
+linked data/BSS must remain below fixture-owned context and stack memory. The
+real private first-restore and PendSV high-register load/move slices are checked
+with independent protected-image pointers. No MPU register writes, exceptions,
+vector activation or protection enforcement are emulated by this extension.
 
 `results.json` separates ordinary observations from actual reserved/caller ABI
 failures. It records Python/tool commands, exact C/ABI/mode source groups,

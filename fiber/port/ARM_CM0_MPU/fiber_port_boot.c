@@ -721,7 +721,7 @@ void fiber_port_context_validate_running_frame(const FiberContext *ctx,
 			ctx->boot.abi_initial_control, 'q');
 	FIBER_REQUIRE(ctx->protected_context.exc_return ==
 			ctx->boot.abi_initial_exc_return, 'x');
-	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)__get_PSP(), 'P');
+	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 	const uintptr_t frame_start = (uintptr_t)hardware_frame;
 	FIBER_REQUIRE((frame_start & 7u) == 0u, 'A');
 	FIBER_REQUIRE(frame_start <= UINTPTR_MAX - FIBER_PORT_EXC_BASE_BYTES,
@@ -872,7 +872,7 @@ void fiber_port_context_init(FiberContext *ctx,
 
 	ctx->boot.hash = fiber_port_context_compute_seal(ctx);
 	ctx->boot.sealed = 1u;
-	__COMPILER_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 	fiber_port_context_seal_check(ctx);
 	fiber_port_context_initial_image_check(ctx, initial_psp, entry_address, arg,
 			initial_r9, initial_return_address);

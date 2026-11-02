@@ -43,6 +43,15 @@
 # define fiber_portASM __asm
 #endif
 
+#define fiber_portCOMPILER_BARRIER() \
+	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_MEMORY_BARRIER() \
+	fiber_portASM volatile("dmb" ::: "memory")
+#define fiber_portDATA_SYNC_BARRIER() \
+	fiber_portASM volatile("dsb" ::: "memory")
+#define fiber_portINST_SYNC_BARRIER() \
+	fiber_portASM volatile("isb" ::: "memory")
+
 #if !FIBER_PORT_BUILD_SELECTED
 # error "[fiber]: ARM_CM0_MPU is build-selected only"
 #endif
@@ -405,10 +414,49 @@
 #define FIBER_PORT_CM0_MPU_BOOT_HASH_OFFSET 84u
 #define FIBER_PORT_CM0_MPU_BOOT_SIZE 88u
 
+/* Raw primitives keep compiler protection inside this port's helper closure. */
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_cpu_wait(void)
+{
+	fiber_portASM volatile("wfe" ::: "memory");
+}
+
 /* Preserve an optional platform/static-base register in the synthetic first
  * context. This is the same Fiber ABI precaution used by the privileged
  * ARM_CM0 port; FreeRTOS uses diagnostic seed values instead. */
-fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_r9(void)
 {
 	uint32_t value;
 	fiber_portASM volatile("mov %0, r9" : "=r"(value));
@@ -418,7 +466,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
 /* VTOR is optional on ARMv6-M. A no-VTOR profile is required to use the
  * architected/remapped vector base at address zero; its board policy is later
  * checked by the selected-port integration proof. */
-fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t fiber_port_vectors_base_addr(void)
 {
 #if FIBER_PORT_HAS_VTOR
 	return (uintptr_t)fiber_portSCB_VTOR_REG &
@@ -428,7 +476,7 @@ fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 #endif
 }
 
-fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
@@ -436,7 +484,7 @@ fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
 /* On an ARMv6-M implementation without VTOR, address zero is the active
  * architecture/remapped vector base, not a C null object. Keep that fact out
  * of GCC's null-array analysis while retaining a volatile hardware read. */
-fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot_at(uintptr_t base,
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_vector_slot_at(uintptr_t base,
 		uint32_t index)
 {
 	const uintptr_t address = base + ((uintptr_t)index * sizeof(uint32_t));
@@ -446,7 +494,7 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot_at(uintptr_t base,
 	return value;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_read_vector_slot(uint32_t index)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_vector_slot(uint32_t index)
 {
 	return fiber_port_read_vector_slot_at(fiber_port_vectors_base_addr(), index);
 }

@@ -61,7 +61,7 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
 
 
-def profiles():
+def profiles(include_cm0_mpu=False):
     result = []
     rows = (
         ("CM33NTZ", "ARM_CM33_NTZ/non_secure", 33, "ARMV8M_MAINLINE", "ntz", False),
@@ -77,12 +77,16 @@ def profiles():
         ("CM4", "ARM_CM4", 4, "ARMV7EM", "classic", True),
         ("CM7", "ARM_CM7/r0p1", 7, "ARMV7EM", "classic", True),
     )
+    if include_cm0_mpu:
+        rows += (("CM0MPU", "ARM_CM0_MPU", 0, "ARMV6M", "mpu0", False),)
     for name, directory, core, architecture, frame, fp in rows:
         abis = ("hard", "softfp") if fp else ("soft",)
         if name in ("CM4", "CM7"):
             abis = ("soft", "hard", "softfp")
         for abi in abis:
             cpu = "cortex-m" + str(core)
+            if frame == "mpu0":
+                cpu = "cortex-m0plus"
             if name == "CM55FNTZ":
                 cpu += "+nomve"
             flags = ["-mcpu=" + cpu, "-mthumb", "-mfloat-abi=" + abi]
@@ -181,7 +185,7 @@ class Machine:
                  3: UC_CPU_ARM_CORTEX_M3, 7: UC_CPU_ARM_CORTEX_M7}.get(core, UC_CPU_ARM_CORTEX_M4)
         self.uc.ctl_set_cpu_model(model)
         self.uc.mem_map(0x08000000, 0x40000)
-        self.uc.mem_map(0x20000000, 0x30000)
+        self.uc.mem_map(0x20000000, 0x40000 if profile["frame"] == "mpu0" else 0x30000)
         self.symbols = {}
         with elf_path.open("rb") as stream:
             elf = ELFFile(stream)
@@ -190,8 +194,11 @@ class Machine:
             for segment in elf.iter_segments():
                 if segment["p_type"] == "PT_LOAD":
                     address, size = segment["p_vaddr"], segment["p_memsz"]
-                    require(0x08000000 <= address <= address + size <= 0x08040000 or
-                            0x20000000 <= address <= address + size <= CONTEXT,
+                    ram_ok = 0x20000000 <= address <= address + size <= CONTEXT
+                    if profile["frame"] == "mpu0":
+                        ram_ok = ram_ok or (address == 0x20030000 and size == 256 and
+                                            segment["p_filesz"] == 0)
+                    require(0x08000000 <= address <= address + size <= 0x08040000 or ram_ok,
                             "Linked image overlaps fixture-owned RAM or exceeds its flash map")
                     if segment["p_filesz"]:
                         self.uc.mem_write(address, segment.data())
@@ -275,13 +282,20 @@ class Machine:
         writes = [n for n, i in enumerate(body) if
                   (i["op"].startswith("ldm") and re.search(r"\br9\b", i["args"])) or
                   (i["op"].startswith("mov") and re.match(r"r9,\s*r[458]$", i["args"]))]
-        altered = (mutant, handler) in (("wrong-restore", "SVC_Handler"), ("wrong-switch", "PendSV_Handler"))
+        altered = ((mutant == "wrong-restore" and handler in ("SVC_Handler", "fiber_port_restore_first_context_from_svc")) or
+                   (mutant == "wrong-switch" and handler == "PendSV_Handler"))
         require(len(writes) == (2 if altered else 1), "Restore R9 instruction inventory drift: " + handler)
         n = writes[0]
         instruction = body[n]
         pointer = frame
         pointer_reg = UC_ARM_REG_R0
-        if profile["frame"] in ("classic0",) or profile["core"] == 23:
+        if profile["frame"] == "mpu0":
+            require(instruction["op"] == "mov" and instruction["args"] == "r9, r5", "MPU Thumb1 restore anchor drift")
+            n -= 2
+            require(body[n]["op"].startswith("ldm") and body[n]["args"] == "r1!, {r4, r5, r6, r7}" and
+                    body[n + 1]["op"] == "mov" and body[n + 1]["args"] == "r8, r4", "MPU high-register restore drift")
+            pointer_reg, pointer = UC_ARM_REG_R1, frame + 16
+        elif profile["frame"] in ("classic0",) or profile["core"] == 23:
             require(instruction["op"] == "mov" and instruction["args"] == "r9, r5", "Thumb1 restore anchor drift")
             n -= 2
             require(body[n]["op"].startswith("ldm") and body[n]["args"] == "r0!, {r4, r5, r6, r7}" and
@@ -326,6 +340,8 @@ class Machine:
             return dict(seed=seed, classification="PANIC", panic=self.panic, trace=self.trace)
         require(self.uc.reg_read(UC_ARM_REG_R9) == 0xA9A9A9A9, "Assembly seed wrapper violated outer AAPCS R9")
         frame_kind = profile["frame"]
+        if frame_kind == "mpu0":
+            return self.execute_mpu_frame(profile, seed, post, reserved, mutant)
         sw = 9 if frame_kind.startswith("classic") else 11 if frame_kind == "secure" else 10
         expected_sp = END - (sw + 8) * 4
         require(self.word(CONTEXT) == expected_sp,
@@ -363,6 +379,37 @@ class Machine:
         elif not running["matched"]:
             classification = "SWITCH-RESTORE-R9"
         return dict(seed=seed, frame_r9=actual[index], post_r9=post, first_restore=first,
+                    switch_restore=running, classification=classification, trace=self.trace)
+
+    def execute_mpu_frame(self, profile, seed, post, reserved, mutant):
+        image = CONTEXT + 36
+        require(self.word(CONTEXT) == image + 76, "Independent MPU one-past cursor geometry mismatch")
+        actual = list(struct.unpack("<20I", self.uc.mem_read(image, 80)))
+        expected = [0] * 20
+        expected[5], expected[8] = seed, ARG
+        expected[13] = self.symbols["fiber_port_unprivileged_task_return"] | 1
+        expected[14:19] = [self.symbols["r9_task_entry"] & ~1, 0x01000000, END - 32, 3, 0xFFFFFFFD]
+        for index, (wanted, found) in enumerate(zip(expected, actual)):
+            if index != 5:
+                require(wanted == found, "Independent protected MPU word mismatch: " + str(index))
+        boot = [self.word(CONTEXT + 120 + i * 4) for i in range(17)]
+        require(boot == [BEGIN, END, BEGIN + 32, END, END - BEGIN - 32,
+                         self.symbols["r9_task_entry"] | 1, ARG, 0x434D304D, 0x10001,
+                         208, 8, 0x1C04, 0xFFFFFFFD, 3, 8, 4, 20], "Independent MPU boot geometry/identity mismatch")
+        require(self.word(BEGIN) == 0xDEADBEEF and self.uc.mem_read(END - 32, 32) == bytes([0xA5]) * 32,
+                "MPU construction changed protected-frame placement or raw canary")
+        public = [r["r9"] for r in self.trace if r["name"] == "fiber_init"]
+        require(any(r["name"] == "fiber_port_context_init" for r in self.trace), "MPU public init did not reach real constructor")
+        first = self.restore_slice(profile, image, actual[5], "fiber_port_restore_first_context_from_svc", mutant)
+        saved = seed ^ 0x5A5A5A5A
+        self.put(image + 20, saved)
+        running = self.restore_slice(profile, image, saved, "PendSV_Handler", mutant)
+        classification = classify(seed, actual[5], post, public, self.panic, reserved)
+        if not first["matched"]:
+            classification = "FIRST-RESTORE-R9"
+        elif not running["matched"]:
+            classification = "SWITCH-RESTORE-R9"
+        return dict(seed=seed, frame_r9=actual[5], post_r9=post, first_restore=first,
                     switch_restore=running, classification=classification, trace=self.trace)
 
 
@@ -504,7 +551,8 @@ class Suite:
                 "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_" + profile["architecture"] + "=1",
                 "-I" + str(self.fixture), "-I" + str(port), "-I" + str(self.repo / "fiber"),
                 "-I" + str(self.repo), "-I" + self.a.cmsis_core,
-                "-DR9_CORE=" + str(profile["core"]), "-DR9_FPU=" + str(profile["fp"])]
+                "-DR9_CORE=" + str(profile["core"]), "-DR9_FPU=" + str(profile["fp"]),
+                "-DR9_MPU=" + str(int(profile["frame"] == "mpu0"))]
         base += ["-DR9_RESERVED=" + str(int(reserved))]
         if profile["core"] == 0:
             # GCC's optionless pragma warning cannot be selected by -Wno-error=.
@@ -531,11 +579,14 @@ class Suite:
                     '\n\t__asm volatile("" : "+r"(scratch) :: "memory");')
                 replacement_count += 1
             if mutant == "wrong-frame" and source.name != "fiber_core.c":
-                pattern = r"(frame\[fiber_portFRAME_R9\]\s*=\s*|\*\(--sp\)\s*=\s*)((?:fiber_port|fiber_arm_cm7_r0p1)_read_r9\(\))"
+                pattern = (r"(const uint32_t initial_r9\s*=\s*)(fiber_port_read_r9\(\))" if profile["frame"] == "mpu0" else
+                           r"(frame\[fiber_portFRAME_R9\]\s*=\s*|\*\(--sp\)\s*=\s*)((?:fiber_port|fiber_arm_cm7_r0p1)_read_r9\(\))")
                 text, count = re.subn(pattern, lambda m: m[1] + "0xDEADC0DEu", text)
                 replacement_count += count
             handler = "PendSV_Handler" if mutant == "wrong-switch" else "SVC_Handler"
-            declaration = "void " + handler + "(void)"
+            if profile["frame"] == "mpu0" and mutant == "wrong-restore":
+                handler = "fiber_port_restore_first_context_from_svc"
+            declaration = "void " + handler + "("
             if mutant in ("wrong-restore", "wrong-switch") and declaration in text:
                 head, body = text.split(declaration, 1)
                 pattern = r'("(?:ldmia\s+r[02]!,\s+\{(?:r[12]-r11|r4-r11, r14|r4-r11)\}|mov\s+r9,\s+r5)\s+\\n")'
@@ -569,7 +620,10 @@ class Suite:
                       "-Wl,--undefined=r9_stop", "-Wl,--undefined=r9_hostile_probe",
                       "-Wl,--undefined=r9_task_entry", "-Wl,--undefined=r9_fault_probe",
                       "-Wl,--undefined=SVC_Handler", "-Wl,--undefined=PendSV_Handler",
-                      "-T", self.fixture / "image.ld", "-Wl,-Map=" + str(directory / "image.map"),
+                      *(["-Wl,--undefined=fiber_addr_plausible_ram", "-Wl,--undefined=fiber_addr_plausible_code"]
+                        if profile["frame"] == "mpu0" else []),
+                      "-T", self.fixture / ("cm0_mpu.ld" if profile["frame"] == "mpu0" else "image.ld"),
+                      "-Wl,-Map=" + str(directory / "image.map"),
                       *objects, "-o", elf])
         for program, flags, output in (("arm-none-eabi-objdump.exe", ["-dr", "-Mreg-names-std"], "image.dis"),
                                        ("arm-none-eabi-readelf.exe", ["-A"], "attributes.txt"),
@@ -665,7 +719,7 @@ def main():
     parser.add_argument("--immutable-inputs", action="store_true")
     args = parser.parse_args()
     suite = Suite(args)
-    selected = profiles()
+    selected = profiles(include_cm0_mpu=bool(args.profiles and "CM0MPU" in args.profiles.split(",")))
     if args.profiles:
         names = args.profiles.split(",")
         require(set(names) <= {p["port"] for p in selected}, "Unknown development profile")

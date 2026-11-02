@@ -24,6 +24,7 @@ fiber/port/ARM_CM4/fiber_portmacro.h
 fiber/port/ARM_CM4/fiber_port_types.h
 fiber/port/ARM_CM4/fiber_port_boot_types.h
 fiber/port/ARM_CM4/fiber_port_boot.h
+fiber/port/ARM_CM4/fiber_port_private.h
 fiber/port/ARM_CM4/fiber_port_boot.c
 fiber/port/ARM_CM4/fiber_port.c
 fiber/port/ARM_CM4/fiber_port_exception.c
@@ -120,6 +121,62 @@ M7 errata policy
 
 MPU and M7 are separate exact selected ports, not conditional modes hidden in
 this context ABI.
+
+## A32/A33 Compiler Closure
+
+The port-local helper chain uses the canonical sensitive/inline-sensitive and
+general-register-only attributes, including boot checks, exception setup and
+the constructor's `r9` reader. Integer CPU/barrier/priority primitives follow the
+CM3 model without changing the global force-inline macro. FP selection,
+eager/lazy policy, frame geometry, provenance checks and errata selection are
+unchanged. Each naked transfer has one `.ltorg` after its terminal panic-loop
+branch; no executable inline-assembly instruction was changed.
+
+`tools/test_cm4_raw_compiler.ps1 -ArmGcc <gcc> -CmsisCore <cmsis>` additionally
+accepts `-FreeRtosRoot`, `-BuildRoot`, `-Python` and `-PythonModules`. The standard
+run captures immutable source/fixture/CMSIS bytes before compilation. It needs
+the preserved Git object `bc520c5a722ca70a461561cf30a59eb4ad8a4b3d` for actual
+pre-repair source, not a model of the old defect.
+
+The frozen receipt is
+`%TEMP%/fiber-cm4-raw-5a020301750b44649e6c29e466d069df/results.json`
+(SHA256 `4B8DCFAC7C10F74C3606C4E2035E822E7338F18BD83E27DFC70758D5986814E9`).
+It passed 160 cells and 800 controls across O0/Og/O2/Os/O3, ordinary/native slim-IR
+LTO, function-sectioned/unsectioned `.text`, and baseline/all-six-family raw flags.
+The four profiles are soft without silicon FPU, soft with silicon FPU,
+hard/eager and softfp/lazy. Normal import sets remain equal to matched baselines;
+unannotated, transitive, initializer and actual annotation-removal controls stay
+active. The documented supported counterflag contract remains separate.
+
+Twenty-four compiled naked-body comparisons match the immutable pre-repair
+assembly after removing only the three pool directives. Four actual pinned
+FreeRTOS O2/Os hard/softfp builds check first start, first restore and conditional
+high-FP/GPR PendSV transfers. These are mechanism checks, not identical-object
+or whole-application LTO claims. Natural pool removal links in all four profiles;
+matched 8192-byte unreachable-pressure controls link with pools and fail exact
+saved-assembly literal reach without them.
+
+The nested constructor receipt passes 48 production and 15 compiled-negative
+ELFs: 252 calls and 504 bounded first/running restore slices. Ordinary AAPCS
+register borrowing is not a static-base contract; strict inherited-`r9` seeds
+are required in explicit `-ffixed-r9` builds. This is not actual exception or FP
+execution, arbitrary PIC/TLS qualification, or external callback/memory-helper
+closure qualification.
+
+The receipt has 128 consumed inputs with zero drift. Four live shared runner/
+README files changed after immutable capture and are explicitly listed in
+`OriginalInputDrift`; neither newer bytes nor a current global aggregate are
+claimed by that snapshot. The executable deltas reviewed at handoff are guarded
+CM0/CM3 controls and a CM0-MPU RAM rule, not CM4 paths. The earlier live-input
+run `fiber-cm4-raw-34681b02e0f7451b9de5978a1d2b4ae0` remains FAIL on drift.
+
+Actual pre-repair evidence remains FAIL at
+`%TEMP%/fiber-sensitive-port-closure-a6d2c5114b2344a2937452e9d55655c4`:
+four raw-hook failures and four unsectioned O2/Os native-LTO range failures,
+zero copied-input drift. Its `results.json` SHA256 is
+`0EDB83B35A476C72DB1518315FF7FAD36CBA934124BDAEF53968780AEA7E86F5`.
+The scoped maintained gate independently reproduces the prior O2 raw leak and
+literal-range failure. Other profiles' raw-compiler status remains separate.
 
 ## Remaining Evidence
 

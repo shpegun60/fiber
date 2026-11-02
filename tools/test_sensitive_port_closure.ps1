@@ -8,6 +8,7 @@ param(
     [ValidateSet('baseline','raw','instrument','ssp','coverage','ubsan','tracepc','pg')]
     [string[]]$Bundles = @('baseline','raw'),
     [ValidateSet('sectioned','unsectioned')][string[]]$NativeLtoSections = @('sectioned','unsectioned'),
+    [ValidateSet('0','1')][string[]]$Cm0Vtor = @('0'),
     [switch]$AllProfiles,
     [switch]$AuditOnly,
     [switch]$ImmutableInputs,
@@ -32,7 +33,8 @@ $selection = if ($Profiles) { $Profiles -join ',' } else { '*' }
 $arguments = @('-B',(Join-Path $PSScriptRoot 'fixtures\sensitive_port_closure\run.py'),
     '--repo',$repo,'--arm-gcc',$ArmGcc,'--cmsis-core',$CmsisCore,'--build',$build,
     '--profiles',$selection,'--optimizations',($Optimizations -join ','),
-    '--bundles',($Bundles -join ','),'--native-lto-sections',($NativeLtoSections -join ','))
+    '--bundles',($Bundles -join ','),'--native-lto-sections',($NativeLtoSections -join ','),
+    '--cm0-vtor',($Cm0Vtor -join ','))
 if ($AllProfiles -or !$Profiles) { $arguments += '--all-profiles' }
 if ($AuditOnly) { $arguments += '--audit-only' }
 if ($ImmutableInputs) { $arguments += '--immutable-inputs' }

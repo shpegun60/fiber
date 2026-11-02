@@ -52,4 +52,7 @@ __attribute__((noreturn, noinline, used, externally_visible))
 void __stack_chk_fail(void) { __builtin_trap(); for (;;) { } }
 
 FIBER_API_NORETURN FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
+#if R9_MPU
+__attribute__((section(".fiber_port_unprivileged_functions")))
+#endif
 void r9_task_entry(void *arg) { (void)arg; __builtin_trap(); for (;;) { } }

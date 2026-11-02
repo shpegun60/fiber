@@ -466,3 +466,52 @@ No later slice may reuse privileged `ARM_CM0` saved-frame assembly, restore a
 protected context from unprivileged memory, reintroduce a broad general
 peripherals region, infer selection from `__MPU_PRESENT`, or turn the optional
 MPU configuration feature into an unconditional portable API.
+
+## A32 Raw Compiler Closure
+
+The existing privileged/unprivileged and boot function bundles already protect
+non-inline bodies. The dictionary's five existing inline helpers and five raw
+CPU-read/WFE helpers now also use the canonical inline-sensitive/GRO bundle.
+Selected C call sites use those local primitives and raw DMB/DSB/ISB/compiler
+barriers rather than unannotated CMSIS helpers. The vector LDR retains its
+Thumb-1 low-register output/base constraints and the immutable vector extent
+remains 48 words. All six naked blocks, their four existing terminal pools,
+protected-image/type geometry, linker policy, PRIMASK envelope and startup
+checks are unchanged.
+
+Qualified copied-input evidence (roots beneath `%TEMP%`):
+
+- `fiber-sensitive-port-closure-c119d2f8e42441af96ec4d16ca3ba1cf`:
+  CM0/CM0MPU, both VTOR values, O0/Og/O2/Os/O3, normal and genuine slim-LTO
+  sectioned/unsectioned groups; 120 cells, 628 controls, zero input/copy drift.
+  Actual dictionary inline-only removals at O2/Os retain GRO and must compile
+  before real transitive instrumentation is rejected. Four matched terminal-
+  pool controls cover both ports/vector dialects: pressure positives assemble,
+  while pool-only pressure negatives reject at actual literal-LDR sites.
+  Natural removal of this port's existing pools also gives five exact LDR range
+  errors per VTOR dialect, independently recorded rather than assumed.
+- `fiber-constructor-r9-ee8ebea01eed4ef682fb439445910529`:
+  both ports, 32 ordinary/reserved-R9 production tuples plus ten compiled
+  controls, 42 ELFs, 168 calls and 336 bounded GPR restores; zero input drift.
+  The explicit additional CM0MPU profile checks actual public initialization,
+  all 20 protected words, one-past cursor, 17 numeric boot words, raw canary
+  and real first/PendSV GPR restore slices. Reserved R9 is strict throughout;
+  ordinary borrowing is not a process-static-base defect. This does not emulate
+  exceptions, MPU programming or protection enforcement.
+- `fiber-cm0-parity-inputs-261d5983e5ae4b14b917c35861171e52`,
+  `O2-qualified/CM0-FOCUSED` and `Os-qualified/CM0-FOCUSED`:
+  three configurations, six actual objects and 18 ordered mechanisms per
+  optimization, zero source drift, against pinned FreeRTOS
+  `a50edad08b29052631aa469d4df6e6ec7ff68878`. The existing named protected-
+  frame, validation and atomic-switch differences remain; no instruction-
+  sequence or whole-object byte-equality claim is added.
+- `fiber-cm0-classic-inputs-b246e9fd896b4632add1bfb0440b2a82/`
+  `fiber-classic-audit-4958672cccfc4b598ddb832ab21a76c9`:
+  84 linked ARM ELFs, 842 guard checks and 90 copied files with zero drift.
+  The other classic groups are preserved comparison inputs; only CM0/CM0MPU
+  are qualified here against this repair's current source bytes.
+
+The raw gate is additional to the documented translation-unit counterflags.
+Common cold API exemptions remain exact, and external memory/callback bodies
+still need separate transitive/GRO integration proof. No hardware or isolation
+claim follows from these compiler/constructor/guard results.

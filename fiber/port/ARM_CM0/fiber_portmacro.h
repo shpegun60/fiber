@@ -25,6 +25,8 @@
 
 #define fiber_portCOMPILER_BARRIER() \
 	fiber_portASM volatile("" ::: "memory")
+#define fiber_portDATA_MEMORY_BARRIER() \
+	fiber_portASM volatile("dmb" ::: "memory")
 #define fiber_portDATA_SYNC_BARRIER() \
 	fiber_portASM volatile("dsb" ::: "memory")
 #define fiber_portINST_SYNC_BARRIER() \
@@ -176,24 +178,103 @@ FIBER_DIAG_WARN("[fiber] Selected ARMv6-M port has no SCB->VTOR; falling back to
 extern "C" {
 #endif
 
-fiber_portFORCE_INLINE uint32_t fiber_port_read_r9(void)
+/* Raw primitives keep compiler protection inside this port's helper closure. */
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_ipsr(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, ipsr" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_control(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, control" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_primask(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, primask" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_psp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, psp" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_read_msp(void)
+{
+	uint32_t value;
+	fiber_portASM volatile("mrs %0, msp" : "=r"(value) :: "memory");
+	return value;
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_cpu_wait(void)
+{
+	fiber_portASM volatile("wfe" ::: "memory");
+}
+
+/* ARMv6-M CMSIS uses word accesses, preserving the other three priority bytes. */
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+volatile uint32_t *fiber_port_cpu_priority_word(const IRQn_Type irq)
+{
+	const int32_t number = (int32_t)irq;
+	FIBER_REQUIRE((number >= 0 && number < 32) || number == -5 ||
+			number == -2 || number == -1, 'Q');
+	if (number < 0) {
+		return ((volatile uint32_t *)(uintptr_t)0xE000ED1Cu) +
+				((((uint32_t)number & 15u) - 8u) >> 2u);
+	}
+	return ((volatile uint32_t *)(uintptr_t)0xE000E400u) +
+			((uint32_t)number >> 2u);
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+uint32_t fiber_port_cpu_get_priority(const IRQn_Type irq)
+{
+	const uint32_t shift = ((uint32_t)irq & 3u) * 8u;
+	return ((*fiber_port_cpu_priority_word(irq) >> shift) & 0xFFu) >>
+			(8u - __NVIC_PRIO_BITS);
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY
+void fiber_port_cpu_set_priority(const IRQn_Type irq, const uint32_t priority)
+{
+	volatile uint32_t *const word = fiber_port_cpu_priority_word(irq);
+	const uint32_t shift = ((uint32_t)irq & 3u) * 8u;
+	*word = (*word & ~(0xFFu << shift)) |
+			(((priority << (8u - __NVIC_PRIO_BITS)) & 0xFFu) << shift);
+}
+
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_r9(void)
 {
 	uint32_t v;
 	fiber_portASM volatile("mov %0, r9" : "=r"(v));
 	return v;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_initial_xpsr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_initial_xpsr(void)
 {
 	return fiber_portINITIAL_XPSR;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_stacked_pc(uintptr_t entry)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_stacked_pc(uintptr_t entry)
 {
 	return (uint32_t)(entry & (uintptr_t)fiber_portSTART_ADDRESS_MASK);
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_arm_cm0_primask_save_disable(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_arm_cm0_primask_save_disable(void)
 {
 	uint32_t primask;
 	fiber_portASM volatile(
@@ -202,58 +283,58 @@ fiber_portFORCE_INLINE uint32_t fiber_arm_cm0_primask_save_disable(void)
 			: "=r"(primask)
 			:
 			: "memory");
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	return primask;
 }
 
-fiber_portFORCE_INLINE void fiber_arm_cm0_primask_restore(uint32_t primask)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_arm_cm0_primask_restore(uint32_t primask)
 {
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 	fiber_portASM volatile("msr primask, %0" :: "r"(primask) : "memory");
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_basepri_read(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_basepri_read(void)
 {
 	return 0u;
 }
 
-fiber_portFORCE_INLINE void fiber_port_basepri_write(uint32_t state)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_basepri_write(uint32_t state)
 {
 	(void)state;
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_scheduler_critical_enter(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_scheduler_critical_enter(void)
 {
 	return fiber_arm_cm0_primask_save_disable();
 }
 
-fiber_portFORCE_INLINE void fiber_port_scheduler_critical_exit(uint32_t state)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_scheduler_critical_exit(uint32_t state)
 {
 	fiber_arm_cm0_primask_restore(state);
 }
 
-fiber_portFORCE_INLINE void fiber_port_fpu_enable_early(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_fpu_enable_early(void)
 {
 	/* ARMv6-M has no architectural FPU. */
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_psplim_read(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_psplim_read(void)
 {
 	return 0u;
 }
 
-fiber_portFORCE_INLINE void fiber_port_psplim_write(uint32_t limit)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_psplim_write(uint32_t limit)
 {
 	(void)limit;
 }
 
-fiber_portFORCE_INLINE void fiber_port_psplim_config(uint32_t stack_low_addr)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_psplim_config(uint32_t stack_low_addr)
 {
 	(void)stack_low_addr;
 }
 
-fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t fiber_port_vectors_base_addr(void)
 {
 #if FIBER_PORT_HAS_VTOR
 	uintptr_t value = (uintptr_t)SCB->VTOR;
@@ -266,12 +347,12 @@ fiber_portFORCE_INLINE uintptr_t fiber_port_vectors_base_addr(void)
 #endif
 }
 
-fiber_portFORCE_INLINE const uint32_t *fiber_port_vectors_base_ptr(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY const uint32_t *fiber_port_vectors_base_ptr(void)
 {
 	return (const uint32_t *)fiber_port_vectors_base_addr();
 }
 
-fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_read_initial_msp(void)
 {
 	const uintptr_t base = fiber_port_vectors_base_addr();
 	uint32_t value;
@@ -280,14 +361,14 @@ fiber_portFORCE_INLINE uint32_t fiber_port_read_initial_msp(void)
 	return value;
 }
 
-fiber_portFORCE_INLINE void fiber_port_set_vectors_base_addr(uintptr_t base)
+fiber_portFORCE_INLINE FIBER_API_ATTR_INLINE_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_set_vectors_base_addr(uintptr_t base)
 {
 #if FIBER_PORT_HAS_VTOR
 # if defined(SCB_VTOR_TBLOFF_Msk)
 	base &= (uintptr_t)SCB_VTOR_TBLOFF_Msk;
 # endif
 	SCB->VTOR = (uint32_t)base;
-	{ __DSB(); __ISB(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); }
 #else
 	(void)base;
 #endif

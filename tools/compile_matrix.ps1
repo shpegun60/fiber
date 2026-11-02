@@ -614,14 +614,14 @@ function Test-ContextPortBoundary {
         $path = Join-Path $RepositoryRoot $relativePath
         $source = Get-Content -LiteralPath $path -Raw
 
-        # CM7 owns annotated raw CPU primitives; CMSIS inline annotations do
+        # Concrete classic ports own annotated raw CPU primitives; CMSIS inline annotations do
         # not inherit the sensitive caller's compiler exclusions.
         $ipsrRead = "__get_IPSR()"
         $controlRead = "__get_CONTROL()"
         $primaskRead = "__get_PRIMASK()"
         $faultmaskRead = "__get_FAULTMASK()"
         if (($relativePath -match 'ARM_CM7\\r0p1\\') -or
-                ($relativePath -match 'ARM_CM3\\')) {
+                ($relativePath -match 'ARM_CM[034]\\')) {
             $ipsrRead = "fiber_port_cpu_read_ipsr()"
             $controlRead = "fiber_port_cpu_read_control()"
             $primaskRead = "fiber_port_cpu_read_primask()"
@@ -895,7 +895,7 @@ function Test-SelectedPortIntegrityPreflight {
         $source = Get-Content -LiteralPath $path -Raw
         $pspRead = "__get_PSP()"
         if (($relativePath -match 'ARM_CM7\\r0p1\\') -or
-                ($relativePath -match 'ARM_CM3\\')) {
+                ($relativePath -match 'ARM_CM[034]\\')) {
             $pspRead = "fiber_port_cpu_read_psp()"
         }
         $saveBody = Get-CFunctionBody -Source $source `

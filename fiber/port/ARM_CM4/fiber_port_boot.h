@@ -19,19 +19,22 @@ enum {
 /* These hooks may run from PendSV validation. Their integration definitions
  * must not use FP/MVE registers or call code that does. A permissive weak
  * fallback exists only when the explicit settings opt-out enables it. */
-FIBER_GENERAL_REGS_ONLY int
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_ram(uintptr_t start, uintptr_t end);
-FIBER_GENERAL_REGS_ONLY int
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_code(uintptr_t addr);
-FIBER_GENERAL_REGS_ONLY uintptr_t
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY uintptr_t
 fiber_fallback_initial_msp(void);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberPortBoot fiber_port_boot_create(void *begin, void *end, entry_t entry, void *arg);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_check(const FiberPortBoot *ctx);
-FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *ctx);
-FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_check(const FiberPortBoot *ctx);
-FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *ctx);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_check(const FiberPortBoot *ctx);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void fiber_port_boot_record_fast_check(const FiberPortBoot *ctx);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uintptr_t fiber_port_boot_prepare_msp_for_start(const FiberPortBoot *ctx);
 
 #ifdef __cplusplus

@@ -419,7 +419,7 @@ class Audit:
             result += ["-mcmse"]
         result += ["-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_" + p["architecture"] + "=1",
                    "-DCLOSURE_CORE=" + str(p["core"]), "-DCLOSURE_MPU=" + str(p["mpu"]),
-                   "-DCLOSURE_FPU=" + str(p["fpu"]), "-DCLOSURE_VTOR=" + str(int(p["core"] != 0))]
+                   "-DCLOSURE_FPU=" + str(p["fpu"]), "-DCLOSURE_VTOR=" + str(p.get("vtor", int(p["core"] != 0)))]
         result += ["-D" + d for d in p["defines"]]
         if lto:
             result += ["-flto"]
@@ -533,16 +533,17 @@ class Audit:
                 "Hook classifier accepts similar but distinct symbols")
         self.preflight_checks += 2
 
-    def literal_range_failure(self, target):
+    def literal_range_failure(self, target, thumb1=False):
         command = self.commands[-1]
         stderr = command["stderr"]
         diagnostics = re.findall(r"^(.+\.s):(\d+): Error: (.+)$", stderr, re.M)
+        message_pattern = r"offset out of range|invalid offset, value too big \(0x[0-9A-Fa-f]+\)" if thumb1 else r"offset out of range"
         require(command["exit"] != 0 and diagnostics and
-                all(message == "offset out of range" for _, _, message in diagnostics),
+                all(re.fullmatch(message_pattern, message) for _, _, message in diagnostics),
                 "Pool control did not fail with exact literal-range diagnostics")
         for line in stderr.splitlines():
             if re.search(r"\b(?:fatal error|error|Error):", line):
-                require(re.match(r"^.+\.s:\d+: Error: offset out of range$", line) or
+                require(re.match(r"^.+\.s:\d+: Error: (?:" + message_pattern + r")$", line) or
                         re.match(r"^lto-wrapper\.exe: fatal error: .+ returned 1 exit status$", line) or
                         line.endswith(": error: lto-wrapper failed") or
                         line == "collect2.exe: error: ld returned 1 exit status",
@@ -560,18 +561,20 @@ class Audit:
             evidence.append(dict(assembly=str(assembly), line=int(lineno), instruction=lines[index].strip()))
         return dict(command="command-%05d.json" % (len(self.commands) - 1), diagnostics=evidence)
 
-    def cm3_pool_controls(self, p, directory, flags, port_objects, port_sources):
+    def classic_pool_controls(self, p, directory, flags, port_objects, port_sources):
         source = next(s for s in port_sources if s.name == "fiber_port.c")
-        preprocessed = self.run([self.gcc, *flags, "-E", source], "actual CM3 pool-control preprocessing")
+        port_name = p["name"]
+        pool_count = 4 if port_name == "CM0MPU" else 3
+        preprocessed = self.run([self.gcc, *flags, "-E", source], "actual " + port_name + " pool-control preprocessing")
         pool = re.compile(r'"\.ltorg[^"\r\n]*"')
-        require(len(pool.findall(preprocessed)) == 3, "Actual CM3 must contain exactly three terminal pools")
+        require(len(pool.findall(preprocessed)) == pool_count, "Actual " + port_name + " terminal-pool inventory changed")
         natural, count = pool.subn('""', preprocessed)
-        require(count == 3, "CM3 natural pool-removal inventory changed")
+        require(count == pool_count, "Natural pool-removal inventory changed")
         pressured, count = pool.subn(lambda match: match[0] + ' ".space 8192\\n"', preprocessed)
-        require(count == 3, "CM3 pressure-positive inventory changed")
+        require(count == pool_count, "Pressure-positive inventory changed")
         pressured_bad, count = pool.subn('""', pressured)
-        require(count == 3 and pressured_bad.count('".space 8192\\n"') == 3,
-                "CM3 pressure-negative must change only the three pool directives")
+        require(count == pool_count and pressured_bad.count('".space 8192\\n"') == pool_count,
+                "Pressure-negative must change only the actual pool directives")
         index = next(i for i, s in enumerate(port_sources) if s == source)
         outcomes = {}
         for name, text, must_fail in (("natural-pool-removal", natural, False),
@@ -579,10 +582,10 @@ class Audit:
                                       ("pressure-pools-removed", pressured_bad, True)):
             case = directory / name
             case.mkdir()
-            mutant = case / "actual-cm3.i"
+            mutant = case / ("actual-" + port_name.lower() + ".i")
             mutant.write_text(text, encoding="ascii")
-            obj = case / "actual-cm3.o"
-            self.run([self.gcc, *flags, "-c", mutant, "-o", obj], "compile actual CM3 " + name)
+            obj = case / "actual-port.o"
+            self.run([self.gcc, *flags, "-c", mutant, "-o", obj], "compile actual pool control " + name)
             elf = Elf(obj)
             require(any(s["name"].startswith(".gnu.lto_") for s in elf.sections) and
                     not any(s["flags"] & 4 and s["size"] for s in elf.sections),
@@ -594,19 +597,20 @@ class Audit:
                 self.lower(p, objects, target, flags, True, "unsectioned")
             except RuntimeError:
                 require(must_fail or name == "natural-pool-removal", "Pressure-positive failed to assemble")
-                outcomes[name] = dict(status="literal-range-failure", **self.literal_range_failure(target))
+                outcomes[name] = dict(status="literal-range-failure", **self.literal_range_failure(target, p["core"] == 0))
             else:
                 require(not must_fail, "Pressure pool-removal control unexpectedly assembled")
                 outcomes[name] = dict(status="PASS", native_sha256=digest(target))
-        row = dict(case=directory.name, kind="actual-cm3-matched-unreachable-pool-pressure", source=str(source),
+        row = dict(case=directory.name, kind="actual-" + p["name"].lower() + "-matched-unreachable-pool-pressure", source=str(source),
                    source_sha256=digest(source), pressure_bytes_per_naked_tail=8192,
                    semantics="Synthetic unreachable layout pressure only; natural pool removal is not required to fail",
                    outcomes=outcomes)
-        write_json(directory / "cm3-pool-controls.json", row)
+        write_json(directory / (p["name"].lower() + "-pool-controls.json"), row)
         self.controls.append(row)
 
     def case(self, p, opt, lto, bundle, section_mode="sectioned"):
-        label = "%s-%s-%s-%s" % (p["name"], opt, "native-lto-" + section_mode if lto else "normal", bundle)
+        profile_label = p["name"] + ("-vtor1" if p["core"] == 0 and p.get("vtor") == 1 else "")
+        label = "%s-%s-%s-%s" % (profile_label, opt, "native-lto-" + section_mode if lto else "normal", bundle)
         directory = self.build / label
         directory.mkdir()
         flags = self.flags(p, opt, lto, bundle)
@@ -633,8 +637,8 @@ class Audit:
             if group == "port" and p["kind"] not in ("companion", "paired-staged"):
                 require(FORWARD <= set(groups[group]["functions"]), "Actual forward ABI functions missing")
             write_json(directory / (group + "-classification.json"), groups[group])
-        if p["name"] == "CM3" and opt == "O2" and lto and section_mode == "unsectioned" and bundle == "baseline":
-            self.cm3_pool_controls(p, directory, flags, port_objects, port_sources)
+        if p["name"] in ("CM0", "CM0MPU", "CM3") and opt == "O2" and lto and section_mode == "unsectioned" and bundle == "baseline":
+            self.classic_pool_controls(p, directory, flags, port_objects, port_sources)
         expected = set(FAMILIES) if bundle == "raw" else {bundle} if bundle in FAMILIES else set()
         active = self.compile(self.fixture / "active_control.c", directory / "active.o", flags)
         dis = self.lower(p, [active], directory / "active-native.o", flags, lto, section_mode)
@@ -707,7 +711,35 @@ class Audit:
                 write_json(directory / "port-annotation-removal-classification.json", boot_mutation)
                 self.controls.append(dict(case=label, kind="actual-port-bundle-removal", expected=["instrument", "ubsan"],
                                           observed=sorted({h["family"] for h in boot_mutation["hooks"]})))
-        baseline_key = (p["name"], opt, lto, section_mode)
+            # At O0, GCC can reject this deliberately mixed inline policy before lowering.
+            # O2/Os require a compiled instrumentation leak, never an arbitrary build failure.
+            if p["name"] in ("CM0", "CM0MPU", "CM3", "CM3MPU") and opt in ("O2", "Os"):
+                copied = directory / "inline-bundle-removal"
+                copied.mkdir()
+                port_directory = port_sources[0].parent
+                header = port_directory / "fiber_portmacro.h"
+                original_header = header.read_bytes()
+                removed_header, removed = re.subn(rb"\bFIBER_API_ATTR_INLINE_SENSITIVE\b", b"", original_header)
+                require(removed > 0 and removed_header.count(b"FIBER_GENERAL_REGS_ONLY") ==
+                        original_header.count(b"FIBER_GENERAL_REGS_ONLY") and
+                        removed_header.count(b"FIBER_API_ATTR_SENSITIVE") == original_header.count(b"FIBER_API_ATTR_SENSITIVE"),
+                        "Inline-only annotation control must retain GRO and every non-inline annotation")
+                for source in port_directory.iterdir():
+                    if source.is_file() and source.suffix in (".c", ".h"):
+                        (copied / source.name).write_bytes(removed_header if source == header else source.read_bytes())
+                mutated_objects = [self.compile(copied / source.name, copied / (source.stem + ".o"), flags)
+                                   for source in port_sources]
+                target = copied / "port-native.o"
+                dis = self.lower(p, mutated_objects, target, flags, lto, section_mode)
+                result = inspect(target, dis)
+                require(any(d["kind"] == "function-hook" and d["family"] == "instrument" for d in result["defects"]),
+                        "Actual inline-only annotation removal did not expose transitive function instrumentation")
+                write_json(copied / "classification.json", result)
+                self.controls.append(dict(case=label, kind="actual-inline-bundle-only-removal", annotations_removed=removed,
+                                          source_header=str(header), source_header_sha256=digest(header),
+                                          mutant_header_sha256=digest(copied / header.name),
+                                          expected="function-hook:instrument", gro_retained=True))
+        baseline_key = (p["name"], p.get("vtor"), opt, lto, section_mode)
         if bundle == "baseline":
             self.baselines[baseline_key] = {name: result["protected_normal_imports"] for name, result in groups.items()}
         else:
@@ -754,7 +786,8 @@ class Audit:
                                      if self.snapshot else None),
                       Commands=len(self.commands), Python=sys.executable, PythonVersion=sys.version,
                       Requested=dict(profiles=self.a.profiles, optimizations=self.a.optimizations, bundles=self.a.bundles,
-                                     native_lto_sections=self.a.native_lto_sections, all_profiles=self.a.all_profiles),
+                                     native_lto_sections=self.a.native_lto_sections, cm0_vtor=self.a.cm0_vtor,
+                                     all_profiles=self.a.all_profiles),
                       Inventory=profiles(), Excluded=[dict(directory="ARM_CM33F", reason="Incomplete in-progress Secure FP source group; not silently admitted")])
         if not complete:
             report["Status"] = "FAIL"
@@ -822,6 +855,7 @@ def run_immutable(args):
                "--repo", root / "repo", "--arm-gcc", args.arm_gcc, "--cmsis-core", root / "cmsis",
                "--build", build, "--profiles", args.profiles, "--optimizations", args.optimizations,
                "--bundles", args.bundles, "--native-lto-sections", args.native_lto_sections,
+               "--cm0-vtor", args.cm0_vtor,
                "--input-snapshot", manifest]
     if args.all_profiles:
         command += ["--all-profiles"]
@@ -843,6 +877,7 @@ def main():
     parser.add_argument("--optimizations", default="O2,Os")
     parser.add_argument("--bundles", default="baseline,raw")
     parser.add_argument("--native-lto-sections", default="sectioned,unsectioned")
+    parser.add_argument("--cm0-vtor", default="0")
     parser.add_argument("--all-profiles", action="store_true")
     parser.add_argument("--audit-only", action="store_true")
     parser.add_argument("--cm7-prefix-root")
@@ -870,17 +905,26 @@ def main():
         bundles = ["baseline"] + [b for b in bundles if b != "baseline"]
         sections = args.native_lto_sections.split(",")
         require(set(sections) <= {"sectioned", "unsectioned"} and len(set(sections)) == len(sections), "Invalid native section inventory")
-        audit.planned_cells = sum(args.all_profiles or p["name"] in requested for p in registry) * len(opts) * (1 + len(sections)) * len(bundles)
-        for profile in registry:
-            if not args.all_profiles and profile["name"] not in requested:
-                continue
+        vtor = args.cm0_vtor.split(",")
+        require(set(vtor) <= {"0", "1"} and len(set(vtor)) == len(vtor), "Invalid CM0 VTOR inventory")
+        admitted = []
+        for entry in registry:
+            if args.all_profiles or entry["name"] in requested:
+                for value in vtor if entry["core"] == 0 else ["1"]:
+                    profile = dict(entry, vtor=int(value))
+                    if entry["name"] == "CM0" and value == "1":
+                        profile["cpu"] = "cortex-m0plus"
+                    admitted.append(profile)
+        audit.planned_cells = len(admitted) * len(opts) * (1 + len(sections)) * len(bundles)
+        for profile in admitted:
             for opt in opts:
                 for lto, section in [(False, "sectioned")] + [(True, s) for s in sections]:
                     for bundle in bundles:
                         try:
                             audit.case(profile, opt, lto, bundle, section)
                         except Exception as error:
-                            label = "%s-%s-%s-%s" % (profile["name"], opt, "native-lto-"+section if lto else "normal", bundle)
+                            profile_label = profile["name"] + ("-vtor1" if profile["core"] == 0 and profile["vtor"] == 1 else "")
+                            label = "%s-%s-%s-%s" % (profile_label, opt, "native-lto-"+section if lto else "normal", bundle)
                             failure = dict(case=label, profile=profile["name"], opt=opt, lto=lto, sections=section, bundle=bundle,
                                            error=str(error), traceback=traceback.format_exc())
                             audit.errors.append(failure)

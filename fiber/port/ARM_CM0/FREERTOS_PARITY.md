@@ -151,3 +151,52 @@ first SVC and later PendSV provenance
 PRIMASK and malformed-frame traps
 long-run stack/canary behavior
 ```
+
+## A32 Raw Compiler Closure
+
+The selected C group and every reachable local helper now carry the canonical
+sensitive/GRO policy. Raw, annotated inline MRS/barrier/WFE primitives replace
+unannotated CMSIS call sites. The priority helpers retain ARMv6-M CMSIS's word
+accesses, byte masks and shifts (`core_cm0.h`, `__NVIC_SetPriority` and
+`__NVIC_GetPriority`); they do not substitute ARMv7-M byte accesses. Only valid
+architectural interrupt numbers are admitted. The initial-MSP LDR retains its
+Thumb-1 low-register output/base constraints.
+
+The three naked blocks differ only by one `.ltorg` after each final unconditional
+panic-loop branch. No transfer instruction, frame/type layout, mask policy,
+startup validation or eight-operation boundary changed. The MPU profile's six
+naked bodies remain unchanged. Normal unsectioned O2 native lowering with these
+three pools removed reproduces four exact literal-LDR range errors for each
+VTOR dialect. Independently matched unreachable 8192-byte pressure controls pass
+with the pools and reject with only the pools removed; they are not execution
+or timing tests.
+
+Qualified copied-input evidence (roots beneath `%TEMP%`):
+
+- `fiber-sensitive-port-closure-c119d2f8e42441af96ec4d16ca3ba1cf`:
+  CM0/CM0MPU, both VTOR values, O0/Og/O2/Os/O3, normal and genuine slim-LTO
+  sectioned/unsectioned groups; 120 cells, 628 controls, zero input/copy drift.
+  Inline-only annotation-removal controls at O2/Os retain GRO and must compile
+  before the classifier rejects real transitive instrumentation. Common cold
+  API exemptions remain confined to their exact function/counter extents.
+- `fiber-constructor-r9-ee8ebea01eed4ef682fb439445910529`:
+  both ports, 32 ordinary/reserved-R9 production tuples plus ten compiled
+  controls, 42 ELFs, 168 calls and 336 bounded GPR restores; zero input drift.
+  Reserved ABI uses `-ffixed-r9` throughout; ordinary borrowing is not a
+  static-base defect. This is not exception/MPU execution qualification.
+- `fiber-cm0-parity-inputs-261d5983e5ae4b14b917c35861171e52`,
+  `O2-qualified/CM0-FOCUSED` and `Os-qualified/CM0-FOCUSED`:
+  three configurations, six actual objects and 18 ordered mechanisms per
+  optimization, zero source drift, against pinned FreeRTOS
+  `a50edad08b29052631aa469d4df6e6ec7ff68878`. Existing named validation,
+  scheduler and protected-frame differences remain; this is not byte equality.
+- `fiber-cm0-classic-inputs-b246e9fd896b4632add1bfb0440b2a82/`
+  `fiber-classic-audit-4958672cccfc4b598ddb832ab21a76c9`:
+  84 linked ARM ELFs and 842 focused guard checks, 90 copied files unchanged.
+  CM0/CM0MPU use the repaired sources; the other classic groups are preserved
+  comparison inputs, not a fresh qualification of concurrent worktree changes.
+
+The raw gate is an additional stronger software-freeze policy, not a replacement
+for documented translation-unit counterflags. External memory helpers and
+application callbacks retain their separate transitive/GRO integration proof.
+These offline results do not establish hardware switching or isolation.

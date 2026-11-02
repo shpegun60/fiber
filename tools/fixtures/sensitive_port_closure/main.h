@@ -29,7 +29,7 @@ typedef enum IRQn {
     PendSV_IRQn = -2, SysTick_IRQn = -1, Device_IRQn = 0
 } IRQn_Type;
 #if CLOSURE_CORE == 0
-#if CLOSURE_MPU
+#if CLOSURE_MPU || CLOSURE_VTOR
 #include "core_cm0plus.h"
 #else
 #include "core_cm0.h"

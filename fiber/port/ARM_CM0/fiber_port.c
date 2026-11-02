@@ -20,17 +20,17 @@ FIBER_PORT_CONTEXT_COHORT_DEFINE();
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_memory_barrier(void)
 {
-	__DMB();
-	__COMPILER_BARRIER();
+	fiber_portDATA_MEMORY_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 }
 
 FIBER_NORETURN FIBER_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_panic_wait(void)
 {
-	__DSB();
-	__ISB();
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_port_cpu_wait();
 	}
 }
 
@@ -42,7 +42,7 @@ void fiber_port_panic_wait(void)
  */
 void fiber_port_require_scheduler_configuration_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -83,6 +83,7 @@ enum {
 FIBER_STATIC_ASSERT(fiber_portOFF_STACK_BASE <= 124, "fiber_portOFF_STACK_BASE must fit Thumb-1 LDR word offset");
 FIBER_STATIC_ASSERT(fiber_portOFF_STACK_TOP <= 124, "fiber_portOFF_STACK_TOP must fit Thumb-1 LDR word offset");
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_init_context_frame(FiberContext * const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
@@ -90,7 +91,7 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 
 	uint32_t *sp = (uint32_t *)ctx->boot.stack_top;
 
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 
 	/* Hardware exception frame, low address after software frame restore. */
 	*(--sp) = fiber_port_initial_xpsr();
@@ -115,19 +116,19 @@ void fiber_port_init_context_frame(FiberContext * const ctx)
 
 	ctx->sp = sp;
 
-	{ __DSB(); __ISB(); __COMPILER_BARRIER(); }
+	{ fiber_portDATA_SYNC_BARRIER(); fiber_portINST_SYNC_BARRIER(); fiber_portCOMPILER_BARRIER(); }
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 	fiber_internal_runtime_require_current_context();
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 2u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
-	__DSB();
-	__ISB();
+	fiber_portDATA_SYNC_BARRIER();
+	fiber_portINST_SYNC_BARRIER();
 }
 
 /* The selected port owns the CPU-state contract around the user scheduler.
@@ -147,32 +148,32 @@ static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void
 fiber_port_capture_scheduler_cpu_state(FiberPortSchedulerCpuState *state)
 {
 	FIBER_REQUIRE(state != 0, 'C');
-	__COMPILER_BARRIER();
-	state->primask = __get_PRIMASK();
-	state->control = __get_CONTROL();
+	fiber_portCOMPILER_BARRIER();
+	state->primask = fiber_port_cpu_read_primask();
+	state->control = fiber_port_cpu_read_control();
 #if FIBER_PORT_HAS_BASEPRI
 	state->basepri = fiber_port_basepri_read();
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
 	state->faultmask = __get_FAULTMASK();
 #endif
-	__COMPILER_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY void
 fiber_port_validate_scheduler_cpu_state(const FiberPortSchedulerCpuState *before)
 {
 	FIBER_REQUIRE(before != 0, 'C');
-	__COMPILER_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	fiber_portCOMPILER_BARRIER();
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
 #if FIBER_PORT_HAS_BASEPRI
 	FIBER_REQUIRE(fiber_port_basepri_read() == before->basepri, 'B');
 #endif
 #if FIBER_PORT_HAS_FAULTMASK
 	FIBER_REQUIRE(__get_FAULTMASK() == before->faultmask, 't');
 #endif
-	__COMPILER_BARRIER();
+	fiber_portCOMPILER_BARRIER();
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -255,6 +256,8 @@ void fiber_port_start_first_context(
 			"movs  r0, #108                         \n" /* 'l': first-start CPU state rejected */
 			"bl    fiber_panic                      \n"
 			"b     9b                               \n"
+			/* Bound literal reach after the terminal, unconditional panic loop. */
+			".ltorg                                 \n"
 			:
 			:
 			: "memory","cc"
@@ -355,6 +358,8 @@ void SVC_Handler(void)
 			"movs  r0, #117                         \n" /* 'u' */
 			"bl    fiber_panic                      \n"
 			"b     94b                              \n"
+			/* Bound literal reach after the terminal, unconditional panic loop. */
+			".ltorg                                 \n"
 			:
 			:
 			: "memory","cc"
@@ -510,6 +515,8 @@ void PendSV_Handler(void)
 			"movs  r0, #100                         \n" /* 'd' */
 			"bl    fiber_panic                      \n"
 			"b     92b                              \n"
+			/* Bound literal reach after the terminal, unconditional panic loop. */
+			".ltorg                                 \n"
 			:
 			: [swbytes] "I" (FIBER_PORT_SOFTWARE_FRAME_BYTES),
 			  [hwbase] "I" (FIBER_PORT_EXC_BASE_BYTES),

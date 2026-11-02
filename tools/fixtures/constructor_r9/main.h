@@ -7,7 +7,10 @@
 #ifndef R9_FPU
 #error "Constructor fixture needs its physical FPU manifest"
 #endif
-#define __MPU_PRESENT 0U
+#ifndef R9_MPU
+#define R9_MPU 0
+#endif
+#define __MPU_PRESENT R9_MPU
 #if R9_CORE == 0
 #define __VTOR_PRESENT 0U
 #else
@@ -37,7 +40,11 @@ typedef enum IRQn {
     PendSV_IRQn = -2, SysTick_IRQn = -1, Device_IRQn = 0
 } IRQn_Type;
 #if R9_CORE == 0
+#if R9_MPU
+#include "core_cm0plus.h"
+#else
 #include "core_cm0.h"
+#endif
 #elif R9_CORE == 3
 #include "core_cm3.h"
 #elif R9_CORE == 4

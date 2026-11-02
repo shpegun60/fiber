@@ -2747,3 +2747,32 @@ and true caller state using three real small ARM objects; missing-instruction
 controls still reject, and restoring the old caller dependency reproduces the
 specific undefined-variable error. The central matrix invokes this guard before
 full parity. This is test-infrastructure repair, with no production changes.
+
+### CM0/CM0 MPU And CM4 Raw Helper Closure
+
+The classic ports now own sensitive/GRO inline CPU primitives and protect the
+complete non-inline validation chain. CM0 preserves Thumb-1 low-register
+constraints and priority word read-modify-write; CM4 preserves byte priority
+accesses and FP policy. Terminal literal pools are placed after nonreturning
+panic loops; executable naked transfer instructions and context ABI stay intact.
+
+The immutable CM0/CM0 MPU qualification passes 120 compiler cells and 628
+compiled controls across five optimizations, both VTOR policies and normal/
+native-LTO layouts. Additional inline-only attribute-removal controls reject
+instrumentation leakage, and constructor r9 coverage passes 42 linked ELFs.
+Parent rehashes 543 consumed-input entries and 19,395 artifact entries across
+the four recorded receipts without mismatch. These are scoped qualifications,
+not a fresh global A32 PASS or hardware claim.
+
+CM4 independently passes 160 compiler cells, 800 controls, 24 compiled naked
+comparisons, four pinned-reference builds and 63 constructor/control ELFs.
+Parent rehashes 128 consumed inputs and 21,550 artifacts without mismatch;
+the ten frozen owned source files also match. A fresh current-source replay
+passes twelve cells/sixty controls. Eight maintained classic boundary, geometry,
+preflight, ordering and CM0 MPU layout/runtime gates pass after updating only
+the exact port-local reader spellings in their source assertions.
+
+Exact roots and receipt hashes remain in the selected-port leaf ledgers.
+The shared closure runner keeps inline-only removal controls distinct from
+removing both protection bundles. External memory routines still require their
+own transitive general-registers-only integration proof.

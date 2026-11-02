@@ -20,6 +20,10 @@ genuinely lowered slim LTO, with sectioned and unsectioned LTO code generation.
 No fat native fallback is permitted. O0/Og/O3 are accepted by `-Optimizations`.
 `-Profiles`, `-Bundles`, and `-NativeLtoSections` select an explicitly recorded
 focused scope. Arrays can be passed through ordinary PowerShell invocation.
+`-Cm0Vtor 0,1` explicitly expands CM0 and CM0MPU into both vector-table
+configurations; VTOR=1 uses actual Cortex-M0+ CMSIS/CPU dialect. Default VTOR=0
+preserves the existing finite inventory. Each cell records its actual VTOR fact;
+VTOR=1 labels have a `-vtor1` suffix and independent baseline-import comparisons.
 `-ImmutableInputs` copies the admitted port families, shared source, this fixture
 and CMSIS before starting any compilation. Inventory/bytes are checked across
 copy construction; actual compiles read only that verified copy. The snapshot
@@ -79,7 +83,16 @@ unannotated helper paths reject,
 isolated cold instrumentation stays allowed beside a relocated external call,
 an unknown compiled initializer rejects, and removing the actual canonical
 bundle on actual common/port source exposes hooks and sanitizer calls. No
-historical receipt is trusted. Optimized Python direct/runpy/import invocations
+historical receipt is trusted.
+For CM0, CM0MPU, CM3 and CM3MPU, an additional actual-dictionary copy removes
+only `FIBER_API_ATTR_INLINE_SENSITIVE`, retaining all GRO and non-inline
+annotations at O2/Os. Its complete actual selected C group must compile and expose a
+function-instrumentation defect after lowering; no substitute helper is used.
+The control covers normal and both native-LTO layouts. It is not requested at
+O0/Og/O3: in particular, O0 can reject the deliberately mixed always-inline
+policy before lowering, which is not an instrumentation counterexample. The
+unmodified production group must still qualify every requested optimization.
+Optimized Python direct/runpy/import invocations
 must fail with exactly the expected diagnostic, including a counterfeit-error
 negative. Inputs include actual compiler tools/plugin and full GCC dependency
 closures (including CMSIS/toolchain headers), hashed before/after. Any input
@@ -102,6 +115,10 @@ saved assembly lines are actual `ldr =` instructions. Natural pool removal is
 recorded independently and is not required to fail: post-attribute code layout
 can put its implicit pools within range. This synthetic pressure control does
 not claim a natural-layout production failure or execute the unreachable bytes.
+The same matched control covers CM0's three and CM0MPU's four existing terminal
+pools, independently for each selected VTOR setting. Thumb-1 accepts only its
+specific `invalid offset, value too big (0x...)`/literal-range diagnostic, still
+requiring an actual saved `ldr =` line; other assembler/linker failures reject.
 
 `-Cm7PrefixRoot` explicitly recompiles a supplied historical flat CM7 source
 copy for pre-fix evidence; it never substitutes a saved success receipt and is
