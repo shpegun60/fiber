@@ -2411,3 +2411,29 @@ Failed matrix artifacts:
 Source ZIP SHA-256:
   77A8A4CA00BF261C485A845B20296D95CB0A5EEDFE6B768C861462493A44C80A
 ```
+
+### Staged C3FS Pool And Initializer
+
+The FP Secure companion now owns real static pool backing and a ninth NSC
+boot-initializer export. Its private cohort advances to generation two; the
+public layout identity does not change. Initialization follows the pinned
+Secure Init/Context policy order, adds caller/quiescent-state admission and
+sticky failure markers, and verifies the complete pool scrub and owned CPU
+policy readbacks. It does not supply an allocator or a placeholder transfer.
+
+Fresh bounded qualification passes 319 checks across eight hard/softfp,
+O2/Os and normal/LTO configurations: 1,056 initializer/pool calls, 768 query
+calls and 2,664 constructor/attachment calls, with seven compiled controls and
+two decoder controls. Parent independently rehashes 8,151 recorded input/artifact
+entries and all 35 owned source files with zero mismatches.
+
+System-register/MMIO execution is explicitly doubled and stops before BXNS.
+This is not two-image SG, FP preservation, complete runtime or hardware proof.
+The profile remains `RuntimeSelectable=0`; real allocation and paired FP
+transfer qualification remain required before activation.
+
+```text
+  %TEMP%/cm33f-secure-manifest-639466a7c86a4342a2f175f863446530
+receipt.json SHA-256:
+  AFCDB8AB78AB83050C7FBB709A0B8E15685F20C0CAD487054163D165B068209E
+```

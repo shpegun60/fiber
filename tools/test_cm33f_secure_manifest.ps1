@@ -43,6 +43,7 @@ $checks=New-Object System.Collections.Generic.List[object]
 $runs=New-Object System.Collections.Generic.List[object]
 $executions=New-Object System.Collections.Generic.List[object]
 $controls=New-Object System.Collections.Generic.List[object]
+$initializers=New-Object System.Collections.Generic.List[object]
 function Json([string]$Path,[object]$Value) {
     ConvertTo-Json -InputObject $Value -Depth 10 | Set-Content -LiteralPath $Path -Encoding ASCII
 }
@@ -76,7 +77,7 @@ function Elf([string]$Path) {
     $r=Run $readelf @('-hA','-SW','-sW',$Path) ($Path+'.attributes')
     Check ($Path+'/v8-M-only') ($r.Text -match 'Tag_CPU_arch:\s+v8-M.main' -and
         $r.Text -notmatch 'Tag_CPU_arch:\s+v8.1-M|Tag_MVE_arch|Tag_PAC_extension|Tag_BTI_extension')
-    $null=Run $objdump @('-dwC',$Path) ($Path+'.dis')
+    $null=Run $objdump @('-dwC','-z',$Path) ($Path+'.dis')
 }
 function NegativeCompile([string]$Name,[string]$Source,[string[]]$Flags,[string]$Diagnostic) {
     $r=Run $ArmGcc ($Flags+@('-c',$Source,'-o',(Join-Path $out ($Name+'.o')))) (Join-Path $out ($Name+'.log')) -Fail
@@ -90,10 +91,10 @@ function IdentityBodies([string]$Elf,[string]$Path) {
     }
     $parts -join "`n" | Set-Content -LiteralPath $Path -Encoding ASCII
 }
-function OracleReject([string]$Mode,[string]$Path,[string]$Diagnostic,[string]$Log) {
+function OracleReject([string]$Mode,[string]$Path,[string]$Diagnostic,[string]$Log,[string]$Kind='CompiledSource') {
     $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),$Mode,$Path) $Log -Fail
     Check ($Log+'/exact-rejection') ($r.ExitCode -eq 1 -and $r.Text -ceq ('REJECT:'+$Diagnostic))
-    $controls.Add(@{Mode=$Mode;Artifact=$Path;Rejection=$Diagnostic})
+    $controls.Add(@{Mode=$Mode;Artifact=$Path;Rejection=$Diagnostic;Kind=$Kind})
 }
 function MissingOnly([string]$Name,[string[]]$Arguments,[string[]]$Expected) {
     $r=Run $ArmGcc $Arguments (Join-Path $out ($Name+'.log')) -Fail
@@ -181,7 +182,7 @@ try {
         $hostile=@('-finstrument-functions','-fstack-protector-all','-fsanitize=undefined',
             '-fprofile-arcs','-ftest-coverage','-fsanitize-coverage=trace-pc')
         $so=@()
-        foreach ($unit in @('fiber_secure_gateway','fiber_secure_context_gateway','fiber_secure_context_manifest')) {
+        foreach ($unit in @('fiber_secure_gateway','fiber_secure_context_gateway','fiber_secure_context_pool')) {
             $object=Join-Path $dir ($unit+'.o')
             Compile (Join-Path $secure ($unit+'.c')) $object $sf
             $so+=$object
@@ -192,7 +193,7 @@ try {
         Compile (Join-Path $fixture 'queries.c') $secureRoot $sf
         $se=Join-Path $dir 'secure.elf'
         $imports=Join-Path $dir 'imports.a'
-        # Ordinary C calls root all eight queries and extract the manifest
+        # Ordinary C calls root eight queries plus init and extract the pool
         # helper. No whole-archive, -u cohort/helper or magic linker extractor.
         $sl=$sf+@('-save-temps=obj','-nostdlib','-Wl,--gc-sections','-Wl,--no-undefined','-Wl,--fatal-warnings',
             '-Wl,--cmse-implib',"-Wl,--out-implib=$imports",'-Wl,--section-start=.gnu.sgstubs=0x10020000',
@@ -202,7 +203,7 @@ try {
         $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'query-bodies',$se) ($se+'.body-execution.json')
         $executions.Add(($r.Text | ConvertFrom-Json))
         $hostileSecure=@()
-        foreach($unit in @('fiber_secure_gateway','fiber_secure_context_gateway','fiber_secure_context_manifest')) {
+        foreach($unit in @('fiber_secure_gateway','fiber_secure_context_gateway','fiber_secure_context_pool')) {
             $object=Join-Path $dir ($unit+'-hostile.o')
             Compile (Join-Path $secure ($unit+'.c')) $object ($sf+$hostile)
             $hostileSecure+=$object
@@ -216,10 +217,14 @@ try {
         $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'query-bodies',$he) ($he+'.body-execution.json')
         $executions.Add(($r.Text | ConvertFrom-Json))
         $defined=Get-Content -LiteralPath ($se+'.nm') -Raw
-        Check ($name+'/one-exact-key') ([regex]::Matches($defined,'(?m)^\S+\s+00000001\s+R\s+fiber_secure_context_cohort_c3fs_g1_').Count -eq 1)
-        Check ($name+'/no-lifecycle-export') ($defined -notmatch 'c3fs_v1_(initialize|allocate|load|save)\b|fiber_port_runtime_|SVC_Handler|PendSV_Handler')
+        Check ($name+'/one-exact-key') ([regex]::Matches($defined,'(?m)^\S+\s+00000001\s+R\s+fiber_secure_context_cohort_c3fs_g2_').Count -eq 1)
+        Check ($name+'/no-transfer-export') ($defined -notmatch 'c3fs_v1_(allocate|load|save)\b|fiber_port_runtime_|SVC_Handler|PendSV_Handler')
         # Audit both final image sets, including hostile/LTO CMSE envelopes.
         foreach($codeImage in @(@{Kind='normal';Elf=$se},@{Kind='hostile';Elf=$he})) {
+          $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'init-codegen',$codeImage.Elf) ($codeImage.Elf+'.initializer-codegen.json')
+          Check ($name+'/'+$codeImage.Kind+'/initializer-no-FP-envelope') ($r.ExitCode -eq 0)
+          $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'init-bodies',$codeImage.Elf) ($codeImage.Elf+'.initializer-execution.json')
+          $initializers.Add(($r.Text | ConvertFrom-Json))
           $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'query-entries',$codeImage.Elf) ($codeImage.Elf+'.entries.json')
           Check ($name+'/'+$codeImage.Kind+'/actual-SG-entries') ($r.ExitCode -eq 0)
           foreach ($unit in @('fiber_secure_gateway','fiber_secure_context_gateway')) {
@@ -308,9 +313,18 @@ try {
             Elf $re
             $r=Run $Python @('-B',(Join-Path $fixture 'run.py'),'reference',$re) ($re+'.execution.json')
             $executions.Add(($r.Text | ConvertFrom-Json))
+            # Actual unchanged FP Secure source bytes and complete generated
+            # functions, not a rewritten reference-shaped implementation.
+            foreach($unit in @('secure_context','secure_context_port','secure_init','secure_heap')) {
+                $object=Join-Path $dir ('reference-'+$unit+'.o')
+                Compile (Join-Path $reference ('secure\'+$unit+'.c')) $object ($rf+@('-mcmse'))
+            }
+            $referenceInit=Get-Content -LiteralPath (Join-Path $dir 'reference-secure_init.o.dis') -Raw
+            Check ($name+'/actual-reference-FP-policy-functions') ($referenceInit -match 'SecureInit_EnableNSFPUAccess' -and
+                $referenceInit -match 'SecureInit_DePrioritizeNSExceptions')
         }
         $runs.Add(@{Name=$name;Companion=$se;ActualImports=$qe})
-        Write-Host "PASS C3FS $name / C,C++ + eight-query companion + two actual constructor ABI modes"
+        Write-Host "PASS C3FS $name / C,C++ + nine-entry companion + two actual constructor ABI modes"
        }
       }
     }
@@ -348,7 +362,7 @@ try {
         SemanticDeletion=$needle;Count=1}
     $first=Join-Path $out 'hard-O2-normal'
     $other=@((Join-Path $first 'secure-root.o'),(Join-Path $first 'fiber_secure_context_gateway.o'),
-        (Join-Path $first 'fiber_secure_context_manifest.o'))
+        (Join-Path $first 'fiber_secure_context_pool.o'))
     $controlFlags=$sfn+@('-nostdlib','-Wl,--no-undefined','-Wl,--cmse-implib',
         '-Wl,--section-start=.gnu.sgstubs=0x10020000','-T',(Join-Path $fixture 'secure.ld'))
     foreach($kind in @('preflight','GRO')) {
@@ -357,21 +371,71 @@ try {
         else {Compile $production $object ($sfn+@('-DFIBER_GENERAL_REGS_ONLY='))}
         $ce=Join-Path $controlDir ($kind+'.elf')
         $null=Run $ArmGcc ($controlFlags+$other+@($object,"-Wl,--out-implib=$ce.imports.a",'-o',$ce)) ($ce+'.log')
+        Elf $ce
         $body=$ce+'.bodies.dis'
         IdentityBodies $ce $body
         OracleReject 'query-codegen' $body $(if($kind -eq 'preflight'){'QUERY_PREFLIGHT'}else{'QUERY_FP_ENVELOPE'}) ($ce+'.rejection.json')
         if($kind -eq 'preflight') {OracleReject 'query-bodies' $ce 'QUERY_ADMISSION' ($ce+'.body-rejection.json')}
+        else {OracleReject 'init-codegen' $ce 'INIT_FP_ENVELOPE' ($ce+'.whole-text-rejection.json')}
     }
+    # Compile controls from the actual initializer, deleting one predicate at
+    # a time. The execution oracle must reject them, rather than blessing a
+    # source string assertion or a precompiled compiler-specific blob.
+    $initSource=Join-Path $secure 'fiber_secure_context_gateway.c'
+    $initOriginal=Get-Content -LiteralPath $initSource -Raw
+    foreach($change in @(
+        @{Name='NS-FPCA';From='((control_ns & 4u) != 0u)';To='(0u != 0u)';Diagnostic='INIT_ADMISSION'},
+        @{Name='pool-exact-one';From='fiber_secure_context_pool_boot_initialize() != 1u';To='fiber_secure_context_pool_boot_initialize() == 0u';Diagnostic='INIT_STICKY_FAILURE'},
+        @{Name='CONTROL-exact-two';From='if (control != 2u)';To='if (0u != 0u)';Diagnostic='INIT_STICKY_FAILURE'})) {
+        Check ($change.Name+'/one-exact-source-mutation') ([regex]::Matches($initOriginal,[regex]::Escape($change.From)).Count -eq 1)
+        $source=Join-Path $controlDir ($change.Name+'.c')
+        $initOriginal.Replace($change.From,$change.To) | Set-Content -LiteralPath $source -Encoding ASCII
+        Json ($source+'.mutation.json') @{Original=$initSource;OriginalSHA256=(Get-FileHash -LiteralPath $initSource).Hash;
+            Mutant=$source;MutantSHA256=(Get-FileHash -LiteralPath $source).Hash;From=$change.From;To=$change.To;Count=1}
+        $object=Join-Path $controlDir ($change.Name+'.o')
+        Compile $source $object $sfn
+        $elf=Join-Path $controlDir ($change.Name+'.elf')
+        $null=Run $ArmGcc ($controlFlags+@((Join-Path $first 'secure-root.o'),
+            (Join-Path $first 'fiber_secure_gateway.o'),(Join-Path $first 'fiber_secure_context_pool.o'),
+            $object,"-Wl,--out-implib=$elf.imports.a",'-o',$elf)) ($elf+'.log')
+        Elf $elf
+        OracleReject 'init-bodies' $elf $change.Diagnostic ($elf+'.rejection.json')
+    }
+    $actualElf=Join-Path $first 'secure.elf'
+    $actualDis=Get-Content -LiteralPath ($actualElf+'.dis') -Raw
+    foreach($function in @('__acle_se_fiber_secure_context_gateway_c3fs_v1_initialize',
+                          'fiber_secure_context_pool_c3fs_g2_cohort_provider')) {
+        $pattern='(?m)^[0-9a-f]+ <'+[regex]::Escape($function)+'>:\r?\n([^\r\n]+)'
+        $match=[regex]::Match($actualDis,$pattern)
+        Check ($function+'/decoder-control-function') $match.Success
+        $line=$match.Groups[1].Value
+        Check ($function+'/decoder-control-one-line') ([regex]::Matches($actualDis,[regex]::Escape($line)).Count -eq 1)
+        $copy=Join-Path $controlDir ($function+'-decode.elf')
+        Copy-Item -LiteralPath $actualElf -Destination $copy
+        $actualDis.Replace($line,'') | Set-Content -LiteralPath ($copy+'.dis') -Encoding ASCII
+        Json ($copy+'.mutation.json') @{ActualElf=$actualElf;ActualElfSHA256=(Get-FileHash -LiteralPath $actualElf).Hash;
+            CopiedElfSHA256=(Get-FileHash -LiteralPath $copy).Hash;OriginalDisassemblySHA256=(Get-FileHash -LiteralPath ($actualElf+'.dis')).Hash;
+            MutantDisassemblySHA256=(Get-FileHash -LiteralPath ($copy+'.dis')).Hash;SemanticDeletion=$line;Count=1}
+        OracleReject 'init-codegen' $copy 'INIT_TEXT_DECODE_COVERAGE' ($copy+'.rejection.json') 'ByteDecoder'
+    }
+    $generation=Join-Path $controlDir 'generation.o'
+    Compile (Join-Path $fixture 'generation.c') $generation $sfn
+    $r=Run $ArmGcc ($sfn+@('-nostdlib','-Wl,--gc-sections','-Wl,-e,fixture_without_pool_generation',
+        '-T',(Join-Path $fixture 'image.ld'),'-T',(Join-Path $secure 'fiber_secure_context_cohort_contract.ld'),
+        $generation,'-o',(Join-Path $controlDir 'no-generation.elf'))) (Join-Path $controlDir 'no-generation.log') -Fail
+    Check 'missing-pool-generation-exact-ASSERT' ($r.ExitCode -ne 0 -and
+        $r.Text.Contains('[fiber]: C3FS Secure exact-pool generation 2 required') -and
+        $r.Text -notmatch 'undefined reference')
     $mixedObject=Join-Path $controlDir 'manifest-other-capacity.o'
-    Compile (Join-Path $secure 'fiber_secure_context_manifest.c') $mixedObject ($sfn+@(
+    Compile (Join-Path $secure 'fiber_secure_context_pool.c') $mixedObject ($sfn+@(
         '-UFIBER_ARM_CM33F_SECURE_CONTEXT_MAX_COUNT','-DFIBER_ARM_CM33F_SECURE_CONTEXT_MAX_COUNT=2',
         '-UFIBER_ARM_CM33F_SECURE_CONTEXT_MAX_STACK_BYTES','-DFIBER_ARM_CM33F_SECURE_CONTEXT_MAX_STACK_BYTES=400'))
     $r=Run $ArmGcc ($controlFlags+@((Join-Path $first 'secure-root.o'),
         (Join-Path $first 'fiber_secure_gateway.o'),(Join-Path $first 'fiber_secure_context_gateway.o'),
         $mixedObject,"-Wl,--out-implib=$controlDir/mixed.imports.a",'-o',(Join-Path $controlDir 'mixed.elf'))) (Join-Path $controlDir 'mixed.log') -Fail
     Check 'mixed-actual-manifest-exact-key-rejected' ($r.ExitCode -ne 0 -and
-        $r.Text -match 'undefined reference to .fiber_secure_context_cohort_c3fs_g1_' -and
-        $r.Text -notmatch 'undefined reference to .fiber_secure_context_manifest_c3fs_v1_cohort_provider')
+        $r.Text -match 'undefined reference to .fiber_secure_context_cohort_c3fs_g2_' -and
+        $r.Text -notmatch 'undefined reference to .fiber_secure_context_pool_c3fs_g2_cohort_provider')
     $cold=Join-Path $first 'ordinary'
     $link=$nf+@('-nostdlib','-Wl,--gc-sections','-Wl,--no-undefined',
         '-Wl,-u,fiber_port_secure_context_attach','-Wl,-u,fixture_task',
@@ -395,7 +459,8 @@ try {
     $importNames=@('fiber_secure_gateway_c3fs_v1_abi_version','fiber_secure_gateway_c3fs_v1_context_port_id',
         'fiber_secure_gateway_c3fs_v1_context_layout_version','fiber_secure_gateway_c3fs_v1_context_feature_mask',
         'fiber_secure_context_gateway_c3fs_v1_abi_version','fiber_secure_context_gateway_c3fs_v1_stack_alignment',
-        'fiber_secure_context_gateway_c3fs_v1_max_stack_bytes','fiber_secure_context_gateway_c3fs_v1_max_contexts')
+        'fiber_secure_context_gateway_c3fs_v1_max_stack_bytes','fiber_secure_context_gateway_c3fs_v1_max_contexts',
+        'fiber_secure_context_gateway_c3fs_v1_initialize')
     MissingOnly 'missing-C3FS-imports' ($nf+@('-nostdlib','-Wl,--gc-sections','-Wl,--no-undefined',
         '-Wl,-e,fixture_real_imports','-T',(Join-Path $fixture 'image.ld'),(Join-Path $first 'queries.c.c.o'),
         '-o',(Join-Path $controlDir 'missing-imports.elf'))) $importNames
@@ -414,7 +479,9 @@ try {
     Json (Join-Path $out 'runs.json') $runs.ToArray()
     Json (Join-Path $out 'executions.json') $executions.ToArray()
     Json (Join-Path $out 'controls.json') $controls.ToArray()
-    $calls=0; $bodyCalls=0; $referenceCalls=0
+    Json (Join-Path $out 'initializers.json') $initializers.ToArray()
+    $calls=0; $bodyCalls=0; $referenceCalls=0; $initializerCalls=0
+    foreach($execution in $initializers) {$initializerCalls += $execution.InitializerBodyCalls}
     foreach($execution in $executions) {
         if($execution.PSObject.Properties['Calls']) {$calls += $execution.Calls}
         if($execution.PSObject.Properties['QueryBodyCalls']) {$bodyCalls += $execution.QueryBodyCalls}
@@ -423,9 +490,12 @@ try {
     Json (Join-Path $out 'receipt.json') @{Verdict=$(if($ok -and !$drift.Count){'PASS'}else{'FAIL'});
         Configurations=$runs.Count;Checks=$checks.Count;Executions=$executions.Count;
         ConstructorCalls=$calls;QueryBodyCalls=$bodyCalls;ReferenceCalls=$referenceCalls;
-        CompiledControlRejections=$controls.Count;
+        CompiledControlRejections=@($controls | Where-Object {$_.Kind -eq 'CompiledSource'}).Count;
+        ByteDecoderControlRejections=@($controls | Where-Object {$_.Kind -eq 'ByteDecoder'}).Count;
+        InitializerBodyRuns=$initializers.Count;
+        InitializerBodyCalls=$initializerCalls;
         Inputs=$before.Count;InputDrift=$drift;SourceSnapshots=$copies.Count;Evidence=$out;
-        Limits='Staged construction/attachment with labelled NS query doubles; real companion compile/link/codegen and isolated query-body preflight with register doubles, stopping before BXNS; no SG, FP stacking, switching or hardware qualification.'}
+        Limits='Staged construction/attachment with labelled NS query doubles; real pool and nine-entry companion compile/link/codegen; actual query/initializer bodies with explicit register/MMIO fault doubles, stopping before BXNS. No SG, FP stacking, switching or hardware qualification.'}
     $artifacts=@(Get-ChildItem -LiteralPath $out -Recurse -File | ForEach-Object {
         [pscustomobject]@{Path=$_.FullName.Substring($out.Length+1);Sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}})
     Json (Join-Path $out 'artifacts.json') $artifacts

@@ -17,7 +17,7 @@
 # define FIBER_C3FS_PRIVATE_COHORT_ALIGNOF _Alignof
 #endif
 
-/* C3FS generation 1 has its own fixed field order and private record revision.
+/* C3FS generation 2 binds real pool backing, not the metadata-only g1 stage.
  * Constants are evaluated, never pasted from count/capacity macro spellings. */
 #define FIBER_C3FS_PRIVATE_COHORT_FACTS(first, next) \
 	first(p, FIBER_ARM_CM33F_SECURE_GATEWAY_CONTEXT_PORT_ID) \
@@ -69,7 +69,7 @@ FIBER_C3FS_PRIVATE_COHORT_ASSERT(
 #define FIBER_C3FS_PRIVATE_COHORT_KEY_PART(tag, value) \
 	"_" #tag "_%c[" #tag "_hi]_%c[" #tag "_lo]"
 #define FIBER_C3FS_PRIVATE_COHORT_KEY \
-	"fiber_secure_context_cohort_c3fs_g1" \
+	"fiber_secure_context_cohort_c3fs_g2" \
 	FIBER_C3FS_PRIVATE_COHORT_FACTS(FIBER_C3FS_PRIVATE_COHORT_KEY_PART, \
 			FIBER_C3FS_PRIVATE_COHORT_KEY_PART)
 
@@ -85,7 +85,7 @@ FIBER_C3FS_PRIVATE_COHORT_ASSERT(
 			FIBER_C3FS_PRIVATE_COHORT_OPERANDS_FIRST, \
 			FIBER_C3FS_PRIVATE_COHORT_OPERANDS_NEXT)
 
-/* Only the strong non-inlined/noipa manifest C helper emits the provider. Keep
+/* Only the strong non-inlined/noipa pool C helper emits the provider. Keep
  * duplicate definitions strong and restore the original assembler section. */
 #define FIBER_C3FS_PRIVATE_COHORT_DEFINE() \
 	__asm volatile ( \
@@ -96,12 +96,12 @@ FIBER_C3FS_PRIVATE_COHORT_ASSERT(
 		".size " FIBER_C3FS_PRIVATE_COHORT_KEY ", 1\n\t.popsection" \
 		:: FIBER_C3FS_PRIVATE_COHORT_OPERANDS : "memory")
 
-/* A real C dependency extracts the manifest archive member even with LTO. The
+/* A real C dependency extracts the pool archive member even with LTO. The
  * subsequent volatile exact-key relocation/read binds its actual tuple.
  * This uses 24 immediate inputs plus one scratch output, not hot-path calls. */
 #define FIBER_C3FS_PRIVATE_COHORT_RETAIN() do { \
 	uint32_t fiber_c3fs_private_cohort_byte; \
-	fiber_secure_context_manifest_c3fs_v1_cohort_provider(); \
+	fiber_secure_context_pool_c3fs_g2_cohort_provider(); \
 	__asm volatile ( \
 		"ldr %[cohort_byte], =" FIBER_C3FS_PRIVATE_COHORT_KEY "\n\t" \
 		"ldrb %[cohort_byte], [%[cohort_byte]]" \

@@ -5,6 +5,7 @@ if sys.flags.optimize or not __debug__:
 import json
 import re
 import struct
+import hashlib
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
 from unicorn import (Uc, UC_ARCH_ARM, UC_MODE_THUMB, UC_MODE_MCLASS, UC_HOOK_CODE,
@@ -186,7 +187,7 @@ def query_codegen(path):
                 re.search(r'\btst(?:\.w)?\b.*#1\b', body) and
                 re.search(r'\budf\b.*#75\b', body) and
                 len(re.findall(r'#15728640\b', body)) >= 2 and
-                'fiber_secure_context_manifest_c3fs_v1_cohort_provider' in body,
+                'fiber_secure_context_pool_c3fs_g2_cohort_provider' in body,
                 'QUERY_PREFLIGHT')
         # GNU objdump spells GCC's flags-only APSR_nzcvqg cleanup CPSR_fs.
         # Admit that exact encoding, never a CONTROL/mask-policy write.
@@ -229,6 +230,10 @@ def query_bodies(path):
             uc.mem_map(0xe000e000, 0x2000)
             for address, data in image.loads:
                 uc.mem_write(address, data)
+            pool = image.symbols['fiber_secure_context_pool_image']
+            uc.mem_write(pool[0], b'\xa5' * pool[1])
+            for state in ('fiber_secure_context_pool_state', 'fiber_secure_context_gateway_state'):
+                uc.mem_write(image.symbols[state][0], pack([0xa5a5a5a5]))
             uc.mem_write(0xe000ed88, pack([cpacr]))
             uc.reg_write(UC_ARM_REG_XPSR, 0x01000000)
             uc.reg_write(UC_ARM_REG_CONTROL, control)
@@ -237,8 +242,8 @@ def query_bodies(path):
             uc.reg_write(UC_ARM_REG_PSP, 0x3000e000)
             uc.reg_write(UC_ARM_REG_LR, 0x12345679)
             observations = {'terminal': False, 'return': False, 'provider': False,
-                            'cpacr_reads': 0, 'mmio_writes': 0}
-            provider = image.symbols['fiber_secure_context_manifest_c3fs_v1_cohort_provider'][0] & ~1
+                            'cpacr_reads': 0, 'mmio_writes': 0, 'backend_writes': 0}
+            provider = image.symbols['fiber_secure_context_pool_c3fs_g2_cohort_provider'][0] & ~1
             def code(cpu, address, size, _):
                 if address == provider:
                     observations['provider'] = True
@@ -255,6 +260,8 @@ def query_bodies(path):
                     observations['cpacr_reads'] += 1
                 if kind == UC_MEM_WRITE and address >= 0xe0000000:
                     observations['mmio_writes'] += 1
+                if kind == UC_MEM_WRITE and 0x30000000 <= address < 0x30001000:
+                    observations['backend_writes'] += 1
             uc.hook_add(UC_HOOK_CODE, code)
             uc.hook_add(UC_HOOK_MEM_READ | UC_HOOK_MEM_WRITE, memory)
             try:
@@ -266,7 +273,8 @@ def query_bodies(path):
                     observations['terminal'] != accepted, 'QUERY_ADMISSION')
             require(observations['provider'] == accepted and
                     observations['cpacr_reads'] == (0 if control else 1) and
-                    observations['mmio_writes'] == 0, 'QUERY_PREFLIGHT_ORDER')
+                    observations['mmio_writes'] == 0 and observations['backend_writes'] == 0,
+                    'QUERY_PREFLIGHT_ORDER')
             if accepted:
                 require(uc.reg_read(UC_ARM_REG_R0) == result and
                         uc.reg_read(UC_ARM_REG_MSP) == 0x3000f000, 'QUERY_VALUE_OR_STACK')
@@ -280,7 +288,9 @@ def query_entries(path):
     names = [name for name in image.symbols if
              name.startswith(('fiber_secure_gateway_c3fs_v1_',
                               'fiber_secure_context_gateway_c3fs_v1_'))]
-    require(len(names) == 8, 'QUERY_ENTRY_COUNT')
+    require(len(names) == 9, 'QUERY_ENTRY_COUNT')
+    covered = set()
+    digest = hashlib.sha256()
     for name in names:
         match = re.search(r'(?ms)^([0-9a-f]+) <' + re.escape(name) +
                           r'>:\n(.*?)(?=^[0-9a-f]+ <|\Z)', text)
@@ -288,8 +298,10 @@ def query_entries(path):
         instructions = re.findall(r'^[ \t]*([0-9a-f]+):[ \t]+'
             r'((?:[0-9a-f]{4,8}[ \t]+)+)([a-z][a-z0-9.]*)[ \t]*(.*)$',
             match[2], re.M)
-        require(len(instructions) == 2, 'QUERY_ENTRY_EXTENT')
         start = image.symbols[name][0] & ~1
+        require(image.symbols[name][1] == 8, 'QUERY_ENTRY_SYMBOL_SIZE')
+        instructions = [i for i in instructions if start <= int(i[0],16) < start+8]
+        require(len(instructions) == 2, 'QUERY_ENTRY_EXTENT')
         first, branch = instructions
         require(int(first[0],16) == start and
                 sum(len(token)//2 for token in first[1].split()) == 4 and
@@ -300,7 +312,17 @@ def query_entries(path):
                 int(branch[3].split()[0],16) ==
                     (image.symbols['__acle_se_'+name][0] & ~1),
                 'QUERY_ENTRY_BRANCH')
-    return {'ActualVeneers': 8, 'BytesCovered': 64, 'Status': 'PASS'}
+        covered.update(range(start, start+8))
+    with open(path, 'rb') as stream:
+        elf = ELFFile(stream)
+        section = elf.get_section_by_name('.gnu.sgstubs')
+        raw, base = section.data(), section['sh_addr']
+        require(len(raw) == 96 and len(covered) == 72 and
+                all(byte == 0 for offset, byte in enumerate(raw) if base+offset not in covered),
+                'QUERY_ENTRY_PADDING')
+        digest.update(raw)
+    return {'ActualVeneers': 9, 'BytesCovered': 72, 'ZeroPaddingBytes': 24,
+            'NSCSectionSHA256': digest.hexdigest().upper(), 'Status': 'PASS'}
 
 def main():
     mode, path = sys.argv[1:3]
@@ -314,6 +336,9 @@ def main():
         result = query_bodies(path)
     elif mode == 'query-entries':
         result = query_entries(path)
+    elif mode in ('init-codegen', 'init-bodies'):
+        import initialize
+        result = initialize.codegen(path) if mode == 'init-codegen' else initialize.execute(path)
     else:
         raise RuntimeError('unknown mode')
     print(json.dumps(result))

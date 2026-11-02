@@ -10,7 +10,9 @@ SECTIONS {
     .gnu.sgstubs 0x10020000 : { *(.gnu.sgstubs*) } > NSC
     .data : { *(.data*) } > RAM
     .bss (NOLOAD) : { *(.bss*) *(COMMON) } > RAM
+    .fiber_secure_context_pool (NOLOAD) : { *(.fiber_secure_context_pool) } > RAM
     /DISCARD/ : { *(.ARM.exidx*) *(.ARM.extab*) *(.comment*) *(.note*) }
 }
-ASSERT(SIZEOF(.gnu.sgstubs) == 64, "eight actual C3FS SG entries required")
-ASSERT(SIZEOF(.bss) == 0, "staged companion must not allocate a pool or marker")
+ASSERT(SIZEOF(.gnu.sgstubs) == 96, "nine actual C3FS SG entries plus alignment required")
+ASSERT(SIZEOF(.bss) == 8, "two four-byte C3FS boot markers required")
+ASSERT(SIZEOF(.fiber_secure_context_pool) == 864, "3x256 C3FS pool backing required")

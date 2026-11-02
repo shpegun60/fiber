@@ -10,5 +10,6 @@ uint32_t fixture_real_imports(void)
         fiber_secure_context_gateway_c3fs_v1_abi_version() +
         fiber_secure_context_gateway_c3fs_v1_stack_alignment() +
         fiber_secure_context_gateway_c3fs_v1_max_stack_bytes() +
-        fiber_secure_context_gateway_c3fs_v1_max_contexts();
+        fiber_secure_context_gateway_c3fs_v1_max_contexts() +
+        fiber_secure_context_gateway_c3fs_v1_initialize();
 }

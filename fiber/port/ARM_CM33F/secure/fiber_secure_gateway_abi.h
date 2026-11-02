@@ -1,4 +1,4 @@
-/* Eight immutable NSC queries for the staged scalar-SP C3FS companion. */
+/* Eight immutable NSC queries and one boot initializer for staged C3FS. */
 #ifndef FIBER_ARM_CM33F_SECURE_GATEWAY_ABI_H_
 #define FIBER_ARM_CM33F_SECURE_GATEWAY_ABI_H_
 #include <stdint.h>
@@ -63,6 +63,7 @@ FIBER_C3FS_NSC uint32_t fiber_secure_context_gateway_c3fs_v1_abi_version(void);
 FIBER_C3FS_NSC uint32_t fiber_secure_context_gateway_c3fs_v1_stack_alignment(void);
 FIBER_C3FS_NSC uint32_t fiber_secure_context_gateway_c3fs_v1_max_stack_bytes(void);
 FIBER_C3FS_NSC uint32_t fiber_secure_context_gateway_c3fs_v1_max_contexts(void);
+FIBER_C3FS_NSC uint32_t fiber_secure_context_gateway_c3fs_v1_initialize(void);
 #ifdef __cplusplus
 }
 #endif

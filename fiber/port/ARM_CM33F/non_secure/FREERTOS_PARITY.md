@@ -8,7 +8,9 @@ and include paths are required; no global selector/route has been added.
 Implemented here: the type-only public storage, private dictionary, sealed
 basic constructor, cold-frame checker, and one-shot pre-start attachment.
 There is no port runtime bundle/provider, SVC, PendSV, first restore, yield,
-scheduler adapter, running-frame validator, live-handle BSS, or Secure lifecycle.
+scheduler adapter, running-frame validator or live-handle BSS. The companion
+now has pool backing and a boot initializer, but no allocation/load/save export
+and no NS startup caller. No Secure allocation/transfer lifecycle is active.
 Do not satisfy those absent operations with dummy implementations.
 
 | Fact | Exact Value |
@@ -106,11 +108,11 @@ hashes are also maintained in `tools/fixtures/cm33f_secure_reference/README.md`.
 | Same PendSV bit4 | Absent. Conditional s16-s31 transfers and raw basic/extended envelopes must be implemented and independently executed. |
 | NS `port.c:1109` SVC100/101/102 | Not copied. Fiber attachment records a pre-start request rather than importing FreeRTOS SVC/heap/task APIs. No new public/common operations. |
 | NS `port.c:1015` FPU setup | Absent. Future Secure grant must precede NS CPACR CP10/11 enable/readback and chosen NS FPCCR ASPEN/LSPEN policy. |
-| Secure `secure_init.c` | Queries do not initialize CPU state. Future initializer owns NSACR.CP10/11 grant, Secure FPCCR.LSPENS clear/TS set and readback; it must not claim to repair prerequisites of earlier queries. |
-| Secure init/allocate/free | Absent, including static pool BSS and initialization latch. Capacity queries are configured future limits, not proof of allocated RAM. |
+| Secure `secure_init.c` | Queries remain read-only. The ninth Secure NSC export owns PRIS, NSACR.CP10/11 grant and FPCCR.LSPENS clear/TS set with readback; it cannot repair prerequisites of earlier queries. NS CPACR/FPCCR setup is still absent here. |
+| Secure init/allocate/free | Secure static backing, whole-image scrub and one-shot boot initialization now exist; see the Secure ledger. Allocate/free remain absent. Capacity is configured reservation, not proof of a usable allocated FP context. |
 | Secure load/save helpers | Absent. Non-MPU has no per-context CONTROL slot. Preserve active FPCA/SFPA appropriately; do not transplant scalar exact-CONTROL2 admission or clear those bits during transfers. |
 | Secure S0 lazy trigger | Absent. Real `VSTMDB/VLDMIA {s0}` requires4 bytes below live PSP, plus genuine deferred-stack extent/readback/seal/owner proof before execution. Zero net pointer movement does not eliminate scratch. |
-| CMSE envelopes | Real eight-query companion/imports are compiled and linked. GRO prevents FP cleanup in the qualified GCC14 bodies; generated envelopes are inspected, not assumed instruction-free for arbitrary compilers. |
+| CMSE envelopes | Real eight-query plus one-initializer companion/imports are compiled and linked. GRO prevents FP cleanup in qualified GCC14 bodies; generated envelopes are inspected, not assumed instruction-free for arbitrary compilers. |
 
 Exact reference SHA256:
 
@@ -134,13 +136,14 @@ C/C++ public/manifest/import declarations, real Secure query archives, and two
 coherent r9 ABI modes per constructor configuration. Actual unchanged reference
 constructors are additionally compiled/executed in four non-LTO combinations.
 Each configuration additionally compiles the actual NS port and Secure
-query/manifest helper graph with raw `-finstrument-functions`, stack protector,
+query/initializer/pool helper graph with raw `-finstrument-functions`, stack protector,
 UB sanitizer, profile arcs, test coverage and trace-pc coverage. No disabling
 counterflags or instrumentation providers are added for those port objects;
 their real linked helper chains must remain free of those dependencies. The
 common fixture/library support is not advertised as globally hostile-qualified.
 No CMSIS register-access function is reachable in this new port chain: local
-annotated raw assembly reads/barriers are used. FPCCR access is not implemented.
+annotated raw assembly reads/barriers are used. The Secure initializer's FPCCR
+policy operations have explicit bounded body/readback tests, not hardware proof.
 This is isolated C3FS evidence, not closure of inherited A32 in other profiles.
 
 Constructor/attachment execution uses Unicorn2.1.4/pyelftools0.33 and labelled
@@ -157,3 +160,10 @@ not genuine SG/BXNS, SFPA/FPCA, physical FPU, lazy stacking or paired switching.
 The original 216-check paired-reference suite is separate compiled-reference
 evidence, not an activation result for this new Fiber pair. A final generated
 receipt, not this ledger's prose, is authoritative for exact counts/hashes.
+
+The Secure pool/initializer extension preserves this NS context identity, cold
+handle0 rules, sealed request and RuntimeSelectable0. The new initializer import
+declaration does not make attachment call it. Private Secure cohort generation2
+rejects stale metadata-only backing; it is not a public context-layout bump.
+The initializer's system-register/MMIO fault-model execution does not qualify
+SG transitions, lazy FP preservation or a complete paired runtime.
