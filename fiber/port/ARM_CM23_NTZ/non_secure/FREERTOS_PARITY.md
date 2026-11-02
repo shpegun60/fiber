@@ -256,3 +256,57 @@ The compile matrix must prove:
 The archive/ELF/LTO proof activates this exact build-selected profile only. It
 does not make a Cortex-M23 hardware claim and does not promote Secure, MPU,
 SecureContext, or TF-M behavior into this non-MPU Non-secure ABI.
+
+## A32 Raw Compiler Helper Closure
+
+The selected port now applies `FIBER_API_ATTR_SENSITIVE` plus
+`FIBER_GENERAL_REGS_ONLY` to its non-inline construction/hash/validation
+helpers and matching private declarations. Every port-owned inline CPU,
+vector and frame helper uses `FIBER_API_ATTR_INLINE_SENSITIVE` plus
+general-register constraints. Sensitive paths use protected local MRS, WFE
+and system-handler-priority primitives rather than calling unprotected CMSIS
+function bodies. Shared geometry helpers already carry the canonical bundle.
+
+The M23 local priority helpers retain CMSIS's word-sized SHPR read/modify/write
+and preserve neighboring priority fields. No BASEPRI, FAULTMASK, or PSPLIM
+register access is introduced; the ignored PSPLIM frame word stays unchanged.
+
+The naked startup/SVC/PendSV source bodies, initial frame-builder body,
+preprocessor dictionary, public/storage geometry, eight forward operations,
+security policy and capability metadata are unchanged. The out-of-line boot
+factory can import ordinary scalar `memset` to zero its existing 72-byte
+stack-local boot record; this is a classified integration dependency, not a
+new reverse ABI operation or permission for unresolved private helpers.
+
+The preserved pre-fix receipt is
+`%TEMP%/fiber-sensitive-port-closure-761d3c9a8fc745579a721cad85ba7150/results.json`.
+Its nine selected O2 baseline cells pass and nine raw cells fail. It is not
+relabeled as a runtime failure under the previously required counterflags.
+
+Current-source qualification:
+- `%TEMP%/fiber-sensitive-port-closure-ce9d6230eb58496c839e979cf28dd31f/results.json`
+  passes all three scalar NTZ groups: 90 cells and 450 controls, zero defects,
+  errors or input drift. Each group has 30 cells: O0/Og/O2/Os/O3, baseline/raw,
+  ordinary native objects and genuinely lowered sectioned/unsectioned LTO.
+  The raw bundle enables instrumentation, SSP, gcov, UBSAN, trace-PC and `-pg`
+  without instrumentation counterflags. Ordinary cold common init/registration
+  remains outside the frozen common-sensitive bundle; this is not an
+  all-five-common-operations attribute claim.
+- `%TEMP%/fiber-constructor-r9-0b87c42ea0f04b6781c2312076ef1dfb/results.json`
+  passes the explicit three-profile subset: 48 configurations, 15 controls,
+  252 constructor calls and 504 bounded first/running GPR restore slices.
+  `CompleteSuite=false` labels that subset, not a global R9 run. Strict
+  initial static-base inheritance applies only to the whole-chain reserved-R9
+  ABI; ordinary AAPCS borrowing is recorded separately from caller corruption.
+  These Unicorn instruction slices are not actual M23/M33/M55 exception,
+  security-state, FP or running-scheduler execution.
+- `%TEMP%/ntz-owner-ordered-f5bbba69249943baa0e96fd1e4c92314/receipt.json`
+  passes 18 actual pinned-reference O2/Os ordered first-start/first-restore/
+  PendSV comparisons across the three groups, plus M23 PSPLIM-absence checks.
+  A retained temporary AST selector replays the unchanged maintained parity
+  configurations, compile loop and assertions; it does not replace that proof
+  with a model or claim closed-body/global parity. The pinned full-tree checks
+  run before and after compilation.
+
+No profile promotion, new hardware qualification, public ABI change, or
+shared compiler-attribute policy change is implied by this additional proof.

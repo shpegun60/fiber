@@ -3418,7 +3418,7 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
             "fiber_port_context_prepare_first_start(first)",
             "fiber_port_require_start_interrupt_state()",
             "fiber_port_primask_save_disable()",
-            "__get_PRIMASK() == 1u",
+            "fiber_port_cpu_read_primask() == 1u",
             "fiber_port_validate_exception_start_configuration()",
             "fiber_port_start_first_context(msp_top)")) {
         $stepIndex = $startFirstBody.IndexOf($startBoundaryStep,
@@ -3476,10 +3476,10 @@ FiberContext fiber_cm23_ntz_cpp_type_only_object;
         -Signature "void fiber_port_runtime_schedule(void)" -Path $runtimePath
     $lastScheduleStep = -1
     foreach ($scheduleStep in @(
-            "FIBER_REQUIRE(__get_IPSR() == 0u, 'i');",
+            "FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');",
             "fiber_internal_runtime_require_current_context();",
-            "FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');",
-            "FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');",
+            "FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 2u, 'l');",
+            "FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');",
             "fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;",
             "fiber_portDATA_SYNC_BARRIER();",
             "fiber_portINST_SYNC_BARRIER();")) {
@@ -9482,7 +9482,8 @@ FiberContext fiber_cm33_ntz_cpp_type_only_object;
         "fiber_internal_runtime_select_scheduler_candidate",
         "fiber_internal_task_return",
         "fiber_panic",
-        "memcpy"
+        "memcpy",
+        "memset"
     )
     $constructionUndefinedDelta = @(Compare-Object `
         -ReferenceObject $allowedConstructionUndefined `
@@ -9735,6 +9736,9 @@ void fiber_panic(char code)
     }
 }
 
+/* Retain late-lowered libc calls through native LTO; these fixture bodies use GPRs only. */
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memcpy(void *destination, const void *source, size_t size)
 {
     unsigned char *out = (unsigned char *)destination;
@@ -9745,6 +9749,8 @@ void *memcpy(void *destination, const void *source, size_t size)
     return destination;
 }
 
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memset(void *destination, int value, size_t size)
 {
     unsigned char *out = (unsigned char *)destination;
@@ -11840,7 +11846,8 @@ FiberContext fiber_cm55_ntz_cpp_type_only_object;
         "fiber_internal_runtime_select_scheduler_candidate",
         "fiber_internal_task_return",
         "fiber_panic",
-        "memcpy"
+        "memcpy",
+        "memset"
     )
     $constructionUndefinedDelta = @(Compare-Object `
         -ReferenceObject $allowedConstructionUndefined `
@@ -12093,6 +12100,9 @@ void fiber_panic(char code)
     }
 }
 
+/* Retain late-lowered libc calls through native LTO; these fixture bodies use GPRs only. */
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memcpy(void *destination, const void *source, size_t size)
 {
     unsigned char *out = (unsigned char *)destination;
@@ -12103,6 +12113,8 @@ void *memcpy(void *destination, const void *source, size_t size)
     return destination;
 }
 
+__attribute__((used, externally_visible))
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void *memset(void *destination, int value, size_t size)
 {
     unsigned char *out = (unsigned char *)destination;

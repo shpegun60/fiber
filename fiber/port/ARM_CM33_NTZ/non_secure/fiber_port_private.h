@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_init_context_frame(FiberContext *ctx);
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_context_validate_restore(FiberContext *ctx);

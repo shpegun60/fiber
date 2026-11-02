@@ -23,16 +23,18 @@ fiber_addr_plausible_ram(uintptr_t start, uintptr_t end);
 FIBER_GENERAL_REGS_ONLY int
 fiber_addr_plausible_code(uintptr_t addr);
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberPortBoot fiber_port_boot_create(void *begin,
 		void *end,
 		entry_t entry,
 		void *arg);
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_check(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 uint32_t fiber_port_boot_record_compute_hash(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_check(const FiberPortBoot *boot);
-FIBER_GENERAL_REGS_ONLY
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_boot_record_fast_check(const FiberPortBoot *boot);
 
 #ifdef __cplusplus

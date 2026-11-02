@@ -2776,3 +2776,26 @@ Exact roots and receipt hashes remain in the selected-port leaf ledgers.
 The shared closure runner keeps inline-only removal controls distinct from
 removing both protection bundles. External memory routines still require their
 own transitive general-registers-only integration proof.
+
+### Scalar NTZ Raw Helper Closure
+
+CM23, CM33 and CM55 scalar NTZ apply the same canonical sensitive/GRO
+protection throughout local CPU primitives and boot-validation helpers.
+All nine naked transfer bodies, frame construction and type headers stay
+unchanged. The immutable five-optimization qualification passes ninety
+baseline/raw cells and 450 controls, including native-LTO text layouts.
+Parent independently rehashes 73 consumed inputs and the original 10,914-entry
+closure artifact manifest without mismatch. The separate constructor proof
+passes 48 configurations and fifteen controls (252 calls/504 bounded restore
+slices); its 91 input hashes and 63 recorded ELF hashes match. No complete
+R9 output-artifact manifest is inferred beyond those recorded hashes.
+
+Eighteen unchanged ordered O2/Os assertions against pinned FreeRTOS pass;
+parent verifies all 219 entries of that receipt's three manifests. Fresh
+maintained CM23/CM33/CM55 runtime/archive/vector/cohort gates also pass.
+The first integration attempt exposes LTO dropping fixture libc definitions
+before late-generated calls: the CM33/CM55 fixtures now retain real sensitive
+GPR-only memcpy/memset definitions, matching the existing CM7 fixture pattern.
+Exact construction dependency assertions admit only the newly emitted memset
+alongside memcpy, not arbitrary unresolved helpers. This remains scoped
+compiler/reference/integration evidence, not a global or hardware PASS.

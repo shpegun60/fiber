@@ -52,6 +52,7 @@ FIBER_STATIC_ASSERT((fiber_portOFF_STACK_BASE & 3u) == 0u,
 FIBER_STATIC_ASSERT((fiber_portOFF_STACK_TOP & 3u) == 0u,
 		"[fiber]: ARM_CM23_NTZ stack-top offset must be word aligned");
 
+FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_init_context_frame(FiberContext *const ctx)
 {
 	FIBER_REQUIRE(ctx != NULL, 'C');
@@ -104,25 +105,25 @@ void fiber_port_panic_wait(void)
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
 	for (;;) {
-		__WFE();
+		fiber_port_cpu_wait();
 	}
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_require_scheduler_configuration_environment(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 }
 
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_runtime_schedule(void)
 {
-	FIBER_REQUIRE(__get_IPSR() == 0u, 'i');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 0u, 'i');
 	fiber_internal_runtime_require_current_context();
 	/* SVC first start seeds privileged Thread/PSP. This non-MPU port has no
 	 * user-mode yield service, so a direct PendSV request is valid only here. */
-	FIBER_REQUIRE((__get_CONTROL() & 3u) == 2u, 'l');
-	FIBER_REQUIRE(__get_PRIMASK() == 0u, 'p');
+	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 2u, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVSET_BIT;
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
@@ -151,7 +152,7 @@ void fiber_port_primask_restore(const uint32_t state)
 	fiber_portASM volatile("msr primask, %0" :: "r"(state) : "memory");
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == state, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == state, 'r');
 }
 
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
@@ -179,9 +180,9 @@ void fiber_port_validate_pendsv_vector(void)
 static FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 void fiber_port_validate_exception_start_configuration(void)
 {
-	FIBER_REQUIRE(NVIC_GetPriority(PendSV_IRQn) ==
+	FIBER_REQUIRE(fiber_port_cpu_get_priority(PendSV_IRQn) ==
 			fiber_portLOWEST_EXCEPTION_PRIORITY, 'P');
-	FIBER_REQUIRE(NVIC_GetPriority(SVCall_IRQn) == 0u, 'w');
+	FIBER_REQUIRE(fiber_port_cpu_get_priority(SVCall_IRQn) == 0u, 'w');
 	fiber_port_validate_pendsv_vector();
 	fiber_port_validate_svc_vector();
 #ifdef SCB_CCR_STKALIGN_Msk
@@ -197,8 +198,8 @@ void fiber_port_prepare_exception_start(void)
 	const uint32_t primask = fiber_port_primask_save_disable();
 	FIBER_REQUIRE(primask == 0u, 'p');
 
-	NVIC_SetPriority(PendSV_IRQn, fiber_portLOWEST_EXCEPTION_PRIORITY);
-	NVIC_SetPriority(SVCall_IRQn, 0u);
+	fiber_port_cpu_set_priority(PendSV_IRQn, fiber_portLOWEST_EXCEPTION_PRIORITY);
+	fiber_port_cpu_set_priority(SVCall_IRQn, 0u);
 	fiber_portNVIC_INT_CTRL_REG = fiber_portNVIC_PENDSVCLEAR_BIT;
 	fiber_portDATA_SYNC_BARRIER();
 	fiber_portINST_SYNC_BARRIER();
@@ -232,8 +233,8 @@ void fiber_port_capture_scheduler_cpu_state(
 {
 	FIBER_REQUIRE(state != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	state->primask = __get_PRIMASK();
-	state->control = __get_CONTROL();
+	state->primask = fiber_port_cpu_read_primask();
+	state->control = fiber_port_cpu_read_control();
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -243,8 +244,8 @@ void fiber_port_validate_scheduler_cpu_state(
 {
 	FIBER_REQUIRE(before != NULL, 'C');
 	fiber_portCOMPILER_BARRIER();
-	FIBER_REQUIRE(__get_PRIMASK() == before->primask, 'r');
-	FIBER_REQUIRE(__get_CONTROL() == before->control, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == before->primask, 'r');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == before->control, 'l');
 	fiber_portCOMPILER_BARRIER();
 }
 
@@ -272,8 +273,8 @@ FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY
 FiberContext *fiber_port_scheduler_pick_next_from_pendsv(FiberContext *current)
 {
 	FIBER_REQUIRE(current != NULL, 'C');
-	FIBER_REQUIRE(__get_IPSR() == 14u, 'j');
-	FIBER_REQUIRE(__get_PRIMASK() == 1u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'j');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 1u, 'p');
 	FiberPortSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
 	FiberContext *const next =
@@ -296,7 +297,7 @@ void fiber_port_runtime_start_first(FiberContext *const first)
 	 * configuration under a mask retained into the naked start helper. */
 	const uint32_t primask = fiber_port_primask_save_disable();
 	FIBER_REQUIRE(primask == 0u, 'p');
-	FIBER_REQUIRE(__get_PRIMASK() == 1u, 'p');
+	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 1u, 'p');
 	fiber_port_validate_exception_start_configuration();
 	fiber_port_start_first_context(msp_top);
 	FIBER_API_UNREACHABLE();
