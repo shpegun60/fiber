@@ -200,3 +200,21 @@ The raw gate is an additional stronger software-freeze policy, not a replacement
 for documented translation-unit counterflags. External memory helpers and
 application callbacks retain their separate transitive/GRO integration proof.
 These offline results do not establish hardware switching or isolation.
+
+## Bounded Seven-Mode Parity
+
+The subsequent Context-owned implementation has a separate captured
+`tools/test_cm0_freeze_parity.ps1` PASS for non-MPU M0/VTOR=0 and M0+/VTOR=1.
+Five ordinary optimization modes produce twenty paired objects and thirty
+mechanism comparisons. The complete ordinary plus final-linked O2/Os LTO
+grid, direct/archive, produces twenty-eight final pairs, fifty-six positive
+ELFs and eighty-four compiled actual-source controls. The unchanged pinned
+CM0 `port.c` and `portasm.c` provide the upstream side, not copied bodies.
+
+The exact sources, independent rehash, limitations and retained FAIL attempts
+are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#cm0-bounded-optimization-and-final-elf-parity`.
+Existing `-Cm0Only` O2/Os inventories remain unchanged and still include MPU.
+This new focused gate does not execute the CPU, interpret constructor bodies,
+qualify CM0+ VTOR=0/MPU, establish closed-function equivalence or replace the
+remaining global/hardware requirements.

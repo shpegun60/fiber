@@ -613,6 +613,17 @@ than a requirement repeatedly added while the port inventory is incomplete.
 Until it exists and passes, the repository may claim the current `-O2`/`-Os`
 parity only, not all-optimization parity.
 
+The first bounded adoption of that grid is now independently qualified for
+non-MPU CM0/VTOR=0 and CM0+/VTOR=1. The separate
+`tools/test_cm0_freeze_parity.ps1` runs all five ordinary optimizations and
+actual final-ELF pairs at all seven modes, direct and archive. Its exact
+receipt, 56 positive ELFs and 84 compiled causal controls are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#cm0-bounded-optimization-and-final-elf-parity`.
+This does not qualify CM0+ VTOR=0, MPU, other profiles, constructor semantics,
+CPU execution or global parity. Ordinary driver defaults remain O2/Os;
+O0/Og/O3 require the explicit `-Cm0NonMpuOnly` selector. Existing `-Cm0Only`
+keeps its original three-profile inventory, including MPU.
+
 `CI_VALIDATION_PLAN.md` defines how the current per-port gate and this final
 cohort become reproducible pull-request and release-blocking CI jobs, including
 pinned inputs and retained proof artifacts.

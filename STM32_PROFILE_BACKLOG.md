@@ -95,6 +95,13 @@ The [global all-optimization/final-linked-LTO gate](FREERTOS_ASM_PARITY.md#two-s
 and exact-commit release-blocking CI are still future freeze gates. Focused
 all-option raw compiler receipts do not satisfy that global parity requirement.
 
+The [first bounded seven-mode parity cohort](PORT_ARCHITECTURE_AUDIT.md#cm0-bounded-optimization-and-final-elf-parity)
+now covers non-MPU CM0/VTOR=0 and CM0+/VTOR=1: five ordinary paired-object
+optimizations, 28 actual final-ELF pairs across five ordinary and two LTO modes,
+and 84 compiled mechanism controls. It does not silently include CM0+ VTOR=0,
+MPU or other profiles, and executes no firmware. The global gate above remains
+pending; the existing CM0 runtime receipt independently remains M0-only.
+
 Driver proof classification is not production activation: C5TF remains a complete
 runtime with `RuntimeSelectable=1`. Its parity definition deliberately retains
 `Staged=1; PendingSelectableMetadata=1`: the source-inventory guard permits exactly

@@ -3,7 +3,7 @@ param(
     [string]$CmsisCore = $env:CMSIS_CORE_INCLUDE,
     [string]$FreeRtosKernel = $env:FREERTOS_KERNEL_REFERENCE,
     [string]$BuildRoot,
-    [ValidateSet("-O2", "-Os")]
+    [ValidateSet("-O0", "-Og", "-O2", "-Os", "-O3")]
     [string]$Optimization = "-O2",
     [switch]$ReferenceIdentityOnly,
     [switch]$Cm33fRunningOnly,
@@ -13,6 +13,7 @@ param(
     [switch]$Cm33SecureOnly,
     [switch]$Cm55SecureOnly,
     [switch]$Cm0Only,
+    [switch]$Cm0NonMpuOnly,
     [switch]$Cm3Only,
     [switch]$KeepBuild,
     [string]$Python = "python",
@@ -22,11 +23,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
+if ($Optimization -notin @('-O2', '-Os') -and -not $Cm0NonMpuOnly) {
+    throw 'O0/Og/O3 parity is admitted only by the bounded -Cm0NonMpuOnly mode'
+}
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $ExpectedFreeRtosCommit = "a50edad08b29052631aa469d4df6e6ec7ff68878"
-$ClassicOnly = $Cm0Only -or $Cm3Only
+$ClassicOnly = $Cm0Only -or $Cm0NonMpuOnly -or $Cm3Only
 $ClassicName = if ($Cm3Only) { 'CM3' } else { 'CM0' }
-$ClassicEvidence = "$ClassicName-FOCUSED"
+$ClassicEvidence = if ($Cm0NonMpuOnly) { 'CM0-NONMPU-FOCUSED' } else { "$ClassicName-FOCUSED" }
 
 function Find-ArmGcc {
     if (-not [string]::IsNullOrWhiteSpace($ArmGcc)) {
@@ -566,7 +571,7 @@ function Start-ClassicFocusedEvidence {
     foreach ($root in @($include.Trim(), (Join-Path (Split-Path $toolDir) 'arm-none-eabi/include'))) {
         $paths += @(Get-ChildItem -LiteralPath $root -Recurse -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
     }
-    $profileRoots = if ($Cm3Only) { @('ARM_CM3') } else { @('ARM_CM0', 'ARM_CM0_MPU') }
+    $profileRoots = if ($Cm3Only) { @('ARM_CM3') } elseif ($Cm0NonMpuOnly) { @('ARM_CM0') } else { @('ARM_CM0', 'ARM_CM0_MPU') }
     $roots = @($RepoRoot, (Join-Path $RepoRoot 'context'),
         (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber/port'),
         (Join-Path $kernel "portable/GCC/ARM_$ClassicName"), (Join-Path $kernel 'include'), $cmsis, $configDir)
@@ -594,9 +599,9 @@ function Start-ClassicFocusedEvidence {
 
 function Complete-ClassicFocusedEvidence {
     $directory = Join-Path $BuildRoot $ClassicEvidence
-    $configurations = if ($Cm3Only) { 1 } else { 3 }
+    $configurations = if ($Cm3Only) { 1 } elseif ($Cm0NonMpuOnly) { 2 } else { 3 }
     $objectCount = 2 * $configurations
-    $mechanismCount = if ($Cm3Only) { 3 } else { 18 }
+    $mechanismCount = if ($Cm3Only) { 3 } elseif ($Cm0NonMpuOnly) { 6 } else { 18 }
     $known = @{}
     foreach ($entry in $script:cm0SourceInputs) { $known[[IO.Path]::GetFullPath($entry.Path)] = $entry.Sha256 }
     $dependencies = @()
@@ -633,7 +638,8 @@ function Complete-ClassicFocusedEvidence {
     })
     [ordered]@{Status='PASS'; ReferenceCommit=$ExpectedFreeRtosCommit; Inputs=$script:cm0Inputs; Artifacts=$artifacts} |
         ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $directory 'artifacts.json') -Encoding ASCII
-    Write-Host "${ClassicName}_FOCUSED_PARITY_PASS ($Optimization; $configurations configurations, $objectCount objects, $mechanismCount mechanisms; narrow ordered checks only)"
+    $marker = if ($Cm0NonMpuOnly) { 'CM0_NONMPU_FOCUSED_PARITY_PASS' } else { "${ClassicName}_FOCUSED_PARITY_PASS" }
+    Write-Host "$marker ($Optimization; $configurations configurations, $objectCount objects, $mechanismCount mechanisms; narrow ordered checks only)"
 }
 
 function Get-C55SGatewayFunctionSpan {
@@ -3403,7 +3409,7 @@ if ($ownsBuildRoot) {
         ("fiber-freertos-asm-parity-" + [Guid]::NewGuid().ToString("N"))
 }
 New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
-if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33fTfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly, $Cm0Only, $Cm3Only) | Where-Object { $_ }).Count -gt 1) {
+if (@(@($Cm33fRunningOnly, $Cm55TfmOnly, $Cm33fTfmOnly, $Cm33SecureContextOnly, $Cm33SecureOnly, $Cm55SecureOnly, $Cm0Only, $Cm0NonMpuOnly, $Cm3Only) | Where-Object { $_ }).Count -gt 1) {
     throw 'Choose only one focused parity group'
 }
 if ($Cm33fRunningOnly -or $Cm55TfmOnly -or $Cm33fTfmOnly -or $Cm33SecureContextOnly -or $Cm33SecureOnly -or $Cm55SecureOnly -or $ClassicOnly) { $KeepBuild = $true }
@@ -3489,6 +3495,7 @@ try {
     if ($ClassicOnly) { Start-ClassicFocusedEvidence }
     $compilePorts = @($ports | Where-Object {
         (-not $ClassicOnly) -or ($Cm3Only -and $_.Name -eq 'ARM_CM3') -or
+        ($Cm0NonMpuOnly -and $_.Name -in @('ARM_CM0', 'ARM_CM0PLUS')) -or
         ($Cm0Only -and $_.Name -in @('ARM_CM0', 'ARM_CM0PLUS', 'ARM_CM0_MPU'))
     })
     foreach ($port in $compilePorts) {
@@ -3671,6 +3678,8 @@ try {
         -DifferenceIds @("FAP-COMMON-SCHEDULER", "FAP-COMMON-PROVENANCE", "FAP-COMMON-MASK-RESTORE") `
         -Ledger $ledger
     }
+
+    if ($Cm0NonMpuOnly) { Complete-ClassicFocusedEvidence; return }
 
     # ARM_CM0_MPU retains the FreeRTOS protected-context model: the complete
     # hardware frame is copied into privileged context storage, MPU state is

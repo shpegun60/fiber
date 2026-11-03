@@ -115,6 +115,7 @@ implementation and its selected software gates, not the entire port roadmap.
 | Post-inversion CM7 Context/Fiber FP-state execution | Separate captured AN500 r1p2 suite: 288 cases PASS and eight paired upstream final ELFs; fresh CM4 replay and 296 executable-image comparisons pass. Not H7/H7S hardware or affected-r0p1 erratum evidence |
 | Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
+| Bounded CM0/CM0+ non-MPU seven-mode parity | Separate captured five-option/final-LTO gate: 28 final pairs, 56 positive ELFs and 84 compiled controls PASS; not global parity or G0 execution |
 | Exact-commit release-blocking CI | Not established |
 | C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
 

@@ -4253,3 +4253,77 @@ controls. The separate CM4 reviewer verifies the unchanged checker and live
 non-documentation overlay hashes; the 296-image native comparison is also
 independently reproduced. All sixteen non-Markdown overlays match live bytes;
 only later README prose differs. No new blocker is found in this bounded scope.
+
+## CM0 Bounded Optimization And Final-ELF Parity
+
+The separate 2026-11-03 non-MPU CM0/CM0+ gate passes from immutable
+`471ec5cfd1e69aefc273f6dd47d487bb1b4e5c6a` plus fourteen explicit test overlays.
+It changes no production source, context layout, transfer assembly or ABI.
+The captured profiles are M0/VTOR=0 and M0+/VTOR=1, soft ABI and ordinary AAPCS.
+Final Fiber images use hash/map 1/1, canary and MSP rewind; this is not every
+configuration of the backend. No firmware is executed by this gate.
+
+Five explicit `-Cm0NonMpuOnly` paired-object invocations at O0/Og/O2/Os/O3
+produce twenty actual objects and thirty ordered mechanism comparisons.
+The new driver selector excludes MPU without changing old `-Cm0Only` semantics.
+Separate O2/Os legacy replays retain three configurations, six objects and
+eighteen mechanisms each, including MPU. Nine admission controls reject the
+three new optimizations outside the new bounded selector before discovery or
+output creation. Ordinary defaults and the global matrix remain O2/Os.
+
+The final executable grid has two profiles, seven modes (five ordinary plus
+O2/Os native final LTO), and direct/archive links: twenty-eight pairs and
+fifty-six positive ELFs. Pure Context uses actual engine/state/panic and three
+actual CM0 providers, no legacy/Fiber/configuration substitution. Every upstream
+image compiles the unchanged pinned CM0 `port.c` and `portasm.c`, real headers,
+typed retained constructor/scheduler roots and fail-stop unavailable boundaries.
+No whole-archive extraction, copied handlers or successful fake kernel is used.
+
+Strong vectors, exact runtime/storage cohorts, prelink common/upstream owners,
+real native final bodies, slim input IR and actual link-driver LTO plugin
+identity are checked. Ordered first-start, first-restore and PendSV mechanisms
+retain the documented adaptations: SVC 70 versus upstream 100, validated initial
+register restore versus upstream skip, common/TCB publication and saved PRIMASK
+versus unconditional IRQ enable. This is bounded mechanism evidence, not closed
+whole-function equivalence or interpretation of retained C constructor bodies.
+
+Each pair compiles three actual-source PendSV mutants: incorrect save stride,
+missing high-R9 restore and omitted mask-restoration sequence. All eighty-four
+must reject at their assigned mechanism, not an unrelated compiler/link/ELF
+error. Eight optimized-Python invocation controls, six parser controls and two
+counterfeit-diagnostic controls also pass. Current source/object, dependency,
+archive and actual final-ELF records are retained.
+
+Retained root: `C:/cm0fq-c660e0b75f`, source: its `source/`, build: its `audit/`.
+The complete receipt has 3,400 inputs, 10,899 verified artifacts and 3,300
+captured source-byte records, with zero source/input/inventory drift. An
+independent reviewer rehashes those inventories and fourteen owned paths without
+mismatch, cross-checks 1,148 compile-command mappings, seventy archive commands,
+forty LTO-plugin traces and all assigned compiled-control rejections.
+
+| File | SHA-256 |
+| --- | --- |
+| `audit/results.json` | `4CA71B77C0AD7BA53ADE0426A97305E42CC53A5FD07720F8701F15C0B914399E` |
+| `audit/artifacts.json` | `27C9D865EC75507DB6B5146FCDC0F79121A750D19B27A0E728AA5CA3CEAF35A8` |
+| `overlay.json` | `B6504773BB4182877478AA5476E391AC8D1FC2D35DAE2D78C029AE7829ACD022` |
+| `HOLD-verified.json` | `AAC201C3E7B3A976274211473881EBA9153E6D5119BEBFD91881B05441DB7977` |
+| `base.zip` | `5BC3216F14063F97F8CF44ABFC5F23FAB4C7E50E1A957DA669F59304D80F3A58` |
+
+Earlier roots `cm0fq-878052bd2d`, `cm0fq-8e989961dc`, and
+`cm0fq-d918caed67` remain FAIL for, respectively, compile failure, a control's
+wrong rejection identity, and final-link failure. Their build-result hashes are
+`5C53D9964D2F59F6496C0E37D97A7D2F9D6F018FB850A4FE7EE25D1ABDE0E3E6`,
+`2D39B09081DADBF9CBCCC0FFC3192FDCDFA08DB93446DAFC954370588095EDE7`, and
+`A5FE20C22DF76CF5CFF4B24C9676A23C6A4306384B3B1B037033609BEE79E38A`.
+The old ad hoc `HOLD.json` used an invalid nested PowerShell array check; it is
+not accepted. The explicit corrected verifier and independent review above
+replace that invalid handoff, not any failed qualification.
+
+A separate live helper-import smoke passes three compiler objects and four
+negative controls under
+`%TEMP%/cm0-freeze-helper-review-977a9ac555ae45ee988390ba70cb5101/`
+`parity-helper-imports-1650a2b4b9884f378b638da97a6aa2f7`.
+Later documentation is outside the captured export. This is not a fresh full
+default matrix or exact-commit CI result. CM0+ VTOR=0, MPU, reserved-r9 and other
+policy combinations, other profiles, global parity, G0 CPU execution and board
+qualification remain separate; the earlier M0 QEMU receipt is not extended.
