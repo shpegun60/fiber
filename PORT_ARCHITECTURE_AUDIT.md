@@ -3870,3 +3870,28 @@ The exact receipt and before/after metadata hashes are recorded in
 Actual IDE regeneration, clean builds after regeneration, linking and board
 execution are NOT_RUN. This repository records the external integration result;
 the external `.cproject` is not part of its commits.
+
+### Main CM33 TF-M Identity Contract Repair
+
+The immutable `b648b4074e6f30d2b2cc37a7a04bc81042e2a6bc` aggregate remains FAIL:
+1,854.65 seconds, 1,016 source files and zero drift. It passes the repaired C55S
+gateway and subsequent M55 runtime groups, then the main CM33 TF-M gate rejects
+the already migrated adapter because its exact allowlist still expects
+`fiber_current`. Later gates are NOT_RUN. Receipt:
+`C:/fcq-80f8a8564f/matrix-result.json`, SHA-256
+`E195BD156CE16B07196674E1B3F25BB461D05DADF51D0394F4472EEC7078C4D3`.
+
+The group and adapter allowlists now substitute only `ctxrt_v1_current`; the
+synthetic common fixture provides that canonical operation. Mandatory CPU/boot
+permissions are not widened. Compiled normal-mode controls reject both public
+getters in CPU code and reject a legacy-getter adapter. The weak-common-definition
+control remains. Independent review accepts the bounded diff; it adds no new
+LTO-negative claim or production change.
+
+All eight maintained function cohorts from CM33 TF-M through the remaining
+classic MPU integration pass against immutable `9dd6a01` plus the exact matrix
+overlay, 1,016 files and zero drift. Receipt:
+`C:/ftfm-matrix-799c8768a9/results.json`, SHA-256
+`F63FD129250E866897F1C5ECB743E25F727D4FF060D34D664117019534268E89`.
+The 109-check execution-policy regression also passes. These focused links do
+not replace a fresh aggregate or establish CPU/board execution.

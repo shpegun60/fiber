@@ -91,10 +91,11 @@ lifecycle logic; physical relocation can be a later mechanical checkpoint.
 C++ Task/Kernel, timer/ISR dispatch, reclamation and richer scheduler policies
 are not implemented by this ownership extraction.
 
-An immutable pre-extraction combined replay may finish independently while
-focused mechanical checkpoints are developed. Its exact source SHA remains
-distinct: a PASS cannot qualify later sources, and pending/failed aggregate
-evidence cannot be replaced by focused receipts or called a software freeze.
+Pre-extraction and post-inversion aggregate failures remain separate captured
+receipts in `PORT_ARCHITECTURE_AUDIT.md`. Focused mechanical and repair receipts
+qualify their exact inputs, not the entire later tree. They cannot replace a
+fresh combined replay or be relabeled as a software freeze. The current combined
+qualification status is summarized in `STM32_PROFILE_BACKLOG.md`.
 
 ## Evidence Boundary
 

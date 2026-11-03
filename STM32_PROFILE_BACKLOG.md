@@ -45,14 +45,15 @@ The following are separate captured receipts, not a current aggregate PASS:
 | C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
 | C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
 
-The latest retained [exported-source aggregate](PORT_ARCHITECTURE_AUDIT.md#094ff9d-exported-source-aggregate)
-is **FAIL**, not software freeze: `C:/fq-d494cb9774/matrix-result.json` records
-094ff9d, 974 files and zero source drift. Pinned O2/Os parity and the repaired
-no-Git historical-handler gate passed, followed by the FP/MVE MPU, Secure-cohort,
-CONTROL and CM33 dual-origin gates. The existing CM33F initializer's shell
-launcher then failed before execution because Git archive emitted CRLF. A shared
-LF export policy and its maintained controls now pass; a complete fresh replay
-remains separate. Later gates in the failed aggregate are NOT_RUN.
+The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#main-cm33-tf-m-identity-contract-repair)
+is **FAIL**, not software freeze: `C:/fcq-80f8a8564f/matrix-result.json` records
+`b648b40`, 1,016 files and zero source drift. It passes Context/Fiber ownership
+gates, pinned O2/Os parity, the repaired C55S gateway and subsequent M55 runtime
+groups, then stops at a stale CM33 TF-M getter allowlist. The repaired exact
+allowance and following eight maintained function cohorts pass separately;
+later aggregate gates are still NOT_RUN. Conditional QEMU gates were not selected.
+Earlier exported-source and pre-extraction failures remain in the audit log;
+none is silently reclassified or used to qualify the later Context inversion.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at

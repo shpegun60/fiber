@@ -16193,7 +16193,7 @@ function Test-ArmCm33TfmObjectRoles {
     $roles = @(
         @{ Name = "mandatory CPU/boot"; Object = $cpuGroup; Expected = $cpuExpected },
         @{ Name = "TF-M initializer"; Object = $Objects[2]; Expected = @("fiber_panic", "tfm_ns_interface_init") },
-        @{ Name = "optional mutex adapter"; Object = $Objects[3]; Expected = @("fiber_current", "fiber_panic", "fiber_port_runtime_schedule") }
+        @{ Name = "optional mutex adapter"; Object = $Objects[3]; Expected = @("ctxrt_v1_current", "fiber_panic", "fiber_port_runtime_schedule") }
     )
     foreach ($role in $roles) {
         $actual = Get-NmUndefinedSymbolNames -NmOutput @(& $Nm -u $role.Object) -Path $role.Object
@@ -16507,7 +16507,7 @@ FiberContext fiber_cm33_tfm_cpp_type_only_object;
     $undefined = Get-NmUndefinedSymbolNames `
         -NmOutput @(& $Nm -u $groupObject) -Path $groupObject
     Assert-ExactSymbolSet -Expected @(
-        "fiber_current",
+        "ctxrt_v1_current",
         "fiber_internal_runtime_current_context_slot",
         "fiber_internal_runtime_port_abi_v1_anchor",
         "fiber_internal_runtime_publish_current_context",
@@ -16527,7 +16527,7 @@ FiberContext fiber_cm33_tfm_cpp_type_only_object;
     Set-Content -LiteralPath $fixturePath -Encoding ASCII -Value @'
 #include <stddef.h>
 #include <stdint.h>
-#include "fiber_api_decl.h"
+#include "context/context_api_decl.h"
 #include "fiber_runtime_port_abi.h"
 #include "fiber_port_tfm_os_wrapper.h"
 
@@ -16555,7 +16555,7 @@ void fiber_internal_runtime_publish_current_context(FiberContext *next)
     fiber_internal_runtime_current_context_slot = next;
 }
 FIBER_API_ATTR_SENSITIVE FIBER_GENERAL_REGS_ONLY FIBER_API_THREAD_FUNCTION
-FiberContext *fiber_current(void)
+CtxrtContextV1 *ctxrt_v1_current(void)
 {
     return fiber_internal_runtime_current_context_slot;
 }
@@ -16647,24 +16647,48 @@ SECTIONS
             $start = $runtimeText.IndexOf($needle, [StringComparison]::Ordinal)
             if ($start -lt 0) { throw "TF-M role control cannot find startup body" }
             $brace = $runtimeText.IndexOf("{", $start, [StringComparison]::Ordinal)
-            $leakSource = Join-Path $modeDir "leaked-public-call.c"
-            $leakText = $runtimeText.Insert($brace + 1,
-                "`nextern FiberContext *fiber_current(void); (void)fiber_current();`n")
-            Set-Content -LiteralPath $leakSource -Value $leakText -Encoding ASCII
-            $leakObject = Join-Path $modeDir "leaked-public-call.o"
-            & $Compiler @archiveArgs -c $leakSource -o $leakObject
-            if ($LASTEXITCODE -ne 0) { throw "TF-M public-call role control must compile" }
+            foreach ($getter in @('fiber_current', 'ctxrt_v1_current')) {
+                $leakSource = Join-Path $modeDir "leaked-$getter.c"
+                $leakText = $runtimeText.Insert($brace + 1,
+                    "`nextern FiberContext *$getter(void); (void)$getter();`n")
+                Set-Content -LiteralPath $leakSource -Value $leakText -Encoding ASCII
+                $leakObject = Join-Path $modeDir "leaked-$getter.o"
+                & $Compiler @archiveArgs -c $leakSource -o $leakObject
+                if ($LASTEXITCODE -ne 0) { throw "TF-M public-call role control must compile: $getter" }
+                $rejected = $false
+                try {
+                    Test-ArmCm33TfmObjectRoles -Compiler $Compiler -Nm $GccNm `
+                        -Objects @($leakObject, $archiveObjects[1], $archiveObjects[2], $archiveObjects[3]) `
+                        -Flags $archiveArgs -Output (Join-Path $modeDir "leak-$getter-roles") -Lto $false
+                } catch {
+                    if ($_.Exception.Message -notmatch 'TFM_ROLE_UNDEFINED: mandatory CPU/boot' -or
+                            $_.Exception.Message -notmatch [regex]::Escape($getter)) { throw }
+                    $rejected = $true
+                }
+                if (-not $rejected) { throw "TF-M CPU role admitted leaked public $getter" }
+            }
+            # Only the optional adapter may use Context's public identity API;
+            # reverting it to the legacy facade must not be accepted either.
+            $legacyWrapper = Join-Path $modeDir 'legacy-wrapper.c'
+            $legacyText = $wrapperText.Replace(
+                '"../../../../context/context_api_decl.h"', '"fiber_api_decl.h"').Replace(
+                'ctxrt_v1_current()', 'fiber_current()')
+            if ($legacyText -ceq $wrapperText) { throw 'TF-M legacy wrapper control did not mutate its input' }
+            Set-Content -LiteralPath $legacyWrapper -Value $legacyText -Encoding ASCII
+            $legacyObject = Join-Path $modeDir 'legacy-wrapper.o'
+            & $Compiler @archiveArgs -c $legacyWrapper -o $legacyObject
+            if ($LASTEXITCODE -ne 0) { throw 'TF-M legacy wrapper control must compile' }
             $rejected = $false
             try {
                 Test-ArmCm33TfmObjectRoles -Compiler $Compiler -Nm $GccNm `
-                    -Objects @($leakObject, $archiveObjects[1], $archiveObjects[2], $archiveObjects[3]) `
-                    -Flags $archiveArgs -Output (Join-Path $modeDir "leak-roles") -Lto $false
+                    -Objects @($archiveObjects[0], $archiveObjects[1], $archiveObjects[2], $legacyObject) `
+                    -Flags $archiveArgs -Output (Join-Path $modeDir 'legacy-wrapper-roles') -Lto $false
             } catch {
-                if ($_.Exception.Message -notmatch 'TFM_ROLE_UNDEFINED: mandatory CPU/boot' -or
+                if ($_.Exception.Message -notmatch 'TFM_ROLE_UNDEFINED: optional mutex adapter' -or
                         $_.Exception.Message -notmatch 'fiber_current') { throw }
                 $rejected = $true
             }
-            if (-not $rejected) { throw "TF-M CPU role admitted leaked public fiber_current" }
+            if (-not $rejected) { throw 'TF-M optional adapter admitted the legacy getter' }
             $weakSource = Join-Path $modeDir "weak-common-anchor.c"
             Set-Content -LiteralPath $weakSource -Encoding ASCII -Value `
                 'const unsigned char fiber_internal_runtime_port_abi_v1_anchor __attribute__((weak)) = 1;'
