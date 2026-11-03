@@ -46,11 +46,11 @@ boundaries, independently of the current aggregate below:
 | C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
 | C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
 
-The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#post-grid-combined-compile-qualification)
-is **PASS** for immutable `ad29f15a0d4e2659c6bad8c46c8d79de27b29f72`:
-`C:/fcmq-9edf4c0570/matrix-result.json` records 1,075 source files and 916
-external inputs, zero observed drift, exit code zero and 2,142.00 seconds.
-The earlier `847953d` receipt stays historical. The maintained matrix completes through
+The latest retained [post-repair compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#post-repair-combined-matrix)
+is **PASS** for immutable `624a4353983e03e766533df3abaa396593c750be`:
+`C:/fcmq-733485291b/matrix-result.json` records 1,086 source files and 916
+external inputs, zero observed drift, exit code zero and 2,178.28 seconds.
+Earlier `847953d` and `ad29f15` receipts stay historical. The maintained matrix completes through
 the final settings negatives and source-inventory check. It includes Context/
 Fiber ownership and consumer gates, pinned O2/Os assembly parity, ABI/cohort/
 archive/GC/LTO controls and the applicable concrete/staged software gates.
@@ -73,7 +73,7 @@ with eager/lazy policy, both consumers, O2/Os, ordinary/final-LTO and direct/
 archive links. Eight actual pinned upstream final ELFs have bounded matching
 mechanism checks. This is neither whole-kernel equivalence nor a G4 board,
 device-priority-width, softfp, CM7, complete panic-suite or arithmetic claim.
-The earlier aggregate is not rerun or promoted by that focused receipt.
+Those focused results do not themselves rerun or promote an aggregate.
 
 The separate [post-Context CM7 FP-state suite](PORT_ARCHITECTURE_AUDIT.md#post-context-cm7-fp-runtime)
 passes 288 actual AN500 cases with the same consumer/policy/optimization/link
@@ -82,8 +82,8 @@ M7 capability, cohort, terminal and PRIMASK-preserving BASEPRI checks. Both
 profiles are replayed from one immutable snapshot; all 296 CM4 executable
 images match the earlier accepted executable sections. This is modeled M7 r1p2
 CPU evidence, not H7/H7S board, cache/TCM, affected-r0p1 silicon, complete panic
-suite or global all-optimization qualification. The aggregate above remains
-historical; later conditional dispatch/documentation are separately checked.
+suite or global all-optimization qualification. That focused receipt does not
+substitute for a fresh combined replay or qualify later conditional dispatch.
 
 The later [opt-in seven-mode classic FP grid](PORT_ARCHITECTURE_AUDIT.md#classic-fp-opt-in-seven-mode-grid)
 passes 504 executions (112 positive / 392 compiled causal) per CM4F and CM7
@@ -93,6 +93,15 @@ both consumers, direct/archive and eager/lazy policies. The 296-image old
 executable subset matches for each profile. This focused gate leaves the
 default matrix grid unchanged and does not qualify softfp, MPU, other profiles,
 all configurations, physical STM32 devices or the global freeze gate.
+
+The separate [classic MPU CONTROL repair and pilot](PORT_ARCHITECTURE_AUDIT.md#classic-mpu-handler-control-repair)
+records seven successful AN386 images for Context/Fiber return and two basic
+MPU fault cases. Its O2/direct/eight-region/FP-inactive scope does not qualify
+FP-active/lazy MPU behavior, other MPU CPUs, final-LTO execution or hardware.
+The later [standalone CONTROL guards](PORT_ARCHITECTURE_AUDIT.md#clean-commit-classic-mpu-control-guards)
+pass for `e971263` with 63 actual ARM codegen cells, scalar guard projections,
+cohort negatives and byte-coverage/closing controls. They change no runtime and
+are not another default aggregate, CPU execution or pinned-reference parity.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at

@@ -96,21 +96,22 @@ receipts in `PORT_ARCHITECTURE_AUDIT.md`. Focused mechanical and repair receipts
 qualify their exact inputs, not the entire later tree. They cannot replace a
 fresh combined replay or be relabeled as a software freeze.
 
-The fresh immutable `ad29f15a0d4e2659c6bad8c46c8d79de27b29f72` combined
-compile/link/codegen replay passes: 1,075 source files, 916 external inputs,
-zero drift, all final settings and source-inventory checks complete. The
-earlier `847953d` receipt remains historical. The new receipt, hashes and exact
-scope are recorded in
-`PORT_ARCHITECTURE_AUDIT.md#post-grid-combined-compile-qualification` and
-summarized in `STM32_PROFILE_BACKLOG.md`. This accepts the bounded Context/Fiber
-implementation and its selected software gates, not the entire port roadmap.
+The latest retained combined compile/link/codegen replay passes for immutable
+`624a4353983e03e766533df3abaa396593c750be`: 1,086 source files, 916 external
+inputs, zero drift, all final settings and source-inventory checks complete.
+Earlier `847953d` and `ad29f15` receipts remain historical. The post-repair
+receipt, hashes and exact scope are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#post-repair-combined-matrix` and summarized in
+`STM32_PROFILE_BACKLOG.md`. This accepts the bounded Context/Fiber implementation
+and its selected software gates, not the entire port roadmap. The later
+`e971263` standalone CONTROL guard receipt is not another combined matrix run.
 
 | Bounded milestone | Status |
 | --- | --- |
 | Concrete-only selection; transitional fallback removed | Implemented |
 | Context engine/state/panic ownership; one-way legacy adapter | Implemented |
 | Distinct static-storage Fiber lifecycle consumer | Implemented and separately qualified |
-| Combined compile/link/codegen matrix for the captured source | PASS at `ad29f15` |
+| Combined compile/link/codegen matrix for the captured source | PASS at `624a435` |
 | Post-inversion CM0 public Context/Fiber SVC/PendSV execution | Captured QEMU O2/Os normal/final-LTO direct/archive suite: 298 cases PASS; not M0+ or board evidence |
 | Post-inversion CM4F Context/Fiber FP-state execution | Captured AN386 O2/Os normal/final-LTO direct/archive eager/lazy suite: 288 cases PASS; bounded paired upstream final ELFs, not G4 board or full panic-suite evidence |
 | Post-inversion CM7 Context/Fiber FP-state execution | Separate captured AN500 r1p2 suite: 288 cases PASS and eight paired upstream final ELFs; fresh CM4 replay and 296 executable-image comparisons pass. Not H7/H7S hardware or affected-r0p1 erratum evidence |
@@ -118,6 +119,8 @@ implementation and its selected software gates, not the entire port roadmap.
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
 | Bounded CM0/CM0+ non-MPU seven-mode parity | Separate captured five-option/final-LTO gate: 28 final pairs, 56 positive ELFs and 84 compiled controls PASS; not global parity or G0 execution |
 | Bounded CM4F/CM7 hard-FP seven-mode runtime/parity | Separate opt-in full grids: 504 executions, fourteen link-only reference final ELFs and 112 associations per profile PASS; old 296-image executable subsets unchanged. Not softfp, MPU, global parity or board evidence |
+| Classic MPU CONTROL repair and basic CM4 pilot | Separate seven-image AN386 pilot PASS for Context/Fiber return and two fault cases; not FP-active/lazy, final-LTO, other MPU CPUs or board evidence |
+| Classic MPU CONTROL software regression guards | Standalone clean-commit `e971263` PASS: 63 ARM codegen cells, scalar guards, cohort negatives, byte-coverage and strict closing controls; not new CPU execution or reference equivalence |
 | Isolated H7S managed Debug/Release integration | Fresh headless-generated 35-object builds and final-ELF audits PASS for the captured application and pinned production export; not CubeMX regeneration or board execution |
 | Exact-commit release-blocking CI | Not established |
 | C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
