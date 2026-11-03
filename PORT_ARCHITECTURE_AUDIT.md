@@ -3583,3 +3583,31 @@ execution of the lifecycle gate. This gate executes a labelled host mock of
 the eight CPU operations; target links prove layout/link/placement, not target
 constructor execution, MPU enforcement, SVC/PendSV transfer or board operation.
 The additional actual-ARM constructor cohort is a separate maintained proof.
+
+### Fiber Constructor R9 Cohort
+
+The maintained constructor runner now defaults to separately identified legacy
+and genuine Fiber cohorts. The latter compiles actual Fiber init, Context
+engine/state/configuration and existing selected backends without the legacy
+shim. Complete EMPTY Fiber storage and surrounding canaries are real; traces
+require Fiber -> configuration guard -> Context -> port. Ordinary AAPCS permits
+temporary R9 borrowing; reserved-R9 builds require the exact static-base seed
+with reservation on every C unit and the final LTO link.
+
+The focused CM0/CM3/CM4/CM7 replay covers both APIs, O2/Os, ordinary/native LTO,
+hostile compiler modes and both R9 contracts: 256 baseline ELFs, 96 compiled
+controls, 1,408 constructor calls, 736 configuration probes and 2,816 bounded
+GPR-restore slices. A compiled consumer borrowing control remains valid ordinary
+AAPCS. A separate compiled guard-removal control actually initializes after
+configuration closure and is rejected as CONFIGURATION-BYPASSED, not by a
+fingerprint or unrelated link failure. Legacy oracles and controls are retained.
+
+Receipt: `C:/r9f/fiber-constructor-r9-8e8bea10c6ac4caaaadde6b640cfdd71/results.json`,
+SHA-256 `37B0F1B1D698D821DAFA5869AD935A0E89EAFB5E3A6B9274577AAE36881A1461`.
+Independent source/oracle review finds no confirmed issue and matches the five
+changed test files to immutable copies. The worker rehashes 13,995 artifacts,
+122 copies and 3,704 source/object mappings without mismatch. The only live
+input delta is the separately qualified publication README, not code drift.
+`CompleteSuite=false`: this is constructor and bounded linked restore-slice
+execution, not full exception transfer, FP/TrustZone/TF-M execution, all-profile
+new-consumer admission or board validation. No production code changes.

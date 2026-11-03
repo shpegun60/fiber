@@ -15,7 +15,11 @@ r9_call_init:
     mov r9,r6
     sub sp,sp,#12
     str r5,[sp]
+#if R9_FIBER
+    bl fiber_v1_init
+#else
     bl fiber_init
+#endif
     add sp,sp,#12
     mov r0,r9
     mov r9,r4

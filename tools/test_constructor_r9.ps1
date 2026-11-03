@@ -6,7 +6,8 @@ param(
     [string]$PythonModules = $env:FIBER_CONSTRUCTOR_R9_PYTHONPATH,
     [switch]$ImmutableInputs,
     [string[]]$DevelopmentProfiles,
-    [string[]]$DevelopmentModes
+    [string[]]$DevelopmentModes,
+    [ValidateSet('legacy','fiber')][string[]]$ConstructorCohorts
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
@@ -41,6 +42,7 @@ try {
         '--arm-gcc',$ArmGcc,'--cmsis-core',$CmsisCore,'--build',$build)
     if ($DevelopmentProfiles) { $arguments += @('--profiles',($DevelopmentProfiles -join ',')) }
     if ($DevelopmentModes) { $arguments += @('--modes',($DevelopmentModes -join ',')) }
+    if ($ConstructorCohorts) { $arguments += @('--constructor-cohorts',($ConstructorCohorts -join ',')) }
     if ($ImmutableInputs) { $arguments += '--immutable-inputs' }
     Write-Host "Constructor R9 evidence: $build"
     $previous = $ErrorActionPreference
@@ -50,6 +52,6 @@ try {
         $status = $LASTEXITCODE
     } finally { $ErrorActionPreference = $previous }
     if ($status -ne 0) { throw "Constructor R9 regression failed ($status); inspect $build\results.json" }
-    if ($DevelopmentProfiles -or $DevelopmentModes) { Write-Host "PASS constructor R9 development subset: $build" }
+    if ($DevelopmentProfiles -or $DevelopmentModes -or ($ConstructorCohorts -and $ConstructorCohorts.Count -lt 2)) { Write-Host "PASS constructor R9 development subset: $build" }
     else { Write-Host "PASS constructor R9: $build" }
 } finally { $env:PYTHONPATH = $oldPath }

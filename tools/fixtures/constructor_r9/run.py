@@ -59,6 +59,7 @@ def runtime_reader(repo):
     return module
 MODES = ("O2", "Os", "O2-lto", "Os-lto", "O2-hostile", "Os-hostile",
          "O2-lto-hostile", "Os-lto-hostile")
+COHORTS = ("legacy", "fiber")
 FRAME_BAD = 0xDEADC0DE
 CONTEXT, BEGIN, END, ARG, CALL_SP = 0x20008000, 0x20010000, 0x20012000, 0x20009000, 0x2002F000
 
@@ -70,6 +71,16 @@ def require(condition, message):
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def interpreter_image():
+    if os.name == "nt":
+        import ctypes
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+        require(0 < length < len(buffer), "Cannot identify running Python image")
+        return Path(buffer.value).resolve()
+    return Path(sys.executable).resolve()
 
 
 def profiles(include_cm0_mpu=False):
@@ -188,8 +199,10 @@ def classify(seed, frame, post, public_entries, panic, reserved=False):
 
 
 class Machine:
-    def __init__(self, elf_path, profile):
+    def __init__(self, elf_path, profile, cohort="legacy"):
         self.elf_path = elf_path
+        self.cohort = cohort
+        self.public_api = "fiber_v1_init" if cohort == "fiber" else "fiber_init"
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS)
         core = profile["core"]
         model = {0: UC_CPU_ARM_CORTEX_M0, 23: UC_CPU_ARM_CORTEX_M0,
@@ -216,9 +229,17 @@ class Machine:
             for symbol in elf.get_section_by_name(".symtab").iter_symbols():
                 if symbol.name and symbol["st_shndx"] != "SHN_UNDEF":
                     self.symbols[symbol.name] = symbol["st_value"]
-        for name in ("fiber_init", "fiber_port_context_init", "r9_call_init", "r9_stop", "fiber_panic",
+        for name in (self.public_api, "fiber_port_context_init", "r9_call_init", "r9_stop", "fiber_panic",
                      "fiber_addr_plausible_ram", "fiber_addr_plausible_code", "r9_task_entry", "fiber_internal_task_return"):
             require(name in self.symbols, "Real ELF symbol missing: " + name)
+        if cohort == "fiber":
+            for name in ("ctxrt_v1_init", "r9_fiber_layout",
+                         "fiber_internal_runtime_close_context_configuration",
+                         "fiber_internal_runtime_require_context_configuration_open"):
+                require(name in self.symbols, "Real consumer/configuration symbol missing: " + name)
+            require(not {"fiber_init", "fiber_current", "fiber_start", "fiber_schedule",
+                         "fiber_scheduler_set_pick_next"} & self.symbols.keys(),
+                    "Fiber consumer unexpectedly linked the legacy five-operation shim")
         self.trace, self.invalid = [], []
         self.instructions = []
         for line in elf_path.with_name("image.dis").read_text().splitlines():
@@ -237,8 +258,9 @@ class Machine:
         self.uc.mem_write(address, struct.pack("<I", value))
 
     def code(self, uc, address, size, data):
-        for name in ("fiber_init", "fiber_port_context_init", "fiber_port_init_context_frame",
-                     "fiber_addr_plausible_ram", "fiber_addr_plausible_code"):
+        for name in (self.public_api, "ctxrt_v1_init", "fiber_port_context_init", "fiber_port_init_context_frame",
+                     "fiber_addr_plausible_ram", "fiber_addr_plausible_code",
+                     "fiber_internal_runtime_require_context_configuration_open"):
             if name in self.symbols and address == (self.symbols[name] & ~1):
                 self.trace.append(dict(name=name, pc=address, r9=uc.reg_read(UC_ARM_REG_R9)))
         if address == (self.symbols["fiber_panic"] & ~1):
@@ -337,7 +359,7 @@ class Machine:
                     expected_r9=expected, actual_r9=actual, matched=actual == expected,
                     instructions=body[n:writes[-1] + 1])
 
-    def execute(self, profile, seed, hostile, reserved, mutant):
+    def execute(self, profile, seed, hostile, reserved, mutant, closed=False):
         if hostile:
             value = self.call("r9_hostile_probe", [7], 0)
             require(value == 8, "Hostile probe did not execute")
@@ -345,10 +367,53 @@ class Machine:
                 require(self.word(self.symbols[name]) > 0, "Hostile flags ineffective: " + name)
             self.returned = False
         self.uc.mem_write(CONTEXT, bytes([0xCC]) * 512)
+        layout = None
+        if self.cohort == "fiber":
+            layout = list(struct.unpack("<6I", self.uc.mem_read(self.symbols["r9_fiber_layout"], 24)))
+            size, prefix, state, alignment, empty, initialized = layout
+            require(0 < prefix <= state and state + 4 <= size <= 508 and
+                    alignment != 0 and CONTEXT % alignment == 0 and empty == 0 and initialized == 1,
+                    "Complete Fiber storage/layout facts invalid")
+            self.uc.mem_write(CONTEXT - 4, bytes([0xCC]) * 4)
+            self.uc.mem_write(CONTEXT, bytes(size))
+            if closed:
+                self.call("fiber_internal_runtime_close_context_configuration", [], 0)
+                require(self.returned and self.panic is None, "Actual configuration close failed")
+                self.returned = False
         self.uc.mem_write(BEGIN, bytes([0xA5]) * (END - BEGIN))
         post = self.call("r9_call_init", [CONTEXT, BEGIN, END, self.symbols["r9_task_entry"] | 1, ARG], seed)
+        if closed:
+            if mutant == "consumer-configuration":
+                require(self.panic is None and self.returned and
+                        self.word(CONTEXT + state) == initialized and
+                        self.word(CONTEXT) != 0 and
+                        any(t["name"] == "fiber_port_context_init" for t in self.trace) and
+                        not any(t["name"] == "fiber_internal_runtime_require_context_configuration_open" for t in self.trace),
+                        "Removed consumer gate must observably construct after actual configuration close")
+                return dict(seed=seed, classification="CONFIGURATION-BYPASSED", post_r9=post,
+                            fiber_state=self.word(CONTEXT + state), trace=self.trace)
+            require(self.panic == "k" and not self.returned and
+                    self.uc.mem_read(CONTEXT, size) == bytes(size) and
+                    self.uc.mem_read(BEGIN, END - BEGIN) == bytes([0xA5]) * (END - BEGIN) and
+                    not any(t["name"] == "fiber_port_context_init" for t in self.trace),
+                    "Closed real configuration must reject before constructor/storage effects")
+            return dict(seed=seed, classification="CONFIGURATION-CLOSED", panic=self.panic,
+                        storage_unchanged=True, stack_unchanged=True, trace=self.trace)
         if self.panic is not None:
             return dict(seed=seed, classification="PANIC", panic=self.panic, trace=self.trace)
+        if layout:
+            require(self.word(CONTEXT + state) == initialized and
+                    self.uc.mem_read(CONTEXT - 4, 4) == bytes([0xCC]) * 4 and
+                    self.uc.mem_read(CONTEXT + size, 512 - size) == bytes([0xCC]) * (512 - size),
+                    "Fiber state transition or complete-object canary corrupted")
+            names = [t["name"] for t in self.trace]
+            expected_guard = int(mutant != "consumer-configuration")
+            require(names.count(self.public_api) == 1 and names.count("ctxrt_v1_init") == 1 and
+                    names.count("fiber_internal_runtime_require_context_configuration_open") == expected_guard and
+                    names.index(self.public_api) < names.index("ctxrt_v1_init") < names.index("fiber_port_context_init") and
+                    (not expected_guard or names.index(self.public_api) <
+                     names.index("fiber_internal_runtime_require_context_configuration_open") < names.index("ctxrt_v1_init")),
+                    "Actual Fiber/configuration/Context/port constructor chain missing or reordered")
         require(self.uc.reg_read(UC_ARM_REG_R9) == 0xA9A9A9A9, "Assembly seed wrapper violated outer AAPCS R9")
         frame_kind = profile["frame"]
         if frame_kind == "mpu0":
@@ -376,7 +441,7 @@ class Machine:
         boot = [self.word(CONTEXT + 4 + i * 4) for i in range(7)]
         require(boot == [BEGIN, END, BEGIN + 32, END, END - BEGIN - 32,
                          self.symbols["r9_task_entry"] | 1, ARG], "Independent boot geometry mismatch")
-        public = [r["r9"] for r in self.trace if r["name"] == "fiber_init"]
+        public = [r["r9"] for r in self.trace if r["name"] == self.public_api]
         require(any(r["name"] == "fiber_port_context_init" for r in self.trace), "Public init did not reach real constructor")
         require(any(r["name"] == "fiber_addr_plausible_ram" for r in self.trace), "Real RAM policy not called")
         require(any(r["name"] == "fiber_addr_plausible_code" for r in self.trace), "Real code policy not called")
@@ -390,7 +455,7 @@ class Machine:
         elif not running["matched"]:
             classification = "SWITCH-RESTORE-R9"
         return dict(seed=seed, frame_r9=actual[index], post_r9=post, first_restore=first,
-                    switch_restore=running, classification=classification, trace=self.trace)
+                    switch_restore=running, classification=classification, trace=self.trace, fiber_layout=layout)
 
     def execute_mpu_frame(self, profile, seed, post, reserved, mutant):
         image = CONTEXT + 36
@@ -409,7 +474,7 @@ class Machine:
                          208, 8, 0x1C04, 0xFFFFFFFD, 3, 8, 4, 20], "Independent MPU boot geometry/identity mismatch")
         require(self.word(BEGIN) == 0xDEADBEEF and self.uc.mem_read(END - 32, 32) == bytes([0xA5]) * 32,
                 "MPU construction changed protected-frame placement or raw canary")
-        public = [r["r9"] for r in self.trace if r["name"] == "fiber_init"]
+        public = [r["r9"] for r in self.trace if r["name"] == self.public_api]
         require(any(r["name"] == "fiber_port_context_init" for r in self.trace), "MPU public init did not reach real constructor")
         first = self.restore_slice(profile, image, actual[5], "fiber_port_restore_first_context_from_svc", mutant)
         saved = seed ^ 0x5A5A5A5A
@@ -433,11 +498,11 @@ class Suite:
         self.commands, self.runs, self.controls, self.unqualified = [], [], [], []
         self.warnings, self.assembly_probes = [], []
 
-    def attempt(self, profile, mode, mutant=None, reserved=False):
+    def attempt(self, profile, mode, mutant=None, reserved=False, cohort="legacy"):
         try:
-            self.build_case(profile, mode, mutant, reserved)
+            self.build_case(profile, mode, mutant, reserved, cohort)
         except Exception as error:
-            directory = self.build / (profile["name"] + "-" + ("reserved-r9" if reserved else "ordinary-aapcs") +
+            directory = self.build / (cohort + "-" + profile["name"] + "-" + ("reserved-r9" if reserved else "ordinary-aapcs") +
                                       "-" + mode + ("-" + mutant if mutant else ""))
             sites = []
             for assembly in directory.glob("*.s"):
@@ -456,7 +521,7 @@ class Suite:
                         sites.append(dict(assembly=str(assembly), assembly_line=number, function=function,
                                           instruction=line.strip(), **origin))
             self.unqualified.append(dict(profile=profile["name"], mode=mode, mutant=mutant,
-                                         reserved_r9=reserved, error=str(error), traceback=traceback.format_exc(),
+                                         cohort=cohort, reserved_r9=reserved, error=str(error), traceback=traceback.format_exc(),
                                          scope="actual-header-assembly-only-register-constraint" if sites else "unclassified-qualification-failure",
                                          assembly_sites=sites))
             print("QUALIFICATION-FAIL " + profile["name"] + " " + mode + " " +
@@ -549,9 +614,9 @@ class Suite:
         require(not any(p["finding"] for p in self.assembly_probes),
                 "Actual CM0 initial-MSP helper still permits an invalid Thumb1 register operand")
 
-    def build_case(self, profile, mode, mutant=None, reserved=False):
+    def build_case(self, profile, mode, mutant=None, reserved=False, cohort="legacy"):
         contract = "reserved-r9" if reserved else "ordinary-aapcs"
-        directory = self.build / (profile["name"] + "-" + contract + "-" + mode + ("-" + mutant if mutant else ""))
+        directory = self.build / (cohort + "-" + profile["name"] + "-" + contract + "-" + mode + ("-" + mutant if mutant else ""))
         directory.mkdir()
         port = self.repo / "fiber/port" / profile["directory"]
         options = ["-" + mode.split("-")[0]] + (["-flto"] if "lto" in mode else [])
@@ -564,7 +629,8 @@ class Suite:
                 "-I" + str(self.repo), "-I" + str(self.repo / "context"), "-I" + self.a.cmsis_core,
                 "-DR9_CORE=" + str(profile["core"]), "-DR9_FPU=" + str(profile["fp"]),
                 "-DR9_MPU=" + str(int(profile["frame"] == "mpu0"))]
-        base += ["-DR9_RESERVED=" + str(int(reserved))]
+        base += ["-DR9_RESERVED=" + str(int(reserved)), "-DR9_FIBER=" + str(int(cohort == "fiber")),
+                 "-I" + str(self.repo / "fiber/lifecycle")]
         if profile["core"] == 0:
             # GCC's optionless pragma warning cannot be selected by -Wno-error=.
             # command() records only exact, source-scoped known diagnostics.
@@ -573,7 +639,11 @@ class Suite:
         if reserved:
             base += ["-ffixed-r9"]
         runtime = runtime_reader(self.repo)
-        common = list(runtime.get_runtime_source_paths(self.repo, COMMON_ROLES))
+        roles = COMMON_ROLES if cohort == "legacy" else tuple(r for r in COMMON_ROLES if r != "legacy_compat")
+        common = list(runtime.get_runtime_source_paths(self.repo, roles))
+        consumer = self.repo / "fiber/lifecycle/fiber_v1.c"
+        if cohort == "fiber":
+            common.append(consumer)
         engines = runtime.get_runtime_source_paths(self.repo, ("engine",))
         require(len(engines) == 1, "Constructor control requires one actual engine owner")
         engine = engines[0]
@@ -581,6 +651,7 @@ class Suite:
         require(sorted(p.name for p in port.glob("*.c")) == expected_sources, "Selected source inventory drift: " + str(port))
         sources = common + [port / name for name in expected_sources]
         objects = []
+        source_objects = []
         replacement_count = 0
         for source in sources:
             original = source
@@ -594,6 +665,19 @@ class Suite:
                 text = text.replace(call, 'register uint32_t scratch __asm("r9") = 0xDEADC0DEu;\n'
                     '\t__asm volatile("" : "+r"(scratch) :: "memory");\n\t' + call +
                     '\n\t__asm volatile("" : "+r"(scratch) :: "memory");')
+                replacement_count += 1
+            consumer_call = "ctxrt_v1_init(&fiber->private_context, stack_begin, stack_end, entry, arg);"
+            if mutant == "consumer-scratch" and source == consumer:
+                require(text.count(consumer_call) == 1, "Consumer scratch control anchor drift")
+                text = text.replace(consumer_call,
+                    'register uint32_t scratch __asm("r9") = 0xDEADC0DEu;\n'
+                    '\t__asm volatile("" : "+r"(scratch) :: "memory");\n\t' + consumer_call +
+                    '\n\t__asm volatile("" : "+r"(scratch) :: "memory");')
+                replacement_count += 1
+            if mutant == "consumer-configuration" and source == consumer:
+                gate = "fiber_internal_runtime_require_context_configuration_open(&fiber->private_context);"
+                require(text.count(gate) == 1, "Consumer configuration control anchor drift")
+                text = text.replace(gate, "/* Compiled control: omitted real consumer gate. */")
                 replacement_count += 1
             if mutant == "wrong-frame" and source not in common:
                 pattern = (r"(const uint32_t initial_r9\s*=\s*)(fiber_port_read_r9\(\))" if profile["frame"] == "mpu0" else
@@ -619,15 +703,24 @@ class Suite:
                           *(["-save-temps=obj"] if profile["core"] == 0 else []),
                           "-c", source, "-o", obj])
             objects.append(obj)
+            source_objects.append(dict(original=str(original), original_sha256=sha(original),
+                                       compiled=str(source), compiled_sha256=sha(source),
+                                       object=str(obj), object_sha256=sha(obj), command=self.commands[-1]))
         if mutant:
             require(replacement_count == 1, "Compiled control must change exactly one source site")
-        for name in ("boundary.c", "hostile_probe.c", "bootstrap.S"):
+        fixtures = ("boundary.c", "hostile_probe.c", "bootstrap.S")
+        if cohort == "fiber":
+            fixtures += ("consumer_layout.c",)
+        for name in fixtures:
             obj = directory / (Path(name).stem + ".o")
             flags = base + [options[0]]
             if name == "hostile_probe.c":
                 flags += options[1:] + hostile_flags
             self.command([self.a.arm_gcc, *flags, "-c", self.fixture / name, "-o", obj])
             objects.append(obj)
+            source_objects.append(dict(original=str(self.fixture / name), original_sha256=sha(self.fixture / name),
+                                       compiled=str(self.fixture / name), compiled_sha256=sha(self.fixture / name),
+                                       object=str(obj), object_sha256=sha(obj), command=self.commands[-1]))
         elf = directory / "constructor.elf"
         self.command([self.a.arm_gcc, *profile["flags"], *options, *hostile_flags,
                       *(["-ffixed-r9"] if reserved else []), "-nostdlib",
@@ -637,6 +730,10 @@ class Suite:
                       "-Wl,--undefined=r9_stop", "-Wl,--undefined=r9_hostile_probe",
                       "-Wl,--undefined=r9_task_entry", "-Wl,--undefined=r9_fault_probe",
                       "-Wl,--undefined=SVC_Handler", "-Wl,--undefined=PendSV_Handler",
+                      *(["-Wl,--undefined=r9_fiber_layout",
+                         "-Wl,--undefined=fiber_internal_runtime_close_context_configuration",
+                         "-Wl,--undefined=fiber_internal_runtime_require_context_configuration_open"]
+                        if cohort == "fiber" else []),
                       *(["-Wl,--undefined=fiber_addr_plausible_ram", "-Wl,--undefined=fiber_addr_plausible_code"]
                         if profile["frame"] == "mpu0" else []),
                       "-T", self.fixture / ("cm0_mpu.ld" if profile["frame"] == "mpu0" else "image.ld"),
@@ -652,22 +749,32 @@ class Suite:
                 require(re.search(r"Tag_CPU_arch: " + re.escape(architecture) + r"$", evidence, re.M),
                         "ELF architecture differs from role-specific target")
             (directory / output).write_text(evidence, encoding="ascii")
-        cases = [Machine(elf, profile).execute(profile, seed, hostile, reserved, mutant) for seed in SEEDS]
-        fault = Machine(elf, profile).fault_control()
+        cases = [Machine(elf, profile, cohort).execute(profile, seed, hostile, reserved, mutant) for seed in SEEDS]
+        closed = [Machine(elf, profile, cohort).execute(profile, seed, hostile, reserved, mutant, closed=True)
+                  for seed in SEEDS] if cohort == "fiber" else []
+        fault = Machine(elf, profile, cohort).fault_control()
         row = dict(profile=profile, mode=mode, contract=contract, reserved_r9=reserved,
-                   mutant=mutant, elf=str(elf), elf_sha256=sha(elf), cases=cases, fault_control=fault)
+                   cohort=cohort, public_api="fiber_v1_init" if cohort == "fiber" else "fiber_init",
+                   mutant=mutant, elf=str(elf), elf_sha256=sha(elf), cases=cases,
+                   source_objects=source_objects, configuration_closed=closed, fault_control=fault)
         (directory / "execution.json").write_text(json.dumps(row, indent=2) + "\n", encoding="ascii")
         if mutant:
             for case in cases:
                 expected = {"wrong-restore": "FIRST-RESTORE-R9", "wrong-switch": "SWITCH-RESTORE-R9"}.get(
                     mutant, "STATIC-BASE-R9" if reserved else "BORROWED-R9")
-                require(case["classification"] == expected and case["post_r9"] == case["seed"],
-                        "Compiled control did not produce exact frame-only classification: " + str(directory))
+                permitted = {"PASS", "BORROWED-R9"} if mutant == "consumer-configuration" else {expected}
+                require(case["classification"] in permitted and case["post_r9"] == case["seed"],
+                        "Compiled control did not produce its exact classification/preserve caller: " + str(directory))
                 if mutant == "wrong-frame":
                     require(case["frame_r9"] == FRAME_BAD, "Wrong-frame control did not execute its changed assignment")
                 elif mutant == "caller-scratch":
                     entries = [t["r9"] for t in case["trace"] if t["name"] == "fiber_port_context_init"]
                     require(entries == [FRAME_BAD], "Caller-scratch control did not borrow R9 at its ABI boundary")
+                elif mutant == "consumer-scratch":
+                    entries = [t["r9"] for t in case["trace"] if t["name"] == "ctxrt_v1_init"]
+                    require(entries == [FRAME_BAD], "Consumer scratch must borrow at the actual Context boundary")
+                elif mutant == "consumer-configuration":
+                    require(case["classification"] in ("PASS", "BORROWED-R9"), "Configuration control changed constructor ABI")
             self.controls.append(row)
             print("CONTROL qualified " + directory.name, flush=True)
         else:
@@ -681,6 +788,9 @@ def snapshot(repo, fixture, selected, cmsis):
     files = set(fixture.rglob("*"))
     files.add(repo / "tools/test_constructor_r9.ps1")
     files.update((repo / "fiber").glob("*.h"))
+    files.update((repo / "fiber/lifecycle").glob("*.h"))
+    files.add(repo / "fiber/lifecycle/fiber_v1.c")
+    files.add(repo / "fiber/lifecycle/README.md")
     files.update(runtime_reader(repo).get_runtime_source_inputs(repo, VALIDATION_ROLES))
     files.update((repo / "context").glob("*.h"))
     files.update((repo / "fiber/port").glob("*.h"))
@@ -722,6 +832,8 @@ def run_immutable(args, selected):
         child += ["--profiles", args.profiles]
     if args.modes:
         child += ["--modes", args.modes]
+    if args.constructor_cohorts:
+        child += ["--constructor-cohorts", args.constructor_cohorts]
     (root / "child-command.json").write_text(json.dumps(child, indent=2) + "\n", encoding="ascii")
     print("Constructor R9 immutable source/CMSIS snapshot: " + str(root), flush=True)
     return subprocess.run(child, cwd=root / "repo").returncode
@@ -733,6 +845,7 @@ def main():
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--profiles")
     parser.add_argument("--modes")
+    parser.add_argument("--constructor-cohorts")
     parser.add_argument("--immutable-inputs", action="store_true")
     args = parser.parse_args()
     suite = Suite(args)
@@ -743,11 +856,16 @@ def main():
         selected = [p for p in selected if p["port"] in names]
     modes = args.modes.split(",") if args.modes else list(MODES)
     require(bool(modes) and len(set(modes)) == len(modes) and set(modes) <= set(MODES), "Unknown/duplicate mode")
+    cohorts = args.constructor_cohorts.split(",") if args.constructor_cohorts else list(COHORTS)
+    require(bool(cohorts) and len(set(cohorts)) == len(cohorts) and set(cohorts) <= set(COHORTS),
+            "Unknown/duplicate constructor cohort")
     if args.immutable_inputs:
         raise SystemExit(run_immutable(args, selected))
     before = snapshot(suite.repo, suite.fixture, selected, args.cmsis_core)
     (suite.build / "inputs.before.json").write_text(json.dumps(before, indent=2) + "\n")
-    report = dict(Verdict="FAIL", CompleteSuite=not (args.profiles or args.modes),
+    report = dict(Verdict="FAIL", CompleteSuite=not (args.profiles or args.modes) and set(cohorts) == set(COHORTS),
+                  ConstructorCohorts=cohorts, DefaultConstructorCohorts=list(COHORTS),
+                  ArtifactManifest="artifacts.sha256.json",
                   Python=sys.executable, PythonPath=os.environ.get("PYTHONPATH", ""),
                   PythonVersion=sys.version, Dependencies={p: importlib.metadata.version(p) for p in ("unicorn", "pyelftools")},
                   Contracts={"ordinary-aapcs": "No fixed-R9 flag; caller return preservation, valid frame and actual first/running R9 restore slices required; initial frame value has no static-base meaning.",
@@ -761,20 +879,37 @@ def main():
     try:
         report["PreflightChecks"] = preflight()
         report["CompilerVersion"] = suite.command([args.arm_gcc, "--version"])
+        tool_paths = {Path(args.arm_gcc).resolve(), interpreter_image()}
+        for program in ("cc1", "lto1", "as", "ld"):
+            path = Path(suite.command([args.arm_gcc, "-print-prog-name=" + program]).strip()).resolve()
+            require(path.is_file(), "Compiler subprocess unavailable: " + str(path))
+            tool_paths.add(path)
+        plugins = {Path(suite.command([args.arm_gcc, "-print-file-name=" + name]).strip()).resolve()
+                   for name in ("liblto_plugin.dll", "liblto_plugin-0.dll", "liblto_plugin.so")}
+        plugins = {p for p in plugins if p.is_file()}
+        require(len(plugins) == 1, "Native LTO plugin missing/ambiguous")
+        tool_paths.update(plugins)
+        for name in ("arm-none-eabi-objdump.exe", "arm-none-eabi-readelf.exe", "arm-none-eabi-gcc-nm.exe"):
+            tool_paths.add((suite.bin / name).resolve())
+        report["ToolInputsBefore"] = {str(p): sha(p) for p in sorted(tool_paths)}
         cm0 = next((p for p in selected if p["port"] == "CM0"), None)
         if cm0 is not None:
             suite.thumb1_probe(cm0)
         for profile in selected:
-            for mode in modes:
-                for reserved in (False, True):
-                    suite.attempt(profile, mode, reserved=reserved)
-            # Controls deliberately use ordinary O2 so a production LTO defect
-            # cannot serve as the expected failure for a different control.
-            suite.attempt(profile, "O2", "wrong-frame")
-            suite.attempt(profile, "O2", "caller-scratch")
-            suite.attempt(profile, "O2", "wrong-frame", reserved=True)
-            suite.attempt(profile, "O2", "wrong-restore", reserved=True)
-            suite.attempt(profile, "O2", "wrong-switch", reserved=True)
+            for cohort in cohorts:
+                for mode in modes:
+                    for reserved in (False, True):
+                        suite.attempt(profile, mode, reserved=reserved, cohort=cohort)
+                # Controls stay O2: an unrelated production LTO failure must
+                # never serve as the expected failure of a different control.
+                suite.attempt(profile, "O2", "wrong-frame", cohort=cohort)
+                suite.attempt(profile, "O2", "caller-scratch", cohort=cohort)
+                suite.attempt(profile, "O2", "wrong-frame", reserved=True, cohort=cohort)
+                suite.attempt(profile, "O2", "wrong-restore", reserved=True, cohort=cohort)
+                suite.attempt(profile, "O2", "wrong-switch", reserved=True, cohort=cohort)
+                if cohort == "fiber":
+                    suite.attempt(profile, "O2", "consumer-scratch", cohort=cohort)
+                    suite.attempt(profile, "O2", "consumer-configuration", cohort=cohort)
         failures = [r for r in suite.runs if any(c["classification"] not in ("PASS", "BORROWED-R9") for c in r["cases"])]
         report["AffectedProfiles"] = sorted({r["profile"]["port"] for r in failures})
         report["ProductionFailingConfigurations"] = len(failures)
@@ -808,13 +943,23 @@ def main():
             "Probes": [p["name"] for p in suite.assembly_probes if p["finding"]],
         }] if any(p["finding"] for p in suite.assembly_probes) else []
         report["ExecutionCalls"] = 4 * (len(suite.runs) + len(suite.controls))
+        report["ConfigurationClosedCalls"] = sum(len(r["configuration_closed"]) for r in suite.runs + suite.controls)
         report["RestoreSlices"] = sum(2 for r in suite.runs + suite.controls for c in r["cases"] if "first_restore" in c)
         report["Commands"] = suite.commands
         report["InputCount"] = len(before)
+        report["ToolInputsAfter"] = {p: sha(p) for p in report.get("ToolInputsBefore", {})}
+        report["ToolDrift"] = [p for p, value in report.get("ToolInputsBefore", {}).items()
+                               if report["ToolInputsAfter"].get(p) != value]
+        if report["ToolDrift"]:
+            report["Verdict"] = "FAIL"
+            error = RuntimeError("Constructor R9 tool inputs changed during test")
         report["ConfirmedAbiFailuresSoFar"] = sorted({r["profile"]["port"] for r in suite.runs
             if any(c["classification"] not in ("PASS", "BORROWED-R9") for c in r["cases"])})
         (suite.build / "inputs.after.json").write_text(json.dumps(after, indent=2) + "\n")
         (suite.build / "results.json").write_text(json.dumps(report, indent=2) + "\n")
+        artifacts = {str(p.relative_to(suite.build)): sha(p) for p in sorted(suite.build.rglob("*"))
+                     if p.is_file() and p.name != "artifacts.sha256.json"}
+        (suite.build / "artifacts.sha256.json").write_text(json.dumps(artifacts, indent=2) + "\n")
     if error:
         raise SystemExit(str(error))
     print("PASS constructor R9 " + str(suite.build), flush=True)
