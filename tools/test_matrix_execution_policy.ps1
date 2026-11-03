@@ -189,7 +189,7 @@ foreach ($gate in @(
             '-ArmGcc \$gcc -CmsisCore \$cmsis')
     }
 }
-foreach ($runner in @('test_classic_context_runtime',
+foreach ($runner in @('test_classic_context_runtime', 'test_classic_fp_context_runtime',
         'test_cm33f_secure_initialize', 'test_m55_secure_runtime_admission',
         'test_cm33_secure_only_runtime', 'test_cm55_secure_only_runtime')) {
     $needle = '"tools\' + $runner + '.ps1"'

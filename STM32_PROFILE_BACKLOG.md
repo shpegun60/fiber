@@ -66,6 +66,14 @@ restore/publication controls. Its captured sources and evidence are independent
 of the aggregate above. It does not qualify M0+/G0, CM4/CM7 FP behavior, other
 profiles, peripherals or a board, and is not final-LTO FreeRTOS equivalence.
 
+The separate [post-Context CM4F FP-state suite](PORT_ARCHITECTURE_AUDIT.md#post-context-cm4f-fp-runtime)
+passes 288 actual AN386 cases: 64 positives and 224 compiled causal controls,
+with eager/lazy policy, both consumers, O2/Os, ordinary/final-LTO and direct/
+archive links. Eight actual pinned upstream final ELFs have bounded matching
+mechanism checks. This is neither whole-kernel equivalence nor a G4 board,
+device-priority-width, softfp, CM7, complete panic-suite or arithmetic claim.
+The earlier aggregate is not rerun or promoted by that focused receipt.
+
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
 O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region

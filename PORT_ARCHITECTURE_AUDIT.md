@@ -4036,3 +4036,127 @@ proofs and both reference receipts, and confirms the three receipt hashes above.
 All twelve non-Markdown overlays still match live bytes. Later documentation
 updates are outside the captured qualification; no current-tree or clean-commit
 claim is inferred from it. Both earlier failed attempts remain unchanged.
+
+### Post-Context CM4F FP Runtime
+
+`tools/test_classic_fp_context_runtime.ps1` completes the captured AN386
+Context/Fiber FP-state suite. The immutable input is Git archive
+`3ece64f4cbd85f70e580cb4a7d9cc1703daa8f6d` plus sixteen explicitly hashed
+owned overlays, not a clean-commit/current-worktree qualification. It contains
+1,042 sources, enrolls 3,386 source/reference/header/tool inputs, retains 21,763
+artifacts and 225 generated inputs, and finishes in 592.26 seconds with exit 0.
+Source, input, repository-inventory and resolved QEMU identity drift are zero.
+
+| Execution class | Cases | Required outcome |
+| --- | --- | --- |
+| Positive | 64 | Exact CHECK, policy-specific OBS and PASS, exit 0 |
+| Actual-production causal mutation | 224 | Exact case-specific register/frame/publication reason and oracle terminal, exit 66 |
+
+The literal grid is Context/Fiber, O2/Os, ordinary/final-linked LTO, direct/static
+archive, eager/lazy, and positive hash/map 0/0 or 1/1. Seven mutations span the
+32 primary-policy tuples: r4/r9 restore, high-FP save/restore, low hardware FP
+payload, FPSCR and common current publication. High-save omission preserves
+frame geometry and separately triggers required lazy materialization. Panic,
+unhandled fault, timeout or a wrong reason never substitutes for its intended
+semantic failure. Twenty terminal and fifteen binding controls also pass.
+
+Three workers include two distinct FP-active contexts and one GRO/FP-inactive
+context. Both public APIs perform real first SVC and later PendSV transfers,
+self-selection and every directed worker edge. Initial/basic and active/extended
+EXC_RETURN, Thread FPCA, current/argument identity, masks, vector/priority
+readback, stack cookies/guards and canaries are checked. The public C-call phase
+requires callee-saved GPRs and s16-s31 only. A separately reseeded assembly-owned
+direct-PendSV phase checks s0-s31, FPSCR, GPRs and stack state before another C
+call or restoring epilogue can mask corruption. This does not invent a C ABI
+promise for caller-saved low FP registers or FPSCR.
+
+Validation-policy builds observe FPCCR before the real handler's first FP
+instruction, distinguish eager/lazy active and inactive LSPACT, and verify the
+post-materialization state. Handler CONTROL is observation-only, not confused
+with resumed Thread FPCA. Primary-policy execution has no pre-save observer
+and does not independently establish lazy-entry LSPACT. The observer calls no
+Context/Fiber API, executes no FP/coprocessor instruction, and writes only its
+exact fixture report/arm objects or matched allocated stack slots.
+
+The finite-constant/stack CFG checker rejects unknown stores, widths, indexed
+addresses, unsupported writeback, out-of-object writes, unproven returns,
+unresolved PC writes, function/literal fallthrough and non-instruction targets.
+Every call enters the exact function entry, including same-body/alias calls;
+ordinary internal branches propagate their own states. Nine parser controls,
+three byte-decoder controls and 32 actual assembled controls pass: five admitted
+and twenty-seven rejected. The latter are checker controls, not extra firmware
+executions. This is a bounded fixture proof, not a general pointer-range
+analyser, whole-program CFI proof or formal verification of the provider.
+
+Every final ELF has actual production providers, strong SVC/PendSV vectors,
+exact storage/runtime expectations and correct Context/Fiber isolation. Pure
+Context omits Fiber, legacy and optional configuration providers. Prelink
+common-private and fixture-output owners constrain the narrowly allowed final
+LTO localization; Context APIs, handlers and cohort definitions remain global.
+Disassembly bytes are checked against the actual final ELF, including mapping
+symbols that distinguish instructions from literal pools.
+
+Eight actual pinned FreeRTOS `GCC/ARM_CM4F/port.c` final ELFs cover O2/Os,
+ordinary/LTO and direct/archive links. Actual upstream headers and fail-stop
+boundary providers are used, not copied handler bodies or a fake functioning
+TCB/scheduler. Each positive has one matching reference tuple, yielding 64
+associations, not 64 independent upstream policy modes. Ordered transfer,
+EXC_RETURN predicates, BASEPRI envelope, first SVC and bounded CPACR checks are
+required. Upstream always selects lazy preservation; Fiber eager is an explicit
+policy difference. These references are link-only, not executed FreeRTOS kernels,
+closed whole-provider equivalence or cross-image byte equality. Final references
+have no remaining relocations; resolved calls, vectors, retained pointers and
+actual prelink definition owners supply the stated bounded evidence.
+
+Retained export: `C:/cfrq-a95232dc6f`; build: `C:/cfrb-a95232dc6f`.
+
+| File | SHA-256 |
+| --- | --- |
+| Build `results.json` | `6785CB110E939B00D139E3CD5045792A3041D85259E1F137AD776399C51016FF` |
+| Build `artifacts.json` | `B8577840A24D43E11CF7EB71427A04AE08B4483D8121EECD56D0703463043855` |
+| Export `qualification-result.json` | `79BD8E1642B18C769DFF35DFFA4372814324A17BD1AE15803787D30733F1EFE8` |
+| Export `overlays.json` | `A09F8E6D84EADCEB4D12DAA9651957ABBCC5C0364931BDC6796E08C033E756A8` |
+| Export `source-before.json` | `B079BF398D10CEF355D18B266648C76F1F8C56CF42D1A8EC373C0F7510A89ECB` |
+| Export `qualification-plan.json` | `B99D0AD88C513C9FFA5E6FC41DBCE67D9D1C85722C7E26F307B4D814AA2E7578` |
+| Export `source.zip` | `DA31D63BDC246CE2060EA448EB542FB78D382FC0CBA2EA62830196C570BB3CB2` |
+| Export `runtime.log` | `AE121217E1D872EEC186F9CB3716552AA3DA285527CAC6F6AB1C71344C3D222A` |
+
+Superseded attempts remain unchanged. The completed `a658770cb4` and
+`5461d401b2` full receipts pass execution but are not accepted as final observer
+assurance: review identified successively missing PC/store and explicit-edge
+checks. Their build-result hashes are respectively
+`8135BFA0891734C92B831B835F9F0DA6FA19E53C93C37825627722646E86C4B2`
+and `304DFE7F2B465AD9FECEA0D41A8603727617D2B9D456F8BA58E55664CF815A75`.
+Development `C:/cfp-closure-dev-e4533db12e/results.json`, hash
+`6CD1E2906A8236DA03AF915CB854A67AFCF5841B76B2A4DF58E2647323954BE6`,
+remains FAIL for a test's overstrict final-LTO fixture binding requirement;
+actual prelink ownership now constrains that localization.
+
+Full builds `87d8bf4e67` and `0ae607d1db` each pass all 288 executions and eight
+reference links but remain overall FAIL for real QEMU-library drift. Their
+build-result hashes are respectively
+`91E2923FFDD08BFD6C6AC6DFAECEA6C7CDBF61DA6D4DC66830348BA3EABDFA2D`
+and `E2DDC1C77FFF4BC3344AB70C3DE7F12243733D658D9FC3C9B5718CB0A7624346`.
+WSL's dpkg log records package upgrades during those runs; system libz/liblzma
+contents changed. No packages were installed or update services disabled by
+this gate. The accepted fresh run retains stable post-update closure hashes;
+neither failure is waived or rewritten.
+
+This qualifies the captured Cortex-M4F FPv4-SP-D16 hard-ABI cohort on QEMU
+8.2.2 with eight model NVIC priority bits, PendSV 0xFF and BASEPRI 0x80, GNU Arm
+GCC 14.3.1 and the clean pinned reference. It is not a device-priority-width or
+STM32G4 peripheral/board claim. Softfp, arithmetic stress, CM7/H7/H7S, complete
+FP panic suites, global all-optimization/final-LTO reference equivalence and
+exact-SHA CI remain separate. No production C, frame layout or exception
+assembly is changed. The old `847953d` aggregate stays historical.
+
+Conditional dispatch has a separate 119-check execution-policy PASS at
+`%TEMP%/matrix-execution-policy-ed87dc5cd0c8434cb59245ba0b218d64`.
+Later dispatch/documentation edits are outside the captured export and do not
+create a current-tree or clean-commit combined qualification.
+
+Independent read-only review rehashes all 1,042 sources, 3,386 inputs, 21,763
+artifacts and 225 generated inputs without mismatch, reconciles all 288
+executions, 32 assembled checker controls, eight references and 64 associations,
+and confirms the result hash above. All fourteen non-Markdown overlays still
+match live bytes. Post-export README prose is outside that qualification.

@@ -22775,6 +22775,11 @@ try {
             -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
             -WslDistro $ControlWslDistro `
             -BuildRoot (Join-Path $buildRoot "audit-classic-context-runtime")
+        Write-Host "== audit / classic CM4F actual Context and Fiber FP runtime =="
+        & (Join-Path $RepoRoot "tools\test_classic_fp_context_runtime.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
+            -WslDistro $ControlWslDistro `
+            -BuildRoot (Join-Path $buildRoot "audit-classic-fp-context-runtime")
         Write-Host "== audit / executed ARM CONTROL exception transitions =="
         & (Join-Path $RepoRoot "tools\test_arm_control.ps1") `
             -ArmGcc $gcc -QemuRoot $ControlQemuRoot `

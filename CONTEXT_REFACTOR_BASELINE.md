@@ -111,6 +111,7 @@ implementation and its selected software gates, not the entire port roadmap.
 | Distinct static-storage Fiber lifecycle consumer | Implemented and separately qualified |
 | Combined compile/link/codegen matrix for the captured source | PASS at `847953d` |
 | Post-inversion CM0 public Context/Fiber SVC/PendSV execution | Captured QEMU O2/Os normal/final-LTO direct/archive suite: 298 cases PASS; not M0+ or board evidence |
+| Post-inversion CM4F Context/Fiber FP-state execution | Captured AN386 O2/Os normal/final-LTO direct/archive eager/lazy suite: 288 cases PASS; bounded paired upstream final ELFs, not G4 board or full panic-suite evidence |
 | Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
 | Exact-commit release-blocking CI | Not established |

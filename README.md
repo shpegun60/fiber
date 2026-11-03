@@ -49,6 +49,12 @@ passes 298 captured QEMU cases through public Context and Fiber v1, including
 ordinary/final-LTO and archive variants. It does not establish M0+/G0, FP,
 other CPU profiles, STM32 peripheral behavior or hardware validation.
 
+A separate [CM4F FP-state execution receipt](PORT_ARCHITECTURE_AUDIT.md#post-context-cm4f-fp-runtime)
+passes 288 captured AN386 cases with eager/lazy policy and both Context/Fiber
+consumers. Eight actual upstream final ELFs provide bounded paired mechanisms,
+not whole-kernel equivalence. G4 peripheral/NVIC-width integration, CM7, softfp,
+full panic suites and boards remain separate qualifications.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
