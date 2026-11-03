@@ -111,21 +111,25 @@ This extends basic MPU8 eager/FP-inactive execution beyond the seven-image
 pilot; it does not qualify FP-active/lazy MPU, MPU16, other CPU profiles,
 global parity, the default aggregate, CI or hardware.
 
-The next bounded classic-MPU proof is a separate FP-active pilot, not a rewrite
-of the qualified basic grid or production assembly. Start with O2, ordinary
-direct linking, Context/Fiber x eager/lazy: four positive images and a model.
-Use two unprivileged workers with distinct FP payloads and one GRO/FP-inactive
-worker, self/cross transitions and real SVC71/PendSV/SVC72. Worker scratch must
-stay inside its own stack. Public-yield assertions cover ABI-preserved high FP;
-an explicit assembly envelope around the real naked scheduling primitive may
-test all FP registers/FPSCR without inventing a public caller-saved guarantee.
-Observe protected extended-frame copying, raw CONTROL capture before VSTM,
-FPCA/lazy completion, exact cursor/SP/cookies and FP isolation. A scheduler
+The separate [CM4 MPU FP-active pilot](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-fp-active-pilot)
+passes without rewriting the qualified basic grid or production assembly.
+It covers O2, ordinary direct linking, Context/Fiber x eager/lazy: four positive
+images and a model. Two unprivileged workers use distinct FP payloads and one
+GRO/FP-inactive worker exercises basic frames, with self/cross transitions and
+real SVC71/PendSV/SVC72. Worker scratch stays inside its own stack. Public-yield
+assertions cover ABI-preserved high FP; an explicit assembly envelope around the
+real naked scheduling primitive tests all FP registers/FPSCR without inventing
+a public caller-saved guarantee. It observes protected extended-frame copying,
+raw CONTROL capture before VSTM, FPCA/lazy completion, cursor/SP/cookies and
+FP isolation. A scheduler
 callback is too late to prove pre-save LSPACT; any such observation needs a
 separate model-side read-only probe, not a production instrumentation hook.
-Add causal compiled omissions and actual pinned MPU reference associations.
-This is planned work, not new FP-active qualification. Broader link/optimization
-coverage follows only after that pilot; keep all 25 basic-grid files unchanged.
+The pilot includes causal compiled omissions and pinned MPU reference associations.
+This is O2/direct/non-LTO MPU8 model evidence, not full FP qualification. Four
+positives, ten causal backend negatives and one model pass. The next separate
+grid extends optimization/link coverage; strict low/FPSCR self-selection and
+pre-save lazy-state observation remain explicit coverage items. Keep all 25
+basic-grid files and the qualified FP pilot unchanged.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at

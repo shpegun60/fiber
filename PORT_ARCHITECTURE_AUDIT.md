@@ -4824,6 +4824,101 @@ not new QEMU/ARM execution, pinned-reference parity, the default combined
 matrix, global all-optimization equivalence, hosted CI or hardware validation.
 The separate basic-frame MPU pilot and its exclusions remain unchanged.
 
+## CM4 MPU FP-Active Pilot
+
+Status: separate opt-in O2/direct/non-LTO AN386 pilot PASS on 2026-11-03.
+This changes test tooling only, not production providers, frame layout, public
+API, exception assembly, or any of the 25 qualified basic-grid files.
+
+`tools/test_classic_cm4_mpu_fp_pilot.ps1` captures selected source bytes before
+import/build, reuses the basic fixture's pinned 26-file FreeRTOS inventory at
+`a50edad08b29052631aa469d4df6e6ec7ff68878`, and requires a fresh external output
+root. It does not depend on an old receipt, invoke Git, install tools, program a
+board, or launch WSL in compile-only mode.
+
+The successful compile-only root is `C:\cmfp-20261103-c4`; the independent fresh
+execution root is `C:\cmfp-20261103-e1`. Both close the same literal inventory:
+
+- Four production positives: Context/FiberV1 x eager/lazy FP, MPU8, hard-FP.
+- Three privileged contexts with disjoint 4 KiB user stacks per positive:
+  two distinct FP payloads and one GRO/FP-inactive worker.
+- Ten compiled production-backend mutations, five under each FP policy.
+- One model probe and one actual pinned, link-only FreeRTOS reference ELF.
+- Four hash-bound reference associations, each with the maintained three
+  basic mechanisms plus explicit decoded FP-copy ordering facts.
+
+All 15 requested AN386 observations pass: model, four production positives and
+ten expected FP mismatches. The latter require exit 66, worker 0, and these exact
+reason/phase pairs, never a generic fault or timeout:
+
+| Backend mutation | Reason | Phase |
+| --- | --- | --- |
+| Omit high save | 131 | 1 (public yield) |
+| Omit high restore | 131 | 1 (public yield) |
+| Omit low save | 134 | 2 (assembly envelope) |
+| Omit low restore | 134 | 2 (assembly envelope) |
+| Corrupt saved FPSCR | 132 | 2 (assembly envelope) |
+
+The user assembly oracle checks R4-R11, active SP, cookies, Thread IPSR/CONTROL,
+and FP data. It requires only ABI-preserved high FP across the genuine public C
+yield, then re-seeds all S0-S31/FPSCR inside an assembly envelope around the
+real naked SVC71 primitive. Unprivileged MRS PSP is deliberately not used as an
+oracle; privileged save/restore code validates PSP and complete frame bounds.
+The constructor-seeded task return reaches the real SVC72 panic path.
+
+The dispatcher observes 23 selections, one self and 21 cross transitions,
+eight/seven extended saves and seven basic saves. After protected capture it
+poisons only the outgoing low16/FPSCR hardware-frame copy. This forces the
+restore oracle to detect omitted reconstruction instead of trusting surviving
+user-stack data. Core8 remains at PSP, low17 starts at PSP+32, and the reserved
+word is untouched. Self-selection covers public/high-FP preservation here;
+strict low/FPSCR self-restoration remains a separate coverage item.
+
+All four positives observe post-save CONTROL mask `0x22` (raw Handler values
+1 and 5), post-save LSPACT 0, return PC `0x0001042E`, PSP `0x20002F98` and xPSR
+`0x21000000`. These are this pilot's observations, not universal addresses or
+proof of pre-save LSPACT. The reference always-lazy policy and subject eager
+policy intentionally differ. Decoded checks prove ordered named mechanisms,
+not whole-handler equivalence; extra saved-FPSCR corruption retains mechanism
+PASS and is rejected only by the runtime payload oracle.
+
+Closing evidence includes 209 captured files, 1,797 enrolled inputs, ten generated
+backend mutations, 1,036 artifacts, 16 native ARM ELFs and zero input drift.
+Sixty synthetic decoded controls and 64 synthetic receipt controls run before
+the builds; they are not target executions. An independent captured PowerShell
+checker verifies exact terminals, observed values, canonical model/ELF bindings
+and every artifact byte against the manifest before admitting the receipt.
+
+Execution receipt SHA256:
+`03F23D31C88B8ADB24C488872EB2B2E52D52B99CCAB51A4822BE28B7233F335C`
+
+Execution artifact manifest SHA256:
+`F3361FE79C8E5F540FFE1CDFA4A381EFCCA489C1F0712549E2D93DECBFF16A22`
+
+Execution capture manifest SHA256:
+`8D0A2CEB4F4FFD0B1B9FC43B429518F32C04A6FF2014181D23F2D6088C030E01`
+
+Independent review rehashed all 1,036 artifacts, 16 ELF bindings and four
+associations. Fifty-five in-memory PowerShell negatives, including malformed
+terminals with matching mutated Observed facts, reject at the intended
+terminal/causality guard rather than a later persisted-receipt mismatch.
+Review report: `C:\cmfp-review-20261103\e1-6e72a441\review-results.json`, SHA256
+`82FBA36E34FCB991D2A9327BD42C96D6A23151F42256D338D62F2891A7C15C6C`.
+These are offline receipt-admission controls, not additional CPU executions.
+
+Historical failures remain preserved: `c1` rejected decreasing RAM section order
+under fatal linker warnings; `c2` rejected objdump's SVC operand annotation;
+`c3` rejected the equivalent `ldmia sp!` spelling of POP. These are test/linker
+and decoder failures, not executed target failures. Source review also removed
+an invalid unprivileged MRS PSP comparison before the first QEMU execution.
+
+`CompleteSuite` remains false and `RequestedInventoryComplete` applies only to
+this pilot. This is fresh selected-byte evidence, not an exact-clean-Git claim.
+It does not update the default aggregate, global parity, hosted CI or hardware
+status. Os, final LTO, archive layouts, MPU16, softfp and other CPU profiles
+remain separate. Broader FP coverage must use a separate grid rather than
+rewriting either qualified fixture.
+
 ## CM4 MPU Basic Grid
 
 The opt-in [maintained basic grid](tools/fixtures/classic_cm4_mpu_basic_grid/README.md)

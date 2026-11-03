@@ -91,6 +91,12 @@ faults. Eight link-only pinned reference ELFs supply 144 bounded mechanism
 checks. This remains MPU8, eager, hard-FP-compiled but FP-inactive evidence;
 FP-active MPU, other optimization modes, other profiles and boards are separate.
 
+A separate [CM4 MPU FP-active pilot](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-fp-active-pilot)
+now passes four Context/Fiber eager/lazy positives, ten causal FP backend
+mutations and one AN386 model probe. It covers O2/direct/non-LTO MPU8 only;
+one pinned link-only FreeRTOS ELF supplies bounded FP mechanism comparisons.
+This is not pre-save LSPACT observation, a full FP grid or hardware evidence.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
