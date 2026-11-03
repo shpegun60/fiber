@@ -4921,6 +4921,43 @@ The corrected outer checker must bind both closing and finalizer reports.
 Its fresh qualification is not part of the independently reviewed execution
 claim above; neither failed outer result is promoted to PASS.
 
+### Clean-Commit Compile Closure
+
+A new full compile-only run, not a reevaluation of either failed outer run,
+passes for the same exact `b2a7d17c7c54e3f1ae9a6f6919dfbc4482491f2b`.
+Its no-overlay export is under
+`C:/cmbgq-3ea2104f3e/experiments/h7s_fiber_test/Boot/app_core/fiber` and its
+fresh outputs are under `C:/cmbgb-3ea2104f3e/evidence`. All 1,121 exported
+paths and raw Git blobs match the commit, including all 25 reviewed test files.
+The child and outer driver both exit zero after 214.00 seconds, with no source,
+inventory, metadata/dependency or enrolled-tool drift. Opening and closing
+source manifests are byte-identical.
+
+The child remains `COMPILE-PREFLIGHT-PASS`, `Execution=NOT_RUN`,
+`CompleteSuite=false`: 48 production ELFs, one model, eight link-only reference
+ELFs and 40 compiled omissions give 97 final ARM ELFs. The outer closing checker
+binds 1,775 inputs, 198 captured files, 6,594 artifacts, 48 associations and the
+exact 132/10/25 control identities. It requires the predeclared 12/20/8
+generated path/role split and both payloads in the exact two-field retained
+control envelope. The TEMP adapter's 172 Python and 203 PowerShell causal
+controls pass before this new launch; the earlier read-only development probe
+is not substituted for the fresh run.
+
+| Compile Record | SHA-256 |
+| --- | --- |
+| `C:/cmbgb-3ea2104f3e/evidence/results.json` | `1B1EEA13A7C05567F8926B76D7DBFC7666F2F9875F601E1366824799BD0C2D9F` |
+| `C:/cmbgb-3ea2104f3e/evidence/artifacts.json` | `58F440311182BF411241F9D3BD4D4B5F195F8422013525DEED272708369E9445` |
+| `C:/cmbgq-3ea2104f3e/grid-result.json` | `FBBC43B2D644F658B3215E46B7977A162434CB051FC61EF410EC295DC8477762` |
+| retained `driver.ps1` | `BE8792D33DA7C878E0E9E749F15C503FA6C7BF66D9CB58F8D456685DCEC2B13F` |
+| retained `expected-source-metadata.json` | `3DBA545AA414CD2994EB8BD757E4584538878090B99028CEFA96786BFAB7D085` |
+
+The two retained files are under `C:/cmbgq-3ea2104f3e`. This separate receipt
+closes the additional compile-only provenance checks, not new CPU execution.
+The independently reviewed 49-observation execution receipt above remains the
+execution evidence. Both old outer FAILs and the pre-child launch FAIL remain
+unchanged. No production code, frame, handler, API or default-matrix dispatch
+changes were needed to obtain either successful receipt.
+
 This does not qualify FP-active/lazy MPU contexts, MPU16, softfp, ordinary
 O0/Og/O3, CM0/CM3/CM7 MPU execution, the global all-optimization/final-LTO parity
 gate, the default aggregate, hosted CI or STM32 hardware. Those remain explicit
