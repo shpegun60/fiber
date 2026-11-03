@@ -78,6 +78,58 @@ foreach ($case in @(
         ($case.Reject -and $null -ne $caught -and $caught.StartsWith('Fixture memory retention control failed for the wrong reason:')) -or
         (!$case.Reject -and $null -eq $caught))
 }
+$inventoryChecks = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -ceq 'Assert-Cm55SecureStagedInventory'
+})
+Check 'C55S/one-artifact-inventory' ($inventoryChecks.Count -eq 1)
+. ([scriptblock]::Create($inventoryChecks[0].Extent.Text))
+$gatewayCheck = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -ceq 'Test-ArmCm55SecureGatewayAbi'
+})
+Check 'C55S/inventory-before-compiler' ($gatewayCheck.Count -eq 1 -and
+    $gatewayCheck[0].Extent.Text.IndexOf('Assert-Cm55SecureStagedInventory -RepositoryRoot $RepositoryRoot') -gt 0 -and
+    $gatewayCheck[0].Extent.Text.IndexOf('Assert-Cm55SecureStagedInventory -RepositoryRoot $RepositoryRoot') -lt
+        $gatewayCheck[0].Extent.Text.IndexOf('$probeDir ='))
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+Assert-Cm55SecureStagedInventory -RepositoryRoot $repo
+Check 'C55S/actual-staged-inventory' $true
+foreach ($case in @(
+        @{Name='matching';Skip=$null;Extra=$null;Hide=$null;Reject=$false},
+        @{Name='missing-runtime';Skip='non_secure/fiber_port.c';Extra=$null;Hide=$null;Reject=$true},
+        @{Name='missing-private';Skip='non_secure/fiber_port_private.h';Extra=$null;Hide=$null;Reject=$true},
+        @{Name='unexpected-lifecycle';Skip=$null;Extra='secure/fiber_secure_context_lifecycle.c';Hide=$null;Reject=$true},
+        @{Name='unexpected-nested';Skip=$null;Extra='secure/future/provider.c';Hide=$null;Reject=$true},
+        @{Name='hidden-lifecycle';Skip=$null;Extra='secure/fiber_secure_context_lifecycle.c';Hide='file';Reject=$true},
+        @{Name='hidden-directory';Skip=$null;Extra='secure/future/provider.c';Hide='directory';Reject=$true})) {
+    $root = Join-Path $out ('inventory-' + $case.Name)
+    $port = Join-Path $root 'fiber\port\ARM_CM55'
+    foreach ($group in @('secure', 'non_secure')) {
+        $null = New-Item -ItemType Directory -Path (Join-Path $port $group) -Force
+        foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $repo ('fiber\port\ARM_CM55\' + $group)) -File)) {
+            if (($group + '/' + $file.Name) -cne $case.Skip) {
+                Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $port ($group + '/' + $file.Name))
+            }
+        }
+    }
+    if ($null -ne $case.Extra) {
+        $extra = Join-Path $port $case.Extra
+        $null = New-Item -ItemType Directory -Path (Split-Path $extra -Parent) -Force
+        Set-Content -LiteralPath $extra -Value '/* inventory negative fixture */' -Encoding ASCII
+        if ($null -ne $case.Hide) {
+            $hidden = if ($case.Hide -ceq 'directory') { Split-Path $extra -Parent } else { $extra }
+            [IO.File]::SetAttributes($hidden,
+                ([IO.File]::GetAttributes($hidden) -bor [IO.FileAttributes]::Hidden))
+        }
+    }
+    $caught = $null
+    try { Assert-Cm55SecureStagedInventory -RepositoryRoot $root }
+    catch { $caught = $_.Exception.Message }
+    Check ('C55S/inventory-' + $case.Name) (
+        ($case.Reject -and $null -ne $caught -and $caught.StartsWith('ARM_CM55 staged artifact inventory')) -or
+        (!$case.Reject -and $null -eq $caught))
+}
 $cases = @(
     @{Name='local/no-qemu';Required=$false;Subset=$false;Root=$null;Diagnostic=$null},
     @{Name='local/with-qemu';Required=$false;Subset=$false;Root='/existing/prefix';Diagnostic=$null},

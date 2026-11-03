@@ -3797,3 +3797,29 @@ The handoff, exact overlay identities and replay commands are retained under
 These separate full-gate receipts do not establish a new combined aggregate,
 complete runtime execution for the primary classic targets, global final-LTO
 equivalence, hardware validation or staged-profile activation.
+
+### Staged CM55 Gateway Inventory Repair
+
+The immutable `3ea0f640e6f912da320baa38e7ed687f9fd6c692` compile/link/codegen
+aggregate remains FAIL after 1,910.15 seconds, 1,016 source files and zero drift.
+It passes the repaired M23 LTO links and forward/reverse/cohort guards, then
+stops at an obsolete foundation assertion forbidding the already implemented
+staged C55S Non-secure runtime source. Later gates are NOT_RUN. Receipt:
+`C:/fcq-17405a5964/matrix-result.json`, SHA-256
+`7317239EAAC5CC197FD4BA264400E43520BDA3DE16FAD9051201EF5A6EEA0E3F`.
+
+The gateway gate now requires the exact current staged NS/Secure file inventory,
+instead of treating the NS runtime as a future artifact. Missing runtime/private
+files, new Secure lifecycle artifacts and unexpected nested sources are rejected.
+Independent review found and closed a hidden-file/directory enumeration gap;
+both now have negative fixtures using actual filesystem Hidden attributes.
+The actual-helper policy regression passes 109 checks. The complete maintained
+CMSE gateway/private-pool/link cohort, including its existing import/profile/
+version negatives, passes against immutable `723878d` plus the two test-only
+overlays: 1,016 files and zero drift. Receipt:
+`C:/fc55-stage-ec6d170108/results.json`, SHA-256
+`5A3231FB8323CC86FFD6976D8902521AD0E9707E752B413A2960EF00B0DF7F0D`.
+No production source, assembly, context layout or admission flag changes.
+`RuntimeSelectable=0`, the twelve-entry gateway surface, and the separate
+complete-runtime admission requirement remain unchanged. This focused PASS is
+not a combined aggregate, CPU execution or hardware claim.

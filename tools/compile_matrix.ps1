@@ -11216,6 +11216,47 @@ FiberContext fiber_arm_cm55_secure_context_cpp_type_only_object;
     }
 }
 
+function Assert-Cm55SecureStagedInventory {
+    param([string]$RepositoryRoot)
+
+    # Exact staged artifacts, not production admission. Adding the NS runtime
+    # did not introduce a new Secure companion or promote RuntimeSelectable.
+    $groups = @{
+        non_secure = @(
+            'fiber_port.c', 'fiber_portmacro.h', 'fiber_port_boot.c',
+            'fiber_port_boot.h', 'fiber_port_boot_types.h',
+            'fiber_port_first_start_contract.ld', 'fiber_port_pendsv.c',
+            'fiber_port_private.h', 'fiber_port_runtime.c',
+            'fiber_port_secure_context.c', 'fiber_port_secure_context_abi.h',
+            'fiber_port_secure_context_gateway_abi.h',
+            'fiber_port_secure_gateway_abi.h', 'fiber_port_svc.c',
+            'fiber_port_types.h', 'FREERTOS_PARITY.md')
+        secure = @(
+            'fiber_secure_context_cohort.h',
+            'fiber_secure_context_cohort_contract.ld',
+            'fiber_secure_context_gateway.c',
+            'fiber_secure_context_gateway_abi.h',
+            'fiber_secure_context_gateway_contract.h',
+            'fiber_secure_context_pool.c', 'fiber_secure_context_pool.h',
+            'fiber_secure_gateway.c', 'fiber_secure_gateway_abi.h',
+            'fiber_secure_gateway_contract.h', 'FREERTOS_PARITY.md')
+    }
+    foreach ($group in @('non_secure', 'secure')) {
+        $dir = Join-Path $RepositoryRoot ('fiber\port\ARM_CM55\' + $group)
+        if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+            throw "ARM_CM55 staged artifact inventory is missing: $group"
+        }
+        $actual = @(Get-ChildItem -LiteralPath $dir -File -Recurse -Force | ForEach-Object {
+            $_.FullName.Substring($dir.Length + 1).Replace('\', '/')
+        })
+        if (($actual.Count -ne $groups[$group].Count) -or
+                (Compare-Object -CaseSensitive -ReferenceObject $groups[$group] `
+                    -DifferenceObject $actual)) {
+            throw "ARM_CM55 staged artifact inventory changed: $group"
+        }
+    }
+}
+
 function Test-ArmCm55SecureGatewayAbi {
     param(
         [string]$RepositoryRoot,
@@ -11274,15 +11315,7 @@ function Test-ArmCm55SecureGatewayAbi {
         }
     }
 
-    foreach ($forbidden in @(
-            (Join-Path $nonSecureDir "fiber_port.c"),
-            (Join-Path $secureDir "fiber_secure_context_lifecycle.c"),
-            (Join-Path $secureDir "fiber_secure_context_lifecycle.h"),
-            (Join-Path $secureDir "fiber_secure_context_port.c"))) {
-        if (Test-Path -LiteralPath $forbidden) {
-            throw "ARM_CM55 staged Secure companion exposed future runtime artifact: $forbidden"
-        }
-    }
+    Assert-Cm55SecureStagedInventory -RepositoryRoot $RepositoryRoot
 
     $expectedIdentityGatewayFunctions = @(
         "fiber_secure_gateway_c55s_v1_abi_version",
