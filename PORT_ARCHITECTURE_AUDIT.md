@@ -5324,3 +5324,89 @@ Its final test-source SHA-256 is
 These parser/accounting controls cannot validate asserted CPU-proof hash bytes.
 The default combined matrix, global optimization/final-LTO parity, staged
 profile admission, hosted CI and hardware evidence are unchanged and pending.
+
+## Exact-Cohort Native Compile Preflight
+
+The next 2026-11-04 slice adds `tools/freeze_compile.py` and pure fixture/recipe
+controls, without production C, assembly, frame or API changes. It reuses the
+maintained sensitive-closure dependency compiler, native ELF parser and
+relocatable lowering, but not that runner's default tuples or fixed device
+header. Each artifact supplies its own CPU/FPU/ABI, policy defines and CMSIS
+fixture facts. Source inventory and the complete expected plan are verified
+before ARM-tool queries; generated fixtures, compiler dependencies, seven
+resolved workers, commands and object bytes are retained and checked at close.
+
+`C:/fzcn-20261104-e2` returns `COMPILE-PREFLIGHT-PASS` for all 725 native cells
+in the current finite inventory: 141 cohorts, four NS/Secure pairs, 145
+artifacts and O0/Og/O2/Os/O3. This covers 25 runtime source groups and two
+companion groups, yielding 2,085 individual source objects and 725 native
+relocatable groups. There are 6,355 recorded tool commands, 1,011 compiler
+input records, 13,769 artifact entries and zero closing drift. Seventy-five
+diagnostics are the bounded no-VTOR fallback warning, not ignored compile
+errors. The source inventory receipt is `C:/fzin-20261104-e6`.
+
+Independent read-only review reconstructs the exact 725 keys and source-flag
+recipes, verifies all artifact hashes and inputs, and checks all ARM objects
+are native ET_REL without LTO IR. The earlier one-cohort CM4 e1 pilot is a
+separate retained result (five groups/15 objects/55 commands), not a substitute
+for this full declared-inventory run. The final receipt-scope guard rejects
+claims of CPU proof, nonzero/boolean execution counts, errors and input drift;
+its synthetic tests use generated one-CM4 receipts, not fake real-port evidence.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzcn-20261104-e2/results.json` | `6837B300938706A3CD3856AEBD61D8B954FBC2E9F0B1D79A45B7815469CA3FD6` |
+| `C:/fzcn-20261104-e2/artifacts.json` | `47E5981E3D706EB4F5D9EECC85EEBCC82AEBDF8088CE2E13C19FF4B5C8978B85` |
+| `C:/fzcn-20261104-e2/inputs.json` | `9C96F4223FCD1BA2DBD85AD8AB3595532A647B83CEC41FF627940FB367B50B36` |
+| `C:/fzin-20261104-e6/results.json` | `D10456BC853DB9362E973BED9D973606A587CDBFDED009A8ABAC54707B428606` |
+| `C:/fzcn-review-20261104/e2-audit.json` | `B03B12492C0FB7F46D89364FAA2CA04F5D8E19E6C8D1B88CB054D89264E16271` |
+| Pure receipt controls | `C9CFFC873410F6B95C1075DEADC89AE6990736E6A329B8C313E5ECECA2088684` |
+| Pure recipe controls | `D977FBE1FD82072D58316C885478E4E53B394C8438CB7AD29E9D0FDADA24AC68` |
+
+The two pure results are under `%TEMP%/freeze-native-pure-20261104-e1`:
+40 receipt controls (3 positive/37 negative) and 53 recipe controls
+(20 positive/33 negative) pass without compiler/process execution. The exact
+native compiler-input fingerprint is
+`4F2756F29A5D5502E510E41245EACA5B9D7E798802425D7C272E882273E85DFA`.
+The captured CLI SHA-256 is
+`D83A794C9357EBAA041332316F3915E391350090058AEB4B8106A15D30977D89`.
+
+This proves native compile admission for the declared inputs, not FreeRTOS
+instruction/mechanism equivalence or every possible admitted tuple. There are
+zero final executable links and no CPU/board executions. No upstream source
+is compiled by this new adapter. Every row keeps `RequiredCellSatisfied=false`,
+`GeneratedAssemblyParity=false` and `FinalElfProof=false`; global qualification
+and the 2,030 final-mode/direct/archive coverage keys remain unclosed. Host
+executables and resolved workers are captured, not all transitive host/OS
+dependencies. Staged profiles stay non-selectable, no CI workflow is added,
+and the default combined matrix is not rerun or promoted by this result.
+
+### Reference Recipe Reconciliation
+
+Source-only review of the exact upstream lists finds 264 translation-unit
+instances per mode: 1,320 planned reference compilations across the same 725
+artifact/mode keys, not executed successes. Before that separate adapter can
+claim paired evidence it must resolve the following explicit prerequisites:
+
+- Seventeen TF-M artifacts (85 mode cells) need a pinned real provider for
+  `os_wrapper/mutex.h` and its transitive headers. The upstream adapter names
+  TF-M tag `TF-Mv2.0.0`. Do not replace the missing interface with a stub.
+- Seven soft-ABI artifacts map to CM4F/CM7 reference sources that require
+  `__ARM_FP`. Keep the Fiber soft/no-FP cohorts; do not fake compiler macros or
+  silently change their ABI. Select and justify a separate reference witness
+  where necessary, rather than claiming an identical compile recipe.
+- Seventy eager-FP artifact policies need explicit FPCCR difference rationale:
+  the pinned enabled-FP reference paths set ASPEN/LSPEN for lazy preservation.
+  The twelve lazy artifacts meet only that bit-policy prerequisite, not parity.
+- All four companions declare three Fiber contexts, while their current
+  upstream define maps omit `secureconfigMAX_SECURE_CONTEXTS` and fall back to
+  eight. A reviewed reference binding must reconcile the budget before claiming
+  matching pool/lifecycle evidence. The existing maintained parity driver
+  explicitly uses three; the inventory is not yet a complete reference recipe.
+
+These categories overlap and are not failures in the measured native run.
+Mainline reference priority adapters must bind the already shifted BASEPRI
+value, rather than retaining the old fixture's unconditional 128 or shifting
+again. Baseline PRIMASK profiles and companion-only artifacts must retain an
+explicit not-applicable threshold policy. Reference includes must select one
+portmacro provider; a union of every port include directory is not acceptable.

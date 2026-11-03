@@ -1274,6 +1274,12 @@ modes and seven final-ELF modes with direct/archive forms. Inventory validation
 does not run those checks, accept historical receipts as new coverage, activate
 staged profiles or declare software freeze.
 
+The separate [exact-cohort native preflight](PORT_ARCHITECTURE_AUDIT.md#exact-cohort-native-compile-preflight)
+has passed 725 declared artifact/mode cells at O0/Og/O2/Os/O3. It retains
+2,085 source objects and 725 relocatable groups, not final executables or paired
+FreeRTOS proof. Reference-recipe reconciliation, final-LTO/direct/archive gates
+and CI remain pending; production runtime code is unchanged by this test slice.
+
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and

@@ -154,3 +154,38 @@ global freeze PASS. The final e5 snapshot and separate 128-control host run are
 recorded in `PORT_ARCHITECTURE_AUDIT.md#exact-cohort-inventory-and-coverage-plan`;
 neither promotes inventory keys to CPU proof. This documentation does not rerun
 the CLI or qualify later source snapshots.
+
+## Native Compile Preflight
+
+`tools/freeze_compile.py` is a separate native-object preflight adapter.
+It consumes an explicit successful inventory receipt and rejects source/receipt
+drift before using ARM tools. Select cohort IDs explicitly or use
+`--all-cohorts`; the default native mode list is O0/Og/O2/Os/O3. Target flags and
+defines come from each artifact, not registry defaults. Generated `main.h`
+describes exact fixture facts, including M0 versus M0+, FPU presence versus use,
+NVIC width and the protected MPU image; it is not an STM32 board header.
+
+```text
+python tools/freeze_compile.py --repo ROOT --inventory INVENTORY_RECEIPT --freertos PINNEDROOT --arm-gcc GCC --cmsis-core CMSIS --output-dir FRESHEXTERNAL --all-cohorts
+```
+
+`--cohort ID` is repeatable instead of `--all-cohorts`, and `--mode O2` can
+request an explicitly partial native preflight. Compiler input dependencies,
+resolved compiler workers, native objects, relocatable groups, disassembly,
+attributes and commands are retained. The native lowering uses the maintained
+`sensitive_port_closure` compiler/dependency/ELF helpers, not its default tuples
+or hardware fixture. A relocatable group is not a final executable.
+
+Successful compilation is only `COMPILE-PREFLIGHT-PASS`. Every row still has
+`RequiredCellSatisfied=false`: this adapter does not compare FreeRTOS assembly,
+prove the forward/reverse ABI, link final direct/archive/LTO images or run a CPU.
+It cannot emit observed PASS cells for the inventory coverage accountant.
+Global parity, hosted CI, profile activation and hardware remain separate gates.
+
+The current full declared-inventory run at `C:/fzcn-20261104-e2` passes 725
+native cells, with 2,085 source objects, 725 relocatable groups, 6,355 commands
+and zero closing drift. Forty receipt and 53 recipe pure controls pass
+separately. Exact hashes, independent review and the still-open reference
+recipe prerequisites are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#exact-cohort-native-compile-preflight`. This is
+captured-source evidence, not exact-commit hosted CI or an exhaustive freeze.

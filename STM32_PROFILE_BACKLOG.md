@@ -453,6 +453,13 @@ retain missing tuples, unreconciled admitted axes and the global CI/parity
 work. They do not narrow the full-roadmap boundary to the current finite rows.
 Inventory/key validation cannot promote a profile or close this freeze gate.
 
+The [separate native preflight](PORT_ARCHITECTURE_AUDIT.md#exact-cohort-native-compile-preflight)
+now compiles all 725 declared artifact/mode cells at the five native options,
+with no new assembly-parity, final-executable, runtime or activation claim.
+Its next reference adapter must preserve the documented TF-M provider,
+soft-ABI reference-admission, eager/lazy policy and companion-budget differences;
+native compilation must not erase those pending comparison obligations.
+
 The complete-profile freeze still requires the processor-state contracts and
 evidence in [`CONTEXT_FIBER_ARCHITECTURE.md`](CONTEXT_FIBER_ARCHITECTURE.md).
 The later bounded scope decision permits the implemented Context/Fiber
