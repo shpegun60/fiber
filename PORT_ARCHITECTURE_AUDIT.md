@@ -3823,3 +3823,31 @@ No production source, assembly, context layout or admission flag changes.
 `RuntimeSelectable=0`, the twelve-entry gateway surface, and the separate
 complete-runtime admission requirement remain unchanged. This focused PASS is
 not a combined aggregate, CPU execution or hardware claim.
+
+### CM4 Historical Raw Gate Uses Explicit Context Inputs
+
+The standalone CM4 raw runner now copies current canonical Context headers,
+role-validated providers, the source manifest and both readers into its nested
+historical-port tree. It compares the requested relative source-role inventory
+after copying and records current contracts separately from the eight Git-pinned
+`bc520c5a722ca70a461561cf30a59eb4ad8a4b3d` port files. This is historical port
+code with captured current contracts, not a historical whole-repository claim.
+No raw-hook, literal-range, transfer or negative-control oracle is relaxed.
+
+The outer immutable inventory also captures the genuine Fiber lifecycle
+consumer. Both default constructor cohorts remain mandatory: 96 production
+ELFs, 36 compiled negatives, 528 constructor calls, 276 closed-configuration
+probes and 1,056 bounded restore slices for CM4. The complete standalone gate
+passes 160 compiler cells and 1,120 controls, including O0/Og/O2/Os/O3 and the
+maintained native-LTO/raw layouts. It rehashes 156 inputs, 30,298 artifacts and
+13 tool images without drift or mismatch.
+
+The exact qualification is immutable `3ea0f640` plus two owned test-only
+overlays, both matching their live files. Receipt:
+`C:/c4r-0fceb9ba/results.json`, SHA-256
+`F0148D89FBCF1F922BFDA31A3A6AEC59EBC8F1FA19B339A2467E5FCCF6706CDA`.
+The prior failed attempt remains separately retained at
+`C:/c4r-3ba6f5b3/failed-attempt.json`, SHA-256
+`189B12366678571101F9CE1583CA4D200AD998A72D329606449A650A9E9FA9EE`.
+This is not complete exception/FP execution, all-profile final-linked FreeRTOS
+equivalence, board validation, or a combined matrix result.

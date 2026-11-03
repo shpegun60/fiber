@@ -119,6 +119,8 @@ def immutable_run(args):
     files.update(load(repo / 'tools/runtime_sources.py').get_runtime_source_inputs(repo,
                  ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')))
     files.update((repo / 'context').glob('*.h'))
+    files.update(p for p in (repo / 'fiber/lifecycle').iterdir()
+                 if p.is_file() and p.suffix.lower() in ('.c', '.h', '.md'))
     files.update(p for p in (repo / PORT).iterdir() if p.is_file() and p.suffix.lower() in ('.c', '.h'))
     for name in ('cm4_raw_compiler', 'sensitive_port_closure', 'constructor_r9'):
         files.update(p for p in (repo / 'tools/fixtures' / name).rglob('*') if p.is_file())
@@ -197,14 +199,27 @@ def main():
         require(audit.run(['git', '-C', kernel, 'rev-parse', 'HEAD'], 'reference pin').strip() == PIN, 'Wrong reference pin')
         require(not audit.run(['git', '-C', kernel, 'status', '--porcelain'], 'reference clean state').strip(), 'Dirty reference')
         historical = build / 'prior-repo'
-        for directory in (Path('.'), Path('fiber'), Path('fiber/port')):
-            for source in (repo / directory).iterdir():
-                if source.is_file() and source.suffix.lower() in ('.c', '.h', '.inc'):
-                    target = historical / directory / source.name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    audit.track(source)
-                    shutil.copyfile(source, target)
-                    audit.track(target)
+        roles = ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')
+        reader = load(repo / 'tools/runtime_sources.py')
+        role_inputs = reader.get_runtime_source_inputs(repo, roles)
+        contracts = {source for directory in (Path('.'), Path('fiber'), Path('fiber/port'), Path('context'))
+                     for source in (repo / directory).iterdir()
+                     if source.is_file() and source.suffix.lower() in ('.c', '.h', '.inc')}
+        contracts.update(role_inputs)
+        current_manifest = []
+        for source in sorted(contracts):
+            target = historical / source.relative_to(repo)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            audit.track(source)
+            shutil.copyfile(source, target)
+            audit.track(target)
+            current_manifest.append(dict(source=str(source), copy=str(target), sha256=module.digest(target)))
+        copied_reader = load(historical / 'tools/runtime_sources.py')
+        require(tuple(path.relative_to(historical) for path in copied_reader.get_runtime_source_inputs(historical, roles)) ==
+                tuple(path.relative_to(repo) for path in role_inputs), 'Historical copy changed current source-role contracts')
+        module.write_json(build / 'prior-current-contracts.json', dict(
+            policy='Historical CM4 port only; shared headers and role-validated common providers are captured current inputs',
+            roles=roles, files=current_manifest))
         prior_manifest = []
         for source in sorted((repo / PORT).glob('*')):
             if source.suffix.lower() not in ('.c', '.h'):
@@ -321,10 +336,13 @@ def main():
                    '--cmsis-core', args.cmsis_core, '--build', ctor, '--profiles', 'CM4'], 'maintained actual CM4 constructor R9', timeout=1800)
         result = json.loads((ctor / 'results.json').read_text())
         require(result['Verdict'] == 'PASS' and not result['InputDrift'] and not result['Unqualified'] and
-                len(result['Runs']) == 48 and len(result['Controls']) == 15 and result['ExecutionCalls'] == 252,
+                result['ConstructorCohorts'] == result['DefaultConstructorCohorts'] == ['legacy', 'fiber'] and
+                len(result['Runs']) == 96 and len(result['Controls']) == 36 and result['ExecutionCalls'] == 528,
                 'Incomplete or failing CM4 constructor inventory')
-        report['Constructor'] = dict(receipt=str(ctor / 'results.json'), production_elfs=48, compiled_negative_elfs=15,
-                                     calls=result['ExecutionCalls'], restore_slices=result['RestoreSlices'], scoped_subset=True)
+        report['Constructor'] = dict(receipt=str(ctor / 'results.json'), cohorts=result['ConstructorCohorts'],
+                                     production_elfs=96, compiled_negative_elfs=36, calls=result['ExecutionCalls'],
+                                     configuration_closed_calls=result['ConfigurationClosedCalls'],
+                                     restore_slices=result['RestoreSlices'], scoped_subset=True)
         report['Status'] = 'PASS'
         report['CompleteSuite'] = not args.development_optimizations
     except Exception as exc:
