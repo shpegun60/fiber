@@ -1,5 +1,20 @@
 # ARM_CM33 TF-M Non-Secure Parity Ledger
 
+## Canonical Context Adapter Identity
+
+The optional OS mutex wrapper includes the canonical Context declaration and
+queries `ctxrt_v1_current()`. Its exact external imports are that getter,
+`fiber_panic`, and `fiber_port_runtime_schedule`. Mutex owner storage remains
+the same context pointer; masks, scheduling, four wrapper exports, frames,
+profile/cohort identity and the frozen eight/reverse ABI are unchanged.
+It does not require the legacy five-operation compatibility object. Focused
+target tests link C/C++ pure Context consumers with exactly engine/state/panic,
+without legacy compatibility or optional configuration, and compile a reverted
+legacy-getter wrapper that must fail that link solely for `fiber_current`.
+These are declaration-boundary/target-link proofs, not an actual TF-M v2 Secure
+image, veneer, PSA service or physical-board qualification. Historical evidence
+and reference fingerprints below retain their original scope and provenance.
+
 This directory is one exact build-selected Cortex-M33 Non-secure profile for a
 TF-M v2.0 Secure image. It is not the fiber-owned SecureContext profile.
 

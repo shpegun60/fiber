@@ -20,6 +20,11 @@ FORWARD = set("fiber_port_context_init fiber_port_runtime_memory_barrier fiber_p
               "fiber_port_require_scheduler_configuration_environment fiber_port_runtime_prepare_start "
               "fiber_port_runtime_select_first fiber_port_runtime_start_first fiber_port_runtime_schedule".split())
 PUBLIC = set("fiber_init fiber_current fiber_start fiber_scheduler_set_pick_next fiber_schedule".split())
+CONTEXT_PUBLIC = set("ctxrt_v1_init ctxrt_v1_current ctxrt_v1_start ctxrt_v1_set_dispatcher ctxrt_v1_yield".split())
+PURE_PROVIDERS = (("engine", "context/context_core.c"), ("state", "context/context_runtime_state.c"),
+                  ("panic", "context/context_panic.c"))
+OPTIONAL_CONFIGURATION = {"fiber_internal_runtime_context_configuration_abi_v1_anchor",
+                          "fiber_internal_runtime_require_context_configuration_open"}
 ADAPTER = set("fiber_port_tfm_initialize fiber_port_tfm_require_initialized "
               "os_wrapper_mutex_create os_wrapper_mutex_acquire os_wrapper_mutex_release os_wrapper_mutex_delete".split())
 REVERSE = "fiber_internal_runtime_port_abi_v1_anchor"
@@ -31,7 +36,7 @@ CPU_BASE_IMPORTS = set("fiber_addr_plausible_ram fiber_addr_plausible_code "
     "fiber_internal_runtime_select_scheduler_candidate fiber_internal_task_return fiber_panic memcpy memset".split())
 LTO_IR_HIDDEN_IMPORTS = {"fiber_internal_runtime_current_context_slot", "memcpy", "memset"}
 INIT_IMPORTS = {"fiber_panic", "tfm_ns_interface_init"}
-WRAPPER_IMPORTS = {"fiber_current", "fiber_panic", "fiber_port_runtime_schedule"}
+WRAPPER_IMPORTS = {"ctxrt_v1_current", "fiber_panic", "fiber_port_runtime_schedule"}
 
 
 def require(condition, message):
@@ -112,6 +117,9 @@ class Proof:
         self.fixture = Path(__file__).resolve().parent
         self.port = self.repo / "fiber/port/ARM_CM55_TFM/non_secure"
         self.common = self.repo / "fiber"
+        self.storage = STORAGE
+        self.cpu_tag = 'Tag_CPU_name: "cortex-m55"'
+        self.integration_anchor = "fiber_port_arm_cm55_tfm_integration_bundle_v1_anchor"
         self.bin = Path(args.arm_gcc).parent
         self.tools = {name: self.bin / ("arm-none-eabi-" + name + ".exe")
                       for name in ("g++", "gcc-nm", "objdump", "readelf", "gcc-ar")}
@@ -144,13 +152,15 @@ class Proof:
                 "Missing/ambiguous actual common object owner: " + str(source))
         return matches[0]
 
-    def run(self, argv, label, timeout=90, allowed=False):
+    def run(self, argv, label, timeout=90, allowed=False, split_output=False):
         argv = list(map(str, argv))
         start = time.monotonic()
         try:
-            p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE if split_output else subprocess.STDOUT,
                                timeout=timeout, text=True, errors="replace", cwd=self.build)
             result = dict(command=argv, exit=p.returncode, output=p.stdout, timeout=False)
+            if split_output:
+                result.update(stdout=p.stdout, stderr=p.stderr, output=p.stdout + p.stderr)
         except subprocess.TimeoutExpired as e:
             output = e.stdout or b""
             if isinstance(output, bytes):
@@ -199,11 +209,22 @@ class Proof:
             result.append((match[1], match[2]))
         return result
 
-    def link(self, objects, output, options, expected=None, duplicate=False):
+    def link(self, objects, output, options, expected=None, duplicate=False, strict=False):
         result = self.run([self.a.arm_gcc, *self.flags[:3], *options, "-nostdlib",
                            "-Wl,--gc-sections", "-Wl,--no-undefined", "-Wl,--fatal-warnings",
                            "-T", self.fixture / "production.ld", "-Wl,-Map=" + str(output) + ".map",
-                           *objects, "-o", output], "link " + str(output), allowed=expected is not None or duplicate)
+                           *objects, "-o", output], "link " + str(output), allowed=expected is not None or duplicate,
+                          split_output=strict)
+        if strict:
+            require(expected is not None and len(expected) == 1 and not duplicate and not result["timeout"],
+                    "Strict missing-only link requires exactly one expected symbol")
+            path = self.repo / "tools/fixtures/context_facade/run.py"
+            spec = importlib.util.spec_from_file_location("tfm_strict_diagnostics", path)
+            classifier = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(classifier)
+            linker = Path(self.run([self.a.arm_gcc, "-print-prog-name=ld"], "resolve strict linker")["output"].strip()).resolve()
+            classifier.classify_unresolved(subprocess.CompletedProcess(result["command"], result["exit"],
+                                           result["stdout"], result["stderr"]), next(iter(expected)), linker)
         if duplicate:
             require(result["exit"] not in (None, 0) and "multiple definition of" in result["output"] and
                     "SVC_Handler" in result["output"] and "PendSV_Handler" in result["output"],
@@ -259,13 +280,13 @@ class Proof:
                         loaded.pop(register, None)
         require(found, "missing exact generated cold volatile byte read: %s -> %s" % (function, marker))
 
-    def check_elf(self, path, cohort, label):
+    def check_elf(self, path, cohort, label, public_api=PUBLIC):
         elf = Elf(path)
         outputs = self.evidence(path)
         require(not [s for s in elf.symbols if s["section"] == 0 and s["name"]], "unresolved final ELF")
-        require('Tag_CPU_name: "cortex-m55"' in outputs["attributes"], "ELF is not actual M55 codegen")
+        require(self.cpu_tag in outputs["attributes"], "ELF is not the actual selected CPU codegen")
         require("Tag_ABI_VFP_args" not in outputs["attributes"], "unexpected VFP argument ABI")
-        for symbol in sorted(FORWARD | PUBLIC | ADAPTER | {"SVC_Handler", "PendSV_Handler", REVERSE, STORAGE, cohort}):
+        for symbol in sorted(FORWARD | public_api | ADAPTER | {"SVC_Handler", "PendSV_Handler", REVERSE, self.storage, cohort}):
             s = elf.one(symbol)
             require(s["bind"] in (0, 1), "weak provider: " + symbol)
         for name, slot in (("SVC_Handler", 11), ("PendSV_Handler", 14)):
@@ -274,7 +295,7 @@ class Proof:
             table = elf.one("vectors")
             actual = struct.unpack("<I", elf.at(table["value"] + slot * 4, 4))[0]
             require(actual == s["value"] and actual & 1, "wrong strong vector slot")
-        for marker in (REVERSE, STORAGE, cohort):
+        for marker in (REVERSE, self.storage, cohort):
             s = elf.one(marker)
             require(s["size"] == 1 and elf.at(s["value"], 1) == b"\1" and
                     not elf.sections[s["section"]]["flags"] & 1, "not readonly one-byte marker: " + marker)
@@ -291,7 +312,7 @@ class Proof:
         self.cold_read(elf, outputs["dis"], "fiber_port_runtime_prepare_start", REVERSE)
         self.cold_read(elf, outputs["dis"], "fiber_port_runtime_prepare_start", cohort)
         self.cold_read(elf, outputs["dis"], "fiber_port_runtime_prepare_start",
-                       "fiber_port_arm_cm55_tfm_integration_bundle_v1_anchor")
+                       self.integration_anchor)
         prepare = elf.one("fiber_port_runtime_prepare_start")
         begin, end = prepare["value"] & ~1, (prepare["value"] & ~1) + prepare["size"]
         calls = []
@@ -365,27 +386,28 @@ class Proof:
         text = self.sources[0].read_text()
         entry = "void fiber_port_runtime_prepare_start(void)\n{"
         require(text.count(entry) == 1, "CPU public-dependency control anchor drift")
-        source = d / "role-cpu-public-leak.c"
-        source.write_text(text.replace(entry, entry +
-            "\n\textern FiberContext *fiber_current(void);\n\t(void)fiber_current();"))
-        mutant = d / "role-cpu-public-leak.o"
-        self.compile(source, mutant, options, extra=["-include", str(self.fixture / "tfm_v2_boundary.h")])
-        self.role_no_common_definitions(mutant, common_owned)
-        for lower in ((False, True) if lto else (False,)):
-            group = d / ("role-cpu-leak-lowered.o" if lower else "role-cpu-leak-group.o")
-            self.role_group([mutant, port_objects[1]], group, options, lower=lower)
-            expected = cpu_expected if lower else ir_expected
-            actual = {name for name, kind in self.nm(group, True)}
-            require(actual == expected | {"fiber_current"}, "CPU leak control has unrelated dependency changes")
-            rejected = False
-            try:
-                self.role_imports(group, expected, "CPU+boot public-leak control")
-            except RuntimeError as error:
-                require(str(error).startswith("role U mismatch CPU+boot public-leak control:"),
-                        "CPU leak control rejected for unrelated reason")
-                rejected = True
-            require(rejected, "CPU public fiber_current dependency falsely accepted")
-        self.negatives.append(dict(name="compiled-cpu-public-dependency-" + d.name, forbidden="fiber_current"))
+        for getter in ("fiber_current", "ctxrt_v1_current"):
+            source = d / ("role_cpu_public_leak_" + getter + ".c")
+            source.write_text(text.replace(entry, entry +
+                "\n\textern FiberContext *" + getter + "(void);\n\t(void)" + getter + "();"))
+            mutant = source.with_suffix(".o")
+            self.compile(source, mutant, options, extra=["-include", str(self.fixture / "tfm_v2_boundary.h")])
+            self.role_no_common_definitions(mutant, common_owned)
+            for lower in ((False, True) if lto else (False,)):
+                group = d / ("role-cpu-" + getter + ("-lowered.o" if lower else "-group.o"))
+                self.role_group([mutant, port_objects[1]], group, options, lower=lower)
+                expected = cpu_expected if lower else ir_expected
+                actual = {name for name, kind in self.nm(group, True)}
+                require(actual == expected | {getter}, "CPU leak control has unrelated dependency changes")
+                rejected = False
+                try:
+                    self.role_imports(group, expected, "CPU+boot public-leak control")
+                except RuntimeError as error:
+                    require(str(error).startswith("role U mismatch CPU+boot public-leak control:"),
+                            "CPU leak control rejected for unrelated reason")
+                    rejected = True
+                require(rejected, "CPU public getter dependency falsely accepted: " + getter)
+            self.negatives.append(dict(name="compiled-cpu-public-dependency-" + getter + "-" + d.name, forbidden=getter))
         weak_source = d / "role-weak-common-anchor.c"
         weak_source.write_text(text + "\n__attribute__((weak, used)) const unsigned char " + REVERSE + " = 1u;\n")
         weak_object = d / "role-weak-common-anchor.o"
@@ -415,7 +437,11 @@ class Proof:
             "fiber_port_boot_types.h", "fiber_port_private.h", "fiber_port_tfm_abi.h", "fiber_port_tfm_os_wrapper.h",
             "fiber_port_types.h", "FREERTOS_PARITY.md"])
         require(files == expected_files, "C5TF complete twelve-file group not ready: " + repr(files))
-        forward_header = (self.common / "port/fiber_port_runtime_abi.h").read_text()
+        forward_header = (self.repo / "context/context_port_abi.h").read_text()
+        legacy_forwarder = (self.common / "port/fiber_port_runtime_abi.h").read_text()
+        require('#include "../../context/context_port_abi.h"' in legacy_forwarder and
+                not re.findall(r"\b(fiber_port_[a-z0-9_]+)\s*\(", legacy_forwarder),
+                "Legacy forward ABI header must only forward the canonical declarations")
         public_header = (self.common / "fiber_api_decl.h").read_text()
         require(set(re.findall(r"\b(fiber_port_[a-z0-9_]+)\s*\(", forward_header)) == FORWARD and len(FORWARD) == 8,
                 "generic forward header is not exactly the frozen eight calls")
@@ -453,7 +479,7 @@ class Proof:
                 group = d / "port-group.o"
                 self.run([self.a.arm_gcc, *self.flags[:3], *options, "-nostdlib", "-r", *port_objects, "-o", group], "relocatable group")
                 missing = {n for n, t in self.nm(group, True)}
-                expected = set("fiber_addr_plausible_ram fiber_addr_plausible_code fiber_current fiber_internal_runtime_current_context_slot "
+                expected = set("fiber_addr_plausible_ram fiber_addr_plausible_code ctxrt_v1_current fiber_internal_runtime_current_context_slot "
                                "fiber_internal_runtime_port_abi_v1_anchor fiber_internal_runtime_publish_current_context "
                                "fiber_internal_runtime_require_current_context fiber_internal_runtime_select_scheduler_candidate "
                                "fiber_internal_task_return fiber_panic memcpy memset tfm_ns_interface_init".split())
@@ -466,7 +492,7 @@ class Proof:
                 if lto:
                     lowered = d / "complete-group-lowered.o"
                     self.role_group(port_objects, lowered, options, lower=True)
-                    self.role_imports(lowered, (CPU_BASE_IMPORTS | {"fiber_current", "tfm_ns_interface_init"}),
+                    self.role_imports(lowered, (CPU_BASE_IMPORTS | {"ctxrt_v1_current", "tfm_ns_interface_init"}),
                                       "combined group lowered LTO")
                 fixtures = []
                 for f in ("vectors.c", "provider.c", "memory.c"):
@@ -478,6 +504,7 @@ class Proof:
                 complete_archive = d / "libfiber-c5tf.a"
                 self.run([self.tools["gcc-ar"], "rcs", complete_archive, *common_objects, *port_objects],
                          "archive real common plus complete C5TF provider")
+                self.pure_context(d, fixtures, common_objects, port_objects, options, cohort)
                 for cxx in (False, True):
                     suffix = "cpp" if cxx else "c"
                     app = d / ("consumer-" + suffix + ".o")
@@ -496,6 +523,59 @@ class Proof:
                     baseline = d
                 print("C5TF target grid PASS " + name, flush=True)
         self.manifest_negatives(baseline)
+
+    def pure_context(self, d, fixtures, common_objects, port_objects, options, cohort):
+        pure = []
+        for role, owner in PURE_PROVIDERS:
+            source = self.common_owner(role)
+            require(source.resolve() == (self.repo / owner).resolve(), "Pure Context role owner changed: " + role)
+            pure.append(self.common_object(source, common_objects))
+        require(len(set(pure)) == 3, "Pure Context must have exactly three independent providers")
+        archive = d / "lib-pure-context-tfm.a"
+        self.run([self.tools["gcc-ar"], "rcs", archive, *pure, *port_objects], "archive pure Context plus TF-M")
+        text = self.sources[3].read_text()
+        anchor = "FiberContext *const current = ctxrt_v1_current();"
+        require(text.count(anchor) == 1, "Wrapper legacy-dependency control anchor drift")
+        # Volatile typed indirection gives a real ABS32 legacy dependency, without
+        # a second unknown ARM/Thumb direct-branch diagnostic obscuring the cause.
+        source = d / "wrapper_legacy_dependency.c"
+        source.write_text(text.replace(anchor,
+            "extern FiberContext *fiber_current(void);\n"
+            "\tFiberContext *(*volatile legacy_identity)(void) = fiber_current;\n"
+            "\tFiberContext *const current = legacy_identity();"))
+        mutant = source.with_suffix(".o")
+        self.compile(source, mutant, options, extra=["-include", str(self.fixture / "tfm_v2_boundary.h")])
+        expected = {"fiber_current", "fiber_panic", "fiber_port_runtime_schedule"}
+        self.role_imports(mutant, expected, "compiled legacy-wrapper control")
+        if "-flto" in options:
+            lowered = d / "wrapper-legacy-lowered.o"
+            self.role_group([mutant], lowered, options, lower=True)
+            self.role_imports(lowered, expected, "compiled legacy-wrapper lowered control")
+        rejected = False
+        try:
+            self.role_imports(mutant, WRAPPER_IMPORTS, "legacy-wrapper forbidden")
+        except RuntimeError as error:
+            require(str(error).startswith("role U mismatch legacy-wrapper forbidden:"),
+                    "Legacy-wrapper control rejected for an unrelated cause")
+            rejected = True
+        require(rejected, "Legacy-wrapper import falsely admitted")
+        for cxx in (False, True):
+            suffix = "cpp" if cxx else "c"
+            app = d / ("pure-context-" + suffix + ".o")
+            self.compile(self.fixture / "consumer.c", app, options, cpu=False, cxx=cxx,
+                         extra=["-DTFM_CONTEXT_ONLY=1"])
+            self.role_imports(app, CONTEXT_PUBLIC | {self.storage}, "pure Context public consumer")
+            for archived in (False, True):
+                label = "pure-context-" + d.name + "-" + suffix + ("-archive" if archived else "-direct")
+                elf_path = d / (label + ".elf")
+                self.link([app, *fixtures, *([archive] if archived else [*pure, *port_objects])], elf_path, options)
+                self.check_elf(elf_path, cohort, label, public_api=CONTEXT_PUBLIC)
+                elf = Elf(elf_path)
+                require(not {s["name"] for s in elf.symbols} & (PUBLIC | OPTIONAL_CONFIGURATION),
+                        "Pure Context ELF retained a legacy/configuration provider")
+            bad = d / ("pure-context-legacy-wrapper-" + suffix + ".elf")
+            self.link([app, *fixtures, *pure, *port_objects[:3], mutant], bad, options,
+                      expected={"fiber_current"}, strict=True)
 
     def stale(self, d, app, fixtures, common_objects, port_objects, options, cxx):
         for profile in ("ARM_CM55_NTZ", "ARM_CM33_TFM"):
@@ -641,9 +721,9 @@ class Proof:
         for text in (init, mutex):
             require(text.count(include) == 1, "source-derived host include boundary drift")
         init, mutex = init.replace(include, '#include "host_port.h"'), mutex.replace(include, '#include "host_port.h"')
-        public_include = '#include "../../../fiber_api_decl.h"'
+        public_include = '#include "../../../../context/context_api_decl.h"'
         require(mutex.count(public_include) == 1, "source-derived public declaration include drift")
-        mutex = mutex.replace(public_include, '#include "fiber_api_decl.h"')
+        mutex = mutex.replace(public_include, '#include "context_api_decl.h"')
         receipt = []
         for name, replacement in (
             ("fiber_port_tfm_primask_save_disable", '{\n uint32_t state = test_cpu[1]; test_cpu[1] = 1; ++test_mask_writes;\n'
@@ -782,6 +862,7 @@ class Proof:
         paths.update(self.runtime_sources.get_runtime_source_inputs(self.repo,
                      ("engine", "state", "panic", "optional_configuration", "legacy_compat", "facade_bridge")))
         paths.update((self.repo / "context").glob("*.h"))
+        paths.add(self.repo / "tools/fixtures/context_facade/run.py")
         if self.a.qemu_root:
             paths.add(self.repo / "tools/fixtures/arm_control/qemu.sh")
             wsl = shutil.which("wsl.exe")
@@ -809,6 +890,14 @@ class Proof:
                     require(located is not None, "missing compiler executable " + str(p))
                     p = Path(located)
                 paths.add(p.resolve())
+            probe = self.run([cc, "-###", "-flto", "-nostdlib", "-r", "-x", "c",
+                              self.common_owner("engine")], "driver LTO plugin", split_output=True)["stderr"]
+            matches = re.findall(r'(?:^|\s)-plugin\s+(?:"([^"]+)"|(\S+))', probe)
+            require(len(matches) == 1, "Expected one driver-selected LTO plugin: " + str(cc))
+            used = Path(next(part for part in matches[0] if part)).resolve()
+            queried = Path(self.run([cc, "-print-file-name=" + used.name], "resolve LTO plugin")["output"].strip()).resolve()
+            require(used == queried and used.is_file(), "Driver/query LTO plugin mismatch: " + str(cc))
+            paths.add(used)
             includes = Path(self.run([cc, "-print-file-name=include"], "resolve compiler include")["output"].strip())
             paths.update(includes.rglob("*.h"))
         target_include = self.bin.parent / "arm-none-eabi/include"
@@ -867,6 +956,7 @@ class Proof:
             write_json(self.build / "commands.json", self.commands)
             write_json(self.build / "receipt.json", dict(success=success and before == after and reference_error is None,
                 target_positives=self.positives, negatives=self.negatives, host_runs=self.host_runs,
+                pure_context_links=[p for p in self.positives if p["name"].startswith("pure-context-")],
                 role_proofs=self.role_proofs, role_definitions=self.role_definitions,
                 r9_execution=self.r9_runs, r9_failures=self.r9_failures, r9_compatibility_controls=self.r9_compatibility_controls,
                 r9_model=self.r9_model,

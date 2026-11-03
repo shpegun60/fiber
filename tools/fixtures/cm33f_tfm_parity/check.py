@@ -26,7 +26,7 @@ DEPENDENCIES = {
         'fiber_internal_task_return','fiber_panic',COHORT,'fiber_port_fpu_prepare',
         'fiber_port_fpu_require_configured','fiber_port_fpu_require_ready','fiber_port_init_context_frame'},
     'Init': {'fiber_panic','tfm_ns_interface_init'},
-    'Wrapper': {'fiber_current','fiber_panic','fiber_port_runtime_schedule'},
+    'Wrapper': {'ctxrt_v1_current','fiber_panic','fiber_port_runtime_schedule'},
     'Reference': {'pxCurrentTCB','vPortSVCHandler_C','vTaskSwitchContext'},
     'ReferenceConstructor': {'PendSV_Handler','SVC_Handler','ulSetInterruptMask','vClearInterruptMask',
         'vRestoreContextOfFirstTask','vStartFirstTask','vTaskSwitchContext','xTaskIncrementTick'},

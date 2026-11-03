@@ -1,5 +1,22 @@
 # C5TF Independent Consumer Gate
 
+## Pure Context TF-M Links
+
+The legacy consumer grid is retained. Additional O2/Os normal/LTO C/C++ direct
+and archive links use a Context-only allocating consumer and exactly the
+independently named engine/state/panic providers. No legacy five-operation
+symbol or optional-configuration provider may survive. Real wrapper objects,
+including native-lowered LTO, must import exactly `ctxrt_v1_current`,
+`fiber_panic`, and `fiber_port_runtime_schedule`. Both public identity getters
+remain forbidden in the CPU/boot role; compiled controls exercise each one.
+A compiled actual-wrapper mutant reintroduces only the legacy identity
+dependency. Its pure Context link must fail solely for the exact
+`fiber_current` symbol under the maintained closed linker-diagnostic grammar;
+unrelated warnings/errors cannot satisfy the control. Strong vectors, storage,
+reverse and private-cohort guards are unchanged. The actual driver-selected
+LTO plugin is queried, cross-checked and hashed alongside compiler helpers.
+Host adapter scenarios are source-derived models, not CPU/TF-M execution.
+
 Run `tools/test_cm55_tfm.ps1 -ArmGcc <gcc> -CmsisCore <CMSIS Include>`.
 Optional parameters: `-BuildRoot`, `-FreeRtosRoot`, `-HostGcc`, `-Python`,
 `-QemuRoot`, `-WslDistro` (default `Ubuntu-24.04`),
@@ -34,16 +51,16 @@ the expectation section is not assumed to be four bytes.
 Role checks precede final linking. CPU+boot has an exact base reverse/hooks/memory
 dependency set plus only the two named private TF-M prestart dependencies
 (`fiber_port_tfm_require_initialized` and the integration-bundle anchor).
-It may not import the public `fiber_current` operation. The initializer imports
+It may not import either public identity operation. The initializer imports
 exactly `fiber_panic` and `tfm_ns_interface_init`; the mutex wrapper imports
-exactly `fiber_current`, `fiber_panic`, and `fiber_port_runtime_schedule`.
+exactly `ctxrt_v1_current`, `fiber_panic`, and `fiber_port_runtime_schedule`.
 These per-role checks supplement, not replace, the combined-group proof.
 LTO IR omits assembly-only references and lowered memory calls, so every LTO
 role is also lowered to native relocatable code and checked against the full
 native dependency set. Every original port object is checked for any definition
 of common-owned services/storage, including weak definitions, before a strong
 common provider could hide it. Other weak port providers are forbidden too.
-Actual compiled controls add `fiber_current` to real CPU source and a weak
+Actual compiled controls add each public getter to real CPU source and a weak
 common reverse anchor; each must fail its specific role check at O2/Os with and
 without LTO.
 

@@ -2,7 +2,7 @@
 
 #include "fiber_port_private.h"
 #include "fiber_port_tfm_os_wrapper.h"
-#include "../../../fiber_api_decl.h"
+#include "../../../../context/context_api_decl.h"
 
 typedef struct FiberPortTfmMutex {
 	FiberContext *volatile owner;
@@ -51,7 +51,7 @@ FiberContext *fiber_port_tfm_require_running_fiber(void)
 {
 	fiber_port_tfm_require_unmasked_thread();
 	FIBER_REQUIRE((fiber_port_cpu_control() & 3u) == 2u, 'l');
-	FiberContext *const current = fiber_current();
+	FiberContext *const current = ctxrt_v1_current();
 	FIBER_REQUIRE(current != NULL, 'K');
 	return current;
 }

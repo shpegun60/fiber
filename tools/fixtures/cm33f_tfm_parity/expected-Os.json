@@ -213,7 +213,7 @@
   },
   "Wrapper/fiber_port_tfm_require_running_fiber": {
     "Instructions": 13,
-    "Sha256": "305A7EB7F6BE63010B51823DF0E6EAA354EDF6049AB19AA1CD30399903E45A5E"
+    "Sha256": "0CF903C0B5EFD8F5393D4654016B802DB89D70D8F5E2BDB1B7D55932809161BE"
   },
   "Wrapper/fiber_port_tfm_mutex_handle_is_valid": {
     "Instructions": 10,

@@ -71,6 +71,69 @@ def asm_body(path, symbol):
     return lines
 
 
+def pure_context_links(args, audit):
+    """Reuse the explicit target oracle with actual scalar M33 production inputs."""
+    repo, root = Path(args.repo), Path(args.build) / 'pure-context'
+    root.mkdir()
+    fixture = root / 'fixture'
+    fixture.mkdir()
+    original = repo / 'tools/fixtures/cm55_tfm'
+    for source in original.iterdir():
+        if source.is_file() and source.suffix in ('.c', '.h', '.ld', '.py'):
+            audit.track(source)
+    audit.track(repo / 'tools/fixtures/context_facade/run.py')
+    for name in ('consumer.c', 'provider.c', 'memory.c', 'vectors.c', 'production.ld', 'tfm_v2_boundary.h'):
+        shutil.copyfile(original / name, fixture / name)
+        audit.track(fixture / name)
+    main = (original / 'main.h').read_text()
+    require(main.count('"core_cm55.h"') == 1, 'Scalar device fixture core anchor drift')
+    (fixture / 'main.h').write_text(main.replace('"core_cm55.h"', '"core_cm33.h"'), encoding='ascii')
+    audit.track(fixture / 'main.h')
+    module = load(original / 'run.py')
+    proof = module.Proof(SimpleNamespace(repo=str(repo), build=str(root), arm_gcc=args.arm_gcc,
+        cmsis=args.cmsis_core, expected_runtime_selectable=1))
+    proof.fixture, proof.port = fixture, repo / PORT
+    proof.flags[0] = '-mcpu=cortex-m33'
+    proof.selection = ['-DFIBER_PORT_BUILD_SELECTED=1', '-DFIBER_PORT_ARMV8M_MAINLINE=1']
+    proof.storage = 'fiber_port_storage_cohort_arm_cm33_tfm_v1_r0'
+    proof.cpu_tag = 'Tag_CPU_arch: v8-M.mainline'
+    proof.integration_anchor = 'fiber_port_arm_cm33_tfm_integration_bundle_v1_anchor'
+    proof.sources = [repo / PORT / name for name in
+                    ('fiber_port.c', 'fiber_port_boot.c', 'fiber_port_tfm.c', 'fiber_port_tfm_os_wrapper.c')]
+    proof.common_sources = list(proof.runtime_sources.get_runtime_source_paths(repo, ('engine', 'state', 'panic')))
+    try:
+        for optimization in ('-O2', '-Os'):
+            for lto in (False, True):
+                d = root / (optimization[1:] + ('-lto' if lto else ''))
+                d.mkdir()
+                options = [optimization] + (['-flto'] if lto else [])
+                port_objects, common_objects, fixtures = [], [], []
+                for source in proof.sources:
+                    obj = d / (source.stem + '.o')
+                    proof.compile(source, obj, options, extra=['-include', str(fixture / 'tfm_v2_boundary.h')])
+                    port_objects.append(obj)
+                for source in proof.common_sources:
+                    obj = d / (source.stem + '.o')
+                    proof.compile(source, obj, options, selected=False, cpu=False)
+                    common_objects.append(obj)
+                cohorts = {name for obj in port_objects for name, kind in proof.nm(obj)
+                           if name.startswith('fiber_port_context_cohort_') and kind in 'RDT'}
+                require(len(cohorts) == 1, 'Scalar TF-M private cohort provider is ambiguous')
+                for name in ('vectors.c', 'provider.c', 'memory.c'):
+                    obj = d / (Path(name).stem + '.o')
+                    proof.compile(fixture / name, obj, options, selected=False, cpu=False)
+                    fixtures.append(obj)
+                proof.pure_context(d, fixtures, common_objects, port_objects, options, next(iter(cohorts)))
+        require(len(proof.positives) == 16 and len(proof.negatives) == 8,
+                'Incomplete pure Context scalar TF-M inventory')
+        return dict(Status='PASS', Links=proof.positives, LegacyDependencyControls=proof.negatives,
+                    Providers=[path for role, path in module.PURE_PROVIDERS],
+                    LegacyShimLinked=False, OptionalConfigurationLinked=False,
+                    RoleProofs=proof.role_proofs, Commands=str(root / 'commands.json'))
+    finally:
+        module.write_json(root / 'commands.json', proof.commands)
+
+
 def immutable_run(args):
     repo, cmsis, build = Path(args.repo).resolve(), Path(args.cmsis_core).resolve(), Path(args.build).resolve()
     root = build / 'immutable-inputs'
@@ -80,8 +143,9 @@ def immutable_run(args):
                  ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')))
     files.update((repo / 'context').glob('*.h'))
     files.update(p for p in (repo / PORT).iterdir() if p.is_file() and p.suffix.lower() in ('.c', '.h'))
-    for name in ('cm33_tfm_raw_compiler', 'sensitive_port_closure', 'constructor_r9'):
+    for name in ('cm33_tfm_raw_compiler', 'sensitive_port_closure', 'constructor_r9', 'cm55_tfm'):
         files.update(p for p in (repo / 'tools/fixtures' / name).rglob('*') if p.is_file())
+    files.add(repo / 'tools/fixtures/context_facade/run.py')
     files.update(repo / 'tools' / name for name in
                  ('test_cm33_tfm_raw_compiler.ps1', 'test_sensitive_port_closure.ps1', 'test_constructor_r9.ps1'))
     files.add(repo / 'tools/fixtures/freertos_asm_parity/FreeRTOSConfig.h')
@@ -101,7 +165,8 @@ def immutable_run(args):
     manifest.write_text(json.dumps(dict(files=rows, policy='Only copied bytes are compilation/execution inputs; later live edits do not qualify as these inputs'), indent=2) + '\n', encoding='ascii')
     command = [sys.executable, '-B', root / 'repo/tools/fixtures/cm33_tfm_raw_compiler/run.py',
                '--repo', root / 'repo', '--cmsis-core', root / 'cmsis', '--arm-gcc', args.arm_gcc,
-               '--freertos', args.freertos, '--build', build, '--input-snapshot', manifest, '--history-repo', repo]
+               '--freertos', args.freertos, '--build', build, '--input-snapshot', manifest,
+               '--history-repo', args.history_repo or repo]
     if args.development_optimizations:
         command += ['--development-optimizations', args.development_optimizations]
     command = list(map(str, command))
@@ -160,7 +225,7 @@ def main():
         require(audit.run(['git', '-C', kernel, 'rev-parse', 'HEAD'], 'reference pin').strip() == PIN, 'Wrong reference pin')
         require(not audit.run(['git', '-C', kernel, 'status', '--porcelain'], 'reference clean state').strip(), 'Dirty reference')
         historical = build / 'prior-repo'
-        for directory in (Path('.'), Path('fiber'), Path('fiber/port')):
+        for directory in (Path('.'), Path('fiber'), Path('fiber/port'), Path('context')):
             for source in (repo / directory).iterdir():
                 if source.is_file() and source.suffix.lower() in ('.c', '.h', '.inc'):
                     target = historical / directory / source.name
@@ -168,6 +233,16 @@ def main():
                     audit.track(source)
                     shutil.copyfile(source, target)
                     audit.track(target)
+        # Historical port, current captured role contracts: never call this a
+        # historical whole-repository image. Validate every current role path.
+        reader = load(repo / 'tools/runtime_sources.py')
+        for source in reader.get_runtime_source_inputs(repo,
+                ('engine', 'state', 'panic', 'optional_configuration', 'legacy_compat', 'facade_bridge')):
+            target = historical / source.relative_to(repo)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            audit.track(source)
+            shutil.copyfile(source, target)
+            audit.track(target)
         prior_manifest = []
         for source in sorted((repo / PORT).glob('*')):
             if source.suffix.lower() not in ('.c', '.h'):
@@ -264,8 +339,8 @@ def main():
                 actual_elf = module.Elf(actual_wrapper)
                 require(exports <= {f['name'] for f in actual_elf.functions}, 'Actual wrapper export mismatch')
                 imports = sorted({row['name'] for row in actual_elf.symbols if row['section'] == 0 and row['name']})
-                require(not any(name.startswith(('xQueue', 'vQueue', 'pvPortMalloc', 'vPortFree')) for name in imports),
-                        'Static cooperative wrapper acquired a kernel/heap dependency')
+                require(set(imports) == {'ctxrt_v1_current', 'fiber_panic', 'fiber_port_runtime_schedule'},
+                        'Actual scalar TF-M wrapper exact import boundary changed: ' + repr(imports))
                 report['TransferChecks'].append(dict(profile=p['name'], opt=opt, pinned_reference=True,
                     mechanisms=['first-start', 'first-restore', 'PendSV', 'wrapper-ABI-and-semaphore-versus-static-policy'],
                     reference_wrapper_undefined=sorted(undefined), actual_wrapper_undefined=imports,
@@ -301,6 +376,8 @@ def main():
         require(len(audit.cases) == audit.planned_cells, 'Incomplete CM33TFM cell inventory')
         report['Cells'] = audit.cases
         report['Controls'] = audit.controls
+
+        report['PureContext'] = pure_context_links(args, audit)
 
         ctor = build / 'constructor-r9'
         ctor.mkdir()

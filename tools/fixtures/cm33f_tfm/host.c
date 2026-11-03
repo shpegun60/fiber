@@ -27,7 +27,7 @@ void fiber_panic(char code)
     panic_code = code;
     longjmp(terminal, 1);
 }
-FiberContext *fiber_current(void) { return current; }
+FiberContext *ctxrt_v1_current(void) { return current; }
 void fiber_port_runtime_schedule(void)
 {
     CHECK(test_cpu[1] == 0, "yield-unmasked");

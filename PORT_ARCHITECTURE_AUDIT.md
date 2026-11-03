@@ -3657,3 +3657,48 @@ The dispatch/recipe regression passes 89 checks. Receipt:
 SHA-256 `D5EC682DDAFA941E92280EA44A7610A89BFA74A1F0357373A8777FE2C7E34847`.
 The canonical ownership gate separately passes against the current source.
 These focused results do not turn the preceding aggregate FAIL into PASS.
+
+### TF-M Adapters Consume Context Directly
+
+The CM33, CM33F and CM55 optional TF-M OS wrappers now include canonical
+Context declarations and call `ctxrt_v1_current()` rather than `fiber_current()`.
+This is the entire production delta: no assembly, frame, mask, priority,
+cohort, runtime ABI or Secure service policy changes. CPU/boot role oracles
+still reject either public getter; only the separate optional adapter may use
+the Context public identity operation. The role boundary is not broadened.
+
+The qualified source cohort is immutable `53b69aa` plus exactly 28 owned
+overlays, not a claim for a later aggregate. Sixty-four pure-Context target
+ELFs (16 CM33, 32 CM33F, 16 CM55) omit the legacy shim and optional configuration
+provider. Thirty-two compiled legacy-wrapper controls fail solely on the
+missing `fiber_current` dependency. CM55/CM33F gates also retain mixed-legacy
+coverage, 200/212 host runs and exact role/import, vector, archive and cohort
+checks. Scalar CM33 raw compiler coverage includes 120 cells / 840 controls
+over five optimizations and native-LTO variants, plus the separately bounded
+constructor cohort. Historical raw failures remain recorded, not requalified.
+
+Closed parity passes C5TF O2/Os and C3FT O2/Os with hard/softfp cohorts. A separate
+native pre/post comparison checks six tuples, 56 objects and 566 functions:
+function metadata and allocatable bytes match, relocations differ only by the
+reviewed getter-symbol substitution. The only normalized body change is the
+call target in the thirteen-instruction wrapper identity helper. Golden edits
+are limited to that one body per optimization. Scalar CM33 and final LTO
+pre/post instruction identity are not claimed by this native comparison.
+
+Independent source/oracle review accepts this bounded change. All 28 live
+files match frozen copies in `C:/fq-tfm-9e9de3ff/HOLD.json`, SHA-256
+`EF857620E99D69A77C2D43D4A9133A3DAE6CC737AA9908843FA5DF3BFA2EEBF7`.
+The reviewed native delta receipt is `C:/fq-tfm-9e9de3ff/reviewed-delta.json`,
+SHA-256 `EE048FC0D44E1A6EB5FCF7C3269FE519294E0832FD9F598E6F1BAAEAAD2EAFD2`.
+Primary receipts under that root:
+
+| Receipt | SHA-256 |
+| --- | --- |
+| `cm55-tfm-65229fc1c4a94de7b8d00a66062cb8fa/receipt.json` | `1E3AB4DFC9501094EA2F86393EFC204CC9AA24CE15C341208899C969E0DC5A84` |
+| `cm33f-tfm-d4e242399071402f8372a4c7f9bce4f6/receipt.json` | `0424900196104FC49A3E489F07E5406F5D88324638BA1CDBF1DF593F6A9FAEBF` |
+| `raw33-v3b/results.json` | `871151137F83CAB6AFADB5478173BBF18EF2B2DE3C3A2DBFEB90AB3E6E659688` |
+
+The rehashed qualification records contain 5,288 inputs and 32,882 artifacts
+without drift. No actual Secure TF-M image, veneer/service execution, board
+operation or runtime profile promotion is established by these synthetic
+links, host-mock runs and bounded compiler/assembly checks.

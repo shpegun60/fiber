@@ -373,7 +373,7 @@ def policy(init, wrapper, reference):
         count += 1
     for control in (2,6):
         s,current,yielded = State(functions),0x22000000,[]
-        s.external['fiber_current'] = lambda m,a:current
+        s.external['ctxrt_v1_current'] = lambda m,a:current
 
         def schedule(m,a):
             require(m.cpu['primask'] == 0 and m.load(mutex) == current+4,'POLICY','masked cooperative retry')

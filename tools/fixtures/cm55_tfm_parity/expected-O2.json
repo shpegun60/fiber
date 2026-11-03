@@ -984,7 +984,7 @@
     "and r3,r3,#3",
     "cmp r3,#2",
     "bne @9",
-    "bl fiber_current",
+    "bl ctxrt_v1_current",
     "cbz r0,@11",
     "ldmia sp!,{r3,pc}",
     "movs r0,#108",

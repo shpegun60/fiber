@@ -24,7 +24,7 @@ DEPENDENCIES = {
     'Boot': {'fiber_addr_plausible_code', 'fiber_addr_plausible_ram', 'fiber_internal_runtime_port_abi_v1_anchor',
         'fiber_internal_task_return', 'fiber_panic', COHORT, 'fiber_port_init_context_frame', 'memcpy', 'memset'},
     'Init': {'fiber_panic', 'tfm_ns_interface_init'},
-    'Wrapper': {'fiber_current', 'fiber_panic', 'fiber_port_runtime_schedule'},
+    'Wrapper': {'ctxrt_v1_current', 'fiber_panic', 'fiber_port_runtime_schedule'},
     'Reference': {'pxCurrentTCB', 'vPortSVCHandler_C', 'vTaskSwitchContext'},
     'ReferenceConstructor': {'PendSV_Handler', 'SVC_Handler', 'ulSetInterruptMask', 'vClearInterruptMask',
         'vRestoreContextOfFirstTask', 'vStartFirstTask', 'vTaskSwitchContext', 'xTaskIncrementTick'},

@@ -1,5 +1,20 @@
 # CM33 TF-M A32 Closure Gate
 
+## Canonical Context Adapter Links
+
+The current wrapper exact import oracle is `ctxrt_v1_current`, `fiber_panic`,
+and `fiber_port_runtime_schedule`. Additional 16 O2/Os normal/LTO C/C++
+direct/archive final links use actual scalar CM33 TF-M objects, actual
+`core_cm33.h`, and exactly the independently checked Context engine/state/panic
+providers. Legacy five-operation and optional-configuration symbols are absent.
+Eight actual-wrapper legacy-getter controls must fail solely for the exact
+`fiber_current` dependency under the maintained closed GNU-ld grammar.
+The shared C5TF target oracle is reused with explicit M33 CPU, storage and
+integration-anchor expectations, not M55 CPU code. Historical old-port controls
+use captured current role contracts/headers and retain their hybrid-boundary
+label; they are not full old-repository qualification. Typed interface fixtures
+remain declaration-only, not an actual TF-M Secure provider.
+
 Only ARM_CM33_TFM/non_secure is qualified. The standard run verifies/copies the
 selected source, shared classifier/constructor fixtures, own fixtures and CMSIS
 before executing the copy. Consumed-copy drift is fatal. Later original-tree

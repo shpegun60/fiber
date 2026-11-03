@@ -51,7 +51,7 @@ class Proof(base.Proof):
         paths.update(SHARED / n for n in ('run.py','elf.py','mutants.py','os_wrapper/mutex.h'))
         paths.add(HERE.parent/'cm33_secure_parity/machine.py')
         paths.add(HERE.parent/'cm33f_mpu_running_parity/check.py')
-        for root in (self.port, self.repo, self.repo/'fiber', self.repo/'fiber/port',
+        for root in (self.port, self.repo/'context', self.repo, self.repo/'fiber', self.repo/'fiber/port',
                      self.ref, self.tfm, self.config, Path(self.a.reference)/'include', Path(self.a.cmsis)):
             paths.update(p for p in root.iterdir() if p.is_file() and p.suffix in ('.c','.h','.ld','.md')
                 and (root != self.repo or p.name in ('mcu_core.h','basic_types.h','FREERTOS_ASM_PARITY.md')))

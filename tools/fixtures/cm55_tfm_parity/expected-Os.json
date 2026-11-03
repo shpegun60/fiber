@@ -981,7 +981,7 @@
     "beq @8",
     "movs r0,#108",
     "bl fiber_panic",
-    "bl fiber_current",
+    "bl ctxrt_v1_current",
     "cbnz r0,@12",
     "movs r0,#75",
     "b @7",

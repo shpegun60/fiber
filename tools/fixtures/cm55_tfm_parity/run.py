@@ -79,7 +79,7 @@ class Proof:
         require(actual_profile == expected_profile, 'C5TF 12-file production inventory changed: ' + str(actual_profile ^ expected_profile))
         paths = {Path(__file__), self.fixture / "check.py", self.repo / "tools/freertos_asm_parity.ps1",
                  self.repo / "FREERTOS_ASM_PARITY.md", Path(self.a.arm_gcc), *self.tools.values()}
-        for root in (self.fixture, self.port, self.repo / 'fiber/port/ARM_CM33_TFM/non_secure', self.repo, self.repo / "fiber", self.repo / "fiber/port",
+        for root in (self.fixture, self.port, self.repo / 'fiber/port/ARM_CM33_TFM/non_secure', self.repo / "context", self.repo, self.repo / "fiber", self.repo / "fiber/port",
                      self.ref, self.tfm, self.config, Path(self.a.reference) / "include", Path(self.a.cmsis)):
             paths.update(p for p in root.rglob("*") if root == self.fixture and p.is_file())
             paths.update(p for p in root.iterdir() if p.is_file() and p.suffix in (".c", ".h", ".ld", ".md")

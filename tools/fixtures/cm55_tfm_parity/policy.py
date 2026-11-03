@@ -47,7 +47,7 @@ def policy_checks(init, wrapper, refwrapper):
 
     s = Machine(all_functions)
     current = 0x22000000
-    s.external['fiber_current'] = lambda m, a: current
+    s.external['ctxrt_v1_current'] = lambda m, a: current
     yielded = []
     def yield_now(m, a):
         require(m.cpu['primask'] == 0 and m.load(mutex) == current+4, 'POLICY', 'masked/bad cooperative yield')
@@ -78,7 +78,7 @@ def policy_checks(init, wrapper, refwrapper):
     count += 5
     for reg, value, code in (('ipsr', 1, 'i'), ('primask', 1, 'p'), ('control', 0, 'l')):
         t = Machine(all_functions)
-        t.external['fiber_current'] = lambda m, a: current
+        t.external['ctxrt_v1_current'] = lambda m, a: current
         t.cpu.update(control=2)
         t.cpu[reg] = value
         expect_panic(t, code, 'os_wrapper_mutex_acquire', mutex, 0)

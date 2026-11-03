@@ -1,5 +1,20 @@
 # ARM_CM55 TF-M Non-secure Parity Ledger
 
+## Canonical Context Adapter Identity
+
+The optional OS mutex wrapper includes the canonical Context declaration and
+queries `ctxrt_v1_current()`. Its exact external imports are that getter,
+`fiber_panic`, and `fiber_port_runtime_schedule`. Mutex owner storage remains
+the same context pointer; masks, scheduling, four wrapper exports, frames,
+profile/cohort identity and the frozen eight/reverse ABI are unchanged.
+It does not require the legacy five-operation compatibility object. Focused
+target tests link C/C++ pure Context consumers with exactly engine/state/panic,
+without legacy compatibility or optional configuration, and compile a reverted
+legacy-getter wrapper that must fail that link solely for `fiber_current`.
+These are declaration-boundary/target-link proofs, not an actual TF-M v2 Secure
+image, veneer, PSA service or physical-board qualification. Historical evidence
+and reference fingerprints below retain their original scope and provenance.
+
 ## Status And Scope
 
 C5TF source group implemented, 2026-11-02. Complete-group target/host and
@@ -157,7 +172,7 @@ MSP/exception preparation. No read is added to the PendSV hot path.
 The common image alone owns reverse services and current storage. Naked SVC
 and PendSV contain the only current-slot address/load sequences; C has no
 declaration/lvalue for it. The optional TF-M wrapper calls public
-`fiber_current()` and the selected-port schedule operation, not common private
+`ctxrt_v1_current()` and the selected-port schedule operation, not common private
 scheduler state. Only one selected group and one TF-M wrapper provider may be
 linked; duplicate handlers/providers are errors.
 
@@ -279,7 +294,7 @@ context slots.
 | `fiber_port_tfm_primask_save_disable` | `fiber_port_tfm_os_wrapper.c` | M33_TFM mutex policy: preserve then briefly mask PRIMASK. |
 | `fiber_port_tfm_primask_restore` | `fiber_port_tfm_os_wrapper.c` | M33_TFM mutex policy: exact PRIMASK restoration/readback. |
 | `fiber_port_tfm_require_unmasked_thread` | `fiber_port_tfm_os_wrapper.c` | M33_TFM mutex policy: no Handler or masked waiting. |
-| `fiber_port_tfm_require_running_fiber` | `fiber_port_tfm_os_wrapper.c` | M33_TFM mutex policy: privileged PSP Thread plus public fiber_current(); no common private storage. |
+| `fiber_port_tfm_require_running_fiber` | `fiber_port_tfm_os_wrapper.c` | M33_TFM mutex policy: privileged PSP Thread plus canonical ctxrt_v1_current(); no common private storage. |
 | `fiber_port_tfm_mutex_handle_is_valid` | `fiber_port_tfm_os_wrapper.c` | TF-M single global mutex adaptation: exact private static address and created marker. |
 | `fiber_port_tfm_mutex_state_check` | `fiber_port_tfm_os_wrapper.c` | Local fail-closed created/owner consistency checks. |
 | `os_wrapper_mutex_create` | `fiber_port_tfm_os_wrapper.c` | TF-M v2.0 mutex ABI; one static mutex, only before first start, no heap/semaphore. |

@@ -68,10 +68,11 @@ Context declarations and preserve the same underlying storage identity.
 
 The compiler-policy header and selected public storage selector retain their
 old physical paths temporarily. These are explicit physical migration debts,
-not dependencies on Fiber lifecycle logic. TF-M integration adapters that still
-call the old current-identity API additionally require its legacy shim until
-their separately recorded mechanical migration. Pure-Context qualification
-must not silently include that shim.
+not dependencies on Fiber lifecycle logic. The three TF-M integration adapters
+use the canonical Context current-identity API and do not require the legacy
+shim. Their maintained pure-Context links exclude both the shim and optional
+configuration provider; compiled legacy-dependency controls fail explicitly.
+This proves the optional adapter boundary, not actual Secure TF-M execution.
 
 See `CONTEXT_REFACTOR_BASELINE.md` and `CONTEXT_FIBER_ARCHITECTURE.md` in the
 repository root for acceptance scope and the retained qualification backlog.

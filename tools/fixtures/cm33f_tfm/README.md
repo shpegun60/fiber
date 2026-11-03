@@ -1,5 +1,22 @@
 # C33F TF-M Staged Consumer Gate
 
+## Pure Context TF-M Links
+
+The legacy consumer grid is retained. Additional O2/Os normal/LTO C/C++ direct
+and archive links use a Context-only allocating consumer and exactly the
+independently named engine/state/panic providers. No legacy five-operation
+symbol or optional-configuration provider may survive. Real wrapper objects,
+including native-lowered LTO, must import exactly `ctxrt_v1_current`,
+`fiber_panic`, and `fiber_port_runtime_schedule`. Both public identity getters
+remain forbidden in the CPU/boot role; compiled controls exercise each one.
+A compiled actual-wrapper mutant reintroduces only the legacy identity
+dependency. Its pure Context link must fail solely for the exact
+`fiber_current` symbol under the maintained closed linker-diagnostic grammar;
+unrelated warnings/errors cannot satisfy the control. Strong vectors, storage,
+reverse and private-cohort guards are unchanged. The actual driver-selected
+LTO plugin is queried, cross-checked and hashed alongside compiler helpers.
+Host adapter scenarios are source-derived models, not CPU/TF-M execution.
+
 Run `tools/test_cm33f_tfm.ps1 -ArmGcc <gcc> -CmsisCore <CMSIS Include>`.
 Optional `-HostGcc`, `-BuildRoot`, `-FreeRtosRoot`, `-Python`, and
 `-ExpectedRuntimeSelectable` (default 0, required to remain 0 for this stage).

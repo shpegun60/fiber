@@ -1,5 +1,19 @@
 # C3FT Actual Pinned FP Parity
 
+## Context Identity Relocation
+
+The maintained wrapper dependency and numeric external-call oracle explicitly
+name `ctxrt_v1_current`. The golden update is limited to the single getter
+call target in `Wrapper/fiber_port_tfm_require_running_fiber`; decoded opcode,
+instruction count, every other body, geometry and pinned FreeRTOS streams are
+unchanged. Before objects at engine commit 53b69aa were checked against the old
+closed baseline, then that one relocation was substituted in their decoded
+stream (both hard/softfp for C3FT), independently of new output. Frozen
+historical `provenance.json` snapshots are not regenerated or relabelled.
+Canonical Context headers are included in the consumed dependency hashes.
+Pure Context final-link omission of legacy compatibility is a separate consumer
+gate, not inferred from these object imports. No actual Secure TF-M proof.
+
 `tools/freertos_asm_parity.ps1 -Cm33fTfmOnly` runs O2 or Os with both hard and
 softfp ABIs. It compiles unmodified production C and pinned M33_NTZ FP port C,
 portasm C and ARM_TFM wrapper C. The profile stays RuntimeSelectable0; this gate
