@@ -4765,6 +4765,65 @@ not silently included in the aggregate. Global all-optimization/final-LTO
 reference equivalence, hosted CI, staged-profile activation and hardware
 qualification remain separate gates.
 
+### Clean-Commit Classic MPU CONTROL Guards
+
+The standalone [CONTROL regression suite](tools/fixtures/classic_mpu_control/README.md)
+passes for exact `e971263e4fa6d6c65565f4fb6836d8f649352afd`. The no-overlay
+Git export is `C:/cmgcq-2dd4f3a4b1/experiments/h7s_fiber_test/Boot/app_core/fiber`;
+outputs are in `C:/cmgcb-2dd4f3a4b1`. All 1,096 exported file paths and bytes
+match Git. The outer driver exits zero after 262.10 seconds, with no source,
+inventory or enrolled-tool drift. The child closes with 817 inputs and 7,079
+verified artifacts. This source commit adds only ten test files; the nine
+production C/header files from the CONTROL repair remain unchanged.
+
+The bounded inventory covers CM0+ with and without VTOR, CM3, and CM4/M7 with
+8/16 MPU regions:
+
+- Thirty-five host runs perform 238,680 source-derived scalar guard checks at
+  O0/Og/O2/Os/O3. These are not complete validator or validation-order execution.
+- Sixty-three actual ARM codegen cells cover those five ordinary modes and
+  O2/Os native LTO both with and without function sections. Six hostile compiler
+  flag families remain active, with a compiled unannotated control in each cell.
+- Fifty-six matching final links and 56 strict cohort mismatches cover direct
+  and archive linking in ordinary/slim-LTO modes. The old-generation provider
+  is an explicitly labeled identity-only mutation, not historical behavior.
+- The emitted pre-MRS graph derives its roots from actual handler transfers and
+  retains section/entry/extent identity. Its bounded byte CFG rejects reachable
+  undecoded bytes, unsupported transfers and altered capture/store sequences.
+  Captured objdump decoding is trusted; this is not a general ARM verifier.
+- All 129 additional assurance identities pass: 24 capture-sequence controls,
+  32 derived-prefix controls, 32 duplicate-local-helper controls, one paired
+  copied-classifier closing control and 40 byte-coverage records. The last set
+  includes 32 intended gap rejections and eight proven-unreachable pool
+  acceptances under the bounded CFG. The closing-only pair reuses genuine
+  parent observations; it is not another compile suite.
+- The actual PowerShell receipt checker accepts one complete receipt and
+  rejects 162 malformed variants. The outer driver independently binds the
+  complete Assurance and Closing identities before the child executes.
+
+GCC-resolved compiler delegates, explicit native binutils and the slim-LTO
+plugin are enrolled before their use and checked at closing. This is a bounded
+installed-tool inventory, not complete transitive host/OS dependency closure.
+The ten reviewed source bytes also match the committed Git-LF bytes without
+normalization changes; metadata and closing identities are pinned before launch.
+
+| Record | SHA-256 |
+| --- | --- |
+| `C:/cmgcb-2dd4f3a4b1/results.json` | `AD7D52E291C24CBE0D3CE64DF335176F8DCCD44703EB41DEEB68CBD951EC5E54` |
+| `C:/cmgcb-2dd4f3a4b1/artifacts.json` | `1A0D9CB6DA9087FEA4C21BB347F38961B8A03AC3C3861D351AB47E11F5396739` |
+| `C:/cmgcb-2dd4f3a4b1/assurance-controls.json` | `7EE8AB5D0FD589E675FDA7F9C6046AACD16A4DCA25B2EDAF6127CC13C4661E2A` |
+| `C:/cmgcb-2dd4f3a4b1-closing/results.json` | `B952DAF619BB107ABDBC203F65B542272AF515CA17F9A05951C64668B6FF71B9` |
+| `C:/cmgcq-2dd4f3a4b1/guard-result.json` | `ABFB93ACA00694BBB69525D60AC758A90CCD94684E79E9BC2C6851E0743D24A8` |
+| retained `driver.ps1` | `5E3FE74BECFAB24B746BEBBC7AA0EECA74CAF3D9616ED3088F7318330989BA2F` |
+| retained `expected-source-metadata.json` | `6639473D1A981957AAF09A87DFE1CC8FE02A1B02B059BA6D9976B72640BA407D` |
+
+The two retained files in the table are under `C:/cmgcq-2dd4f3a4b1`. Earlier
+development FAILs and the incomplete v1/v2 scanner receipts remain distinct;
+they are not upgraded to byte-coverage qualification. This standalone run is
+not new QEMU/ARM execution, pinned-reference parity, the default combined
+matrix, global all-optimization equivalence, hosted CI or hardware validation.
+The separate basic-frame MPU pilot and its exclusions remain unchanged.
+
 ## Recorded Host Tool Identity Boundary
 
 A later provenance review identifies an enrollment omission in the historical

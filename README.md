@@ -76,6 +76,13 @@ Context/FiberV1 startup, basic switching, return and two MPU fault cases. This
 is a deliberately incomplete O2/direct/eight-region, FP-inactive pilot, not an
 FP-active MPU, final-LTO or hardware qualification.
 
+A separate [classic MPU CONTROL regression receipt](PORT_ARCHITECTURE_AUDIT.md#clean-commit-classic-mpu-control-guards)
+passes for exact `e971263`: source-derived scalar guards, actual ARM codegen,
+pre-MRS byte coverage, cohort negatives and strict receipt closing. Its 63
+codegen cells include five ordinary optimization modes and O2/Os native LTO.
+This is an opt-in software guard suite, not new CPU execution or whole-program
+FreeRTOS equivalence; it changes no runtime or public API.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
