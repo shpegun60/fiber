@@ -94,6 +94,12 @@ dependency closure, diagnostics and source/tool hashes are retained. Source
 drift produces INCOMPLETE without an artifact PASS manifest. Documentation
 artifacts are immutable copies, never mutable live repository paths.
 
+The explicit snapshot inventory includes top-level `context/*.h` alongside
+the legacy `fiber` headers that forward to these canonical declarations and
+types. This does not compile or qualify the Context engine. Dependency closure
+still rejects every uncaptured dependency, even when that file exists; no
+assembly baseline, dependency allowlist or behavioral oracle is broadened.
+
 ## C33S A32 Fixture Admission
 
 Only the A30 Boot baseline changed for the canonical helper-closure repair:

@@ -3611,3 +3611,49 @@ input delta is the separately qualified publication README, not code drift.
 `CompleteSuite=false`: this is constructor and bounded linked restore-slice
 execution, not full exception transfer, FP/TrustZone/TF-M execution, all-profile
 new-consumer admission or board validation. No production code changes.
+
+### Post-Publication Aggregate Boundary
+
+The fresh immutable `0e054a8` compile/link/codegen aggregate replays artifact,
+selection, source-reader, canonical Context, pure/mixed Fiber and helper gates
+successfully, then stops in the first O2 scalar Secure parity group. Its runner
+omits `context/context_api_types.h` from the declared hashed input inventory,
+and the existing dependency-closure check correctly rejects that actual compiler
+dependency. Receipt: `C:/fcq-be47d02769/matrix-result.json`, SHA-256
+`40A0FF40B8BF0E6F0948D31A260CDE370AB3C9F8031D1AE7485C6A8B76020C68`.
+It remains aggregate FAIL: 1,014 immutable source files, zero drift, 415.56
+seconds. Later parity and matrix gates are NOT_RUN in this receipt; conditional
+QEMU execution was intentionally not selected. The missing provenance input is
+not evidence of a frame/assembly defect or permission to relax dependency closure.
+
+### Canonical Header Provenance And Public Build Recipe
+
+The scalar Secure parity snapshot now explicitly includes canonical Context
+headers. Its strict compiler-dependency closure remains unchanged. An immutable
+`f87db9e` source archive plus the two reviewed runner/documentation overlays
+passes A30, C3SO and C5SO at O2/Os: six profile/optimization groups, six deliberate
+missing-header controls, twelve positive/restoration checks, 9,038 input and
+2,292 artifact records without drift. Receipt:
+`C:/scp-cc72c72e/results.json`, SHA-256
+`F63F8B23758DED62CB9A83474F6C8DF9D17AD9A962404BC568C8E1BB2BB3A9D7`.
+
+The PowerShell C3FP and Secure companion initialization inventories likewise
+include canonical Context headers, without changing assembly, golden bodies or
+behavioral oracles. A separate immutable `f87db9e` archive with that exact driver
+overlay passes C3FP O2/Os, both FP ABIs and 8/16 MPU regions, with 132 compiled
+mutants and eight harness controls. Its 1,015 source files have zero drift.
+Receipt: `C:/fcfp-9b9238d28a/results.json`, SHA-256
+`95852111D8E60FEA0B489948361663B0D126454460ABCC6226A59A8CEE27C738`.
+
+Independent integration review also finds a real documentation defect: the main
+Project Setup still lists deleted providers and omits the canonical engine.
+The active recipe now lists the three Context providers plus the legacy shim,
+or explicitly replaces that shim with the genuine Fiber consumer and Context
+configuration provider. Retired configuration paths are removed from that
+active recipe. A maintained section-scoped validator rejects missing providers
+and retired paths while allowing historical records outside the setup section.
+The dispatch/recipe regression passes 89 checks. Receipt:
+`%TEMP%/matrix-execution-policy-5181c5c7b52946b99294f3ba6b650cc4/results.json`,
+SHA-256 `D5EC682DDAFA941E92280EA44A7610A89BFA74A1F0357373A8777FE2C7E34847`.
+The canonical ownership gate separately passes against the current source.
+These focused results do not turn the preceding aggregate FAIL into PASS.

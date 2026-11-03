@@ -346,9 +346,33 @@ function Test-FinalReversePortAbi {
     }
 }
 
+function Assert-PublicProviderRecipe {
+    param([string]$Source)
+
+    $setup = [regex]::Match($Source,
+        '(?ms)^## Project Setup\s*\r?\n(?<body>.*?)(?=^## |\z)')
+    if (!$setup.Success) { throw 'Public provider recipe: missing Project Setup section' }
+    $block = [regex]::Match($setup.Groups['body'].Value,
+        '(?ms)^```text[ \t]*\r?\n(?<providers>.*?)^```')
+    $actual = @($block.Groups['providers'].Value -split '\r?\n' |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $expected = @('context/context_core.c', 'context/context_runtime_state.c',
+        'context/context_panic.c', 'fiber/fiber_core.c')
+    if (!$block.Success -or $actual.Count -ne $expected.Count -or
+            (Compare-Object $expected $actual)) {
+        throw 'Public provider recipe: legacy setup must list the three Context providers and one legacy shim'
+    }
+    if ($setup.Value -match '\bfiber/fiber_(?:runtime_state|panic|runtime_context_configuration|context_compat)\.c\b' -or
+            !$setup.Value.Contains('context/context_configuration.c')) {
+        throw 'Public provider recipe: active setup contains a retired provider or omits the configuration provider'
+    }
+}
+
 function Test-CanonicalContextOwnership {
     param([string]$RepositoryRoot)
 
+    Assert-PublicProviderRecipe -Source (Get-Content -LiteralPath (
+        Join-Path $RepositoryRoot 'README.md') -Raw)
     # Source ownership is an independent oracle, not inferred from the manifest.
     $owners = [ordered]@{
         engine = 'context\context_core.c'

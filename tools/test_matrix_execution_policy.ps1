@@ -33,6 +33,27 @@ Check 'matrix/policy-before-output-creation' (
     $calls[0].Extent.StartOffset -lt $source.IndexOf('$matrixDirectory = New-FiberMatrixBuildDirectory'))
 Check 'matrix/exact-policy-arguments' ($calls[0].Extent.Text -cmatch
     '(?s)^Assert-MatrixExecutionPolicy -Required \$RequireArchitectureExecution\s+`\s+-SettingsSubset \$SettingsOnly -QemuRoot \$ControlQemuRoot$')
+$recipeChecks = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -ceq 'Assert-PublicProviderRecipe'
+})
+Check 'public-recipe/one-validator' ($recipeChecks.Count -eq 1)
+. ([scriptblock]::Create($recipeChecks[0].Extent.Text))
+$readme = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\README.md') -Raw
+$history = "`n## Historical Recipe`n" + '```text' + "`nfiber/fiber_panic.c`n" + '```'
+foreach ($case in @(
+        @{Name='actual';Source=$readme;Reject=$false},
+        @{Name='history-outside-setup';Source=($readme + $history);Reject=$false},
+        @{Name='retired-engine';Source=$readme.Replace('context/context_core.c', 'fiber/fiber_core.c');Reject=$true},
+        @{Name='missing-state';Source=$readme.Replace('context/context_runtime_state.c', '');Reject=$true},
+        @{Name='retired-configuration';Source=$readme.Replace('context/context_configuration.c', 'fiber/fiber_runtime_context_configuration.c');Reject=$true})) {
+    $caught = $null
+    try { Assert-PublicProviderRecipe -Source $case.Source }
+    catch { $caught = $_.Exception.Message }
+    Check ('public-recipe/' + $case.Name) (
+        ($case.Reject -and $null -ne $caught -and $caught.StartsWith('Public provider recipe:')) -or
+        (!$case.Reject -and $null -eq $caught))
+}
 $cases = @(
     @{Name='local/no-qemu';Required=$false;Subset=$false;Root=$null;Diagnostic=$null},
     @{Name='local/with-qemu';Required=$false;Subset=$false;Root='/existing/prefix';Diagnostic=$null},

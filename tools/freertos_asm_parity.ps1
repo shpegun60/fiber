@@ -2503,7 +2503,8 @@ function Assert-Cm33fMpuRunningParity {
     foreach ($root in @($compilerHeaders, (Join-Path (Split-Path $toolDir) 'arm-none-eabi\include'))) {
         $paths += @(Get-ChildItem -LiteralPath $root -Recurse -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
     }
-    foreach ($root in @($RepoRoot, (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber\port'),
+    foreach ($root in @($RepoRoot, (Join-Path $RepoRoot 'context'),
+            (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber\port'),
             $profile, $referenceDir, (Join-Path $kernel 'include'), $cmsis, $configDir, $fixture)) {
         $paths += @(Get-ChildItem -LiteralPath $root -File | Where-Object {
             $_.Extension -in @('.h', '.c', '.ld', '.py', '.ps1', '.md')
@@ -3522,6 +3523,7 @@ try {
         if ($port.Name -like "ARM_CM55_SECURE_CONTEXT_INIT_*" -or $captureC33) {
             $initInputs = @((Join-Path $RepoRoot "fiber\fiber_api_attributes.h"),
                 (Join-Path $RepoRoot "tools\freertos_asm_parity.ps1"), $ledgerPath) +
+                @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'context') -Filter '*.h' -File | Select-Object -ExpandProperty FullName) +
                 @(Get-ChildItem -LiteralPath $profileDir -File | Where-Object { $_.Extension -in @('.c', '.h', '.ld') } | Select-Object -ExpandProperty FullName) +
                 @(Get-ChildItem -LiteralPath $configDir -Filter '*.h' -File | Select-Object -ExpandProperty FullName) +
                 @(Get-ChildItem -LiteralPath (Join-Path $kernel $port.ReferenceDir) -File |

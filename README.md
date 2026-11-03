@@ -342,25 +342,37 @@ PSA veneer, and board operation are not. See
 
 ## Project Setup
 
-Add the repository root to the include path, then include the public API:
+Add the repository root to the include path. Existing five-call applications
+include the compatibility API:
 
 ```c
 #include "fiber/fiber_core.h"
 ```
 
-Compile the common runtime sources into the application:
+Compile its canonical runtime providers and the legacy shim:
 
 ```text
+context/context_core.c
+context/context_runtime_state.c
+context/context_panic.c
 fiber/fiber_core.c
-fiber/fiber_runtime_state.c
-fiber/fiber_panic.c
 ```
 
-The common runtime and selected port include the internal
-`fiber/fiber_runtime_port_abi.h` reverse boundary themselves; it is not a
-separate translation unit.
+New Fiber v1 applications replace the legacy shim with
+`fiber/lifecycle/fiber_v1.c` and also compile `context/context_configuration.c`;
+see its [static setup example](fiber/lifecycle/README.md#static-round-robin).
+Pure Context applications use `context/context.h` and the three mandatory
+Context providers without either consumer. Context-mutating selected-port
+extensions additionally require the configuration provider as described below.
 
-Then compile exactly one matching port source group:
+The runtime and selected port include the internal
+`context/context_runtime_port_abi.h` reverse boundary themselves; it is not a
+translation unit. The old `fiber/fiber_runtime_port_abi.h` is a forwarding header.
+
+Select exactly one matching backend group. Compile its C/assembly sources;
+the headers and linker contracts listed alongside them are integration
+artifacts, not additional C translation units. Exclude unselected backends and
+`tools` fixtures from application source discovery.
 
 ```text
 Cortex-M0/M0+: fiber/port/ARM_CM0/fiber_port.c
@@ -407,7 +419,7 @@ M55 scalar NTZ full build-selected runtime source group:
 
 M55 TrustZone SecureContext full staged runtime and separate Secure companion
 (runtime-selectable remains zero):
-               fiber/fiber_runtime_context_configuration.c
+               context/context_configuration.c
                fiber/port/ARM_CM55/non_secure/fiber_port_types.h
                fiber/port/ARM_CM55/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM55/non_secure/fiber_portmacro.h
@@ -459,7 +471,7 @@ M33 TF-M v2.0.0 full build-selected Non-secure source group:
                fiber/port/ARM_CM33_TFM/non_secure/fiber_port_tfm_os_wrapper.c
 
 M33 TrustZone companion-aware full build-selected runtime and Secure companion:
-               fiber/fiber_runtime_context_configuration.c
+               context/context_configuration.c
                fiber/port/ARM_CM33/non_secure/fiber_port_types.h
                fiber/port/ARM_CM33/non_secure/fiber_port_boot_types.h
                fiber/port/ARM_CM33/non_secure/fiber_portmacro.h
@@ -494,7 +506,7 @@ M33F NTZ full build-selected FPU runtime source group:
 ```
 
 Both the CM33 and staged CM55 SecureContext attachment sources require the
-optional common `fiber/fiber_runtime_context_configuration.c` module in the
+optional Context `context/context_configuration.c` module in the
 Non-secure image.
 It supplies `fiber_internal_runtime_require_context_configuration_open()` and
 `fiber_internal_runtime_context_configuration_abi_v1_anchor`; omitting it leaves

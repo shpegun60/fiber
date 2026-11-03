@@ -57,6 +57,8 @@ class Proof(base.Proof):
         if self.mode == 'A30':
             paths.update(self.repo/'fiber/port/ARM_CM33/secure'/n for n in (
                 'fiber_secure_context_gateway_contract.h','fiber_secure_gateway_contract.h'))
+        paths.update(p for p in (self.repo/'context').iterdir()
+                     if p.is_file() and p.suffix == '.h')
         for root in (HERE, SHARED, self.port, self.repo, self.repo/'fiber', self.repo/'fiber/port',
                      self.ref, self.config, Path(self.a.reference)/'include', Path(self.a.cmsis),
                      self.secure_ref):
