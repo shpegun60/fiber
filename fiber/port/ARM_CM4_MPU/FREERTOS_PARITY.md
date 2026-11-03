@@ -25,8 +25,10 @@ and [Arm AN298](https://documentation-service.arm.com/static/5f0352c0cafe527e86f
 Private context semantics advance from `0x00010008`/`0x00010010` to
 `0x00020008`/`0x00020010` for 8/16 regions (including the M7 cohort). Public
 storage V1 and both callable ABI versions are unchanged. Historical evidence
-below is not a CPU qualification of this repair; a fresh candidate-image
-execution is pending.
+below is not a CPU qualification of this repair. A separate
+[clean-commit basic-frame pilot](../../../PORT_ARCHITECTURE_AUDIT.md#clean-commit-cm4-mpu-pilot)
+passes for Context/FiberV1 on AN386. FP-active, lazy, full-grid and board
+qualification remain pending.
 
 ## Protected Startup MSP Policy
 

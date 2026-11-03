@@ -39,7 +39,7 @@ exactly one dispatcher owner; do not mix Fiber's selector registration with a
 separate Context or legacy scheduler registration.
 
 The post-extraction combined compile/link/codegen matrix passes for immutable
-`ad29f15`; its [exact receipt and exclusions](PORT_ARCHITECTURE_AUDIT.md#post-grid-combined-compile-qualification)
+`624a435`; its [exact receipt and exclusions](PORT_ARCHITECTURE_AUDIT.md#post-repair-combined-matrix)
 keep conditional QEMU runtime, global all-optimization parity, board and CI
 claims separate. This is the bounded F0/G0/G4/H7/H7S CPU-profile checkpoint,
 not completion of every feature combination in the STM32 catalog.
@@ -68,6 +68,13 @@ profile at ordinary O0/Og/O2/Os/O3 and O2/Os final LTO. Both pure Context and
 Fiber v1 are exercised. The old O2/Os subset preserves all 296 executable
 images per profile. This remains bounded hard-FP, non-MPU CPU-model evidence;
 default matrix dispatch, the global parity gate and board claims are unchanged.
+
+A separate [classic MPU CONTROL repair and CM4 execution pilot](PORT_ARCHITECTURE_AUDIT.md#classic-mpu-handler-control-repair)
+distinguishes live Handler CONTROL from initial Thread intent without rewriting
+the pinned raw save/restore sequence. Seven clean-commit AN386 images pass for
+Context/FiberV1 startup, basic switching, return and two MPU fault cases. This
+is a deliberately incomplete O2/direct/eight-region, FP-inactive pilot, not an
+FP-active MPU, final-LTO or hardware qualification.
 
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`

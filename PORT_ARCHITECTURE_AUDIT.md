@@ -4589,8 +4589,8 @@ created by the outer PASS. The all-catalog freeze gates remain open.
 
 ## Classic MPU Handler CONTROL Repair
 
-Status: confirmed CM4 MPU runtime defect; source repair implemented, fresh
-regression and execution qualification pending.
+Status: source repair implemented; fresh bounded CM4 MPU pilot execution and
+the combined default matrix pass. The new guard-regression review is pending.
 The first seven-image pilot is deliberately not a complete qualification gate.
 Its manifest is M4 hard-FP, eight MPU regions, O2/native/direct, eager policy,
 FP-inactive workers, hash/map 0/0, with separate Context and FiberV1 consumers.
@@ -4655,6 +4655,115 @@ contracts; this repair must not mechanically modify those ports. Actual-source
 guard controls, emitted success-path GRO closure, stale-cohort negatives,
 reference-mechanism checks and fresh execution evidence remain required.
 FP-active/eager/lazy MPU execution is not established by the basic-frame pilot.
+
+### Focused Repair Qualification
+
+The refreshed focused O2/Os receipt retains twelve repaired production compiles,
+six baseline compiles, six pinned-reference compiles and 36 maintained mechanism
+assertions. Its 858 checks close with 1,493 inputs and 173 artifacts unchanged.
+GCC-resolved `as` and `cc1` are enrolled before compilation, matched against all
+24 compiler traces, and rehashed at closing. This corrects the earlier focused
+driver's guessed assembler enrollment; the old `DA95929F...` receipt remains
+historical and does not gain a retrospective tool-identity observation.
+
+| Record | SHA-256 |
+| --- | --- |
+| `C:/classic-mpu-control-repair-workers-098ea650d058472e88cd0eef14d373f3/results.json` | `BDF6C2977EFFC31DA0AD7737A41D9FEDA34C7644287D74FB2D9DFD0F9AE0893A` |
+| `C:/classic-mpu-control-repair-handoff-workers-098ea650/handoff.json` | `D54ACDB6F9B87615573D5D385796B113FA22E590C2BDB161C37B652178D35F66` |
+
+Independent assembly review compares 36 transfer bodies across the baseline
+and current builds. Only the two intended CM0 Handler readback immediates per
+optimization change in those instruction spans; raw MRS/save/MSR ordering is
+retained. This focused driver does not itself prove relocation identity.
+These are bounded mechanism checks, not complete generated-program equivalence
+or execution on CM0/CM3.
+
+### Clean-Commit CM4 MPU Pilot
+
+Exact source `624a4353983e03e766533df3abaa396593c750be` is exported with no
+overlays to `C:/cmpcq-d7389ea0cf`; the build is `C:/cmpcb-d7389ea0cf`.
+All 1,086 source paths and bytes match Git blobs. Opening/closing source
+inventories and the recorded 2,416 inputs and 480 artifacts have zero drift.
+Resolved compiler subprocess identities are enrolled before the first compile;
+native nm is explicit. No archiver, gcc-nm or target board is used.
+
+All seven distinct images execute successfully on the existing AN386 model:
+
+- The separate model image reports CPUID `410FC240`, MPU_TYPE `00000800`,
+  IRQ0 priority mask `FF`, MVFR0 `10110021` and initial MPU_CTRL `0`.
+- Context and FiberV1 each run the return, current-aperture write-fault and
+  peer-stack read-fault images. The return images observe eight selections,
+  one self-selection and six cross-selections before the worker entry returns
+  through the constructor-installed return veneer, enters the actual production
+  SVC72 path and reaches panic `R`.
+- Fault images observe MemManage IPSR `4`, EXC_RETURN `FFFFFFFD`, CFSR `82`,
+  HFSR `0`, the exact compiled access PC and MMFAR `20000000` or `20004080`.
+  A generic fault, timeout or mismatched terminal channel is not a PASS.
+
+| Record | SHA-256 |
+| --- | --- |
+| `C:/cmpcb-d7389ea0cf/results.json` | `63E6AA02B995634C2B51AF435ACD7C5F96D0437827E08B9052C54B19E8927F25` |
+| `C:/cmpcb-d7389ea0cf/artifacts.json` | `88FF4E9447F9C0F69BAD6993DC81FDE7413976CFF9AA69C2B8A7E6B58B10BF1A` |
+| `C:/cmpcq-d7389ea0cf/pilot-result.json` | `AB2FE7FB0863DDBD8ABB5D3B36A1184520074D624DB532E056D21DB0AA615F44` |
+| `C:/cmpcq-d7389ea0cf/pilot-plan.json` | `8F5963CC085E3F6CFD4B284EDB4E28C019BDAB71DA4CD1275BA437252A0ACA20` |
+| retained `driver.ps1` | `87201DD34443C75C579261E0647D3450D26D38ECBE56FB071C4971868107CB40` |
+
+Both receipts deliberately retain `CompleteSuite=false`. This is O2, ordinary
+direct linking, eight regions, eager policy, FP-inactive workers and hash/map
+0/0. It establishes real basic-frame MPU transfer and these two enforcement
+cases on that model, not explicit GPR/FP stress, lazy FP, other configurations,
+CM0/CM3/CM7 MPU execution, STM32 peripheral behavior, CI or hardware validation.
+The pinned reference identity is captured, but no new paired final-reference
+ELF/LTO parity or upstream runtime execution is claimed. The two earlier FAIL
+receipts remain FAIL; this fresh candidate run does not relabel them.
+
+### Post-Repair Combined Matrix
+
+The complete default compile/link/codegen aggregate passes for exact
+`624a4353983e03e766533df3abaa396593c750be`. It runs from
+`C:/fcmq-733485291b/experiments/h7s_fiber_test/Boot/app_core/fiber`, with build
+outputs in `C:/fcmb-733485291b`, and exits zero after 2,178.28 seconds with the
+final matrix footer. All 1,086 exported source files and 916 external inputs
+(the pinned FreeRTOS regular files and CMSIS headers) have zero closing byte or
+inventory drift. The reference remains clean at
+`a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+Both O2/Os FreeRTOS mechanism passes complete, including the repaired classic
+MPU groups. Common/runtime ABI, Context/Fiber, archive/cohort, generic build
+cells and the late settings gates also complete. The new standalone
+`classic_mpu_control` development runner is not committed in this export and
+is not admitted by this result; its oracle/closing review is separate.
+
+Independent review matches every exported file to Git blobs and ZIP bytes,
+rehashes the complete snapshot and all 916 recorded external files, and checks
+81 static headers in source order, 42 generic cells across eighteen
+configurations, all 67 late settings headers, 62 expected rejection diagnostics
+and exactly one final footer. This does not invent an external-after manifest
+or strengthen the driver's recorded host-tool identity boundary.
+
+| Record | SHA-256 |
+| --- | --- |
+| `matrix-result.json` | `A70D665472CD91FC5C4C9D19AD2785DB29D2913A46FD1E3578241B9D63441F2D` |
+| `matrix-plan.json` | `FB5F0866FC1719BFE90163A2AE3EABDF252BE8BA1B9E5A610D8A34D9290EB44B` |
+| `source-before.json` and `source-after.json` | `9244D9F4CC4F3DB2C0F3A5CB489D8E278544FC3D54468F8726BF63129A9D110E` |
+| `external-before.json` | `0B365988E5519992709FC48101A1ED9FCDFBD5C5AD6E9CC5C8172F01C5417411` |
+| `source.zip` | `9637BBBB54B2F78028F31E8A7362159DF698C64D65EB34D3C06A0E31E9C425C4` |
+| `matrix.log` | `DD9AD818920822F63BD59D93F57A37B56903FE30DDDC9A81494C0FB541FA00B9` |
+| `driver-postrun.ps1` | `919976E5077B0660A7ADCA61587510FF3D79FC3B9C9A0DB446587DD25FEB72BC` |
+
+Paths in the table are relative to `C:/fcmq-733485291b`. The retained driver is
+copied and hashed after the run; the external closing rehash is reported by the
+driver, not persisted as a separate external-after manifest. Neither is an
+additional before/after tool-identity observation. Known CM0 no-VTOR, mutant
+unused-variable and synthetic optional-configuration RWX warnings remain in
+the log. No whole-build artifact inventory is claimed by this outer receipt.
+
+This replaces `ad29f15` only as the latest captured default aggregate. Earlier
+receipts and FAILs remain intact. Conditional QEMU architecture/Secure/TF-M
+execution is NOT_RUN here; the separately admitted seven-image MPU pilot is
+not silently included in the aggregate. Global all-optimization/final-LTO
+reference equivalence, hosted CI, staged-profile activation and hardware
+qualification remain separate gates.
 
 ## Recorded Host Tool Identity Boundary
 
