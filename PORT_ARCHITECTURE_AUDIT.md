@@ -4526,3 +4526,63 @@ Softfp, non-FP/MPU profiles, other profiles/policies, affected-M7 silicon, STM32
 peripherals/NVIC widths/cache/TCM, complete startup/panic suites, hardware,
 global final-LTO equivalence and exact-SHA CI remain separate open gates.
 These focused receipts do not replace the historical default aggregate.
+
+## Post-Grid Combined Compile Qualification
+
+The complete default compile/link/codegen matrix passes on 2026-11-03 for
+clean committed source `ad29f15a0d4e2659c6bad8c46c8d79de27b29f72`, without
+overlays. The retained export is `C:/fcmq-9edf4c0570`; its actual repository is
+`experiments/h7s_fiber_test/Boot/app_core/fiber/`. The absent-at-launch build
+directory is `C:/fcmb-9edf4c0570`. Source archive, driver, log, plan and before/
+after manifests are retained. No untracked or stopped WIP enters this export.
+
+The child exits zero after the final settings negatives and common-source
+inventory checks, with the exact `PASS: compile matrix completed.` footer.
+Elapsed process time is 2,142.00 seconds, not a runtime performance benchmark.
+All 1,075 source files retain their bytes and inventory. All 916 recorded
+external FreeRTOS/CMSIS files retain their hashes and inventory; the reference
+remains clean at `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+An independent source-provenance review verifies all 1,075 files / 10,540,308
+bytes against their exact Git blobs, ZIP entries/embedded commit, and source
+manifest. There are no missing, extra, duplicate or reparse source files.
+The launcher uses explicit existing tools, a new Git archive, cleared child
+QEMU/Python-optimization environment and an explicit pinned reference. It does
+not provision packages, alter services, program a board or write live project/
+IDE metadata. Its external junctions do not enforce read-only access; before/
+after input checks, not filesystem ACL claims, establish the observed identity.
+
+The selected gates include Context/Fiber ownership and consumer checks,
+ordinary O2/Os pinned FreeRTOS parity, ABI/cohort/archive/GC/LTO controls,
+applicable protected/staged source/codegen/link tests, and final settings
+negatives. Included host and bounded Unicorn constructor/guard execution are
+not full exception or MPU-enforcement execution. Conditional QEMU architecture,
+Secure and TF-M probes are explicitly `NOT_RUN`; neither
+`-RequireArchitectureExecution` nor `-SettingsOnly` is selected. The separate
+classic full-grid receipts above remain independent evidence.
+
+| Retained file | SHA-256 |
+| --- | --- |
+| `matrix-result.json` | `71C4B6CE37B8F942B2F21569099D9C70D63C0ACE594DAE69A9EB3568654773FE` |
+| `matrix-plan.json` | `DF82E5FF3F1BA2DFE7F51FBDD4CFA295418171BB47897285F135D8C106440346` |
+| `source-before.json` and `source-after.json` | `3DBB20428D420D29AFD2463C2C27A01ABAECC022F2DC36868D1E48890141C2B0` |
+| `external-before.json` | `0B365988E5519992709FC48101A1ED9FCDFBD5C5AD6E9CC5C8172F01C5417411` |
+| `source.zip` | `B025BB82E36DA82155A429AD995D190DF1645DF5167E627F84CB8AD7F23CE0D0` |
+| `matrix.log` | `993EA388728F7A2D9930F85A2E4B53FD7BB430C6FB22D6413EEA30A0610EEC60` |
+| `driver.ps1` | `919976E5077B0660A7ADCA61587510FF3D79FC3B9C9A0DB446587DD25FEB72BC` |
+
+Independent bounded reviews confirm all 81 applicable static gate headers in
+source order, both O2/Os parity completions, 42 generic cells across eighteen
+configurations, the late settings gates and exactly one final footer. All nine
+runtime-role/reader/matrix inputs retain their closing hashes. A separate review
+rechecks the 1,075 source and 916 external records plus 657 selected Context/
+Fiber/consumer/source-reader inputs and copies, without mismatch. It does not
+claim a rehash of the entire build directory. CM0 no-VTOR, mutant unused-variable
+and synthetic optional-configuration RWX warnings remain visible in the log.
+
+This replaces `847953d` only as the latest captured default aggregate; that
+earlier receipt and all historical FAILs remain unchanged. Later receipt prose
+and the separately developed CM4 MPU execution pilot are outside the export.
+No whole-build artifact inventory, exact-SHA hosted CI, global all-optimization/
+final-LTO reference equivalence, staged-profile activation or hardware claim is
+created by the outer PASS. The all-catalog freeze gates remain open.

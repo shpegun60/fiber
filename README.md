@@ -39,7 +39,7 @@ exactly one dispatcher owner; do not mix Fiber's selector registration with a
 separate Context or legacy scheduler registration.
 
 The post-extraction combined compile/link/codegen matrix passes for immutable
-`847953d`; its [exact receipt and exclusions](PORT_ARCHITECTURE_AUDIT.md#post-context-combined-compile-qualification)
+`ad29f15`; its [exact receipt and exclusions](PORT_ARCHITECTURE_AUDIT.md#post-grid-combined-compile-qualification)
 keep conditional QEMU runtime, global all-optimization parity, board and CI
 claims separate. This is the bounded F0/G0/G4/H7/H7S CPU-profile checkpoint,
 not completion of every feature combination in the STM32 catalog.

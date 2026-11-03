@@ -46,10 +46,11 @@ boundaries, independently of the current aggregate below:
 | C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
 | C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
 
-The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#post-context-combined-compile-qualification)
-is **PASS** for immutable `847953da273a30b1594a66bd3facfb8ecf1ac902`:
-`C:/fcq-ed1be3f107/matrix-result.json` records 1,016 files, zero source drift,
-exit code zero and 1,931.19 seconds. The maintained matrix completes through
+The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#post-grid-combined-compile-qualification)
+is **PASS** for immutable `ad29f15a0d4e2659c6bad8c46c8d79de27b29f72`:
+`C:/fcmq-9edf4c0570/matrix-result.json` records 1,075 source files and 916
+external inputs, zero observed drift, exit code zero and 2,142.00 seconds.
+The earlier `847953d` receipt stays historical. The maintained matrix completes through
 the final settings negatives and source-inventory check. It includes Context/
 Fiber ownership and consumer gates, pinned O2/Os assembly parity, ABI/cohort/
 archive/GC/LTO controls and the applicable concrete/staged software gates.
