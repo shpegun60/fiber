@@ -4824,6 +4824,108 @@ not new QEMU/ARM execution, pinned-reference parity, the default combined
 matrix, global all-optimization equivalence, hosted CI or hardware validation.
 The separate basic-frame MPU pilot and its exclusions remain unchanged.
 
+## CM4 MPU Basic Grid
+
+The opt-in [maintained basic grid](tools/fixtures/classic_cm4_mpu_basic_grid/README.md)
+is committed as `b2a7d17c7c54e3f1ae9a6f6919dfbc4482491f2b`. It adds 25 test
+files, not production C, context layout, SVC/PendSV assembly or a new public API.
+The earlier seven-image pilot and default combined matrix are unchanged.
+
+### Bounded Execution
+
+The exact no-overlay Git export contains 1,121 files. Before execution, its
+inventory and every raw Git blob are independently rechecked. The maintained
+wrapper then captures its selected source/dependency inputs before local helper
+imports and uses a separate fresh build directory. All 49 requested observations
+exit zero with exact terminals; the wrapper and outer launch both exit zero.
+The outer run takes 211.42 seconds and detects no source or inventory drift.
+
+The fixed profile is AN386 Cortex-M4, eight MPU regions, hard FPv4-SP-D16 ABI,
+eager policy, FP-inactive/basic frames and hash/map policy 0/0. The observed model
+reports CPUID `410FC240`, MPU_TYPE `00000800`, NVIC mask `000000FF`, MVFR0
+`10110021` and initially disabled MPU. These are CPU-model facts, not STM32
+device/NVIC-width or peripheral integration evidence.
+
+The sixteen configurations are Context/FiberV1 x O2/Os x ordinary/final LTO x
+direct/archive. Each executes three production cases:
+
+- Normal switching retains r4-r11, exact SP and stack cookies across public and
+  direct SVC71 yields. Each normal terminal records 32 scheduler selections,
+  one self selection, 30 cross selections, 16 public and 15 direct transfers,
+  GPR/SP success masks `0F` and cookie count `1E`. Task return reaches the
+  constructor-installed SVC72 target and panic `R` in SVC, not an entry wrapper.
+- An unprivileged current-slot write produces MemManage at the exact access PC
+  decoded from each image, with MMFAR `20000000`, CFSR `82`, HFSR zero and
+  EXC_RETURN `FFFFFFFD`.
+- An unprivileged peer-stack read produces MemManage at its image-specific
+  decoded access PC, with MMFAR `20004080` and the same fault class. LTO may
+  change those PC addresses. Generic HardFault/timeout text is not accepted.
+
+The model executes first, followed by all 48 production images. The final
+receipt is `BASIC-GRID-PASS`, `Execution=BOUNDED_BASIC_GRID`, `CompileOnly=false`
+and `CompleteSuite=true` only for this literal bounded inventory. It closes
+1,775 enrolled inputs, 40 generated inputs and 6,720 artifacts with no drift.
+Existing-prefix QEMU/tool/library manifests are checked before and after;
+the run provisions nothing and touches no board or live CubeIDE build.
+
+### Reference And Receipt Boundaries
+
+Eight actual pinned `portable/GCC/ARM_CM4_MPU/port.c` final ELFs remain link-only.
+The selected 26-file reference inventory pins FreeRTOS
+`a50edad08b29052631aa469d4df6e6ec7ff68878`. Each production ELF has a hash-bound
+reference association for the same optimization/LTO/archive key. The 48
+associations check the maintained SVC-dispatch, first-restore and PendSV-MPU
+mechanisms: 144 named mechanism-check results, not byte identity or whole-kernel
+equivalence.
+Upstream's always-lazy FP policy intentionally differs from this eager subject.
+`ReferenceExecuted` and `NewFinalReferenceParity` both remain false.
+
+All 32 subject and eight upstream compiled omissions are rejected by their
+intended decoded diagnostic; they are not additional CPU executions. The 132
+synthetic closing controls, ten actual-finalizer controls and 25 typed
+PowerShell finalizer mutations remain separate from target observations.
+The model's actual bytes, canonical path and manifest entry are bound before
+success. Source/tool identities include the six GCC-resolved workers, native
+nm/ar and explicit LTO plugin, not complete transitive host/OS closure.
+
+The 97 final ELF role images preserve executable/data bytes and NOBITS geometry
+against the earlier admitted compile-only v2 inputs. Only two trailing LF bytes
+in each of `build.py` and `engine.py` were removed before the source commit;
+that source-only bridge is not substituted for new compile or execution evidence.
+
+| Execution Record | SHA-256 |
+| --- | --- |
+| `build/evidence/results.json` | `3A41B553B90E4D2DC55D3348A2454779EE4617D969228713ECD1A4BCAFAFF4F9` |
+| `build/evidence/artifacts.json` | `2FA41490C0A98116E8D40C61DD653818889D20356A4BCFB9CAD71FDC055CA563` |
+| `execution-result.json` | `F2E131088DDF4D5111368682C5F27ED60E8F3268E6C7B63C592CCD3A563BCBFC` |
+| retained `driver.ps1` | `9414D7639DCE39B4A1C125F51C27092DC98679FDB9BAAD3D62D79BD37489B254` |
+
+These records are under `C:/cmbge-b2a7d17-20261103-a2`; the immutable export is
+under `C:/cmbgq-0b465e0c82/experiments/h7s_fiber_test/Boot/app_core/fiber`.
+The earlier `a1` outer launch remains a pre-child FAIL: PowerShell 5 nested a
+JSON array, so the source-count assertion stopped it before compilation or CPU
+execution. Its receipt is not relabeled.
+
+The first separate clean-commit compile-only child under
+`C:/cmbgb-0b465e0c82/evidence` exits zero and passes, but its outer result under
+`C:/cmbgq-0b465e0c82` remains FAIL. The TEMP outer adapter incorrectly expected
+all 40 generated files to have one role. The fixed adapter requires the exact
+predeclared 12/20/8 path/role split with uniqueness, containment and artifact
+hashes, rather than learning allowed roles from child output. That fix changes
+no maintained source or existing receipt; fresh qualification is separate.
+
+A second fresh compile-only child under `C:/cmbgb-83856a744c/evidence` also
+exits zero, but its outer result under `C:/cmbgq-83856a744c` remains FAIL: the
+adapter treats the two-field retained control envelope as a raw closing report.
+The corrected outer checker must bind both closing and finalizer reports.
+Its fresh qualification is not part of the independently reviewed execution
+claim above; neither failed outer result is promoted to PASS.
+
+This does not qualify FP-active/lazy MPU contexts, MPU16, softfp, ordinary
+O0/Og/O3, CM0/CM3/CM7 MPU execution, the global all-optimization/final-LTO parity
+gate, the default aggregate, hosted CI or STM32 hardware. Those remain explicit
+backlog, not implied by the bounded `CompleteSuite` flag.
+
 ## Recorded Host Tool Identity Boundary
 
 A later provenance review identifies an enrollment omission in the historical

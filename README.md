@@ -83,6 +83,14 @@ codegen cells include five ordinary optimization modes and O2/Os native LTO.
 This is an opt-in software guard suite, not new CPU execution or whole-program
 FreeRTOS equivalence; it changes no runtime or public API.
 
+A separate [CM4 MPU basic-grid receipt](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-basic-grid)
+passes 49 AN386 observations: one model and 48 production images across
+Context/Fiber, O2/Os, ordinary/final LTO and direct/archive linking. It covers
+register/SP/cookie stress, public/direct SVC yields, return and two MPU access
+faults. Eight link-only pinned reference ELFs supply 144 bounded mechanism
+checks. This remains MPU8, eager, hard-FP-compiled but FP-inactive evidence;
+FP-active MPU, other optimization modes, other profiles and boards are separate.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and

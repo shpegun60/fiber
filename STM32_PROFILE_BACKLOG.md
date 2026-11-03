@@ -103,6 +103,14 @@ pass for `e971263` with 63 actual ARM codegen cells, scalar guard projections,
 cohort negatives and byte-coverage/closing controls. They change no runtime and
 are not another default aggregate, CPU execution or pinned-reference parity.
 
+The separate [CM4 MPU basic grid](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-basic-grid)
+passes 49 AN386 observations for `b2a7d17`: one model and 48 Context/Fiber
+production images at O2/Os, ordinary/final LTO and direct/archive. Eight
+link-only reference final ELFs supply 144 hash-bound mechanism checks.
+This extends basic MPU8 eager/FP-inactive execution beyond the seven-image
+pilot; it does not qualify FP-active/lazy MPU, MPU16, other CPU profiles,
+global parity, the default aggregate, CI or hardware.
+
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
 O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region

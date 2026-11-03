@@ -121,6 +121,7 @@ and its selected software gates, not the entire port roadmap. The later
 | Bounded CM4F/CM7 hard-FP seven-mode runtime/parity | Separate opt-in full grids: 504 executions, fourteen link-only reference final ELFs and 112 associations per profile PASS; old 296-image executable subsets unchanged. Not softfp, MPU, global parity or board evidence |
 | Classic MPU CONTROL repair and basic CM4 pilot | Separate seven-image AN386 pilot PASS for Context/Fiber return and two fault cases; not FP-active/lazy, final-LTO, other MPU CPUs or board evidence |
 | Classic MPU CONTROL software regression guards | Standalone clean-commit `e971263` PASS: 63 ARM codegen cells, scalar guards, cohort negatives, byte-coverage and strict closing controls; not new CPU execution or reference equivalence |
+| CM4 MPU bounded basic grid | Separate `b2a7d17` AN386 run: 49 observations across Context/Fiber, O2/Os, ordinary/final LTO and direct/archive; eight link-only reference ELFs and 144 mechanism checks. MPU8 eager/FP-inactive only, not MPU FP-active, global parity or boards |
 | Isolated H7S managed Debug/Release integration | Fresh headless-generated 35-object builds and final-ELF audits PASS for the captured application and pinned production export; not CubeMX regeneration or board execution |
 | Exact-commit release-blocking CI | Not established |
 | C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
