@@ -49,6 +49,8 @@ $inputs = @($PSCommandPath, $ArmGcc, $nm, $objdump, $readelf,
     @(Get-ChildItem (Join-Path $repo 'fiber\port') -File | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem $CmsisCore -Filter '*.h' -File -Recurse | Select-Object -ExpandProperty FullName) +
     @('port.c', 'portasm.c', 'portasm.h', 'portmacro.h' | ForEach-Object {Join-Path $reference $_})
+$inputs += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 function HashInputs {
     @($inputs | Sort-Object -Unique | ForEach-Object {Get-FileHash -LiteralPath $_ -Algorithm SHA256} |
         Select-Object Path, Hash)

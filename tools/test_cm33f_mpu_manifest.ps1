@@ -94,6 +94,8 @@ $sourcePaths += @(Get-ChildItem -LiteralPath (Join-Path $repo 'fiber'),
     (Join-Path $repo 'fiber\port'), $port, $CmsisCore, (Join-Path $FreeRtosRoot 'include') -File -Filter '*.h' |
     Select-Object -ExpandProperty FullName)
 $sourcePaths += @(Get-ChildItem -LiteralPath $fixtures -Recurse -File | Select-Object -ExpandProperty FullName)
+$sourcePaths += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 $sourceHashes = @($sourcePaths | Sort-Object -Unique | ForEach-Object {
     [pscustomobject]@{ Path=$_; Sha256=(Get-FileHash $_ -Algorithm SHA256).Hash }
 })

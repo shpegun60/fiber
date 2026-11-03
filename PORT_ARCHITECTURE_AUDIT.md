@@ -3767,3 +3767,33 @@ and attribute-removal behavior are unchanged. The full maintained gate passes
 rehash without mismatch. Receipt: `C:/mca-48c2a5ba/results.json`, SHA-256
 `0323E907F96D8A3DE611821DB689366B8AA8B41CEF3E860395C42553091DE8AE`.
 These are focused repairs/links, not a combined PASS or CPU execution claim.
+
+### Standalone Canonical Header Inventories
+
+Eight additional maintained PowerShell runners now explicitly enroll top-level
+canonical Context headers in their existing hash inventories. The entire delta
+is sixteen inventory lines; no runtime code, oracle, counterflag, profile or
+admission boundary changes. These gaps did not prevent live compilation, but
+the earlier standalone receipts did not account for every consumed header.
+
+Each full affected gate passes against immutable `3ea0f640` plus the eight
+reviewed overlays:
+
+| Gate | Focused Replay |
+| --- | --- |
+| MPU start policy | 54 configurations, 162 compiles |
+| M55 FP/MPU state | 180,156 source-derived checks, 96 negatives |
+| CM33F MPU manifest | 56 objects, 51 negatives |
+| CM33F MPU constructor | 4,176 ARM calls, 1,216 expected panics, 66 controls |
+| CM33F MPU first-start codegen | 32 ELF checks, 60 negatives |
+| CM33/CM55 Secure-only manifest/reference subsets | 110 / 117 checks |
+| CM33F MPU first-start execution | 25 QEMU runs, 120 first-start and 28 compatibility checks |
+
+All eight live files match qualified copies. Seventy-two canonical-header
+enrollments, 1,654 input records and 4,370 artifacts rehash without drift.
+The handoff, exact overlay identities and replay commands are retained under
+`C:/fctx-hdr-6e974d2a`; `HOLD.json` SHA-256:
+`6F63FBDEAF8563902955CF077065DBF61EC479D5763F251EAD4569CED7042D3B`.
+These separate full-gate receipts do not establish a new combined aggregate,
+complete runtime execution for the primary classic targets, global final-LTO
+equivalence, hardware validation or staged-profile activation.

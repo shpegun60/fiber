@@ -148,6 +148,8 @@ foreach ($directory in @($repo, (Join-Path $repo "fiber"), (Join-Path $repo "fib
 }
 $inputPaths += @(Get-ChildItem -LiteralPath $fixture -File -Recurse |
     Where-Object { $_.FullName -notmatch '[\\/]__pycache__[\\/]' } | Select-Object -ExpandProperty FullName)
+$inputPaths += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 $hashes = @($inputPaths | Sort-Object -Unique | ForEach-Object {
     [pscustomobject]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
 })

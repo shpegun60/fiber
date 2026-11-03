@@ -79,6 +79,8 @@ $inputs = @($PSCommandPath,$ArmGcc,$nm,$objdump,$objcopy,$readelf,$gxx,
     @(Get-ChildItem -LiteralPath $CmsisCore -Recurse -File -Filter '*.h' | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem -LiteralPath (Join-Path $FreeRtosRoot 'include') -File -Filter '*.h' | Select-Object -ExpandProperty FullName) +
     @(Get-ChildItem -LiteralPath $reference -File | Where-Object {$_.Extension -in '.c','.h'} | Select-Object -ExpandProperty FullName)
+$inputs += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 $before = @($inputs | Sort-Object -Unique | ForEach-Object { Get-FileHash -LiteralPath $_ } | Select-Object Path,Hash)
 $before | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'inputs-before.json') -Encoding ASCII
 try {

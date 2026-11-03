@@ -34,6 +34,8 @@ foreach($profile in $profiles) {
 }
 $inputs=@($PSCommandPath,$ArmGcc,(Join-Path $repo 'mcu_core.h'),(Join-Path $repo 'basic_types.h'))+
     @(Get-ChildItem $fixture,(Join-Path $repo 'fiber'),(Join-Path $repo 'fiber\port'),$CmsisCore -File | Where-Object {$_.Extension -in @('.h','.c')} | Select-Object -ExpandProperty FullName)
+$inputs+=@(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 foreach($directory in @($profiles.Directory | Sort-Object -Unique)) {
     foreach($name in @('fiber_portmacro.h','fiber_port_types.h','fiber_port_boot_types.h')) {
         $path=Join-Path $directory $name

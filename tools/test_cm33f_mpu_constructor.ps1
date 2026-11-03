@@ -242,6 +242,8 @@ raise SystemExit('ERROR: optimized compiled entry was accepted')
             $CmsisCore, (Join-Path $FreeRtosRoot "include"), $reference)) {
         $sourcePaths += @(Get-ChildItem -LiteralPath $directory -File -Filter *.h | Select-Object -ExpandProperty FullName)
     }
+    $sourcePaths += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+        Select-Object -ExpandProperty FullName)
     $hashes = @($sourcePaths | Sort-Object -Unique | ForEach-Object {
         [pscustomobject]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
     })

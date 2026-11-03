@@ -46,6 +46,8 @@ foreach ($profile in @('ARM_CM55F_MPU', 'ARM_CM55_MVEF_MPU')) {
     $inputPaths += @(Get-ChildItem -LiteralPath $dir -File -Filter '*.h' |
         Select-Object -ExpandProperty FullName)
 }
+$inputPaths += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter '*.h' |
+    Select-Object -ExpandProperty FullName)
 $inputHashes = @($inputPaths | Sort-Object -Unique | ForEach-Object {
     [pscustomobject]@{ path = $_; sha256 = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash }
 })
