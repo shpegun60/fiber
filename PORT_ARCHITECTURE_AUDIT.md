@@ -4824,6 +4824,111 @@ not new QEMU/ARM execution, pinned-reference parity, the default combined
 matrix, global all-optimization equivalence, hosted CI or hardware validation.
 The separate basic-frame MPU pilot and its exclusions remain unchanged.
 
+## CM4 MPU Lazy-Save Observer
+
+Status: separate read-only O2/native/direct AN386 observations PASS on
+2026-11-03. Four existing positive FP-pilot ELFs are copied byte-for-byte from
+the explicitly supplied qualified pilot receipt. No production provider,
+fixture C/assembly, protected frame, scheduler policy or frozen pilot/grid
+file changes. No compilation, linking or reference firmware execution occurs.
+
+`tools/test_classic_cm4_mpu_lazy_observer.ps1` captures its reader, planner,
+checker, transport and supplied input identities before importing local code.
+It independently admits the pilot's complete artifact inventory with the
+captured maintained pilot checker, then requires the same twelve stable QEMU
+identity files. ASLR-bearing diagnostic `ldd` text is not compared, but resolved
+library hashes are. No tools are installed and no board is accessed.
+
+The planner binds two unconditional decoded PendSV instruction boundaries:
+`TST LR,#16` before the first high-FP VSTM and `TST r3,#1` at the post-copy
+FPCCR guard, before the scheduler callback. It verifies all thirteen maintained
+FP mechanism facts, actual strong vectors, exact private/storage cohorts,
+three privileged workers, disjoint user stacks and the real SVC72 return PC.
+These are bounded existing-code checks, not a new full FreeRTOS parity claim.
+
+The collector uses only private AF_UNIX RSP and hardware-assisted `Z1/z1`
+breakpoints, alternating pre/post stops. No software-breakpoint fallback,
+single stepping, PC adjustment, register/memory writes or monitor commands are
+allowed. Queries and reads are narrowly whitelisted before sending. TX/RX
+framing/checksums are retained; the independent validator binds each event to
+the actual register/memory replies rather than trusting an asserted read-only
+flag. The approach follows QEMU's documented GDB/TCG breakpoint interface,
+not a physical debug-timing guarantee. [QEMU GDB documentation](https://www.qemu.org/docs/master/system/gdb.html)
+
+The successful `C:\cmlz-20261103-e3` run observes:
+
+| Worker state | Pairs | Pre LSPACT | Post LSPACT |
+| --- | ---: | ---: | ---: |
+| FP-active, lazy | 30 | 1 | 0 |
+| FP-active, eager | 30 | 0 | 0 |
+| Basic, either policy | 28 | 0 | 0 |
+
+The four Context/FiberV1 x eager/lazy images each produce 22 paired saves,
+44 snapshots and the unchanged exact three-line terminal with exit 0. Total:
+88 pairs, 176 snapshots and 6,080 framed packet records. Every pair preserves
+current owner, PSP, EXC_RETURN and complete own-stack frame identity. Raw pre
+r3 is the Handler-mode architectural CONTROL capture, value 1; pre r0 is
+PSP+32, not PSP. Post r3 equals a fresh FPCCR read. XML-described PSP is read
+directly; it is never inferred from r0 or silently substituted. Debugger CONTROL
+is recorded separately, not treated as equivalent to the saved MRS value.
+Pending FPCAR identifies PSP+32. The observed transition is bounded to the
+FP-copy interval, not attributed to a particular instruction or exception-entry
+instant. This interpretation follows Arm's lazy-preservation description.
+[Arm AN298](https://documentation-service.arm.com/static/5f0352c0cafe527e86f5bc66?token=)
+
+All four QEMU children exit and are reaped; their private sockets disappear.
+Each trace closes 267 Linux input-role records, including actual Python/QEMU
+executables, mapped libraries, loaded Python source/cache files and QEMU support
+files. The run captures 77 files, closes 1,465 host inputs, 115 artifacts and
+17 commands, with zero input/QEMU identity drift. Four original/captured ELF
+hashes agree with the supplied pilot. Target-state writes and recompilation
+remain zero.
+
+Maintained synthetic controls remain separate from CPU observations: 48 parser
+controls, four producer/validator compatibility controls using the actual
+snapshot producer, 40 fake transport controls, and nine actual-image planner
+controls per image. The original `C:\cmlz-20261103-e1` bootstrap FAIL is retained:
+Store Python reported an activation alias via `sys.executable`. Enrollment now
+uses `GetModuleFileNameW` to identify the actual loaded executable; no native
+inspection or QEMU execution had occurred in the failed bootstrap.
+
+Execution receipt SHA256:
+`CE57E5E81BAEE75D41DA5758C5C70B9A96DC5176E80476DFBF5B103116964BCB`
+
+Artifact manifest SHA256:
+`54C6E1BE65AD47BD0FAF288BB1A0C2D219488FC78E51751D5F1798CEBF6F1162`
+
+Capture manifest SHA256:
+`914217864354ACE85C37DF29D12E234AB3339FE9EECF6DC6CACF4A52DC05D018`
+
+Independent provenance review rehashes all 115 artifacts, all 77 original/copy
+pairs and all 1,465 closing inputs twice. The 1,453 opening identities remain
+unchanged; twelve generated disassembly/attribute/manifest inputs are added
+explicitly after creation. All four ELF pairs and twelve stable QEMU identities
+match, and all seventeen commands are compiler/archive/link-free.
+Review report: `C:\cmlz-review-20261103\review-e3-b138c65a\checkpoint-report.json`, SHA256
+`46F35085DC8640E8B4395CA10C96CBC4D366174495943B39293DF597AFC5B542`.
+
+The earlier e2 observations also pass, but independent review found two future
+admission gaps: RX wire bytes were optional, and a balanced simultaneous pair
+of breakpoints could pass the validator. Neither occurred in the actual e2
+traces. Both are now rejected explicitly; the producer also rejects a second
+active breakpoint before transmitting it. The fresh e3 run captures that
+hardening and the fixture README clarification, with the same immutable ELFs.
+Independent packet review verifies all 6,080 frames, reproduces the 48+40
+maintained controls and rejects 20 actual-trace counterfeits. Each former
+counterfeit is rejected for all four images with its exact diagnostic.
+Packet review: `C:\cmlz-review-20261103\e3-mw1a3blx-1198f87a\review.json`, SHA256
+`585F37E94DEA3B4DA89890A820306C1D3D74D9123279385B20E8AD614651B7D6`.
+These are parser/admission negatives, not newly executed CPU mutants. This
+remains a captured-byte receipt, not an automatic exact-final-commit claim.
+
+This is selected-byte evidence for four frozen pilot images, not all 32 FP-grid
+images, strict low-FP/FPSCR self-selection, reference execution, whole-handler
+equivalence, physical lazy-stacking timing, global all-optimization parity,
+hosted CI, default aggregate update or STM32 hardware validation.
+`CompleteSuite` remains false.
+
 ## CM4 MPU FP Grid
 
 Status: separate bounded O2/Os, ordinary/final-LTO, direct/archive AN386
