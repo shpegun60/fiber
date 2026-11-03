@@ -90,6 +90,113 @@ CM7 = Profile("CM7", "CM7F", "cortex-m7", "fpv5-d16", "tools/fixtures/classic_cm
     "QEMU mps2-an500 Cortex-M7 r1p2 fpv5-d16 hard-float; NVIC8/PendSVFF/BASEPRI80; S0-S31 storage only, not DP arithmetic, STM32, affected-r0p1 erratum, cache/TCM, board, whole-kernel or global parity qualification")
 
 
+DEFAULT_MODES = (("O2", False), ("O2", True), ("Os", False), ("Os", True))
+FULL_MODES = (("O0", False), ("Og", False), ("O2", False), ("Os", False), ("O3", False), ("O2", True), ("Os", True))
+
+
+class GridCounts(NamedTuple):
+    Rows: int
+    Positive: int
+    CompiledControl: int
+    References: int
+    Pairs: int
+    CompleteSuite: bool
+
+
+def grid_counts(full, development):
+    need(type(full) is bool and type(development) is bool, "FP grid options must be booleans")
+    if development:
+        return GridCounts(11, 4, 7, 14, 4, False) if full else GridCounts(9, 2, 7, 8, 2, False)
+    return GridCounts(504, 112, 392, 14, 112, True) if full else GridCounts(288, 64, 224, 8, 64, True)
+
+
+def execution_plan(full, development):
+    grid_counts(full, development)
+    modes = FULL_MODES if full else DEFAULT_MODES
+    plan = []
+    if development:
+        if full:
+            plan.extend((("context", "O0", False, False, False, "primary", None),
+                         ("fiber", "Og", False, True, True, "validation", None),
+                         ("context", "O3", False, True, True, "validation", None),
+                         ("fiber", "O2", True, False, False, "primary", None)))
+        else:
+            plan.extend((("context", "O2", False, False, False, "primary", None),
+                         ("fiber", "O2", True, True, True, "validation", None)))
+        plan.extend(("context", "O0" if full else "O2", False, False, True, "primary", m) for m in MUTANTS)
+    else:
+        for consumer, (opt, lto), archive, lazy in itertools.product(("context", "fiber"), modes, (False, True), (False, True)):
+            plan.extend((consumer, opt, lto, archive, lazy, p, None) for p in ("primary", "validation"))
+            plan.extend((consumer, opt, lto, archive, lazy, "primary", m) for m in MUTANTS)
+    return plan
+
+
+def validate_execution_grid(rows, full, development):
+    counts = grid_counts(full, development)
+    fields = ("Consumer", "Optimization", "LTO", "Archive", "Lazy", "Policy", "Mutant")
+    need(all(type(r[k]) is bool for r in rows for k in ("LTO", "Archive", "Lazy")), "FP grid boolean variant field")
+    actual = [tuple(r[k] for k in fields) for r in rows]
+    need(len(rows) == counts.Rows and len(set(actual)) == len(rows), "FP grid missing/duplicate execution cell")
+    need(set(actual) == set(execution_plan(full, development)), "FP grid exact variant tuples mismatch")
+    need(all(r["Kind"] == ("CompiledControl" if r["Mutant"] else "Positive") for r in rows), "FP grid case kind mismatch")
+    need(dict(Counter(r["Kind"] for r in rows)) == dict(Positive=counts.Positive, CompiledControl=counts.CompiledControl),
+         "FP grid literal positive/causal counts mismatch")
+    return counts
+
+
+def grid_controls():
+    records = []
+    fields = ("Consumer", "Optimization", "LTO", "Archive", "Lazy", "Policy", "Mutant")
+    def record(name, accepted, expected):
+        need(accepted == expected, "FP grid control failed: "+name)
+        records.append(dict(Name=name, Accepted=accepted))
+    for full, development, expected in ((False, False, (288, 64, 224, 8, 64, True)),
+            (True, False, (504, 112, 392, 14, 112, True)), (False, True, (9, 2, 7, 8, 2, False)),
+            (True, True, (11, 4, 7, 14, 4, False))):
+        rows = [dict(zip(fields, spec), Kind="CompiledControl" if spec[-1] else "Positive") for spec in execution_plan(full, development)]
+        record("contract-%s-%s" % (full, development), tuple(validate_execution_grid(rows, full, development)) == expected, True)
+        bad_sets = [("missing", rows[:-1]), ("duplicate", rows[:-1]+[dict(rows[0])]),
+                    ("kind", [dict(r, Kind="Positive") if n == len(rows)-1 else dict(r) for n, r in enumerate(rows)]),
+                    ("boolean", [dict(r, LTO=int(r["LTO"])) if n == 0 else dict(r) for n, r in enumerate(rows)])]
+        for name, bad in bad_sets:
+            try:
+                validate_execution_grid(bad, full, development)
+                accepted = True
+            except RuntimeError as error:
+                need(str(error).startswith("FP grid"), "Incidental grid negative failure")
+                accepted = False
+            record(name+"-%s-%s" % (full, development), accepted, False)
+    for n, (full, development) in enumerate(((1, False), (False, 0), ("true", False), (True, None))):
+        try:
+            grid_counts(full, development)
+            accepted = True
+        except RuntimeError as error:
+            need(str(error) == "FP grid options must be booleans", "Incidental option negative failure")
+            accepted = False
+        record("option-type-%d" % n, accepted, False)
+    class ControlParser(argparse.ArgumentParser):
+        def error(self, message):
+            raise RuntimeError("CLI option rejected: "+message)
+    parser = argument_parser(ControlParser)
+    base = [s for name in ("repo", "gcc", "cmsis", "freertos", "qemu-root", "wsl-distro", "build-root") for s in ("--"+name, "control")]
+    for full, development in itertools.product((False, True), repeat=2):
+        args = parser.parse_args(base+(["--full-optimization-grid-fp"] if full else [])+(["--development-smoke"] if development else []))
+        record("cli-%s-%s" % (full, development), args.full_optimization_grid_fp is full and args.development_smoke is development, True)
+    for n, extra in enumerate((["--full-opt"], ["--full-optimization-grid-fp", "false"],
+                               ["--full-optimization-grid"], ["--full-optimization-grid-fp=0"])):
+        try:
+            parser.parse_args(base+extra)
+            accepted = True
+        except RuntimeError as error:
+            need(str(error).startswith("CLI option rejected:"), "Incidental CLI negative failure")
+            accepted = False
+        record("cli-reject-%d" % n, accepted, False)
+    record("default-mode-order", DEFAULT_MODES == (("O2", False), ("O2", True), ("Os", False), ("Os", True)), True)
+    record("full-seven-modes", FULL_MODES == (("O0", False), ("Og", False), ("O2", False), ("Os", False), ("O3", False), ("O2", True), ("Os", True)), True)
+    need(len(records) == 34, "FP grid literal option/control count")
+    return dict(Controls=records, Scope="Synthetic option/count controls, not additional executions or CPU/model qualification")
+
+
 def expected_terminal(lazy, validation, mutant=None, profile=CM4):
     if mutant:
         return dict(Exit=66, Lines=["REASON:%08X" % MUTANTS[mutant], "FAIL:"+profile.label+"-ORACLE"])
@@ -691,14 +798,268 @@ class Image:
         return reads
 
 
+def cpacr_spill_proof(image, owner):
+    """Exact CPACR admission at every normal exit; no general pointer algebra."""
+    address, mask = 0xE000ED88, 0x00F00000
+    body = image.body(owner)
+    for ins in body:
+        if not image.is_data(ins, owner):
+            op, conditional = operation(ins)
+            need(not (conditional and op in ("bl", "blx")), "CPACR_PROOF_CONDITIONAL_CALL")
+    image.targets(body, owner)  # Keep the established exact-edge and return admission.
+    decoded = {i["Address"]: i for i in body}
+    states, pending, stores, elsewhere, exits = {}, [], {}, {}, {}
+    def merge(a, b):
+        return {k: v for k, v in a.items() if v is not None and b.get(k) == v}
+    def enqueue(pc, regs, slots):
+        need(pc in decoded, "CPACR_PROOF_UNSUPPORTED_FLOW")
+        state = (regs, slots)
+        if pc in states:
+            old = states[pc]
+            state = (merge(old[0], regs), merge(old[1], slots))
+            if state == old:
+                return
+        states[pc] = state
+        pending.append(pc)
+    def plus(value, offset):
+        if isinstance(value, int):
+            return (value+offset) & 0xFFFFFFFF
+        if isinstance(value, tuple) and value[0] == "stack":
+            return ("stack", value[1]+offset)
+        return None
+    def read_value(value):
+        return isinstance(value, tuple) and value[0] == "read"
+    def bit_or(a, b):
+        if isinstance(a, int) and isinstance(b, int):
+            return a | b
+        if isinstance(a, int) and read_value(b):
+            return ("read", b[1], b[2], b[3] | a, b[4])
+        if read_value(a) and isinstance(b, int):
+            return ("read", a[1], a[2], a[3] | b, a[4])
+        if read_value(a) and read_value(b) and a[1:3] == b[1:3]:
+            return ("read", a[1], a[2], a[3] | b[3], a[4] | b[4])
+        return None
+    def bit_and(a, b):
+        if isinstance(a, int) and isinstance(b, int):
+            return a & b
+        if isinstance(a, int) and read_value(b):
+            a, b = b, a
+        if read_value(a) and isinstance(b, int):
+            return ("read", a[1], a[2], a[3] & b, a[4] & b)
+        return None
+    def full_compare(a, b):
+        if isinstance(a, int) and read_value(b):
+            a, b = b, a
+        return read_value(a) and a[1:] == (address, 4, 0, mask) and b == mask
+    def condition_state(regs, condition, taken):
+        result = dict(regs)
+        if result.get("$full_compare") and condition in ("eq", "ne") and taken == (condition == "eq"):
+            result["$admitted"] = True
+        return result
+    enqueue(body[0]["Address"], {"sp": ("stack", 0)}, {})
+    steps = 0
+    while pending:
+        pc = pending.pop()
+        steps += 1
+        need(steps <= 20000, "CPACR_PROOF_CFG_LIMIT")
+        ins = decoded[pc]
+        need(not image.is_data(ins, owner), "CPACR_PROOF_UNSUPPORTED_FLOW")
+        before_regs, before_slots = states[pc]
+        regs, slots = dict(before_regs), dict(before_slots)
+        op, conditional = operation(ins)
+        need(op in DATA_OPS or op in ("b", "bl", "blx", "bx", "cbz", "cbnz", "nop", "dsb", "isb", "dmb") or
+             re.fullmatch(r"it[te]{0,3}", op), "CPACR_PROOF_UNSUPPORTED_OPERATION")
+        operands = ins["Operands"].split("@")[0].strip().lower()
+        form, target = control_form(ins)
+        need(not (form == "call" and conditional), "CPACR_PROOF_CONDITIONAL_CALL")
+        # Only a single predicated store/return is modeled; arbitrary IT dataflow is not.
+        need(not conditional or form in ("conditional", "return") or op.startswith("str"),
+             "CPACR_PROOF_UNSUPPORTED_CONDITION")
+        condition = ins["Mnemonic"].split(".")[0].lower()[len(op):] if conditional else ""
+        if conditional:
+            regs = condition_state(regs, condition, True)
+        skipped_regs = condition_state(before_regs, condition, False)
+        following = pc+len(ins["Bytes"])
+        def value(token):
+            token = token.strip()
+            if token.startswith("#"):
+                return int(token[1:], 0)
+            name = register(token)
+            return ((pc+4) & ~3) if name == "pc" else regs.get(name)
+        def put(name, v):
+            name = register(name)
+            if name == "sp":
+                old = regs.get("sp")
+                if not (isinstance(v, tuple) and v[0] == "stack"):
+                    slots.clear()
+                elif isinstance(old, tuple) and old[0] == "stack" and v[1] > old[1]:
+                    for key in list(slots):
+                        if key < v[1]:
+                            slots.pop(key)
+            if v is None:
+                regs.pop(name, None)
+            else:
+                regs[name] = v
+        def store(location, width, values):
+            need(location is not None, "CPACR_PROOF_UNRESOLVED_STORE")
+            if isinstance(location, tuple):
+                sp = regs.get("sp")
+                need(location[0] == "stack" and isinstance(sp, tuple) and sp[0] == "stack" and
+                     -8192 <= sp[1] <= location[1] and location[1]+width <= 0,
+                     "CPACR_PROOF_UNSUPPORTED_STACK")
+                for key in list(slots):
+                    if key < location[1]+width and location[1] < key+4:
+                        slots.pop(key)
+                if width % 4 == 0:
+                    for n, v in enumerate(values):
+                        if v is not None:
+                            slots[location[1]+n*4] = v
+            elif location < address+4 and address < location+width:
+                need(location == address and width == 4, "CPACR_PROOF_WRONG_WIDTH")
+                v = values[0]
+                need(read_value(v), "CPACR_PROOF_UNRELATED_MASK")
+                need(v[1] == address and v[2] == 4, "CPACR_PROOF_WRONG_ADDRESS")
+                need(v[3] != 0, "CPACR_PROOF_UNRELATED_MASK")
+                need(v[3] == mask and (v[4] | v[3]) == 0xFFFFFFFF, "CPACR_PROOF_WRONG_MASK")
+                regs["$admitted"] = True
+                stores[pc] = dict(Instruction=ins["Text"], Destination=location, Width=width,
+                                  ReadAddress=v[1], ReadWidth=v[2], OrMask=v[3])
+            elif any(read_value(v) and v[3] == mask for v in values):
+                elsewhere[pc] = ins["Text"]
+        push = op == "push" or op == "stmdb" and re.match(r"sp!\s*,", operands)
+        pop = op == "pop" or op in ("ldm", "ldmia") and re.match(r"sp!\s*,", operands)
+        if push:
+            names = register_list(operands)
+            location = plus(regs.get("sp"), -4*len(names))
+            put("sp", location)
+            store(location, 4*len(names), [regs.get(n) for n in names])
+        elif pop:
+            names = register_list(operands)
+            sp = regs.get("sp")
+            need(isinstance(sp, tuple) and sp[0] == "stack", "CPACR_PROOF_UNSUPPORTED_STACK")
+            for n, name in enumerate(names):
+                put(name, slots.get(sp[1]+n*4))
+            put("sp", plus(sp, 4*len(names)))
+        elif op.startswith(("ldr", "str")):
+            widths = {"ldr": 4, "ldrb": 1, "ldrh": 2, "ldrsb": 1, "ldrsh": 2, "ldrd": 8,
+                      "str": 4, "strb": 1, "strh": 2, "strd": 8}
+            need(op in widths, "CPACR_PROOF_UNSUPPORTED_MEMORY")
+            match = re.fullmatch(r"(.+?),\s*\[([^]]+)\]", operands)
+            need(match is not None, "CPACR_PROOF_UNSUPPORTED_MEMORY")
+            names = [register(s) for s in match[1].split(",")]
+            parts = [s.strip() for s in match[2].split(",")]
+            need(len(names) == (2 if widths[op] == 8 else 1) and len(parts) in (1, 2) and
+                 (len(parts) == 1 or re.fullmatch(r"#-?(?:0x[0-9a-f]+|[0-9]+)", parts[1])),
+                 "CPACR_PROOF_UNSUPPORTED_MEMORY")
+            base = register(parts[0])
+            location = plus(value(base), int(parts[1][1:], 0) if len(parts) == 2 else 0)
+            if op.startswith("str"):
+                store(location, widths[op], [regs.get(n) for n in names])
+            else:
+                loaded = None
+                if isinstance(location, tuple) and location[0] == "stack" and widths[op] == 4:
+                    sp = regs.get("sp")
+                    need(isinstance(sp, tuple) and sp[0] == "stack" and
+                         sp[1] <= location[1] and location[1]+4 <= 0, "CPACR_PROOF_UNSUPPORTED_STACK")
+                    loaded = slots.get(location[1])
+                elif isinstance(location, int):
+                    loaded = image.word(location) if base == "pc" and op == "ldr" else ("read", location, widths[op], 0, 0xFFFFFFFF)
+                for name in names:
+                    put(name, loaded if len(names) == 1 else None)
+        elif op.startswith(("st", "ldm")):
+            raise RuntimeError("CPACR_PROOF_UNSUPPORTED_MEMORY")
+        elif op in ("mov", "movs", "movw", "movt", "mvn", "mvns", "add", "adds", "sub", "subs", "orr", "orrs", "and", "ands", "bic", "bics"):
+            parts = [s.strip() for s in operands.split(",")]
+            result = None
+            if op.startswith("mov") and len(parts) == 2:
+                result = value(parts[1])
+                if op == "movt":
+                    old = regs.get(register(parts[0]))
+                    result = ((old & 0xFFFF) | result << 16) if isinstance(old, int) and isinstance(result, int) else None
+            elif op.startswith("mvn") and len(parts) == 2 and isinstance(value(parts[1]), int):
+                result = value(parts[1]) ^ 0xFFFFFFFF
+            elif len(parts) in (2, 3):
+                a, b = (value(parts[0]), value(parts[1])) if len(parts) == 2 else (value(parts[1]), value(parts[2]))
+                if op.startswith("orr"):
+                    result = bit_or(a, b)
+                elif op.startswith(("and", "bic")):
+                    if op.startswith("bic"):
+                        need(isinstance(b, int), "CPACR_PROOF_NONCONSTANT_BIC")
+                        b ^= 0xFFFFFFFF
+                    result = bit_and(a, b)
+                elif isinstance(b, int):
+                    result = plus(a, -b if op.startswith("sub") else b)
+            put(parts[0], result)
+        elif op == "cmp":
+            parts = [s.strip() for s in operands.split(",")]
+            if len(parts) == 2 and full_compare(value(parts[0]), value(parts[1])):
+                regs["$full_compare"] = True
+            else:
+                regs.pop("$full_compare", None)
+        elif op not in ("b", "bl", "blx", "bx", "cbz", "cbnz", "cmp", "cmn", "tst", "teq", "nop", "dsb", "isb", "dmb", "msr") and not op.startswith("it"):
+            name = register(operands.split(",")[0])
+            if re.fullmatch(r"r\d+|lr|sp", name):
+                put(name, None)
+        if op in ("movs", "mvns", "adds", "subs", "orrs", "ands", "bics", "eors", "lsls", "lsrs", "asrs", "muls", "cmn", "tst", "teq") or op == "msr" and operands.startswith("apsr"):
+            regs.pop("$full_compare", None)
+        if form == "return":
+            exits[pc] = bool(regs.get("$admitted"))
+            if conditional:
+                enqueue(following, skipped_regs, before_slots)
+            continue
+        if form in ("branch", "conditional"):
+            if target in decoded:
+                enqueue(target, regs, slots)
+            elif image.resolve(target) not in NORETURN:
+                exits[pc] = bool(regs.get("$admitted"))
+            if form == "conditional":
+                enqueue(following, skipped_regs, slots)
+            continue
+        if form == "call":
+            if image.resolve(target) in NORETURN:
+                continue
+            slots.clear()
+            regs = {k: v for k, v in regs.items() if not read_value(v) and k != "$full_compare"}
+            for n in ("r0", "r1", "r2", "r3", "r12", "lr"):
+                regs.pop(n, None)
+        if conditional:
+            regs, slots = merge(regs, skipped_regs), merge(slots, before_slots)
+        enqueue(following, regs, slots)
+    need(stores, "CPACR_PROOF_WRONG_ADDRESS" if elsewhere else "CPACR_PROOF_MISSING_STORE")
+    need(exits, "CPACR_PROOF_NO_NORMAL_EXIT")
+    need(all(exits.values()), "CPACR_PROOF_MISSING_ON_EXIT")
+    return dict(Mode="bounded-constant-stack-spill", Owner=owner, Stores=list(stores.values()), States=len(states), Steps=steps,
+                NormalExits=[dict(Address=pc, Admitted=ok) for pc, ok in sorted(exits.items())],
+                Scope="Every decoded normal exit follows an exact CPACR word-read/OR/word-store or full-mask read guard; freed/call-crossing spills are unknown; no general pointer or whole-provider proof")
+
+
+def legacy_cpacr_check(text, reference):
+    need(re.search(r"\borr[^\n]*#(?:15728640|0xf00000)\b", text, re.I) and
+         re.search(r"\bstr", text), "CP10/CP11 enable/store mechanism missing")
+    need(("0xe000ed88" in text.lower()) if reference else
+         ("0xe000ed88" in text.lower() or "0xe000e000" in text.lower() and
+          re.search(r"\bstr[^\n]*#(?:3464|0xd88)\b", text, re.I)), "CPACR address/store evidence missing")
+    return dict(Mode="legacy-immediate-pattern", Scope="Existing bounded mask/address/store pattern; not whole-provider dataflow")
+
+
+def cpacr_mechanism_proof(image, owner, reference, full_grid, optimization):
+    if full_grid and optimization == "O0" and not reference:
+        return cpacr_spill_proof(image, owner)
+    return legacy_cpacr_check("\n".join(i["Text"] for i in image.body(owner)), reference)
+
+
 class Suite(common.Suite):
     def __init__(self, args, profile=CM4):
         need(profile in (CM4, CM7), "Only the two immutable classic FP profiles are admitted")
         self.profile = profile
+        self.grid = grid_counts(args.full_optimization_grid_fp, args.development_smoke)
+        self.modes = FULL_MODES if args.full_optimization_grid_fp else DEFAULT_MODES
         super().__init__(args)
         self.fixture = self.repo/profile.fixture_relative
         self.pairs = []
         self.report.update(Scope=profile.scope, Profile=profile._asdict(),
+                           FullOptimizationGridFP=args.full_optimization_grid_fp, DevelopmentSmoke=args.development_smoke,
+                           OptimizationModes=[dict(Optimization=opt, LTO=lto) for opt, lto in self.modes], GridContract=self.grid._asdict(),
                            ReferencePairs=self.pairs, ReferenceExecuted=False,
                            ReferencePolicy="Pinned upstream always lazy; Fiber eager is an intentional divergence")
 
@@ -749,13 +1110,121 @@ class Suite(common.Suite):
         self.enroll(self.tools["nm"], "SlimLtoNm")
         self.report["TerminalControls"] = terminal_controls(self.profile)
         self.report["ProfileControls"] = profile_controls()
+        self.report["GridOptionControls"] = grid_controls()
         self.report["DecoderControls"] = decoder_controls()
         self.report["ObserverParserControls"] = self.observer_parser_controls()
         self.report["ObserverCompiledControls"] = self.observer_compiled_controls()
+        if self.a.full_optimization_grid_fp:
+            self.report["CpacrSpillControls"] = self.cpacr_spill_controls()
         self.report["InheritedEvidenceHelper"] = dict(Path=str(COMMON_PATH), Sha256=digest(COMMON_PATH),
             Roles=["input/tool/reference identity", "dependency closure", "prelink private owner", "artifact verification"])
         self.report["PreflightComplete"] = True
         save(self.build/"inputs.before.json", list(self.inputs.values()))
+
+    def cpacr_spill_controls(self):
+        header = self.repo/self.profile.port_relative/"fiber_portmacro.h"
+        need(str(header.resolve()) in self.inputs, "CPACR control source must already be enrolled")
+        text = header.read_text()
+        begin = "\tconst uint32_t cpacr_cp10_cp11_full = (0xFu << 20);"
+        end = "\tFIBER_REQUIRE((*cpacr_reg"
+        need(text.count(begin) == text.count(end) == 1, "Exact production CPACR block anchors")
+        fragment = text[text.index(begin):text.index(end, text.index(begin))]
+        assignment = "value = (value & ~cpacr_cp10_cp11_full) | cpacr_cp10_cp11_full;"
+        variants = [("positive", None, None, None),
+                    ("wrong_mask", "(0xFu << 20)", "(0x7u << 20)", "CPACR_PROOF_WRONG_MASK"),
+                    ("wrong_address", "0xE000ED88u", "0xE000ED8Cu", "CPACR_PROOF_WRONG_ADDRESS"),
+                    ("missing_store", "*cpacr_reg = value;", "(void)value;", "CPACR_PROOF_MISSING_STORE"),
+                    ("unrelated_mask", assignment, "cpacr_control_witness |= cpacr_cp10_cp11_full;", "CPACR_PROOF_UNRELATED_MASK"),
+                    ("unknown_address", "(uint32_t *)0xE000ED88u", "destination", "CPACR_PROOF_UNRESOLVED_STORE"),
+                    ("wrong_width", "*cpacr_reg = value;", "*(volatile unsigned char *)cpacr_reg = (unsigned char)value;", "CPACR_PROOF_WRONG_WIDTH"),
+                    ("branch_skip", "*cpacr_reg = value;", "if (cpacr_control_witness) { *cpacr_reg = value; }", "CPACR_PROOF_MISSING_ON_EXIT")]
+        chunks = ["typedef unsigned int uint32_t;", "_Static_assert(sizeof(uint32_t) == 4, \"control word\");",
+                  "volatile uint32_t cpacr_control_witness;",
+                  "#define fiber_portDATA_SYNC_BARRIER() __asm volatile(\"dsb\" ::: \"memory\")",
+                  "#define fiber_portINST_SYNC_BARRIER() __asm volatile(\"isb\" ::: \"memory\")",
+                  "#define CONTROL __attribute__((used,noipa,target(\"general-regs-only\")))"]
+        for name, old, new, _ in variants:
+            body = fragment
+            if old is not None:
+                need(body.count(old) == 1, "Unique source-derived CPACR mutation: "+name)
+                body = body.replace(old, new)
+            args = "uint32_t *destination" if name == "unknown_address" else "void"
+            chunks.append("CONTROL void cpacr_control_"+name+"("+args+") {\n"+body+"}\n")
+        directory = self.build/"cpacr-spill-controls"
+        directory.mkdir()
+        source = directory/"controls.c"
+        source.write_text("\n".join(chunks)+"\n", encoding="ascii", newline="\n")
+        self.generated[str(source.resolve())] = dict(Path=str(source.resolve()), Sha256=digest(source), Role="SourceDerivedCpacrControls")
+        cpacr = "movw r3,#0xed88\nmovt r3,#0xe000\nldr r1,[r3]\n"
+        update = "orr.w r1,r1,#0x00f00000\nstr r1,[r3]\n"
+        asm_variants = [
+            ("it_skip", cpacr+"orr.w r1,r1,#0x00f00000\ncmp r0,#0\nit ne\nstrne r1,[r3]\nbx lr\n",
+             "CPACR_PROOF_MISSING_ON_EXIT"),
+            ("guard_spill", "push {r4,lr}\nsub sp,#8\nmov.w r2,#0x00f00000\nstr r2,[sp,#4]\n"+cpacr+
+             "ldr r2,[sp,#4]\nand.w r0,r1,r2\ncmp r0,r2\nbeq 1f\norrs r1,r2\nstr r1,[r3]\n1: add sp,#8\npop {r4,pc}\n", None),
+            ("it_guard", cpacr+"orr.w r2,r1,#0x00f00000\nand.w r1,r1,#0x00f00000\ncmp.w r1,#0x00f00000\nit ne\nstrne r2,[r3]\nbx lr\n", None),
+            ("constant_bic", cpacr+"bic.w r1,r1,#0x00f00000\n"+update+"bx lr\n", None),
+            ("read_rhs_bic", cpacr+"mov.w r2,#0x00f00000\nbic.w r0,r2,r1\ncmp r0,r2\nbeq 1f\norr.w r1,r1,r2\nstr r1,[r3]\n1: bx lr\n", "CPACR_PROOF_NONCONSTANT_BIC"),
+            ("reclaimed_spill", "push {r4,lr}\nsub sp,#8\nmov.w r2,#0x00f00000\nstr r2,[sp,#4]\nadd sp,#8\nsub sp,#8\nldr r2,[sp,#4]\n"+
+             cpacr+"orrs r1,r2\nstr r1,[r3]\nadd sp,#8\npop {r4,pc}\n", "CPACR_PROOF_UNRELATED_MASK"),
+            ("call_spill", "push {r4,lr}\nsub sp,#8\nmov.w r2,#0x00f00000\nstr r2,[sp,#4]\nadd sp,#8\nbl cpacr_clobber_below_sp\nsub sp,#8\nldr r2,[sp,#4]\n"+
+             cpacr+"orrs r1,r2\nstr r1,[r3]\nadd sp,#8\npop {r4,pc}\n", "CPACR_PROOF_UNRELATED_MASK"),
+            ("indirect_call_spill", "push {r4,lr}\nsub sp,#8\nmov.w r2,#0x00f00000\nstr r2,[sp,#4]\nmovw r0,#:lower16:cpacr_control_spill_pointer\nmovt r0,#:upper16:cpacr_control_spill_pointer\nstr sp,[r0]\nbl cpacr_clobber_indirect\nldr r2,[sp,#4]\n"+
+             cpacr+"orrs r1,r2\nstr r1,[r3]\nadd sp,#8\npop {r4,pc}\n", "CPACR_PROOF_UNRELATED_MASK"),
+            ("conditional_noreturn", "push {r4,lr}\n"+cpacr+update+
+             "cmp r0,#0\nit eq\nbleq fixture_check_fail\npop {r4,pc}\n", "CPACR_PROOF_CONDITIONAL_CALL"),
+            ("no_normal_exit", cpacr+update+"1: b 1b\n", "CPACR_PROOF_NO_NORMAL_EXIT")]
+        assembly = directory/"controls.S"
+        asm_chunks = [".syntax unified\n.thumb\n.text\n"]
+        for name, body, _ in asm_variants:
+            symbol = "cpacr_control_"+name
+            asm_chunks.append(".global "+symbol+"\n.type "+symbol+",%function\n.thumb_func\n"+symbol+":\n"+body+".size "+symbol+",.-"+symbol+"\n")
+        asm_chunks.append(".global cpacr_clobber_below_sp\n.type cpacr_clobber_below_sp,%function\n.thumb_func\ncpacr_clobber_below_sp:\nsub sp,#8\nmovs r1,#0\nstr r1,[sp,#4]\nadd sp,#8\nbx lr\n.size cpacr_clobber_below_sp,.-cpacr_clobber_below_sp\n")
+        asm_chunks.append(".global cpacr_clobber_indirect\n.type cpacr_clobber_indirect,%function\n.thumb_func\ncpacr_clobber_indirect:\nldr r0,[r0]\nmovs r1,#0\nstr r1,[r0,#4]\nbx lr\n.size cpacr_clobber_indirect,.-cpacr_clobber_indirect\n.bss\n.balign 4\n.global cpacr_control_spill_pointer\n.type cpacr_control_spill_pointer,%object\ncpacr_control_spill_pointer: .space 4\n.size cpacr_control_spill_pointer,4\n.text\n")
+        asm_chunks.append(".global fixture_check_fail\n.type fixture_check_fail,%function\n.thumb_func\nfixture_check_fail:\nb fixture_check_fail\n.size fixture_check_fail,.-fixture_check_fail\n.section .note.GNU-stack,\"\",%progbits\n")
+        assembly.write_text("\n".join(asm_chunks), encoding="ascii", newline="\n")
+        self.generated[str(assembly.resolve())] = dict(Path=str(assembly.resolve()), Sha256=digest(assembly), Role="CpacrCompiledCfgAndSpillControls")
+        cases = []
+        for opt in ("O0", "O2"):
+            obj, elf = directory/(opt+".o"), directory/(opt+".elf")
+            asm_obj = directory/(opt+"-asm.o")
+            compile_record = self.command([self.tools["gcc"], *self.profile.cpu_flags, *COMPILE, "-"+opt,
+                                          "-c", source, "-o", obj], "compile source-derived CPACR controls "+opt)
+            need(not compile_record["Stderr"], "CPACR control compilation warning")
+            asm_record = self.command([self.tools["gcc"], *self.profile.cpu_flags, "-"+opt,
+                                       "-c", assembly, "-o", asm_obj], "assemble CPACR CFG/spill controls "+opt)
+            need(not asm_record["Stderr"], "CPACR assembly control warning")
+            link_record = self.command([self.tools["gcc"], *self.profile.cpu_flags, "-"+opt, "-nostdlib",
+                "-Wl,--no-undefined,--fatal-warnings,-z,noexecstack,-Ttext=0x1000,-Tbss=0x20000000,-e,cpacr_control_positive",
+                obj, asm_obj, "-o", elf], "link source-derived CPACR controls "+opt)
+            dis = self.command([self.tools["objdump"], "-drwC", "-Mreg-names-std", elf], "disassemble CPACR controls "+opt)
+            elf.with_suffix(".dis").write_text(dis["Stdout"], encoding="ascii")
+            image = Image(elf, self.ELFFile)
+            for name, reason in ([(n, r) for n, _, _, r in variants]+[(n, r) for n, _, r in asm_variants]):
+                symbol = "cpacr_control_"+name
+                record = dict(Name=name, Optimization=opt, Symbol=symbol, ExpectedReason=reason,
+                    Elf=str(elf), ElfSha256=digest(elf), Object=str(obj), ObjectSha256=digest(obj),
+                    ExecutableBytes=image.bytes(image.symbol(symbol, "STT_FUNC")).hex(),
+                    AssemblyObject=str(asm_obj), AssemblyObjectSha256=digest(asm_obj),
+                    Compile=compile_record["Record"], Assemble=asm_record["Record"], Link=link_record["Record"], Disassembly=dis["Record"])
+                try:
+                    proof = (cpacr_mechanism_proof(image, symbol, False, True, opt) if opt == "O0" else
+                             cpacr_spill_proof(image, symbol))
+                except RuntimeError as error:
+                    need(reason is not None and str(error) == reason, "Wrong CPACR causal rejection: "+name+" "+opt+": "+str(error))
+                    record.update(Accepted=False, Reason=str(error))
+                else:
+                    need(reason is None, "CPACR causal false acceptance: "+name+" "+opt)
+                    record.update(Accepted=True, Proof=proof)
+                cases.append(record)
+        need(len(cases) == 36 and sum(c["Accepted"] for c in cases) == 8, "Literal CPACR compiled control coverage")
+        report = dict(ProductionHeader=str(header), ProductionHeaderSha256=digest(header),
+            ExtractedBlockSha256=hashlib.sha256(fragment.encode("ascii")).hexdigest().upper(),
+            Source=str(source), SourceSha256=digest(source), AssemblySource=str(assembly), AssemblySourceSha256=digest(assembly),
+            OriginalSourceDerivedControls=14, AddedSourceDerivedControls=2, AddedAssemblyControls=20, Controls=cases,
+            Scope="Original fourteen actual-header C controls retained, plus compiled branch/IT admission, constant/nonconstant BIC, active/freed/call-crossing spills, conditional no-return and no-normal-exit controls; static checks only, no CPU execution or runtime grid rows")
+        save(directory/"results.json", report)
+        return report
 
     def observer_parser_controls(self):
         # These are the review counterexamples, not disassembly generated from a passing subject.
@@ -889,22 +1358,11 @@ class Suite(common.Suite):
             self.rows.append(dict(Name=name, Consumer=consumer, Optimization=opt, LTO=lto, Archive=archive,
                 Lazy=lazy, Policy=policy, Mutant=mutant, Kind="CompiledControl" if mutant else "Positive",
                 Expected=expected_terminal(lazy, policy == "validation", mutant, profile=self.profile), Status="STAGED"))
-        if self.a.development_smoke:
-            add("context", "O2", False, False, False, "primary")
-            add("fiber", "O2", True, True, True, "validation")
-            for mutant in MUTANTS:
-                add("context", "O2", False, False, True, "primary", mutant)
-        else:
-            for consumer, opt, lto, archive, lazy in itertools.product(("context", "fiber"), ("O2", "Os"), (False, True), (False, True), (False, True)):
-                for policy in ("primary", "validation"):
-                    add(consumer, opt, lto, archive, lazy, policy)
-                for mutant in MUTANTS:
-                    add(consumer, opt, lto, archive, lazy, "primary", mutant)
+        for spec in execution_plan(self.a.full_optimization_grid_fp, self.a.development_smoke):
+            add(*spec)
         counts = dict(Counter(row["Kind"] for row in self.rows))
         need(len({r["Name"] for r in self.rows}) == len(self.rows), "Duplicate FP execution cell")
-        need(counts == (dict(Positive=2, CompiledControl=7) if self.a.development_smoke else
-                        dict(Positive=64, CompiledControl=224)), "Literal FP execution grid mismatch")
-        need(len(self.rows) == (9 if self.a.development_smoke else 288), "Literal FP execution count mismatch")
+        validate_execution_grid(self.rows, self.a.full_optimization_grid_fp, self.a.development_smoke)
         self.report["ExpectedGrid"] = counts
         self.report["FixtureFacts"] = facts
         self.report["MutantReasons"] = MUTANTS
@@ -1184,7 +1642,7 @@ class Suite(common.Suite):
         return found
 
     def reference_parity(self):
-        for opt, lto, archive in itertools.product(("O2", "Os"), (False, True), (False, True)):
+        for (opt, lto), archive in itertools.product(self.modes, (False, True)):
             name = "-".join((opt, "lto" if lto else "normal", "archive" if archive else "direct"))
             directory = self.build/"reference"/name
             directory.mkdir(parents=True)
@@ -1220,7 +1678,7 @@ class Suite(common.Suite):
             stop = image.body("reference_fail_stop")
             need(any(i["Mnemonic"].startswith("udf") and re.search(r"#(?:90|0x5a)\b", i["Operands"]) for i in stop), "Reference fail-stop UDF #90 missing")
             need(not any(n.startswith(("fiber_", "ctxrt_")) for n in image.symbols), "Reference acquired Fiber/Context code")
-            mechanisms = self.mechanisms(image, reference=True)
+            mechanisms = self.mechanisms(image, reference=True, optimization=opt)
             audit = dict(Status="PASS", Executed=False, Scope="Actual pinned final ELF; retained bounded mechanisms, not whole-port/kernel equivalence",
                 UpstreamOwners=owners, CodeRoots=roots, RootBindings={n: image.symbol(n, "STT_FUNC", local=lto)["Binding"] for n in REF_ROOTS},
                 StrongHandlers=list(REF_HANDLERS), Mechanisms=mechanisms, Policy="Upstream always ASPEN+LSPEN; never executed")
@@ -1228,22 +1686,25 @@ class Suite(common.Suite):
             row.update(Status="PASS", Elf=str(elf), ElfSha256=digest(elf), ElfAudit=str(directory/"elf-audit.json"),
                        SourceObjectMap=str(directory/"source-object-map.json"), Mechanisms=mechanisms)
             print("PASS link-only reference "+name, flush=True)
-        need(len(self.parity) == 8, "Literal eight reference ELF grid")
+        need(len(self.parity) == self.grid.References and
+             {(r["Optimization"], r["LTO"], r["Archive"]) for r in self.parity} ==
+             {(opt, lto, archive) for (opt, lto), archive in itertools.product(self.modes, (False, True))},
+             "Literal exact reference ELF grid")
         for row in self.rows:
             if row["Kind"] != "Positive":
                 continue
             matches = [r for r in self.parity if all(r[k] == row[k] for k in ("Optimization", "LTO", "Archive"))]
             need(len(matches) == 1, "Positive/reference tuple does not pair uniquely")
             image = Image(row["Elf"], self.ELFFile)
-            mechanisms = self.mechanisms(image, reference=False)
+            mechanisms = self.mechanisms(image, reference=False, optimization=row["Optimization"])
             pair = dict(Execution=row["Name"], ExecutionElfSha256=row["ElfSha256"], Reference=matches[0]["Name"],
                         ReferenceElfSha256=matches[0]["ElfSha256"], Mechanisms=mechanisms,
                         PolicyDifference="Fiber eager vs upstream always lazy" if not row["Lazy"] else "Both initialize lazy preservation",
                         ReferenceExecuted=False, Scope="Ordered common CPU mechanisms; not byte equality or whole-kernel equivalence")
             self.pairs.append(pair)
-        need(len(self.pairs) == (2 if self.a.development_smoke else 64), "Literal positive/reference association count")
+        need(len(self.pairs) == self.grid.Pairs, "Literal positive/reference association count")
 
-    def mechanisms(self, image, reference):
+    def mechanisms(self, image, reference, optimization=None):
         handler = "xPortPendSVHandler" if reference else "PendSV_Handler"
         body = image.body(handler)
         text = "\n".join(i["Text"] for i in body)
@@ -1290,14 +1751,9 @@ class Suite(common.Suite):
         cpacr_name = "vPortEnableVFP" if reference else "fiber_port_runtime_prepare"
         cpacr_names = [n for n in image.symbols if n == cpacr_name or n.startswith(cpacr_name+".")]
         need(len(cpacr_names) == 1, "CPACR helper identity")
-        cpacr = "\n".join(i["Text"] for i in image.body(cpacr_names[0]))
-        need(re.search(r"\borr[^\n]*#(?:15728640|0xf00000)\b", cpacr, re.I) and
-             re.search(r"\bstr", cpacr), "CP10/CP11 enable/store mechanism missing")
-        need(("0xe000ed88" in cpacr.lower()) if reference else
-             ("0xe000ed88" in cpacr.lower() or "0xe000e000" in cpacr.lower() and
-              re.search(r"\bstr[^\n]*#(?:3464|0xd88)\b", cpacr, re.I)), "CPACR address/store evidence missing")
+        cpacr_proof = cpacr_mechanism_proof(image, cpacr_names[0], reference, self.a.full_optimization_grid_fp, optimization)
         return dict(PendSvOrderedPatterns=patterns, ConditionalFpTransfers=conditional,
-                    BasepriEnvelopePatterns=envelope, CpacrHelper=cpacr_names[0],
+                    BasepriEnvelopePatterns=envelope, CpacrHelper=cpacr_names[0], CpacrProof=cpacr_proof,
                     FirstRestore=svc, FirstStart=names[0], Reference=reference,
                     Scope="Bounded ordered/predicate/mask/CPACR patterns plus execution; not whole-provider or byte equivalence",
                     Differences=["SVC number and provenance/seals", "common vs TCB publication", "r9 initialization policy", "eager initialization when selected"]+
@@ -1311,9 +1767,13 @@ class Suite(common.Suite):
             need(not self.report["QemuDrift"], "QEMU/tool/library drift")
             self.reference_identity()
             self.check_repository_inventory()
-            need(all(r["Status"] == "PASS" for r in self.rows) and len(self.parity) == 8 and
+            validate_execution_grid(self.rows, self.a.full_optimization_grid_fp, self.a.development_smoke)
+            need(self.report["CompleteSuite"] is self.grid.CompleteSuite, "Completion verdict does not match requested grid")
+            need(all(r["Status"] == "PASS" for r in self.rows) and len(self.parity) == self.grid.References and
                  all(r["Status"] == "PASS" and r["Executed"] is False for r in self.parity), "Execution/reference coverage mismatch")
-            need(len(self.pairs) == (2 if self.a.development_smoke else 64), "Reference association coverage mismatch")
+            need(len(self.pairs) == self.grid.Pairs and
+                 {p["Execution"] for p in self.pairs} == {r["Name"] for r in self.rows if r["Kind"] == "Positive"},
+                 "Reference association coverage mismatch")
         drift = self.input_drift()
         self.report["InputDrift"] = drift
         if not (self.build/"inputs.before.json").is_file():
@@ -1331,12 +1791,17 @@ class Suite(common.Suite):
             self.artifact_manifest(verify=True)
 
 
-def main(profile=CM4):
-    parser = argparse.ArgumentParser(description=__doc__)
+def argument_parser(parser_type=argparse.ArgumentParser):
+    parser = parser_type(description=__doc__, allow_abbrev=False)
     for name in ("repo", "gcc", "cmsis", "freertos", "qemu-root", "wsl-distro", "build-root"):
         parser.add_argument("--"+name, required=True)
     parser.add_argument("--development-smoke", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--full-optimization-grid-fp", action="store_true")
+    return parser
+
+
+def main(profile=CM4):
+    args = argument_parser().parse_args()
     suite = Suite(args, profile=profile)
     print("Classic FP Context runtime evidence: "+str(suite.build), flush=True)
     error = None

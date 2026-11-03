@@ -7,7 +7,8 @@ param(
     [string]$BuildRoot,
     [string]$Python = 'python',
     [string]$PythonModules = $env:FIBER_CLASSIC_AUDIT_PYTHONPATH,
-    [switch]$DevelopmentSmoke
+    [switch]$DevelopmentSmoke,
+    [switch]$FullOptimizationGridFP
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +49,7 @@ $arguments = @(
     '--build-root', $BuildRoot
 )
 if ($DevelopmentSmoke) { $arguments += '--development-smoke' }
+if ($FullOptimizationGridFP) { $arguments += '--full-optimization-grid-fp' }
 $oldPythonPath = $env:PYTHONPATH
 try {
     if ([string]::IsNullOrWhiteSpace($PythonModules)) {
@@ -60,11 +62,29 @@ try {
     & $Python @arguments
     if ($LASTEXITCODE -ne 0) { throw "Classic FP Context runtime failed; preserve $BuildRoot" }
     $receipt = Get-Content -LiteralPath (Join-Path $BuildRoot 'results.json') -Raw | ConvertFrom-Json
-    if ($receipt.Verdict -cne 'PASS') { throw 'Missing classic FP runtime PASS receipt' }
-    if ($DevelopmentSmoke) {
-        if ($receipt.CompleteSuite) { throw 'Development mode must not claim full qualification' }
-    } elseif (-not $receipt.CompleteSuite -or $receipt.Rows.Count -ne 288) {
-        throw 'Incomplete standard classic FP runtime suite'
+    if (-not ($receipt.Verdict -is [string]) -or $receipt.Verdict -cne 'PASS') {
+        throw 'Missing classic FP runtime PASS receipt'
+    }
+    if ($receipt.Profile.name -cne 'CM4' -or -not ($receipt.CompleteSuite -is [bool]) -or
+            -not ($receipt.FullOptimizationGridFP -is [bool]) -or -not ($receipt.DevelopmentSmoke -is [bool]) -or
+            $receipt.FullOptimizationGridFP -ne $FullOptimizationGridFP.IsPresent -or
+            $receipt.DevelopmentSmoke -ne $DevelopmentSmoke.IsPresent -or
+            $receipt.CompleteSuite -ne (-not $DevelopmentSmoke.IsPresent)) {
+        throw 'Wrong profile, requested options or completion verdict'
+    }
+    $expectedRows = if ($DevelopmentSmoke) { if ($FullOptimizationGridFP) { 11 } else { 9 } } else { if ($FullOptimizationGridFP) { 504 } else { 288 } }
+    $expectedPositive = if ($DevelopmentSmoke) { if ($FullOptimizationGridFP) { 4 } else { 2 } } else { if ($FullOptimizationGridFP) { 112 } else { 64 } }
+    $expectedCausal = if ($DevelopmentSmoke) { 7 } elseif ($FullOptimizationGridFP) { 392 } else { 224 }
+    $expectedReferences = if ($FullOptimizationGridFP) { 14 } else { 8 }
+    if (-not ($receipt.Rows -is [array]) -or -not ($receipt.ReferenceParity -is [array]) -or
+            -not ($receipt.ReferencePairs -is [array]) -or $receipt.Rows.Count -ne $expectedRows -or
+            @($receipt.Rows | Where-Object { $_.Kind -ceq 'Positive' }).Count -ne $expectedPositive -or
+            @($receipt.Rows | Where-Object { $_.Kind -ceq 'CompiledControl' }).Count -ne $expectedCausal -or
+            @($receipt.Rows | Where-Object { $_.Status -cne 'PASS' }).Count -ne 0 -or
+            @($receipt.Rows | ForEach-Object { $_.Name } | Sort-Object -CaseSensitive -Unique).Count -ne $expectedRows -or
+            $receipt.ReferenceParity.Count -ne $expectedReferences -or $receipt.ReferencePairs.Count -ne $expectedPositive -or
+            $receipt.ObserverCompiledControls.Controls.Count -ne 32) {
+        throw 'Incomplete exact classic FP execution/reference grid'
     }
 } finally {
     $env:PYTHONPATH = $oldPythonPath

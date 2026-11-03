@@ -624,6 +624,18 @@ CPU execution or global parity. Ordinary driver defaults remain O2/Os;
 O0/Og/O3 require the explicit `-Cm0NonMpuOnly` selector. Existing `-Cm0Only`
 keeps its original three-profile inventory, including MPU.
 
+The separate classic CM4F and CM7 runtime runners also accept the explicit
+`-FullOptimizationGridFP` option. Per profile this selects five ordinary modes
+and two native final-LTO modes, both consumers, direct/archive, eager/lazy and
+primary/validation policies: 112 positives and 392 compiled causal executions.
+Fourteen actual pinned reference final ELFs provide 112 bounded mechanism
+associations; they are not executed FreeRTOS kernels or closed-body equivalence.
+The exact evidence boundary is recorded in
+`PORT_ARCHITECTURE_AUDIT.md#classic-fp-opt-in-seven-mode-grid`.
+Default runners and conditional matrix dispatch retain the original O2/Os
+288-execution grid. This opt-in does not establish softfp, MPU, other profiles,
+all policy combinations or the global optimization gate above.
+
 `CI_VALIDATION_PLAN.md` defines how the current per-port gate and this final
 cohort become reproducible pull-request and release-blocking CI jobs, including
 pinned inputs and retained proof artifacts.

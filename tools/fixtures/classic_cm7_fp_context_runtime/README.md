@@ -58,14 +58,28 @@ add 224 exact causal failures, for 288 total. Wrong panic, incidental fault,
 timeout or compile failure is not an oracle success. Development smoke retains
 `CompleteSuite=false` and cannot satisfy this full grid.
 
+An explicit `-FullOptimizationGridFP` selects the separate seven-mode grid:
+ordinary O0/Og/O2/Os/O3 plus O2/Os native final LTO. It has 112 positive and
+392 compiled-causal target executions (504 total), fourteen link-only upstream
+ELFs and 112 associations. Combining it with `-DevelopmentSmoke` instead runs
+eleven executions/four associations with fourteen references and explicitly
+`CompleteSuite=false`. The default 288/8/64 inventory and ordering are unchanged.
+See the shared fixture's
+[CPACR and option-oracle boundary](../classic_fp_context_runtime/README.md#opt-in-seven-mode-grid)
+for the unchanged `Image`/observer checks and the separate 36 compiled controls.
+Only actual-port full-grid O0 uses the new bounded spill/guard CPACR proof;
+upstream and the other modes retain their existing bounded patterns. This is
+not a global profile/ABI or whole-provider equivalence claim.
+
 ## Actual Upstream Comparison
 
 The separate `reference/` fixture links the unmodified pinned
 `portable/GCC/ARM_CM7/r0p1/port.c` and real upstream headers at
 `a50edad08b29052631aa469d4df6e6ec7ff68878`. It supplies fail-stop unavailable-
-kernel boundaries, not a working TCB or scheduler. Eight upstream final ELFs
-cover O2/Os x ordinary/LTO x direct/archive, paired with the 64 consumer rows.
-They are not executed, nor are they eight complete FreeRTOS runtime tests.
+kernel boundaries, not a working TCB or scheduler. The default eight upstream
+final ELFs cover O2/Os x ordinary/LTO x direct/archive, paired with the 64
+consumer rows. The opt-in grid uses fourteen reference ELFs and 112 associations.
+They are not executed or complete FreeRTOS runtime tests.
 
 Retain separate M7 BASEPRI checks. Upstream PendSV uses `cpsid i`, BASEPRI,
 DSB/ISB, and unconditional `cpsie i`, then later clears BASEPRI to zero. The
@@ -93,3 +107,5 @@ attempts. Source/dependency/tool/QEMU-library identities, object ownership,
 actual final ELF bytes/disassembly, exact terminal outcomes and full artifact
 hashes must remain stable through finalization. A shared checker refactor also
 requires a fresh independent CM4F replay; its historical receipt stays intact.
+Add `-FullOptimizationGridFP` to request the opt-in expansion, never to relabel
+an old default or development receipt as the complete seven-mode qualification.

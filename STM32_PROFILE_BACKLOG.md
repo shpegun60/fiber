@@ -84,6 +84,15 @@ CPU evidence, not H7/H7S board, cache/TCM, affected-r0p1 silicon, complete panic
 suite or global all-optimization qualification. The aggregate above remains
 historical; later conditional dispatch/documentation are separately checked.
 
+The later [opt-in seven-mode classic FP grid](PORT_ARCHITECTURE_AUDIT.md#classic-fp-opt-in-seven-mode-grid)
+passes 504 executions (112 positive / 392 compiled causal) per CM4F and CM7
+profile, fourteen actual link-only pinned reference final ELFs and 112
+associations. It covers ordinary O0/Og/O2/Os/O3 plus O2/Os native final LTO,
+both consumers, direct/archive and eager/lazy policies. The 296-image old
+executable subset matches for each profile. This focused gate leaves the
+default matrix grid unchanged and does not qualify softfp, MPU, other profiles,
+all configurations, physical STM32 devices or the global freeze gate.
+
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
 O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region

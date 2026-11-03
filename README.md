@@ -62,6 +62,13 @@ executable images preserve their previously qualified executable sections.
 This establishes bounded CPU mechanics on the M7 r1p2 model, not H7/H7S board,
 cache/TCM, affected-r0p1 erratum, complete panic-suite or global parity evidence.
 
+A separate opt-in [seven-mode CM4F/CM7 receipt](PORT_ARCHITECTURE_AUDIT.md#classic-fp-opt-in-seven-mode-grid)
+passes 504 executions and fourteen link-only pinned reference final ELFs per
+profile at ordinary O0/Og/O2/Os/O3 and O2/Os final LTO. Both pure Context and
+Fiber v1 are exercised. The old O2/Os subset preserves all 296 executable
+images per profile. This remains bounded hard-FP, non-MPU CPU-model evidence;
+default matrix dispatch, the global parity gate and board claims are unchanged.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and

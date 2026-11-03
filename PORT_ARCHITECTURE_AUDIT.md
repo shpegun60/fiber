@@ -4428,3 +4428,101 @@ retain all eleven allocated sections' geometry and bytes versus revision 1
 (NOBITS geometry is compared separately). Release is whole-ELF identical;
 Debug is not, so whole-image identity is not claimed for Debug. No confirmed
 residual admission defect is found within this bounded offline scope.
+
+## Classic FP Opt-In Seven-Mode Grid
+
+The separate 2026-11-03 CM4F/CM7 full-grid qualification passes from immutable
+`910346d3d5d505e0ff0908158cf47d07884cf327` plus four explicitly captured test
+overlays. The export has 1,075 files; the CM7 Python entry overlay is unchanged.
+Only the shared Python runner and two PowerShell launchers change code. No
+production source, frame layout, CPU transfer assembly, ABI or default matrix
+dispatch changes. Later documentation is outside this captured source export.
+
+`-FullOptimizationGridFP` is an independent opt-in: ordinary O0/Og/O2/Os/O3
+plus O2/Os native final LTO. Each profile passes 504 target executions: 112
+positives and 392 compiled causal controls. Both Context/Fiber consumers,
+direct/archive links, eager/lazy FP policy and primary hash/map 0/0 versus
+validation 1/1 enter the grid. Each of the seven modes contributes sixteen
+positives and fifty-six assigned causal rejections. Fourteen actual pinned
+upstream final ELFs have 112 positive associations; reference images are not
+executed and do not represent 112 upstream policies or complete kernels.
+
+The default grid retains its exact 288/8/64 execution/reference/association
+inventory and ordering. Development subsets remain incomplete: default 9/8/2
+and full-grid 11/14/4, both `CompleteSuite=false`. Thirty-four synthetic
+option/count controls reject wrong types, inventories and request/completion
+bindings. They are not extra firmware executions.
+
+The bounded `Image` checker and its 32 compiled observer controls are unchanged,
+as are twelve previously reviewed implementation components. Actual-port O0
+alone needs a separate CPACR spill/guard proof: every decoded normal exit follows
+an exact word read/OR/store or an exact already-full-mask read guard. Path
+intersection, allocated-stack provenance and flags are tracked. Reclaimed or
+call-crossing spills cannot prove values; conditional calls and nonconstant BIC
+RHS fail closed. Other modes and upstream references retain their prior bounded
+immediate patterns. This is not arbitrary pointer/callee or whole-provider proof.
+Thirty-six separately compiled O0/O2 controls pass: eight admitted positives and
+twenty-eight exact rejections, including branch/IT skips, stale spills, missing
+normal exits, wrong mask/address/width and inverted BIC guards.
+
+Both complete builds have 3,419 inputs and 38,060 verified artifacts, zero
+source/dependency/tool/QEMU-library/inventory drift, and `CompleteSuite=true`.
+The outer export is `C:/cffq-af68ee4540`; builds are
+`C:/cffb-cm4-af68ee4540` (1,090.45 seconds) and
+`C:/cffb-cm7-af68ee4540` (1,131.54 seconds). Separate old-subset comparisons
+against `C:/cf47b-cm4-f0254f0288` and `C:/cf47b-cm7-f0254f0288` preserve all 296
+native ELFs per profile: allocated executable section names, addresses, sizes
+and bytes match, with zero input drift. This is not whole-ELF, object,
+relocation, cross-kernel or new-mode byte identity.
+
+| File | SHA-256 |
+| --- | --- |
+| CM4 `results.json` | `03CFA1FC51E3ABDA7469CF576F94E4FBEB24F429EBF284F9637A2559DEEAF364` |
+| CM4 `artifacts.json` | `AD1E82B70C117B4B15D85DF5BBF26DB7FEF57BEE2393F783BCC542262A329D4B` |
+| CM7 `results.json` | `BD46EADD08C3B81D0AE69F504B0DBFA3ED232A4311BDF0A9CADCC96EF446B3EA` |
+| CM7 `artifacts.json` | `AE1E073DBF0250918446F43D8B66E1F45C52DE157CD07B60BC2118E12CA8B6AA` |
+| Export `qualification-result.json` | `062803AD8F3385E010FD5BA44D776C26605BD155DEDBF03187538E61FA8E6F7F` |
+| Export `source-before.json` | `554CC32F87CC69C40018AF862CDE6F0F57F756FB8CC543F523FBE66766CD7929` |
+| Export `overlays.json` | `3994ABD57A3651BCA2BCE920852A5F93029C6DA9F3D8CE30CD949584795299EB` |
+| Export `qualification-plan.json` | `21547F876BB10765FC43330A5365DA4AA4C8D268111C61EAB0768818AFFA52FB` |
+| Export `source.zip` | `684D3F2733EA6FBCAAB147709691F9260FD8A57C26E47248D2C21318C72A8E23` |
+| Export `cm4-default-code-identity.json` | `0F7DC87F9EB4825417D0E35A20DA697C56AAB55B0A95AA033A85995800FA81AA` |
+| Export `cm7-default-code-identity.json` | `7A86C9CB756EA802342BD1A7364D21F8417A954A244F8D4B984028ED369D294B` |
+
+Development evidence and failed/superseded oracles remain distinct. Final
+incomplete development handoff `C:/cfp-fullopt-q-76d45c7706/handoff.json`, hash
+`DD937E02B14F90927F0227CDA855D238E950410021B1AD1B22EBE114A92247C6`,
+records the final source and both 11-case receipts; it cannot qualify the full
+grid. Earlier CM4 `C:/cfp-fullopt-cm4-dev-1ef4076c8d/results.json`, hash
+`B3E63260274921C966B5FFA6B7C30FEB36E7C61DEFFB62138FCB58BCFC665488`,
+and CM7 `C:/cfp-fullopt-cm7-dev-2565e11bcb/results.json`, hash
+`870AB206252533DD8C7E1553AB169E5471AC2CD550125AE129D64695D2E8CD00`,
+remain FAIL for the old immediate-only CPACR oracle rejecting actual O0 code.
+`C:/cpacr-controls-dev-2f77cec0c3/failed.json`, hash
+`F6CCE1469D20EE6B36DECD9E3252F75DBDD718DD9FD7F3C2B142E79CD138E556`,
+remains FAIL for a control's wrong diagnostic. Provisional source-only
+branch/spill and inverted-BIC false passes were repaired before this complete
+run; preserved source-derived reproductions are not mislabeled as compiled
+reproductions of those older oracles.
+
+The final shared runner hash is
+`9691A8543513BB2BA00F22C464C03B87EF498C5689F0BD15C21394901AFD8A7A`.
+Independent CM4 review rehashes 41,479 unique input/artifact files and reconciles
+395 generated files, 5,600 raw depfiles and 120,554 dependency entries without
+mismatch. Separate semantic review for each profile replays all 112 positive
+ELF audits, fourteen reference mechanism checks, 112 associations, 504 exact
+recorded terminals, 32 observer controls and 36 CPACR controls with no finding.
+The CM7 review additionally verifies exact r1p2 CPUID/MVFR terminals and the
+PRIMASK-preserving mask envelope rather than inferring them from CM4.
+Independent CM7 inventory review rehashes its 41,479 unique files twice and
+reconciles 395 generated files, 5,600 depfiles and 120,890 dependency entries,
+again with no mismatch or missing/extra artifact. A separate direct review of
+592 old/new CM7 ELF files reproduces all 296 executable-section identities;
+it does not rely solely on the parent comparison receipt.
+
+CM4 remains the AN386 hard-FP model; CM7 remains AN500 M7 r1p2 with the exact
+capability/terminal identities above. S0-S31 storage is not arithmetic accuracy.
+Softfp, non-FP/MPU profiles, other profiles/policies, affected-M7 silicon, STM32
+peripherals/NVIC widths/cache/TCM, complete startup/panic suites, hardware,
+global final-LTO equivalence and exact-SHA CI remain separate open gates.
+These focused receipts do not replace the historical default aggregate.

@@ -69,6 +69,47 @@ runner must enforce that grid and exact case/reason map, not derive completeness
 only from whatever happened to execute. Development smoke runs nine executions
 and must retain `CompleteSuite=false`.
 
+### Opt-In Seven-Mode Grid
+
+`-FullOptimizationGridFP` independently selects five ordinary modes
+`O0/Og/O2/Os/O3` and native final-linked LTO at O2/Os only. It does not multiply
+all five optimizations by LTO, change the default O2/Os grid, or expand the
+central matrix's conditional dispatch. Each profile has 56 primary tuples:
+two consumers, seven modes, direct/archive and eager/lazy. Primary/validation
+positives produce 112 executions; seven primary-only production mutants add
+392, for 504 target executions. Fourteen actual pinned upstream final ELFs
+provide 112 positive/reference associations and remain link-only.
+
+| Request | Target executions | Upstream ELFs | Associations | CompleteSuite |
+| --- | --- | --- | --- | --- |
+| Default | 288 | 8 | 64 | true |
+| Default + DevelopmentSmoke | 9 | 8 | 2 | false |
+| FullOptimizationGridFP | 504 | 14 | 112 | true |
+| FullOptimizationGridFP + DevelopmentSmoke | 11 | 14 | 4 | false |
+
+Literal tuple/option controls and both launchers distinguish these requests;
+an incomplete development result cannot become a qualification receipt. Neither
+the `Image` checker nor its 32 compiled observer controls changes for this mode.
+
+Actual-port O0 CPACR code spills constants and uses register ORR, so this one
+new tuple uses a separate bounded dataflow oracle. Every decoded normal exit
+must follow an exact CPACR word read/OR/store or an exact already-full-mask
+read guard. Constant/allocated-stack provenance, path intersection and flag
+effects are tracked; reclaimed/call-crossing spills and nonconstant BIC RHS
+cannot provide admission. Unsupported conditional calls fail closed. This is
+not a general pointer, arbitrary callee or whole-provider semantic proof.
+The other modes and upstream references retain their existing bounded
+immediate mask/address/store patterns.
+
+Thirty-six source-derived/assembly CPACR controls are separately compiled at
+O0/O2: eight accepted positives and twenty-eight exact assigned rejections.
+They cover wrong mask/address/width, unresolved stores, unrelated masks,
+branch/IT skips, stale spills, conditional calls, missing normal exits and
+inverted BIC guards. These are static checker controls, not extra target
+executions or a changed production port. A successful full opt-in run still
+does not establish non-FP profiles, softfp/MPU, all-configuration/global
+FreeRTOS equivalence, hosted CI or board qualification.
+
 Compile causal mutations of actual register save/restore and publication code.
 Preserve frame geometry and required lazy-state materialization when isolating
 a high-FP-store omission. A compile error, incidental frame panic, arbitrary
@@ -87,7 +128,8 @@ intentional documented difference, not a second upstream eager implementation.
 Pair final ELFs at the selected optimization/LTO/link tuples without claiming
 byte equality or execution of the complete FreeRTOS scheduler.
 
-There are eight distinct upstream final ELFs, not 64 upstream policy modes.
+The default grid has eight distinct upstream final ELFs, not 64 upstream policy
+modes; the opt-in grid has fourteen, not 112 upstream policy modes.
 Each positive execution is associated with exactly one matching optimization,
 LTO and link tuple. Ordered save/restore, conditional FP transfer, BASEPRI,
 first-SVC and bounded CPACR evidence do not constitute closed-body equivalence.
@@ -109,6 +151,8 @@ Use existing explicit compiler, CMSIS, pinned reference and WSL QEMU inputs:
 The output directory must not already exist. The runner does not install tools,
 download packages, program boards or reuse earlier PASS records. Add
 `-DevelopmentSmoke` only for development; it cannot satisfy full qualification.
+Add `-FullOptimizationGridFP` for the separate seven-mode grid described above;
+the ordinary invocation and default matrix continue to select the original grid.
 Preserve every failed or superseded output directory. Acceptance additionally
 requires independent review of the captured inputs, complete receipt and
 actual final-ELF evidence; successful execution alone does not certify a

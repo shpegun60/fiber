@@ -116,6 +116,7 @@ implementation and its selected software gates, not the entire port roadmap.
 | Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
 | Bounded CM0/CM0+ non-MPU seven-mode parity | Separate captured five-option/final-LTO gate: 28 final pairs, 56 positive ELFs and 84 compiled controls PASS; not global parity or G0 execution |
+| Bounded CM4F/CM7 hard-FP seven-mode runtime/parity | Separate opt-in full grids: 504 executions, fourteen link-only reference final ELFs and 112 associations per profile PASS; old 296-image executable subsets unchanged. Not softfp, MPU, global parity or board evidence |
 | Isolated H7S managed Debug/Release integration | Fresh headless-generated 35-object builds and final-ELF audits PASS for the captured application and pinned production export; not CubeMX regeneration or board execution |
 | Exact-commit release-blocking CI | Not established |
 | C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
