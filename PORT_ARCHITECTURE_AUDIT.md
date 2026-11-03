@@ -4586,3 +4586,94 @@ and the separately developed CM4 MPU execution pilot are outside the export.
 No whole-build artifact inventory, exact-SHA hosted CI, global all-optimization/
 final-LTO reference equivalence, staged-profile activation or hardware claim is
 created by the outer PASS. The all-catalog freeze gates remain open.
+
+## Classic MPU Handler CONTROL Repair
+
+Status: confirmed CM4 MPU runtime defect; source repair implemented, fresh
+regression and execution qualification pending.
+The first seven-image pilot is deliberately not a complete qualification gate.
+Its manifest is M4 hard-FP, eight MPU regions, O2/native/direct, eager policy,
+FP-inactive workers, hash/map 0/0, with separate Context and FiberV1 consumers.
+All receipts retain `CompleteSuite=false`. No board is used.
+
+Both immutable attempts use tracked base
+`30036f8426858dce98680b5bb124e2e3f58f38c2` plus eleven explicitly hashed new
+fixture files, 1,086 total source files, and zero source/inventory drift:
+
+| Retained receipt | Outcome | SHA-256 |
+| --- | --- | --- |
+| `C:/cmpb-1e46914fe4/results.json` | FAIL, startup panic V | `79C3B61C90C6BF11B7A80C8010C698EEEB5B24AA1345E9E53A77EBB016AEC9CE` |
+| `C:/cmpq-1e46914fe4/pilot-result.json` | Outer FAIL | `65346D6DA593F8D2E4D918569B3E96BDF102FAF4D58D7E2FAA34B2EC4307DE5F` |
+| `C:/cmpb-4bfe3654df/results.json` | FAIL, first running SVC panic l | `12FCB94F49BBB5C858CB44608B0834499C6F457C446B3289CE7C6EE4E355030D` |
+| `C:/cmpq-4bfe3654df/pilot-result.json` | Outer FAIL | `231D52199B9CE48E7A1E095649CEB5EF12FE852630CE9824B48D6EE02DCDC3A6` |
+
+The first attempt violated this selected port's explicit nonzero-VTOR
+precondition. It is a fixture integration failure before MPU activation or task
+execution, not a switch defect. The replacement preserves reset MSP/PC words
+at zero, installs the full active vector table at 0x400, and starts privileged
+code at 0x800. Linker and native-ELF checks admit the matching reset words,
+strong handlers and actual VTOR store/barriers. The port guard is not removed.
+
+The second attempt exposes a production validation defect. A separately
+retained diagnostic replays the unchanged failing ELF under QEMU/GDB and
+observes Thread `CONTROL=3`, `IPSR=0`, then actual SVC MRS `CONTROL=1`, `IPSR=11`
+with exception return FFFFFFFD. Panic receives l and LR=23E5, identifying the BL
+at 23E0 after the incorrect `CONTROL & 3 == 3` guard at 23CA..23D4. QEMU exits
+with status 66 and GDB with status 0. The ELF and 82 recorded tool/library hashes
+are unchanged, and no debug process remains. Diagnostic receipt:
+`%TEMP%/cm4mpu-control-diag-20261103-61da2cf4/diagnostic.json`, SHA-256
+`5C4853A4513C893F327754B9EF0C665B64097364F4ACDFD78FCF6510B00D538C`.
+This is diagnostic evidence, not a successful runtime qualification.
+
+The distinction is architectural: live Handler CONTROL is not the initial
+Thread CONTROL template. [Arm DUI0553B, section 2.1.3](https://documentation-service.arm.com/static/5f2ac76d60a93e65927bbdc5)
+describes Handler SPSEL read/write behavior and exception-return selection.
+[Arm DAI0298A](https://documentation-service.arm.com/static/5f0352c0cafe527e86f5bc66)
+separates Handler FP activity from the interrupted floating-point context.
+Pinned FreeRTOS classic MPU paths capture raw CONTROL; CM4 does so before
+conditional VSTM. EXC_RETURN, not live Handler FPCA, identifies the interrupted
+frame. The old serialized 3-only basic and 7-only extended requirements are
+also incorrect. PendSV is not reached in the failing diagnostic; that follow-on
+issue is source/compiled-code analysis, not an observed saved-image failure.
+
+The accepted repair contract preserves original raw save/restore and geometry:
+
+- Fresh initial images retain exact CONTROL=3 and the exact basic PSP frame.
+- Saved CM0/CM3 and CM4 basic images admit raw 1 or initial 3; CM4 extended images
+  admit raw 1. Reserved/control-policy bits and exact EXC_RETURN stay checked.
+- Running Thread/PSP SVC and pre-save Handler CONTROL is 1. Initial Thread/MSP
+  start-SVC admission remains 0. CM4 post-VSTM guards admit exactly 1/5; full raw
+  callback-state preservation remains mandatory.
+- Both CM0 Handler MSR readbacks expect 1, not the Thread template 3.
+- Private cohort semantics advance to 0x00020001 for CM0/CM3 and
+  0x00020008/0x00020010 for CM4/M7 region variants. Public storage geometry and
+  mandatory forward/reverse ABI versions do not change.
+
+Analogous CM0/CM3 defects are source-confirmed, not newly executed on those
+cores. Scoped v8-M review finds different, already separated Handler/saved-image
+contracts; this repair must not mechanically modify those ports. Actual-source
+guard controls, emitted success-path GRO closure, stale-cohort negatives,
+reference-mechanism checks and fresh execution evidence remain required.
+FP-active/eager/lazy MPU execution is not established by the basic-frame pilot.
+
+## Recorded Host Tool Identity Boundary
+
+A later provenance review identifies an enrollment omission in the historical
+classic 288/504-case FP receipts and relevant default-aggregate children:
+gcc-nm/gcc-ar wrappers and the LTO plugin were recorded, but their delegated
+native binutils executables were not identified under another enrolled role.
+The aggregate's 916 external records describe FreeRTOS/CMSIS, not all host tools.
+Recorded source/artifact hashes, wrapper/plugin identities and observed target
+execution outcomes remain evidence; no wrong backend, symbol result, ELF or
+runtime false PASS is demonstrated. Complete delegated-binutils identity and
+unchangedness throughout those historical runs are not established. Later
+capture cannot retrospectively supply that missing observation.
+
+The native-only MPU pilot selects and hashes native nm explicitly. Its complete
+compile-only preflight records 79 native-nm invocations and invokes neither
+gcc-nm nor an archiver; the second failed CPU attempt stops after 13 nm
+invocations among 50 total commands. Future LTO closure needs an explicitly
+captured backend/plugin contract and semantic
+symbol/archive-index controls, not just a subprocess exit code. That future
+hardening is separate from the classic MPU CONTROL repair; no universal host/OS
+dependency-closure claim is made here.

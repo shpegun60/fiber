@@ -655,14 +655,9 @@ void fiber_port_context_validate_running_svc(const FiberContext *ctx,
 			(exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED), 'l');
 	FIBER_REQUIRE(hardware_frame != NULL, 'P');
 
-	const uint32_t control = fiber_port_cpu_read_control();
-	FIBER_REQUIRE((control & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
-	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
-		FIBER_REQUIRE((control & 4u) != 0u, 'l');
-	} else {
-		FIBER_REQUIRE((control & 4u) == 0u, 'l');
-	}
+	/* SVC/pre-save Handler state is not the interrupted Thread's CONTROL.
+	 * SPSEL/FPCA are zero here; exact EXC_RETURN supplies PSP/frame identity. */
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 
 	/* ARMv7E-M keeps the basic core frame at PSP. For an extended exception
 	 * frame, s0-s15/FPSCR/reserved follow the core frame at higher addresses. */
@@ -714,8 +709,8 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 		core = &ctx->protected_context.basic.core;
 		hardware = &ctx->protected_context.basic.hardware;
 		frame_bytes = (uintptr_t)FIBER_PORT_EXC_BASE_BYTES;
-		FIBER_REQUIRE(core->control ==
-				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+		/* Initial Thread intent is 3; a basic PendSV saves raw Handler1. */
+		FIBER_REQUIRE((core->control == 1u) || (core->control == 3u), 'l');
 		FIBER_REQUIRE(core->exc_return ==
 				fiber_portEXC_RETURN_THREAD_PSP_BASIC, 'l');
 		for (uint32_t index = 19u;
@@ -727,8 +722,8 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 		core = &ctx->protected_context.extended.core;
 		hardware = &ctx->protected_context.extended.hardware;
 		frame_bytes = (uintptr_t)FIBER_PORT_EXC_PER_LEVEL_BYTES;
-		FIBER_REQUIRE(core->control ==
-				(fiber_portINITIAL_CONTROL_UNPRIVILEGED | 4u), 'l');
+		/* MRS precedes VSTM: saved FPCA remains zero even for an FP frame. */
+		FIBER_REQUIRE(core->control == 1u, 'l');
 		FIBER_REQUIRE(core->exc_return ==
 				fiber_portEXC_RETURN_THREAD_PSP_EXTENDED, 'l');
 		FIBER_REQUIRE(ctx->protected_context.extended.cursor_limit == 0u,

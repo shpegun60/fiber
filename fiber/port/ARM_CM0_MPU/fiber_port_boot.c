@@ -689,8 +689,10 @@ void fiber_port_context_validate_restore(FiberContext *ctx)
 
 	FIBER_REQUIRE(ctx->protected_context_cursor ==
 			&ctx->protected_context.cursor_limit, 'P');
-	FIBER_REQUIRE(ctx->protected_context.control ==
-			ctx->boot.abi_initial_control, 'q');
+	/* Construction seeds Thread CONTROL3; PendSV serializes raw Handler1.
+	 * Exact EXC_RETURN, not stored SPSEL, owns the resumed Thread/PSP choice. */
+	FIBER_REQUIRE((ctx->protected_context.control == 1u) ||
+			(ctx->protected_context.control == 3u), 'q');
 	FIBER_REQUIRE(ctx->protected_context.exc_return ==
 			ctx->boot.abi_initial_exc_return, 'x');
 
@@ -717,8 +719,8 @@ void fiber_port_context_validate_running_frame(const FiberContext *ctx,
 	 * pre-save check must establish this before PendSV reads it as a pointer. */
 	FIBER_REQUIRE(ctx->protected_context_cursor ==
 			&ctx->protected_context.r4, 'P');
-	FIBER_REQUIRE(ctx->protected_context.control ==
-			ctx->boot.abi_initial_control, 'q');
+	FIBER_REQUIRE((ctx->protected_context.control == 1u) ||
+			(ctx->protected_context.control == 3u), 'q');
 	FIBER_REQUIRE(ctx->protected_context.exc_return ==
 			ctx->boot.abi_initial_exc_return, 'x');
 	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');

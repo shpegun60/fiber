@@ -17969,10 +17969,10 @@ int fiber_arm_cm4_mpu_type_only_cpp_probe()
         "-I$CmsisPath"
     )
     $variants = @(
-        [pscustomobject]@{ Name = "m4-r8"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 8; PortId = "0x434D344Du"; Layout = "0x00010008u"; Errata = 0 },
-        [pscustomobject]@{ Name = "m4-r16"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 16; PortId = "0x434D344Du"; Layout = "0x00010010u"; Errata = 0 },
-        [pscustomobject]@{ Name = "m7-r8"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 8; PortId = "0x434D374Du"; Layout = "0x00010008u"; Errata = 1 },
-        [pscustomobject]@{ Name = "m7-r16"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 16; PortId = "0x434D374Du"; Layout = "0x00010010u"; Errata = 1 }
+        [pscustomobject]@{ Name = "m4-r8"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 8; PortId = "0x434D344Du"; Layout = "0x00020008u"; Errata = 0 },
+        [pscustomobject]@{ Name = "m4-r16"; Cpu = "cortex-m4"; Fpu = "fpv4-sp-d16"; Core = 4; Regions = 16; PortId = "0x434D344Du"; Layout = "0x00020010u"; Errata = 0 },
+        [pscustomobject]@{ Name = "m7-r8"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 8; PortId = "0x434D374Du"; Layout = "0x00020008u"; Errata = 1 },
+        [pscustomobject]@{ Name = "m7-r16"; Cpu = "cortex-m7"; Fpu = "fpv5-d16"; Core = 7; Regions = 16; PortId = "0x434D374Du"; Layout = "0x00020010u"; Errata = 1 }
     )
     $cohortSymbols = @()
     foreach ($variant in $variants) {
@@ -19537,7 +19537,7 @@ int fiber_arm_cm0_mpu_selected_facade_probe(void)
             if ($cohorts.Count -ne 1) {
                 throw "ARM_CM0_MPU layout probe must define exactly one cohort ($($variant.Name)/$mode)"
             }
-            $expectedPrefix = "fiber_port_context_cohort_armv6m_p0x434D304Du_l0x00010001u_"
+            $expectedPrefix = "fiber_port_context_cohort_armv6m_p0x434D304Du_l0x00020001u_"
             if (-not $cohorts[0].StartsWith($expectedPrefix,
                     [System.StringComparison]::Ordinal)) {
                 throw "ARM_CM0_MPU cohort identity mismatch ($($variant.Name)/$mode): $($cohorts[0])"
@@ -21259,7 +21259,7 @@ int fiber_arm_cm3_mpu_type_only_probe(void)
     if ($cohortSymbols.Count -ne 1) {
         throw "ARM_CM3_MPU layout probe must define exactly one cohort symbol"
     }
-    $expectedIdentity = "fiber_port_context_cohort_armv7m_p0x434D334Du_l0x00010001u_"
+    $expectedIdentity = "fiber_port_context_cohort_armv7m_p0x434D334Du_l0x00020001u_"
     if (-not $cohortSymbols[0].StartsWith($expectedIdentity,
             [System.StringComparison]::Ordinal)) {
         throw "ARM_CM3_MPU cohort identity mismatch: $($cohortSymbols[0])"

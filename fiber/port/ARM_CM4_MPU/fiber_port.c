@@ -489,14 +489,9 @@ void fiber_port_pendsv_validate_save_current(FiberContext *current,
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
 	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 
-	const uint32_t control = fiber_port_cpu_read_control();
-	FIBER_REQUIRE((control & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
-	if (exc_return == fiber_portEXC_RETURN_THREAD_PSP_EXTENDED) {
-		FIBER_REQUIRE((control & 4u) != 0u, 'l');
-	} else {
-		FIBER_REQUIRE((control & 4u) == 0u, 'l');
-	}
+	/* Entry clears Handler SPSEL/FPCA. Exact EXC_RETURN owns Thread/PSP and
+	 * the interrupted FP frame; no Handler FP instruction has executed yet. */
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 
 	FIBER_REQUIRE((fiber_portSCB_CPACR_REG &
 			fiber_portCPACR_CP10_CP11_FULL) ==
@@ -627,8 +622,9 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
-	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Preserving an extended frame can set Handler FPCA after the raw save. */
+	const uint32_t control = fiber_port_cpu_read_control();
+	FIBER_REQUIRE((control == 1u) || (control == 5u), 'l');
 	FIBER_REQUIRE((fiber_portFPU_FPCCR_REG &
 			fiber_portFPCCR_LSPACT_BIT) == 0u, 'E');
 
@@ -651,8 +647,8 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
-	FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	const uint32_t control = fiber_port_cpu_read_control();
+	FIBER_REQUIRE((control == 1u) || (control == 5u), 'l');
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE,
 			'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED,
@@ -959,6 +955,7 @@ void PendSV_Handler(void)
 			 * words, exactly matching the pinned FreeRTOS port. */
 			"mov   r2, r1                           \n" /* retain current */
 			"ldr   r1, [r2, #0]                    \n" /* cursor -> word 0 */
+			/* Raw Handler1 is captured before VSTM can set live FPCA. */
 			"mrs   r3, control                      \n"
 			"add   r0, r0, #32                     \n" /* low FP frame */
 			"tst   lr, #16                          \n"

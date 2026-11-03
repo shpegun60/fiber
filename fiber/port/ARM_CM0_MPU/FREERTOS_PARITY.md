@@ -1,5 +1,26 @@
 # ARM_CM0_MPU FreeRTOS Parity Record
 
+## Handler CONTROL Contract Repair
+
+Initial construction and first restore still require exact CONTROL `3`
+(unprivileged Thread/PSP intent). The separate initial Thread/MSP start-SVC
+state is CONTROL `0`. ARMv6-M Handler reads SPSEL as zero and ignores its
+writes: live running-Thread/PSP SVC and PendSV CONTROL, and both post-MSR
+Handler readbacks, must therefore be exactly `1`. The raw MRS/save/MSR sequence
+is unchanged. A restorable basic image accepts only `1` (raw Handler save) or
+`3` (constructed Thread intent), independently requiring exact Thread/PSP EXC_RETURN
+`0xFFFFFFFD`. Exception return selects PSP; stored SPSEL is not a substitute
+for EXC_RETURN provenance. Reserved CONTROL values remain rejected, and the
+complete raw scheduler CPU snapshot is still compared without normalization.
+
+The pinned `portable/GCC/ARM_CM0/portasm.c` MPU branch likewise saves raw
+CONTROL and restores it with MSR; it does not compare Handler readback with
+the initial Thread template. Fiber retains its additional readback checks,
+now against the Handler value. Private context semantics advance from
+`0x00010001` to `0x00020001`; physical geometry, public storage V1, and both
+callable ABI versions are unchanged. Historical evidence below is not a CPU
+qualification of this repair; a fresh candidate-image execution is pending.
+
 ## Protected Startup MSP Policy
 
 This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
@@ -248,7 +269,7 @@ unprivileged exception return.
 
 ```text
 port ID           0x434D304D (CM0M)
-layout version    0x00010001
+layout version    0x00020001
 feature mask      0x00001C04
 ```
 
@@ -390,7 +411,7 @@ are an intentional validation difference; they do not replace the reference
 transfer order.
 
 PendSV first proves `IPSR == 14`, `EXC_RETURN == 0xFFFFFFFD`, a clear
-incoming PRIMASK, the active unprivileged CONTROL value, the current protected
+incoming PRIMASK, exact live Handler CONTROL `1`, the current protected
 context, the live PSP frame, and the active eight-region MPU image. Its C
 preflight executes before the first assembly read of
 `current->protected_context_cursor`. The preflight is an ordinary AAPCS

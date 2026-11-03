@@ -448,8 +448,8 @@ void fiber_port_pendsv_validate_save_current(FiberContext *current,
 	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
 	FIBER_REQUIRE(fiber_port_basepri_read() == 0u, 'b');
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Handler SPSEL is zero; EXC_RETURN proves the interrupted Thread used PSP. */
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 	fiber_port_context_validate_save_current(current, hardware_frame);
 	fiber_port_mpu_validate_active_context(current);
@@ -519,6 +519,9 @@ FiberContext *fiber_port_runtime_select_first(void)
 			fiber_internal_runtime_select_scheduler_candidate(NULL);
 	fiber_port_validate_scheduler_cpu_state(&cpu_state);
 	fiber_port_context_validate_restore(first);
+	/* First execution still requires the constructor's exact Thread intent. */
+	FIBER_REQUIRE(first->protected_context.control ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'q');
 	fiber_port_scheduler_critical_exit(critical_state);
 	return first;
 }
@@ -532,6 +535,8 @@ void fiber_port_runtime_start_first(FiberContext *first)
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE, 'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == 0u, 'M');
 	fiber_port_context_validate_restore(first);
+	FIBER_REQUIRE(first->protected_context.control ==
+			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'q');
 	fiber_port_start_first_context();
 	FIBER_API_UNREACHABLE();
 }
@@ -546,8 +551,7 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 
 	FiberPortMpuSchedulerCpuState cpu_state;
 	fiber_port_capture_scheduler_cpu_state(&cpu_state);
@@ -569,8 +573,7 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 	FIBER_REQUIRE(fiber_port_basepri_read() ==
 			FIBER_PORT_SCHEDULER_BASEPRI, 'b');
 	FIBER_REQUIRE(fiber_port_cpu_read_faultmask() == 0u, 'f');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE, 'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
 	fiber_port_mpu_build_global_regions(&global);
@@ -634,8 +637,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 		FIBER_REQUIRE((fiber_port_cpu_read_control() & 3u) == 0u, 'l');
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 	} else if (exc_return == fiber_portINITIAL_EXC_RETURN) {
-		FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+		FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 		FIBER_REQUIRE(current != NULL, 'C');
 		fiber_port_context_validate_running_svc(current, hardware_frame);
 	} else {
@@ -651,6 +653,8 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 				fiber_port_svc_start_return_site, 'u');
 		FIBER_REQUIRE(current != NULL, 'C');
 		fiber_port_context_validate_restore(current);
+		FIBER_REQUIRE(current->protected_context.control ==
+				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'q');
 		fiber_portDISABLE_IRQ();
 		fiber_portDATA_SYNC_BARRIER();
 		fiber_portINST_SYNC_BARRIER();

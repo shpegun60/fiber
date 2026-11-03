@@ -354,8 +354,8 @@ void fiber_port_pendsv_validate_save_current(FiberContext *current,
 	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
 	FIBER_REQUIRE(exc_return == fiber_portINITIAL_EXC_RETURN, 'l');
 	FIBER_REQUIRE(fiber_port_cpu_read_primask() == 0u, 'p');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	/* Handler SPSEL is zero; EXC_RETURN proves the interrupted Thread used PSP. */
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 	FIBER_REQUIRE((uintptr_t)hardware_frame == (uintptr_t)fiber_port_cpu_read_psp(), 'P');
 	fiber_port_context_validate_save_current(current, hardware_frame);
 	fiber_port_mpu_validate_active_context(current);
@@ -475,8 +475,7 @@ FiberContext *fiber_port_scheduler_pick_next_from_pendsv(
 	FIBER_REQUIRE(current != NULL, 'C');
 	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
 	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
 
 	FiberPortMpuSchedulerCpuState cpu_state;
@@ -495,8 +494,7 @@ void fiber_port_mpu_switch_to_context(FiberContext *next)
 	FIBER_REQUIRE(next != NULL, 'N');
 	FIBER_REQUIRE(fiber_port_cpu_read_ipsr() == 14u, 'i');
 	FIBER_REQUIRE(fiber_port_cpu_read_primask() != 0u, 'p');
-	FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-			fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+	FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 	FIBER_REQUIRE(fiber_portMPU_TYPE_REG == fiber_portMPU_EXPECTED_TYPE, 'M');
 	FIBER_REQUIRE(fiber_portMPU_CTRL_REG == fiber_portMPU_CTRL_REQUIRED, 'M');
 	/* The bridge validates next before publication. Repeat the invariant here so
@@ -601,8 +599,7 @@ void fiber_port_svc_dispatch(uint32_t *hardware_frame,
 		FIBER_REQUIRE(fiber_port_cpu_read_control() == 0u, 'l');
 		fiber_port_validate_start_svc_frame(hardware_frame, &layout);
 	} else {
-		FIBER_REQUIRE(fiber_port_cpu_read_control() ==
-				fiber_portINITIAL_CONTROL_UNPRIVILEGED, 'l');
+		FIBER_REQUIRE(fiber_port_cpu_read_control() == 1u, 'l');
 		FIBER_REQUIRE(current != NULL, 'C');
 		fiber_port_context_validate_running_svc(current, hardware_frame);
 		fiber_port_mpu_validate_active_context(current);
@@ -726,7 +723,8 @@ void fiber_port_restore_first_context_from_svc(
 			"msr   control, r3                                    \n"
 			"isb                                                   \n"
 			"mrs   r4, control                                    \n"
-			"movs  r6, #3                                         \n"
+			/* ARMv6-M Handler ignores SPSEL writes; exception return selects PSP. */
+			"movs  r6, #1                                         \n"
 			"cmp   r4, r6                                         \n"
 			"bne   90f                                            \n"
 			"mov   lr, r5                                         \n"
@@ -931,7 +929,7 @@ void PendSV_Handler(void)
 			"msr   control, r3                                    \n"
 			"isb                                                   \n"
 			"mrs   r4, control                                    \n"
-			"movs  r6, #3                                         \n"
+			"movs  r6, #1                                         \n"
 			"cmp   r4, r6                                         \n"
 			"bne   93f                                            \n"
 			"mov   lr, r5                                         \n"

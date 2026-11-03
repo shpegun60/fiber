@@ -1,5 +1,26 @@
 # ARM_CM3_MPU FreeRTOS Parity Record
 
+## Handler CONTROL Contract Repair
+
+Initial construction and all three cold admission sites still require exact
+CONTROL `3` (unprivileged Thread/PSP intent). The separate initial Thread/MSP
+start-SVC state is CONTROL `0`. ARMv7-M Handler reads SPSEL as zero, so live
+running-Thread/PSP SVC and PendSV CONTROL must instead be exactly `1`. The raw
+MRS/save/MSR sequence is unchanged. A restorable basic image accepts only `1`
+(raw Handler save) or `3` (constructed Thread intent), independently requiring
+exact Thread/PSP EXC_RETURN `0xFFFFFFFD`. Exception return selects PSP; stored
+SPSEL is not a substitute for EXC_RETURN provenance. Reserved CONTROL values
+remain rejected, and full raw scheduler CPU snapshots are still compared
+without normalization.
+
+The pinned `portable/GCC/ARM_CM3_MPU/port.c` likewise saves raw CONTROL in
+PendSV and restores it with MSR. Fiber's additional validators now distinguish
+that raw value from the initial Thread template. Private context semantics
+advance from `0x00010001` to `0x00020001`; physical geometry, public storage
+V1, and both callable ABI versions are unchanged. Historical evidence below
+is not a CPU qualification of this repair; a fresh candidate-image execution
+is pending.
+
 ## Protected Startup MSP Policy
 
 This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
@@ -75,7 +96,7 @@ The protected image freezes every word offset for CONTROL, r4-r11,
 EXC_RETURN, PSP, copied r0-r3/r12/LR/PC/xPSR, and the one-past cursor-limit
 slot. The boot record additionally seals initial CONTROL policy and the exact
 four-region count. Port identity `0x434D334D` (`CM3M`), layout version
-`0x00010001`, and feature identity `0x00001C04` are distinct from privileged
+`0x00020001`, and feature identity `0x00001C04` are distinct from privileged
 `ARM_CM3`.
 
 The feature bits are explicit: `0x00000004` is the CONTROL slot,
@@ -266,7 +287,7 @@ The handler accepts only the exact unprivileged Thread/PSP basic-frame state:
 ```text
 IPSR       14 (PendSV)
 EXC_RETURN 0xFFFFFFFD
-CONTROL    0x00000003
+CONTROL    0x00000001 (live Handler; initial Thread intent remains 3)
 PRIMASK    0
 BASEPRI    0 before the scheduler envelope
 FAULTMASK  0
@@ -693,7 +714,7 @@ live PSP points to a complete basic frame inside the declared stack
 copied xPSR has T set and stacked IPSR zero
 copied PC is structurally valid and optionally address-map valid
 EXC_RETURN is the exact ARMv7-M Thread/PSP value
-CONTROL contains only the selected SPSEL/nPRIV policy
+saved CONTROL is exactly 1 or 3; first admission still requires exactly 3
 next MPU region image is sealed and validated before MPU disable
 MPU disable/program/enable uses mandatory DMB/DSB/ISB ordering
 next hardware frame is copied only to its own writable PSP stack

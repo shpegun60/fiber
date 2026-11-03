@@ -1,5 +1,33 @@
 # ARM_CM4_MPU FreeRTOS Parity Record
 
+## Handler CONTROL Contract Repair
+
+Initial construction and fresh basic restore still require exact CONTROL `3`
+(unprivileged Thread/PSP intent). The separate initial Thread/MSP start-SVC
+state is CONTROL `0`. On exception entry, Handler SPSEL and FPCA are zero;
+running-Thread/PSP SVC and pre-save validation therefore require exact live
+CONTROL `1`. Exact EXC_RETURN independently establishes Thread/PSP origin and
+basic versus extended interrupted-frame identity. Handler FPCA must not be
+used as a copy of the interrupted Thread's FP state.
+
+The pinned `portable/GCC/ARM_CM4_MPU/port.c` reads raw CONTROL before VSTM,
+as Fiber continues to do. With the general-registers-only pre-save closure,
+that serialized raw value is `1` even for an extended frame. Basic restore
+accepts exactly `{1,3}` (raw save or constructed intent); extended restore
+accepts exactly `1`. A later VSTM can make live Handler CONTROL `5`, without
+changing the captured raw register value. Scheduler and MPU-switch guards
+therefore accept exactly `{1,5}`, reject all reserved bits, and retain exact
+full raw CPU snapshots around hooks. No CONTROL bits are synthesized, and no
+MRS/save/MSR instruction or protected-frame geometry changes.
+
+The architectural distinction follows the Armv7-M ARM exception/CONTROL rules
+and [Arm AN298](https://documentation-service.arm.com/static/5f0352c0cafe527e86f5bc66).
+Private context semantics advance from `0x00010008`/`0x00010010` to
+`0x00020008`/`0x00020010` for 8/16 regions (including the M7 cohort). Public
+storage V1 and both callable ABI versions are unchanged. Historical evidence
+below is not a CPU qualification of this repair; a fresh candidate-image
+execution is pending.
+
 ## Protected Startup MSP Policy
 
 This profile requires `FIBER_REWIND_MSP=1`. Its first-SVC provenance contract
@@ -157,8 +185,8 @@ reserve the reference padding and privilege bits.
 ```text
 Cortex-M4F port ID  0x434D344D (CM4M)
 Cortex-M7F port ID  0x434D374D (CM7M)
-8-region layout     0x00010008
-16-region layout    0x00010010
+8-region layout     0x00020008
+16-region layout    0x00020010
 feature mask        0x00001C05
 ```
 
@@ -245,13 +273,15 @@ runtime while preserving the same generated SVC/PendSV bodies.
 ## Protected PendSV
 
 PendSV accepts only Thread/PSP basic or extended EXC_RETURN, an exact live PSP,
-zero incoming masks, matching CONTROL/FPCA state, an enabled and read-back MPU
-image, and the configured CPACR/FPCCR policy. The current context seal, cursor,
+zero incoming masks, exact pre-save Handler CONTROL `1`, an enabled and
+read-back MPU image, and the configured CPACR/FPCCR policy. EXC_RETURN, not
+live Handler FPCA, identifies the interrupted FP frame. The current context seal, cursor,
 stack extent, hardware frame, code address, and canary are validated before the
 handler reads mutable context fields.
 
-The save path starts at protected word zero. For an extended frame it first
-saves `s16-s31`, then copies the 17 raw `s0-s15/FPSCR` words from `PSP + 32`;
+The save path starts at protected word zero and captures raw CONTROL before
+any VSTM. For an extended frame it saves `s16-s31`, then copies the 17 raw
+`s0-s15/FPSCR` words from `PSP + 32`;
 it stores CONTROL, `r4-r11`, EXC_RETURN, PSP, and the copied basic hardware
 frame after them. A basic frame skips the FP transfers and ends at cursor word
 19; an extended frame ends at cursor word 52. `FPCCR.LSPACT` must be clear after
