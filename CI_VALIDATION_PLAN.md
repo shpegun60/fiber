@@ -4,8 +4,15 @@
 
 No CI workflow is currently committed. The local validation entry point is
 `tools/compile_matrix.ps1`. This document freezes how that proof will move into
-CI after the required port inventory is complete and before the software
-freeze or Context-interface extraction.
+CI; it does not describe an operational hosted pipeline.
+
+The older roadmap placed complete port inventory and CI before Context-interface
+extraction. The [2026-11-02 bounded scope decision](CONTEXT_REFACTOR_BASELINE.md)
+supersedes that sequencing for F0/G0/G4/H7/H7S: Context ownership and its separate
+Fiber consumer are implemented with captured local software evidence, without
+declaring a global software freeze. Exact-SHA release-blocking CI and the
+remaining all-optimization/final-linked-ELF gates are still required before that
+broader freeze. They are not waived or retrospectively reported as completed.
 
 CI is a software evidence layer. It does not run a board and cannot create a
 hardware support claim.
@@ -80,8 +87,9 @@ continues to report missing QEMU gates as `NOT_RUN`, not execution evidence.
 
 ## Pull-Request Gate
 
-Every pull request and every push to the protected integration branch runs the
-current executable per-port gate:
+The future workflow must run the executable per-port gate for every pull
+request and every push to the protected integration branch. No such automatic
+execution or branch-protection configuration is established by this document:
 
 ```text
 paired pinned-FreeRTOS/Fiber assembly parity at -O2 and -Os
@@ -126,7 +134,10 @@ assembly are not accepted as evidence. Unsupported combinations remain
 negative compile/link cases.
 
 The final software-freeze commit is accepted only when this job passes against
-that exact SHA. The same job is repeated after Context-interface extraction.
+that exact SHA. For the already implemented bounded Context/Fiber extraction,
+this remains an outstanding post-extraction requirement, not an inherited
+pre-extraction PASS. Repeat the same qualified gates after later mechanical
+Context/backend or Fiber-interface changes.
 
 ## Artifacts
 
