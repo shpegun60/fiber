@@ -1,0 +1,141 @@
+.syntax unified
+.cpu cortex-m4
+.thumb
+.section .fixture_user_functions,"ax",%progbits
+.global fixture_register_stress
+.type fixture_register_stress,%function
+.thumb_func
+fixture_register_stress:
+    push {r4-r11,lr}
+    sub sp,sp,#20
+    mov r2,sp
+    str r2,[sp,#0]
+    str r1,[sp,#4]
+    str r0,[sp,#8]
+    str r2,[r1,#0]
+    str r0,[r1,#8]
+    movw r2,#0xcafe
+    movt r2,#0xc005
+    str r2,[sp,#12]
+    movw r2,#0x9bdf
+    movt r2,#0x1357
+    str r2,[sp,#16]
+    movw r4,#0x4444
+    movt r4,#0x4444
+    eor r4,r4,r0
+    movw r5,#0x5555
+    movt r5,#0x5555
+    eor r5,r5,r0
+    movw r6,#0x6666
+    movt r6,#0x6666
+    eor r6,r6,r0
+    movw r7,#0x7777
+    movt r7,#0x7777
+    eor r7,r7,r0
+    movw r8,#0x8888
+    movt r8,#0x8888
+    eor r8,r8,r0
+    movw r9,#0x9999
+    movt r9,#0x9999
+    eor r9,r9,r0
+    movw r10,#0xaaaa
+    movt r10,#0xaaaa
+    eor r10,r10,r0
+    movw r11,#0xbbbb
+    movt r11,#0xbbbb
+    eor r11,r11,r0
+.global fixture_direct_schedule_call
+fixture_direct_schedule_call:
+    bl fiber_port_runtime_schedule
+    mov r2,sp
+    ldr r1,[sp,#4]
+    str r2,[r1,#4]
+    add r2,r1,#16
+    stmia r2,{r4-r11}
+    ldr r0,[sp,#8]
+    movw r2,#0x4444
+    movt r2,#0x4444
+    eor r2,r2,r0
+    cmp r4,r2
+    bne .Lreg_bad
+    movw r2,#0x5555
+    movt r2,#0x5555
+    eor r2,r2,r0
+    cmp r5,r2
+    bne .Lreg_bad
+    movw r2,#0x6666
+    movt r2,#0x6666
+    eor r2,r2,r0
+    cmp r6,r2
+    bne .Lreg_bad
+    movw r2,#0x7777
+    movt r2,#0x7777
+    eor r2,r2,r0
+    cmp r7,r2
+    bne .Lreg_bad
+    movw r2,#0x8888
+    movt r2,#0x8888
+    eor r2,r2,r0
+    cmp r8,r2
+    bne .Lreg_bad
+    movw r2,#0x9999
+    movt r2,#0x9999
+    eor r2,r2,r0
+    cmp r9,r2
+    bne .Lreg_bad
+    movw r2,#0xaaaa
+    movt r2,#0xaaaa
+    eor r2,r2,r0
+    cmp r10,r2
+    bne .Lreg_bad
+    movw r2,#0xbbbb
+    movt r2,#0xbbbb
+    eor r2,r2,r0
+    cmp r11,r2
+    bne .Lreg_bad
+    mov r2,sp
+    ldr r3,[sp,#0]
+    cmp r2,r3
+    bne .Lsp_bad
+    ldr r2,[sp,#12]
+    str r2,[r1,#48]
+    movw r3,#0xcafe
+    movt r3,#0xc005
+    cmp r2,r3
+    bne .Lcookie_bad
+    ldr r2,[sp,#16]
+    str r2,[r1,#52]
+    movw r3,#0x9bdf
+    movt r3,#0x1357
+    cmp r2,r3
+    bne .Lcookie_bad
+    mrs r2,control
+    str r2,[r1,#56]
+    cmp r2,#3
+    bne .Lcontrol_bad
+    mrs r2,ipsr
+    str r2,[r1,#60]
+    cmp r2,#0
+    bne .Lorigin_bad
+    movs r0,#0
+    b .Ldone
+.Lreg_bad:
+    movs r0,#121
+    b .Ldone
+.Lsp_bad:
+    movs r0,#122
+    b .Ldone
+.Lcookie_bad:
+    movs r0,#123
+    b .Ldone
+.Lcontrol_bad:
+    movs r0,#124
+    b .Ldone
+.Lorigin_bad:
+    movs r0,#125
+.Ldone:
+    str r0,[r1,#12]
+    add sp,sp,#20
+    pop {r4-r11,pc}
+.size fixture_register_stress,.-fixture_register_stress
+.section .note.GNU-stack,"",%progbits

@@ -1,0 +1,110 @@
+{
+  "ExpectedCommit": "a50edad08b29052631aa469d4df6e6ec7ff68878",
+  "Scope": "Exact selected upstream port and include-file bytes; not a clean Git working-tree assertion",
+  "Files": [
+    {
+      "Path": "include/CMakeLists.txt",
+      "Sha256": "52741830C9909C41EDCDA8328F223226C8CE682990B83BFBD8C6C0C95F7BE9B7"
+    },
+    {
+      "Path": "include/FreeRTOS.h",
+      "Sha256": "2C44261B3B9AD4E72DB690A5735CE431E091992FD29AEFE25BC06F63E26ECBE2"
+    },
+    {
+      "Path": "include/StackMacros.h",
+      "Sha256": "E6E8DCCC04FB251F5B5B660BC1ECA1523AB527BDE5AFF030996DA8781FDF0EAB"
+    },
+    {
+      "Path": "include/atomic.h",
+      "Sha256": "4B1AA5F420DAF854671D25623FFD8EC5CF69C6E705AB768E57197D79AC68B5FE"
+    },
+    {
+      "Path": "include/croutine.h",
+      "Sha256": "C57A4079D6BED513B9945BB99EF7557E96AB7695CFD685314B44082950772651"
+    },
+    {
+      "Path": "include/deprecated_definitions.h",
+      "Sha256": "584B56BFC0E294DED578AE6B88DBF25F1FA73FDA09104363F47F59AF0C06B282"
+    },
+    {
+      "Path": "include/event_groups.h",
+      "Sha256": "DB05995F6BDF2CEA8991A0D338CE00BCE896978EA284EEFA8B5B2177E9F12460"
+    },
+    {
+      "Path": "include/list.h",
+      "Sha256": "2780EC2C84DBC6F2B3B522DE34A47F5112677BD59921C5F3CCCCA724E099BA5B"
+    },
+    {
+      "Path": "include/message_buffer.h",
+      "Sha256": "255CA146677D0AE9EA2B6173C7ECCE74A0300F217349AD3B3099BBB5D29D6090"
+    },
+    {
+      "Path": "include/mpu_prototypes.h",
+      "Sha256": "7BCF4BE7AC136BD3BC01B02F795A4B1C4E6D7733BC4CAE26A1EB2929CBC4CAD2"
+    },
+    {
+      "Path": "include/mpu_syscall_numbers.h",
+      "Sha256": "6F8B1E143ABA870A04DCF2E26CBDA7AFD443EECA5AA7683DB4DAF939D54D38B0"
+    },
+    {
+      "Path": "include/mpu_wrappers.h",
+      "Sha256": "FC85BB471D08CABC26F81F04BCF4589612DEB7233148CE085D191E0725C1B1C1"
+    },
+    {
+      "Path": "include/newlib-freertos.h",
+      "Sha256": "F235D3E1A9F69F4AEDE9F75CC7CAC76E0C88D8E4CA40001D20B6E43AC20062B8"
+    },
+    {
+      "Path": "include/picolibc-freertos.h",
+      "Sha256": "B6DEB08FFFFCDF6201B2FBF3C185E0A35F9B611EA527F34C834B0AA67C371463"
+    },
+    {
+      "Path": "include/portable.h",
+      "Sha256": "7C63071040355F047A8D09F11EE32DBA86D32EAAB29CCE822D9882F0C87B4DB5"
+    },
+    {
+      "Path": "include/projdefs.h",
+      "Sha256": "17F5B94E35D1E322B63DA8B2DC6EF42B46CBEA10CEF590440C3DEB8EE3C2B6F3"
+    },
+    {
+      "Path": "include/queue.h",
+      "Sha256": "F71A5437BDCA655940FBAF5B2B5BFDF39DBC3E9959421FE0A5D023CE8A872461"
+    },
+    {
+      "Path": "include/semphr.h",
+      "Sha256": "6B925650D492F7181277B3088AA6A5E3E0859C1CE4FB32B1ADA6E7519EA20581"
+    },
+    {
+      "Path": "include/stack_macros.h",
+      "Sha256": "9E3A25980D79E834FC055D70C673C2DE6D2BE226F9EF88D7EB87BA28B8A4128F"
+    },
+    {
+      "Path": "include/stdint.readme",
+      "Sha256": "4819660A83F64EEE25AB982A4ABFAEE31098A0E6090CC9134A34B3D20B4E4BEA"
+    },
+    {
+      "Path": "include/stream_buffer.h",
+      "Sha256": "C748A5106EBEC59EBF577409B0CD95028EEE5869DE169A2A8875706BA28795ED"
+    },
+    {
+      "Path": "include/task.h",
+      "Sha256": "AA1F9D04E96B248C6FC7A86D862D59E034DD9534C96F8A0833EB0F46AA3DA6BA"
+    },
+    {
+      "Path": "include/timers.h",
+      "Sha256": "C5F33A2AE674FD86F708D5CA5F2ACE2E34DFB05FF15158A879C8948619FBE78E"
+    },
+    {
+      "Path": "portable/GCC/ARM_CM4_MPU/mpu_wrappers_v2_asm.c",
+      "Sha256": "6B5110E0C14BA78C20D43C1EDF17E5AC2311A6AF0413D6AAAB5DF59EDB2655C2"
+    },
+    {
+      "Path": "portable/GCC/ARM_CM4_MPU/port.c",
+      "Sha256": "CC9B731BC23E52A91D7D37B5DDA16D7B501CFB4D3B3A3C8229C355C66662BF59"
+    },
+    {
+      "Path": "portable/GCC/ARM_CM4_MPU/portmacro.h",
+      "Sha256": "FA624BD1CAFAD461C86D1858E5AA9328EDEFE71D0E19A328746F85A52E7C35AD"
+    }
+  ]
+}
