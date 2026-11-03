@@ -54,6 +54,30 @@ foreach ($case in @(
         ($case.Reject -and $null -ne $caught -and $caught.StartsWith('Public provider recipe:')) -or
         (!$case.Reject -and $null -eq $caught))
 }
+$memoryChecks = @($ast.EndBlock.Statements | Where-Object {
+    $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -ceq 'Assert-MemoryProviderLinkFailure'
+})
+Check 'memory-link/one-validator' ($memoryChecks.Count -eq 1)
+. ([scriptblock]::Create($memoryChecks[0].Extent.Text))
+$memoryFailure = 'undefined reference to `memcpy''' + "`n" + 'undefined reference to `memset'''
+foreach ($case in @(
+        @{Name='exact';Code=1;Output=$memoryFailure;Reject=$false},
+        @{Name='repeated';Code=1;Output=($memoryFailure + "`n" + $memoryFailure);Reject=$false},
+        @{Name='success';Code=0;Output=$memoryFailure;Reject=$true},
+        @{Name='suffix';Code=1;Output=$memoryFailure.Replace('memcpy', 'memcpy.extra');Reject=$true},
+        @{Name='case';Code=1;Output=$memoryFailure.Replace('memcpy', 'MEMCPY');Reject=$true},
+        @{Name='space';Code=1;Output=$memoryFailure.Replace('memcpy', 'memcpy extra');Reject=$true},
+        @{Name='foreign';Code=1;Output=($memoryFailure + "`n" + 'undefined reference to `malloc''');Reject=$true},
+        @{Name='unquoted';Code=1;Output=($memoryFailure + "`nundefined reference to foreign");Reject=$true},
+        @{Name='empty';Code=1;Output='';Reject=$true})) {
+    $caught = $null
+    try { Assert-MemoryProviderLinkFailure -ExitCode $case.Code -Output $case.Output }
+    catch { $caught = $_.Exception.Message }
+    Check ('memory-link/' + $case.Name) (
+        ($case.Reject -and $null -ne $caught -and $caught.StartsWith('Fixture memory retention control failed for the wrong reason:')) -or
+        (!$case.Reject -and $null -eq $caught))
+}
 $cases = @(
     @{Name='local/no-qemu';Required=$false;Subset=$false;Root=$null;Diagnostic=$null},
     @{Name='local/with-qemu';Required=$false;Subset=$false;Root='/existing/prefix';Diagnostic=$null},

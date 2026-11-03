@@ -46,8 +46,9 @@ int fiber_addr_plausible_code(uintptr_t address)
 			(address < UINT32_C(0x08020000));
 }
 
-/* Freestanding implementations keep the fixture independent of a C library
- * if GCC lowers a structure operation to a call. */
+/* LTO may introduce structure-copy calls after its reachability pass. Keep
+ * these freestanding providers externally available through that pass. */
+__attribute__((used, externally_visible, noipa))
 void *memcpy(void *destination, const void *source, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;
@@ -58,6 +59,7 @@ void *memcpy(void *destination, const void *source, size_t count)
 	return destination;
 }
 
+__attribute__((used, externally_visible, noipa))
 void *memset(void *destination, int value, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;

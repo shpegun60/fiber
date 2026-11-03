@@ -29,8 +29,8 @@ const uintptr_t fiber_arm_cm0_mpu_runtime_vectors[16] = {
 	[14] = (uintptr_t)&PendSV_Handler
 };
 
-/* Keep the proof freestanding when GCC lowers a structure operation to a
- * library call. */
+/* Keep late LTO structure-lowering calls bound to these fixture providers. */
+__attribute__((used, externally_visible, noipa))
 void *memcpy(void *destination, const void *source, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;
@@ -41,6 +41,7 @@ void *memcpy(void *destination, const void *source, size_t count)
 	return destination;
 }
 
+__attribute__((used, externally_visible, noipa))
 void *memset(void *destination, int value, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;

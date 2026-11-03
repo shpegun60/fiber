@@ -3702,3 +3702,68 @@ The rehashed qualification records contain 5,288 inputs and 32,882 artifacts
 without drift. No actual Secure TF-M image, veneer/service execution, board
 operation or runtime profile promotion is established by these synthetic
 links, host-mock runs and bounded compiler/assembly checks.
+
+### Combined Replay Failures Remain Explicit
+
+The immutable pre-extraction `0372d72a7d7ba98ee2e5ff15908cfbd03d1fec64`
+architecture-execution aggregate finishes with FAIL after 8,691.17 seconds,
+969 source files and zero drift. Its executed CM33/CM55 Secure-only suites,
+staged SecureContext/MPU suites and TF-M FP/R9 suites pass before the later M23
+LTO archive fixture fails on unresolved `memcpy`/`memset`. These synthetic
+definitions were removed before late structure-operation lowering introduced
+their calls. It is a fixture-provider retention defect, not an observed switch
+failure. Later matrix gates remain NOT_RUN. Receipt:
+`C:/fq-96d5c9e0ed/matrix-result.json`, SHA-256
+`3693F8E2F00F5A776FA6088273BFE70FF2EC11A53AEE0567AF9BAFBB63A3AE42`.
+None of that earlier-source execution qualifies the later Context inversion.
+
+The immutable post-inversion `1baf85f155f2b20701b476fee5ddb25d66f9a98c`
+compile/link/codegen aggregate also remains FAIL: 892.94 seconds, 1,015 source
+files and zero drift. Context/Fiber gates, pinned O2/Os parity, classic guards,
+consumer cohorts and owner guards pass. The MPU constructor annotation-removal
+copy then fails because it omits canonical Context headers, before the mutant
+can exercise its intended instrumentation oracle. This compile error is not an
+accepted mutant rejection. Conditional QEMU gates were not selected, and later
+matrix gates are NOT_RUN. Receipt: `C:/fcq-3c68253a43/matrix-result.json`, SHA-256
+`A8FDE2302745BCE1136EB7DF430EECD14C96CCAD07DC5B5E7625962A8FFD75BA`.
+
+### Synthetic LTO Providers And Isolated Attribute Inputs
+
+Eight standalone startup fixtures and the generated exact-cohort startup now
+retain their freestanding `memcpy`/`memset` definitions with `used`,
+`externally_visible` and `noipa`. This changes test providers only, not runtime
+sources or compiler flags applied to production code. The original M23 failure
+also reproduces against the post-inversion source before the fixture repair.
+The maintained M23 LTO link then passes and retains both strong providers;
+removing their annotations reproduces exactly the missing memory-service pair.
+Positive and negative links now use separate maps.
+
+Independent review identifies a P2 weakness in the first negative parser:
+word-only capture and case-insensitive comparison could accept a suffixed or
+wrong-case symbol. The final helper captures complete quoted names, rejects
+unparsed undefined-reference messages and compares the exact pair case-
+sensitively. Its maintained actual-helper regression passes 99 policy/recipe/
+diagnostic checks, including suffix, case, space, foreign, unquoted, empty and
+successful-link controls. Receipt:
+`%TEMP%/matrix-execution-policy-2c7711d50f5947099ee17b6fccf2dceb/results.json`,
+SHA-256 `EB5D0F59BB483996347C998ED18AAF4086C50221679AE3ED0EA6ECD18E7723C3`.
+Final source review finds no remaining confirmed issue.
+
+The complete nine-function maintained integration/cohort replay passes against
+immutable `1baf85f` plus nine exact test-only overlays, 1,015 files and zero drift.
+This includes M23, CM0/3/4/33 MPU, all three M55 MPU variants and exact cohort
+mismatch checks. Receipt: `C:/fmem-8c7404ffae/results.json`, SHA-256
+`12F3704A330E7DB06A1F1C678D55D8C16128319E7F7DE3ED8BD369EC54B1EDED`.
+All nine live overlays match its retained copies. The earlier receipts before
+map/parser tightening are narrower, not the final qualification.
+
+The separate MPU attribute runner explicitly hashes/copies canonical Context
+headers into its annotation-removal tree. A missing canonical-input control
+must produce its exact missing-header diagnostic and is not counted as an
+instrumentation mutant. Existing imports, counterflags, frame/assembly oracles
+and attribute-removal behavior are unchanged. The full maintained gate passes
+24 configurations, 48 hostile mutants and 40 caller compiles against immutable
+`1baf85f` plus its two owned overlays. Ninety-nine inputs and 1,996 artifacts
+rehash without mismatch. Receipt: `C:/mca-48c2a5ba/results.json`, SHA-256
+`0323E907F96D8A3DE611821DB689366B8AA8B41CEF3E860395C42553091DE8AE`.
+These are focused repairs/links, not a combined PASS or CPU execution claim.

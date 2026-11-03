@@ -346,6 +346,22 @@ function Test-FinalReversePortAbi {
     }
 }
 
+function Assert-MemoryProviderLinkFailure {
+    param([int]$ExitCode, [string]$Output)
+
+    $references = [regex]::Matches($Output,
+        'undefined reference to [`''"](?<symbol>[^`''"]+)[`''"]')
+    $missing = @($references | ForEach-Object {
+        $_.Groups['symbol'].Value
+    } | Sort-Object -CaseSensitive -Unique)
+    if ($ExitCode -eq 0 -or $references.Count -eq 0 -or
+            $references.Count -ne [regex]::Matches($Output, 'undefined reference to ').Count -or
+            $missing.Count -ne 2 -or
+            (Compare-Object -CaseSensitive @('memcpy', 'memset') $missing)) {
+        throw "Fixture memory retention control failed for the wrong reason:`n$Output"
+    }
+}
+
 function Assert-PublicProviderRecipe {
     param([string]$Source)
 
@@ -3013,6 +3029,8 @@ int fiber_addr_plausible_code(uintptr_t address)
     return (address != 0u) ? 1 : 0;
 }
 
+/* LTO can lower structure operations after its reachability analysis. */
+__attribute__((used, externally_visible, noipa))
 void *memcpy(void *destination, const void *source, size_t count)
 {
     unsigned char *dst = (unsigned char *)destination;
@@ -3023,6 +3041,7 @@ void *memcpy(void *destination, const void *source, size_t count)
     return destination;
 }
 
+__attribute__((used, externally_visible, noipa))
 void *memset(void *destination, int value, size_t count)
 {
     unsigned char *dst = (unsigned char *)destination;
@@ -4323,6 +4342,43 @@ typedef enum IRQn {
             throw "ARM_CM23_NTZ runtime vector slot 14 lost strong PendSV handler ($mode)"
         }
 
+        if ($useLto) {
+            foreach ($memorySymbol in @('memcpy', 'memset')) {
+                if (@($defined | Where-Object {
+                        $_ -match ("\bT\s+" + $memorySymbol + "$")
+                    }).Count -ne 1) {
+                    throw "ARM_CM23_NTZ LTO lost its strong fixture provider: $memorySymbol"
+                }
+            }
+            # Reproduce late structure-lowering without retained providers.
+            # Failure must name only the two memory services, not another ABI.
+            $retention = '__attribute__((used, externally_visible, noipa))'
+            $startupText = Get-Content -LiteralPath $startupSource -Raw
+            if ([regex]::Matches($startupText, [regex]::Escape($retention)).Count -ne 2) {
+                throw 'ARM_CM23_NTZ fixture memory retention anchors changed'
+            }
+            $mutantSource = Join-Path $probeDir 'startup-memory-retention-removed.c'
+            $mutantObject = Join-Path $probeDir 'startup-memory-retention-removed.o'
+            Set-Content -LiteralPath $mutantSource -Encoding ASCII -Value (
+                $startupText.Replace($retention, ''))
+            & $Compiler @($baseArgs + $counterFlags + @(
+                '-c', $mutantSource, '-o', $mutantObject))
+            if ($LASTEXITCODE -ne 0) {
+                throw 'ARM_CM23_NTZ memory retention control failed to compile'
+            }
+            $mutantArgs = @($linkArgs | ForEach-Object {
+                if ($_ -eq $startupObject) { $mutantObject }
+                elseif ($_ -eq $elfPath) { Join-Path $probeDir 'memory-retention-removed.elf' }
+                elseif ($_ -eq "-Wl,-Map,$mapPath") {
+                    '-Wl,-Map,' + (Join-Path $probeDir 'memory-retention-removed.map')
+                }
+                else { $_ }
+            })
+            $mutant = Invoke-CompilerProbe -Compiler $Compiler -Arguments $mutantArgs `
+                -LogPath (Join-Path $probeDir 'memory-retention-removed.log')
+            Assert-MemoryProviderLinkFailure -ExitCode $mutant.ExitCode -Output $mutant.Output
+        }
+
         $competingSource = Join-Path $probeDir "competing.c"
         $competingObject = Join-Path $probeDir "competing.o"
         Set-Content -LiteralPath $competingSource -Encoding ASCII -Value `
@@ -4333,7 +4389,12 @@ typedef enum IRQn {
             throw "ARM_CM23_NTZ competing-handler fixture compile failed ($mode)"
         }
         $duplicateLog = Join-Path $probeDir "duplicate.log"
-        $duplicateArgs = @($linkArgs[0..($linkArgs.Count - 3)] + @(
+        $duplicateBase = @($linkArgs[0..($linkArgs.Count - 3)] | ForEach-Object {
+            if ($_ -eq "-Wl,-Map,$mapPath") {
+                '-Wl,-Map,' + (Join-Path $probeDir 'duplicate.map')
+            } else { $_ }
+        })
+        $duplicateArgs = @($duplicateBase + @(
             $competingObject, "-o", (Join-Path $probeDir "duplicate.elf")))
         $duplicate = Invoke-CompilerProbe -Compiler $Compiler `
             -Arguments $duplicateArgs -LogPath $duplicateLog

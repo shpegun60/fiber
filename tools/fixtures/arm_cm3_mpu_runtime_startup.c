@@ -31,6 +31,8 @@ const uintptr_t fiber_arm_cm3_mpu_runtime_vectors[16] = {
 
 /* Freestanding implementations keep the fixture independent of a C library
  * if GCC lowers a structure operation to a call. */
+/* Keep these providers available for calls introduced late by LTO. */
+__attribute__((used, externally_visible, noipa))
 void *memcpy(void *destination, const void *source, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;
@@ -41,6 +43,7 @@ void *memcpy(void *destination, const void *source, size_t count)
 	return destination;
 }
 
+__attribute__((used, externally_visible, noipa))
 void *memset(void *destination, int value, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;

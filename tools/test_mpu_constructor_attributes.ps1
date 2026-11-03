@@ -25,7 +25,8 @@ $nm = Join-Path $bin 'arm-none-eabi-nm.exe'
 $objdump = Join-Path $bin 'arm-none-eabi-objdump.exe'
 $objcopy = Join-Path $bin 'arm-none-eabi-objcopy.exe'
 foreach ($path in @($nm, $objdump, $objcopy, (Join-Path $CmsisCore 'core_cm33.h'),
-        (Join-Path $CmsisCore 'core_cm55.h'), (Join-Path $fixtures 'main.h'), (Join-Path $fixtures 'probe.c'))) {
+        (Join-Path $CmsisCore 'core_cm55.h'), (Join-Path $fixtures 'main.h'), (Join-Path $fixtures 'probe.c'),
+        (Join-Path $fixtures 'README.md'), (Join-Path $repo 'context/context_api_types.h'))) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing proof input: $path" }
 }
 if (-not $BuildRoot) { $BuildRoot = [IO.Path]::GetTempPath() }
@@ -128,6 +129,7 @@ $profiles = @(
 )
 $helpers = @('read_r9', 'basepri_read', 'basepri_write', 'vectors_base_addr', 'vectors_base_ptr', 'read_vector_slot', 'read_initial_msp')
 $headers = @(Get-ChildItem -LiteralPath $repo -File -Filter *.h | Select-Object -ExpandProperty FullName)
+$headers += @(Get-ChildItem -LiteralPath (Join-Path $repo 'context') -File -Filter *.h | Select-Object -ExpandProperty FullName)
 $headers += @(Get-ChildItem -LiteralPath (Join-Path $repo 'fiber') -File -Filter *.h | Select-Object -ExpandProperty FullName)
 $headers += @(Get-ChildItem -LiteralPath (Join-Path $repo 'fiber/port') -File -Filter *.h | Select-Object -ExpandProperty FullName)
 foreach ($profile in $profiles) {
@@ -143,7 +145,7 @@ $sources = @($profiles | ForEach-Object {
     }
 })
 $cmsisHeaders = @(Get-ChildItem -LiteralPath $CmsisCore -File -Filter *.h | Select-Object -ExpandProperty FullName)
-$inputs = @($headers + $PSCommandPath + (Join-Path $fixtures 'main.h') + (Join-Path $fixtures 'probe.c') +
+$inputs = @($headers + $PSCommandPath + (Join-Path $fixtures 'main.h') + (Join-Path $fixtures 'probe.c') + (Join-Path $fixtures 'README.md') +
     $sources + $cmsisHeaders | Sort-Object -Unique)
 $hashes = @($inputs | ForEach-Object { [pscustomobject]@{Path=$_; Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash} })
 $hashes | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $build 'sources.json') -Encoding ASCII
@@ -157,6 +159,33 @@ foreach ($inputPath in $headers) {
     $null = New-Item -ItemType Directory -Path (Split-Path $destination) -Force
     Copy-Item -LiteralPath $inputPath -Destination $destination
 }
+
+# A missing copied canonical header must be a distinct input failure, never an
+# accepted annotation mutant or an implicit fallback to the live source tree.
+$canonicalProbe = Join-Path $build 'canonical-input.c'
+Set-Content -LiteralPath $canonicalProbe -Encoding ASCII -Value '#include "fiber/fiber_api_types.h"'
+$canonicalFlags = @('-mcpu=cortex-m33', '-mthumb', '-std=gnu11', '-ffreestanding', '-E', '-P')
+$null = Invoke-Checked $ArmGcc ($canonicalFlags + @("-I$shadow", $canonicalProbe)) (Join-Path $build 'canonical-input-positive.i')
+$missingRoot = Join-Path $build 'missing-canonical-input'
+$null = New-Item -ItemType Directory -Path (Join-Path $missingRoot 'fiber') -Force
+Copy-Item -LiteralPath (Join-Path $shadow 'fiber/fiber_api_types.h') -Destination (Join-Path $missingRoot 'fiber/fiber_api_types.h')
+$missingLog = Join-Path $build 'missing-canonical-input.log'
+$missingRejected = $false
+try {
+    $null = Invoke-Checked $ArmGcc ($canonicalFlags + @("-I$missingRoot", $canonicalProbe)) $missingLog
+} catch {
+    $diagnostic = Get-Content -LiteralPath $missingLog -Raw
+    $expected = '(?m)fatal error: \.\.[\\/]context[\\/]context_api_types\.h: No such file or directory'
+    if ($_.Exception.Message -notlike 'Proof command failed (1):*' -or
+            [regex]::Matches($diagnostic, $expected).Count -ne 1) { throw }
+    $missingRejected = $true
+}
+if (-not $missingRejected) { throw 'Missing canonical header was accepted or resolved outside the explicit snapshot' }
+[pscustomobject]@{ Status='PASS'; Positive='canonical-input-positive.i';
+    MissingCanonicalInputRejected=$true; Diagnostic='missing-canonical-input.log';
+    OmittedPath='context/context_api_types.h'; AnnotationMutant=$false } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $build 'canonical-input-control.json') -Encoding ASCII
+
 foreach ($profile in $profiles) {
     $relative = "fiber/port/$($profile.Name)/non_secure"
     $port = Join-Path $repo $relative

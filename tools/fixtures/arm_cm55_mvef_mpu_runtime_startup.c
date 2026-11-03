@@ -31,6 +31,8 @@ const uintptr_t fiber_ARM_CM55_MVEF_MPU_runtime_vectors[16] = {
 
 /* Keep the proof freestanding when GCC lowers a structure operation to a
  * library call. */
+/* Keep these providers available for calls introduced late by LTO. */
+__attribute__((used, externally_visible, noipa))
 void *memcpy(void *destination, const void *source, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;
@@ -41,6 +43,7 @@ void *memcpy(void *destination, const void *source, size_t count)
 	return destination;
 }
 
+__attribute__((used, externally_visible, noipa))
 void *memset(void *destination, int value, size_t count)
 {
 	unsigned char *dst = (unsigned char *)destination;
