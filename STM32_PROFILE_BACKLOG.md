@@ -126,10 +126,21 @@ callback is too late to prove pre-save LSPACT; any such observation needs a
 separate model-side read-only probe, not a production instrumentation hook.
 The pilot includes causal compiled omissions and pinned MPU reference associations.
 This is O2/direct/non-LTO MPU8 model evidence, not full FP qualification. Four
-positives, ten causal backend negatives and one model pass. The next separate
-grid extends optimization/link coverage; strict low/FPSCR self-selection and
-pre-save lazy-state observation remain explicit coverage items. Keep all 25
-basic-grid files and the qualified FP pilot unchanged.
+positives, ten causal backend negatives and one model pass. The separate
+[FP grid](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-fp-grid) now extends this to 32
+O2/Os ordinary/final-LTO direct/archive positives, 20 causal negatives and a
+model: 53 observations PASS, with eight link-only references and 32 associations.
+Strict low/FPSCR self-selection and pre-save lazy-state observation remain
+explicit coverage items, as do MPU16, softfp and O0/Og/O3. Keep all 25 basic-grid
+files and the qualified FP pilot unchanged.
+
+The next lazy-state proof should be a separate model-side observer over the
+four existing positive O2/direct FP-pilot ELFs, not fixture/runtime edits. Bind
+read-only pre-copy and post-copy observations to decoded ELF anchors and require
+complete paired events plus the unchanged exact terminal result. The present
+four-image schedule yields 88 save pairs (60 extended, 28 basic). Post-save
+LSPACT=0 alone remains insufficient; only a successfully qualified observer can
+establish the lazy transition. This is planned coverage, not a completed gate.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at

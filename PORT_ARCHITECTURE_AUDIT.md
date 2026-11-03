@@ -4824,6 +4824,87 @@ not new QEMU/ARM execution, pinned-reference parity, the default combined
 matrix, global all-optimization equivalence, hosted CI or hardware validation.
 The separate basic-frame MPU pilot and its exclusions remain unchanged.
 
+## CM4 MPU FP Grid
+
+Status: separate bounded O2/Os, ordinary/final-LTO, direct/archive AN386
+FP-active grid PASS on 2026-11-03. The published `e81f3f3` FP pilot, all 25
+basic-grid files, production C/assembly and public ABI remain unchanged.
+
+`tools/test_classic_cm4_mpu_fp_grid.ps1` closes these independently fixed keys:
+
+- 32 positives: Context/FiberV1 x eager/lazy x O2/Os x ordinary/final LTO x
+  direct/archive provider linkage.
+- 20 causal backend controls: five mutations x eager/lazy for Context O2 native
+  direct, and for FiberV1 Os final-LTO archive.
+- Eight actual pinned FreeRTOS link-only final ELFs, one for each
+  optimization/LTO/archive tuple, and one AN386 model probe.
+- 32 same-configuration hash-bound reference associations: 96 maintained basic
+  mechanism-check results plus the explicit FP-copy facts.
+
+Fresh compile root `C:\cmfg-20261103-c2` closes as COMPILE-PREFLIGHT-PASS without
+WSL/QEMU. Fresh execution root `C:\cmfg-20261103-e1` closes as FP-GRID-PASS with
+all 53 observations: model, 32 positives and 20 exact expected FP mismatches.
+All 61 final ELF hashes match between the compile and execution builds.
+All positives observe post-save CONTROL mask `0x22` and LSPACT 0. Return PC and
+complete frame checks use each image's actual symbols and include STKALIGN
+padding rather than assuming the O2 pilot's addresses.
+
+Archive variants package only the two actual selected-port provider objects,
+use the enrolled explicit AR plugin, and verify exact members and genuine
+extraction in the final map. Common, application and external cohort expectation
+objects remain direct inputs. No whole-archive or forced-symbol extraction is
+used. The reference archive similarly contains the actual pinned upstream port.
+
+The first attempt, `C:\cmfg-20261103-c1`, remains FAIL: the frozen ordinary-only
+pilot audit rejected legitimate final-LTO LOCAL binding of the common-private
+current slot. The separate grid adapter applies the already-qualified basic
+grid rule to only the three named common-private objects, only with exact
+prelink common ownership and final STT_OBJECT/extent proof. Public functions,
+strong exception handlers and cohort symbols still require GLOBAL binding.
+This changes the test adapter, not runtime visibility or the qualified pilot.
+
+The successful execution captures 216 selected input files, enrolls 1,811 inputs,
+records 20 generated backend mutations and 4,084 artifacts, and closes with zero
+input/QEMU identity drift. It runs 76 synthetic grid contract controls in
+addition to the inherited 60 decoded and 64 pilot receipt controls. Synthetic
+controls are not CPU observations. The captured independent PowerShell checker
+requires exact keys, terminals, observed facts, reference tuples, canonical
+model/61-ELF bindings and full artifact-byte closure before admission.
+
+Execution receipt SHA256:
+`D758117469244D5939A140866EC90EC44811D48E3FA3F6DC2956522C7B3F7B8A`
+
+Execution artifact manifest SHA256:
+`3D0088148AFB820A213E2084055489B4B179A2370EF9F882CBB2722CEB50EE38`
+
+Execution capture manifest SHA256:
+`0CB3D84D3650A69EA67111A07F4E53844663A4995B9998437D46243099ED1440`
+
+Compile receipt SHA256:
+`A56B480221BC6DA99281DAE456DE93DC0C6B077310518486494FA87AEC247A8E`
+
+Independent compile/provenance review rehashed all 1,811 inputs, 20 generated
+mutants, 216 captures and 3,950 compile artifacts. It checked 130 prelink
+definitions across 52 subject images and all 70 final LOCAL private bindings:
+each is LTO-only with the exact strong common prelink owner. Independent review
+of the Os/LTO/archive representative also confirms byte-exact real provider
+archive members, genuine extraction, and GLOBAL public/handler/cohort symbols.
+
+Independent execution-receipt review verifies 53 outcomes, 61 ELFs, all 32
+associations and 4,084 artifacts with zero rehash mismatches. It passes 115
+full-checker negative controls and 24 AST-extracted association negatives.
+Review report: `C:\cmfg-review-20261103\e1-2b4e9a1f\review-results.json`, SHA256
+`3CEA1231F6334E15B36797DF1F429703E05EA97ACC334E583188CE93E8BF0F84`.
+These controls do not constitute new target executions or reference runs.
+
+This is selected-byte evidence, not an implicit exact-clean-Git claim.
+`CompleteSuite` remains false; `RequestedInventoryComplete` describes only the
+32/20/8 grid. No reference execution, whole-port equivalence, O0/Og/O3, MPU16,
+softfp, other CPUs, STM32-specific NVIC-width manifests, hosted CI, default
+aggregate update or hardware qualification is claimed. Strict low-FP/FPSCR
+self-selection and pre-save lazy-state observation remain separate bounded
+coverage items; the qualified application/probe/checker are not rewritten.
+
 ## CM4 MPU FP-Active Pilot
 
 Status: separate opt-in O2/direct/non-LTO AN386 pilot PASS on 2026-11-03.

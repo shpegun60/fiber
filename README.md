@@ -97,6 +97,12 @@ mutations and one AN386 model probe. It covers O2/direct/non-LTO MPU8 only;
 one pinned link-only FreeRTOS ELF supplies bounded FP mechanism comparisons.
 This is not pre-save LSPACT observation, a full FP grid or hardware evidence.
 
+The separate [CM4 MPU FP grid](PORT_ARCHITECTURE_AUDIT.md#cm4-mpu-fp-grid)
+extends this to 32 O2/Os, ordinary/final-LTO, direct/archive positives and 20
+causal negatives plus a model: 53 AN386 observations PASS. Eight link-only
+FreeRTOS ELFs provide matching reference associations. This remains bounded
+MPU8 hard-FP evidence, not all optimizations, all MPU features or hardware.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
