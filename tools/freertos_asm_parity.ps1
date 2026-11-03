@@ -567,7 +567,8 @@ function Start-ClassicFocusedEvidence {
         $paths += @(Get-ChildItem -LiteralPath $root -Recurse -Filter '*.h' -File | Select-Object -ExpandProperty FullName)
     }
     $profileRoots = if ($Cm3Only) { @('ARM_CM3') } else { @('ARM_CM0', 'ARM_CM0_MPU') }
-    $roots = @($RepoRoot, (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber/port'),
+    $roots = @($RepoRoot, (Join-Path $RepoRoot 'context'),
+        (Join-Path $RepoRoot 'fiber'), (Join-Path $RepoRoot 'fiber/port'),
         (Join-Path $kernel "portable/GCC/ARM_$ClassicName"), (Join-Path $kernel 'include'), $cmsis, $configDir)
     $roots += @($profileRoots | ForEach-Object { Join-Path $RepoRoot "fiber/port/$_" })
     foreach ($root in $roots) {

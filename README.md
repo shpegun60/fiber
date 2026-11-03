@@ -44,6 +44,11 @@ keep conditional QEMU runtime, global all-optimization parity, board and CI
 claims separate. This is the bounded F0/G0/G4/H7/H7S CPU-profile checkpoint,
 not completion of every feature combination in the STM32 catalog.
 
+A separate [CM0 exception-runtime receipt](PORT_ARCHITECTURE_AUDIT.md#post-context-cm0-exception-runtime)
+passes 298 captured QEMU cases through public Context and Fiber v1, including
+ordinary/final-LTO and archive variants. It does not establish M0+/G0, FP,
+other CPU profiles, STM32 peripheral behavior or hardware validation.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
@@ -613,10 +618,11 @@ code. Common runtime code uses the opaque callable `fiber_port_runtime_abi.h`
 boundary and does not include the selected CPU contract.
 
 Cross-file implementation declarations are additionally isolated in the
-concrete port's `fiber_port_private.h`. `fiber_core.c` now calls exactly the
-eight CPU-neutral operations in `fiber_port_runtime_abi.h`; it does not transport
+concrete port's `fiber_port_private.h`. `context/context_core.c` calls only the
+eight CPU-neutral operations in the runtime port ABI; it does not transport
 MSP values or call selected-port-private startup, validation, scheduler, SVC, or
-PendSV helpers. This activation changes first-start ordering and requires a
+PendSV helpers. `fiber/fiber_core.c` is now only the one-way legacy adapter.
+The earlier ABI activation changed first-start ordering and requires a
 fresh H7 hardware run before restoring the runtime-validation claim.
 
 `fiber_port_private.h` is included only by that concrete profile's own role
@@ -712,20 +718,24 @@ Those mandatory map/isolation checks do not depend on the address-hook policy
 settings; setting them to zero or allowing permissive hooks cannot bypass the
 protected map. Adding such a profile does not add callbacks to the portable API.
 
-`FiberContext` objects and their PSP stack buffers require persistent storage.
-Use static, global, or application-owned storage that outlives every context
-restore. Automatic local buffers are intentionally not supported; reclaimable
-storage is valid only after the application has permanently stopped that
-context.
+Context/Fiber objects, runtime policy storage and their PSP stack buffers require
+static lifetime and fixed addresses. Automatic local buffers are unsupported.
+There is no v1 completion or reclamation protocol: do not copy, move, free or
+reinitialize an initialized object, even if application policy stops selecting
+it. Entry `arg` and dispatcher/selector `user` retain pointers, not copies of
+their pointees. Those pointees must remain valid for every use. In particular,
+default startup rewinds MSP; a startup-local C++ object is not safe retained
+policy/argument storage merely because `start()` never returns.
 
-The public API is exactly `fiber_init()`, `fiber_current()`,
+The legacy compatibility API is exactly `fiber_init()`, `fiber_current()`,
 `fiber_scheduler_set_pick_next()`, `fiber_start()`, and `fiber_schedule()`.
 Names such as `fiber_yield()`, `fiber_sleep_until()`, and `fiber_wake()` are
 future application-scheduler design examples. They are not current library
 exports.
 
 For automatic ARMv7E-M public type selection, include the device CMSIS header
-(normally the application's `main.h`) before `fiber_core.h`; it provides
+(normally the application's `main.h`) before any complete-storage public header:
+`fiber_core.h`, `context/context.h`, or `fiber/lifecycle/fiber_v1.h`. It provides
 `__CORTEX_M` so the facade can distinguish the concrete M4 and M7 source
 groups. A build-selected integration supplies its selected type header through
 the build include path instead.

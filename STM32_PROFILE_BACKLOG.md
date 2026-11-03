@@ -11,7 +11,7 @@ This is the implementation backlog accompanying
 [`STM32_PORT_FREEZE_INVENTORY.md`](STM32_PORT_FREEZE_INVENTORY.md), not a new
 support declaration or a replacement for a profile's `FREERTOS_PARITY.md`.
 It reconciles source groups, implemented manifests, pending processor-state
-mechanics, and unresolved inclusion choices before Context/Fiber extraction.
+mechanics, and unresolved inclusion choices for the retained full-profile freeze.
 
 Recorded implementation inventory on 2026-11-02:
 
@@ -58,6 +58,13 @@ included host and bounded ARM constructor execution are not full exception/FP
 runtime qualification. Earlier aggregate FAIL receipts remain unchanged in the
 audit log. This is a bounded local software checkpoint, not an all-profile
 freeze, staged-profile activation, hardware result or exact-SHA CI result.
+
+The separate [post-Context CM0 exception-runtime suite](PORT_ARCHITECTURE_AUDIT.md#post-context-cm0-exception-runtime)
+passes 298 actual microbit firmware cases, including pure Context and real
+Fiber, O2/Os ordinary/final-LTO, direct/archive, strict panics and compiled
+restore/publication controls. Its captured sources and evidence are independent
+of the aggregate above. It does not qualify M0+/G0, CM4/CM7 FP behavior, other
+profiles, peripherals or a board, and is not final-LTO FreeRTOS equivalence.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
@@ -306,7 +313,8 @@ cross-image and private layout/cohort changes receive their appropriate identity
 8. **Resolve conditional feature and M85 scope, then freeze.** Do not retire
    transitional coverage until every remaining role has a concrete replacement
    or an explicit scope decision. Complete the global gates below before
-   beginning Context extraction.
+   claiming the full included-profile freeze. The older extraction ordering is
+   superseded only for the implemented bounded F0/G0/G4/H7/H7S extraction.
 
 Reference geometry is in
 [`ARM_CM55/non_secure/portmacrocommon.h`](../../../../_reference/FreeRTOS-Kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h).
@@ -352,14 +360,15 @@ The inventory receipt is
 `%TEMP%/fiber-m85-reference-inventory-20261102a/results.json`; no Fiber
 cohort, final runtime link, exception execution or hardware was qualified.
 
-## Gates Before CPU Extraction
+## Retained Full-Roadmap Freeze Gates
 
-The mandatory order remains
-[`CONTEXT_FIBER_ARCHITECTURE.md`](CONTEXT_FIBER_ARCHITECTURE.md): complete the
-included processor-state contracts, record a stable checkpoint, then mechanically
-separate Context, Fiber lifecycle, Tasks and scheduler policy.
+The complete-profile freeze still requires the processor-state contracts and
+evidence in [`CONTEXT_FIBER_ARCHITECTURE.md`](CONTEXT_FIBER_ARCHITECTURE.md).
+The later bounded scope decision permits the implemented Context/Fiber
+extraction before that broader freeze. It does not waive any requirement below
+or establish exception, feature or hardware qualification through extraction.
 
-Real pre-extraction blockers are:
+Blockers to claiming that full included-profile freeze are:
 
 1. An unclosed known runtime defect, including the CONTROL correction.
 2. A required pending cohort, or unresolved inclusion boundary hidden behind a
@@ -372,12 +381,12 @@ Real pre-extraction blockers are:
    bundle, or recorded stable pre-extraction commit. See
    [`CI_VALIDATION_PLAN.md`](CI_VALIDATION_PLAN.md).
 
-Extraction must wait because unfinished banked state, companion ownership,
-protected images and provider contracts can still change the backend being
-separated. Combining those changes with dispatcher/current/start ownership
-migration would lose the stable behavioral comparison required by the contract.
-After extraction, repeat the same applicable software suites against that
-checkpoint; moving names and ownership is not permission to redesign mechanics.
+That broader freeze must wait while required banked state, companion ownership,
+protected images or provider contracts remain unfinished. Keep such backend
+changes separate from dispatcher/current/start ownership changes, preserving
+their stable behavioral comparisons. The bounded extraction is implemented;
+repeat its applicable software suites against each affected checkpoint. Moving
+names and ownership is not permission to redesign mechanics.
 
 Unavailable hardware can be explicitly recorded as deferred for software freeze;
 available hardware tests remain part of the documented evidence process.

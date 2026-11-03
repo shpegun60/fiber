@@ -3947,3 +3947,92 @@ Independent read-only review rehashes all 1,016 declared source files against
 both the inventory and archive bytes without mismatch, confirms the exact
 receipt hash, and verifies that the sole final PASS follows the late settings
 and `finally` checks. The generated Python cache is not a source overlay.
+
+### Post-Context CM0 Exception Runtime
+
+The maintained `tools/test_classic_context_runtime.ps1` completes all 298 real
+QEMU microbit firmware executions. The immutable input is a Git archive of
+`2d018453b2b94adeb56021d9617d12a813c8f9a7` plus sixteen explicitly hashed
+owned overlays, not a clean-commit or current-worktree qualification. The export
+contains 1,026 source files; the runner enrolls 3,370 source, reference, header
+and tool inputs. Source, input, repository-inventory and QEMU identity drift are
+zero. Exit is zero after 480.03 seconds, with `CompleteSuite=true`.
+
+| Execution class | Cases | Required outcome |
+| --- | --- | --- |
+| Positive | 32 | Exact semantic CHECK and PASS records, exit 0 |
+| Production rejection | 216 | Exact case-specific panic record, exit 64 |
+| Compiled causal control | 48 | Exact register/publication oracle reason, exit 66 |
+| Deliberate unhandled fault control | 2 | Fault-only record, exit 65; never a substitute for panic |
+
+Both pure Context and the real Fiber v1 consumer run at O2/Os, ordinary and
+final-linked LTO, with direct port objects and static port archives. Positive
+cases cover both production hash/map 0/0 and validation 1/1. Pure Context omits
+Fiber, the legacy shim and optional configuration; Fiber adds its real lifecycle
+and configuration providers. The actual backend and portable providers are
+compiled, not replaced by a fixture CPU port.
+
+The loaded strong SVC/PendSV vectors transfer to privileged Thread/PSP execution;
+dispatcher observations establish actual PendSV IPSR 14, current identity,
+PRIMASK protection, first/next, self-selection and bidirectional switching.
+Distinct r4-r11 payloads, PSP/MSP, stack cookies/guards and canaries are checked.
+A supplemental assembly-owned direct PendSV request prevents intervening C
+prologues from masking broken register restoration. Actual compiled controls
+remove r9 restore, corrupt r4 restore, or suppress later current publication;
+only their intended semantic failures qualify them. The SVC evidence is loaded
+vector plus real start/continuation, not a sampled SVC-entry LR/IPSR trace.
+
+Final ELFs retain exact runtime/storage expectations, correct Thumb slots 11/14,
+one common current slot and the appropriate configuration dependencies. Every
+input object is inspected for exact strong global common-private ownership.
+Final LTO may internalize only the named private slot/reverse/configuration
+objects; APIs, handlers and cohort providers remain global. Fifteen binding
+controls and sixteen strict terminal-classifier controls reject weaker outcomes.
+Final private binding is not confused with prelink ownership or version matching.
+
+Pinned FreeRTOS CM0/M0+/CM0-MPU ordered-mechanism comparisons also pass at O2
+and Os inside the same run. These are six object builds and eighteen mechanisms
+per mode, not paired final-LTO reference equivalence. The classic focused input
+inventory now includes `context/` headers; an unenrolled dependency still fails.
+The independent CM3 focused O2/Os replay also passes after that shared repair.
+
+Retained export: `C:/ccrq-0ef2b5a91a`; build: `C:/ccrb-0ef2b5a91a`.
+
+| File | SHA-256 |
+| --- | --- |
+| Build `results.json` | `63978BDA12DAC2BC5E6F77285CF1125C79C6F80C9F9C16EFFD02D22AFF77C6A6` |
+| Build `artifacts.json` | `0D00639B0AE1FD1E5BF5D46099BA49043288F7596F221AC0498A0634C75F3637` |
+| Export `qualification-result.json` | `CBC4135D3833E56C7FE8CF26C604C13DFF0307AAFD50701EADECA732CB1462C9` |
+| Export `overlays.json` | `C04E1C8A4643349AFFD93A28F4F3011081EA1BF284410D4AE13B3A49F7E4A4A0` |
+| Export `source-before.json` | `38D95546BA7F28E61AE647BE83EF21592521790F10E10A464C5F098E29E77A3B` |
+| Export `qualification-plan.json` | `81C2A579B1B1AC673F21E3E001360538387849F25C0626747CEA2D5EC71FCB2A` |
+| Export `source.zip` | `A3842DE6F3A33070EDAEC8C08D5296B2A4886E17AE9BC4571F78E8AC286E5103` |
+| Export `runtime.log` | `98FB72644BB8E04E39D6906F76175CD23E8427D4F51AC4787FE60FF37FEF0DF5` |
+
+The two earlier attempts remain FAIL. `C:/ccr-dev-03/results.json`, hash
+`7293B45C2B3E590F4B78A9B1D58625CF61C2FA7E25C9D0288636CC1445D71C30`,
+passes seven development firmware cases but rejects the missing Context-header
+inventory. `C:/ccrq-90614b1b9e/qualification-result.json`, hash
+`9DDE6EA56CF5E74E009A5B2ADF3736F0EC8A065D6528C3F5F6C3516875DD518E`,
+records zero drift and the new ELF check's incorrect global-binding requirement
+for an LTO-internalized private slot. The later narrow ownership-aware repair
+does not alter production sources or rewrite either failed receipt.
+
+The conditional matrix dispatch has a separate 114-check execution-policy PASS
+at `%TEMP%/matrix-execution-policy-292277b2689c4069b09555b88a259fb4`.
+The earlier `847953d` combined compile result stays historical; this focused
+execution does not establish a fresh combined matrix or exact-SHA CI result.
+
+This qualifies the captured CM0 CPU cohort on QEMU 8.2.2, GNU Arm GCC 14.3.1,
+and the clean FreeRTOS pin already recorded above. The installed emulator has
+no separate Cortex-M0+ model: G0 execution is not inferred from CM0. CM3,
+CM4/CM7 FP execution, MPU/TrustZone, global all-optimization/final-linked-LTO
+reference parity, STM32 peripherals, board integration and hardware remain
+separate evidence. No production runtime or assembly is changed by this slice.
+
+Independent read-only review rehashes all 1,026 exported sources, 3,370 inputs
+and 18,519 artifacts without mismatch, reconciles all 298 execution/ELF/prelink
+proofs and both reference receipts, and confirms the three receipt hashes above.
+All twelve non-Markdown overlays still match live bytes. Later documentation
+updates are outside the captured qualification; no current-tree or clean-commit
+claim is inferred from it. Both earlier failed attempts remain unchanged.

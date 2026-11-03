@@ -24,6 +24,11 @@ replaced before first selection, but not after it begins. Contexts and stacks
 have static lifetime. Returning from an entry still panics with `R`; there is
 no completion, reclamation, direct-target transfer, tick or ISR API in v1.
 
+The entry `arg` and dispatcher `user` are retained pointers; their pointees are
+not copied. Keep them valid at fixed addresses for their entire use. The default
+start policy rewinds MSP, so startup-local objects must not back retained state
+even though `ctxrt_v1_start()` never returns.
+
 ## Build
 
 Compile exactly these mandatory portable providers and one concrete backend:
@@ -53,6 +58,10 @@ it is not a runtime selector or a substitute for a correct application build.
 Use the selected backend's required settings, include path, source group,
 linker contract and expectation object. The Context refactor does not remove
 its existing frame/storage/cohort, vector, MPU or optional integration contracts.
+For automatic M4/M7 selection, include the board's CMSIS/device header before
+`context/context.h` so `__CORTEX_M` identifies the concrete backend. Explicit
+build-selected integrations instead supply the matching public type header and
+selection definitions through the build; no runtime CPU probing is introduced.
 
 `CtxrtContextV1` names the existing CPU-storage tag, not a second struct. Legacy
 `FiberContext` pointers and callbacks are type-compatible without casts. The

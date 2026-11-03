@@ -73,6 +73,9 @@ Context; do not call private bootstrap helpers manually. Both Fibers, both
 stacks and the runtime have static
 storage and must stay disjoint. The selector owns no second current pointer:
 NULL selects the first Fiber, and each subsequent yield selects the other.
+With automatic M4/M7 selection, include the board's CMSIS/device header before
+`fiber_v1.h`; an explicit build-selected integration supplies the matching type
+header and selection definitions instead.
 
 ```c
 #include "fiber/lifecycle/fiber_v1.h"
@@ -162,6 +165,9 @@ its own rejection precedence.
 
 There is no entry trampoline. The original user entry and arg go directly to
 Context construction, and the existing entry-return `R` panic is unchanged.
+Entry `arg` and selector `user` are retained pointers, not copied values. Their
+pointees must outlive every use. Default startup rewinds MSP, so startup-local
+C++ state cannot safely back these pointers merely because start never returns.
 The arg must already satisfy the selected profile's application-memory rules;
 it is not implicitly a pointer to privileged Fiber storage. No COMPLETED or
 FAILED tracking, completion callback, queue, tick or ISR API is claimed.

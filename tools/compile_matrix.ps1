@@ -22770,6 +22770,11 @@ try {
         -BuildRoot (Join-Path $buildRoot "audit-c33s-isa")
 
     if (-not [string]::IsNullOrWhiteSpace($ControlQemuRoot)) {
+        Write-Host "== audit / classic CM0 actual Context and Fiber runtime =="
+        & (Join-Path $RepoRoot "tools\test_classic_context_runtime.ps1") `
+            -ArmGcc $gcc -CmsisCore $cmsis -QemuRoot $ControlQemuRoot `
+            -WslDistro $ControlWslDistro `
+            -BuildRoot (Join-Path $buildRoot "audit-classic-context-runtime")
         Write-Host "== audit / executed ARM CONTROL exception transitions =="
         & (Join-Path $RepoRoot "tools\test_arm_control.ps1") `
             -ArmGcc $gcc -QemuRoot $ControlQemuRoot `
