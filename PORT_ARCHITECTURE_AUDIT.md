@@ -3851,3 +3851,22 @@ The prior failed attempt remains separately retained at
 `189B12366678571101F9CE1583CA4D200AD998A72D329606449A650A9E9FA9EE`.
 This is not complete exception/FP execution, all-profile final-linked FreeRTOS
 equivalence, board validation, or a combined matrix result.
+
+### H7 Managed Source Admission Follow-Up
+
+The external H7S project had five missing backend exclusions in both managed
+configurations. Existing generated make overlays masked admission of seventeen
+foreign sources during a future rescan. The local `.cproject` repair adds only
+those exclusions. Structured XML comparison confirms exactly ten additions and
+no other metadata change. Context providers already belong to its managed
+`app_core` source root.
+
+The independently reviewed qualification passes 1,057 checks, 34 pre-repair
+guard rejections and 22 post-repair preprocessing probes. Each configuration
+retains eleven intended sources and rejects all seventy-nine foreign backend
+C files plus 277 tools sources. All 120 retained artifacts rehash correctly.
+The exact receipt and before/after metadata hashes are recorded in
+`H7_RUNTIME_VALIDATION.md#context-owner-managed-source-admission`.
+Actual IDE regeneration, clean builds after regeneration, linking and board
+execution are NOT_RUN. This repository records the external integration result;
+the external `.cproject` is not part of its commits.

@@ -1,5 +1,38 @@
 # STM32H7 Runtime Validation Checklist
 
+## Context Owner Managed Source Admission
+
+The external H7S `Boot/.cproject` now excludes `ARM_CM33F`, `ARM_CM33F_TFM`,
+`ARM_CM33_SECURE_ONLY`, `ARM_CM55_SECURE_ONLY` and `ARM_CM55_TFM` backend
+directories from both Debug and Release. These five missing exclusions would
+admit seventeen incompatible C sources during a managed rescan; the existing
+generated make overlays did not expose that metadata defect.
+
+The `app_core` source root already discovers canonical Context providers, the
+legacy shim and optional configuration/lifecycle units. No explicit Context
+source entry or extra Context include path is required. The metadata replay
+retains eleven intended app-core sources per configuration, rejects all
+seventy-nine other backend C files and excludes 277 tool fixtures (237 C,
+38 assembly and two C++). Actual preprocessing reproduces 34 pre-repair
+profile-guard failures and passes 22 post-repair source probes. Independent
+review accepts this bounded result and rehashes 120 artifacts without mismatch.
+
+Receipt: `%TEMP%/fiber-h7-cproject-exclusions-0eec08a241494622a5298b450371ff43/qualification-02/results.json`,
+SHA-256 `5618689FFA89AB1A449267145FCD865BE110616ECE6F236E3089B582F706FF7A`.
+The archived `.cproject` changes only ten exclusion additions:
+
+```text
+Before 382A4E8753E2F25C788B0496AFEF9F893BDD629375393D6F23FA1EE189669B47
+After  4FD77ABCD1ED56203225AF1A3460278355EC5FAD0353309E41CE5EACD335DE1A
+```
+
+The application project is outside this library repository; this document
+records its local change, not publication of `.cproject` in the library commit.
+This proof is XML/source-inventory replay and preprocessing only. Actual CubeIDE
+regeneration, a subsequent clean Debug/Release build, final ELF re-audit and board
+execution remain NOT_RUN for this metadata checkpoint. The earlier generated
+make builds below do not prove regeneration safety or reactivate a hardware claim.
+
 ## E6b8149 Offline Rebuild
 
 Both generated H7 configurations pass a forced `make -B -j4 all` rebuild with
