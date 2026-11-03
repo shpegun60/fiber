@@ -36,7 +36,8 @@ bytes, not proof for later source or a complete port roadmap.
 
 ## Current Qualification Boundary
 
-The following are separate captured receipts, not a current aggregate PASS:
+The following staged-profile receipts keep their own admission and execution
+boundaries, independently of the current aggregate below:
 
 | Staged profile | Captured software proof | Remaining boundary |
 | --- | --- | --- |
@@ -45,21 +46,25 @@ The following are separate captured receipts, not a current aggregate PASS:
 | C3FT | [Complete consumer/FP runtime suite](PORT_ARCHITECTURE_AUDIT.md#staged-c3ft-portable-and-default-admission): 64 target ELFs and 336 modeled CPU runs. [Independent pinned hard/softfp O2/Os parity](FREERTOS_ASM_PARITY.md#staged-c3ft-fp-and-wrapper-parity): 77 closed streams per tuple. | Activation and fresh combined qualification; the typed provider is not an external Secure TF-M image. |
 | C3FS | [Construction/manifest and initializer evidence](fiber/port/ARM_CM33F/non_secure/FREERTOS_PARITY.md#maintained-evidence-boundary). | Runtime provider, allocation/load/save and actual FP/Secure switching remain absent. |
 
-The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#main-cm33-tf-m-identity-contract-repair)
-is **FAIL**, not software freeze: `C:/fcq-80f8a8564f/matrix-result.json` records
-`b648b40`, 1,016 files and zero source drift. It passes Context/Fiber ownership
-gates, pinned O2/Os parity, the repaired C55S gateway and subsequent M55 runtime
-groups, then stops at a stale CM33 TF-M getter allowlist. The repaired exact
-allowance and following eight maintained function cohorts pass separately;
-later aggregate gates are still NOT_RUN. Conditional QEMU gates were not selected.
-Earlier exported-source and pre-extraction failures remain in the audit log;
-none is silently reclassified or used to qualify the later Context inversion.
+The latest retained [post-Context compile/link/codegen aggregate](PORT_ARCHITECTURE_AUDIT.md#post-context-combined-compile-qualification)
+is **PASS** for immutable `847953da273a30b1594a66bd3facfb8ecf1ac902`:
+`C:/fcq-ed1be3f107/matrix-result.json` records 1,016 files, zero source drift,
+exit code zero and 1,931.19 seconds. The maintained matrix completes through
+the final settings negatives and source-inventory check. It includes Context/
+Fiber ownership and consumer gates, pinned O2/Os assembly parity, ABI/cohort/
+archive/GC/LTO controls and the applicable concrete/staged software gates.
+Conditional QEMU architecture/Secure and TF-M execution gates were not selected;
+included host and bounded ARM constructor execution are not full exception/FP
+runtime qualification. Earlier aggregate FAIL receipts remain unchanged in the
+audit log. This is a bounded local software checkpoint, not an all-profile
+freeze, staged-profile activation, hardware result or exact-SHA CI result.
 
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
 O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region
-manifests, not all configurations or final-linked FreeRTOS equivalence; it does
-not turn the failed aggregate into PASS or activate staged profiles.
+manifests, not all configurations or final-linked FreeRTOS equivalence. It
+does not independently qualify the later Context inversion or activate staged
+profiles. Its captured inputs remain separate from the aggregate above.
 
 The [global all-optimization/final-linked-LTO gate](FREERTOS_ASM_PARITY.md#two-stage-optimization-coverage)
 and exact-commit release-blocking CI are still future freeze gates. Focused
@@ -276,7 +281,7 @@ cross-image and private layout/cohort changes receive their appropriate identity
    staged runtime and separate compiler-group admission receipts above. Private
    companion binding, ordinary/attached paths, exact cross-image identity,
    archive/GC/LTO/vector and negative-link evidence remain separately bounded by
-   their captured sources; neither older pool/component receipts nor the latest
+   their captured sources; neither older pool/component receipts nor an earlier
    failed aggregate substitute for final independent admission. Keep C33S and
    C55S manifests distinct. Do not mix FP, MPU or TF-M expansion into this slice.
 3. **Close M33 scalar-FP MPU.** This can proceed independently after phase 1,

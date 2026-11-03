@@ -38,6 +38,12 @@ Every row still requires one correctly configured concrete backend. Install
 exactly one dispatcher owner; do not mix Fiber's selector registration with a
 separate Context or legacy scheduler registration.
 
+The post-extraction combined compile/link/codegen matrix passes for immutable
+`847953d`; its [exact receipt and exclusions](PORT_ARCHITECTURE_AUDIT.md#post-context-combined-compile-qualification)
+keep conditional QEMU runtime, global all-optimization parity, board and CI
+claims separate. This is the bounded F0/G0/G4/H7/H7S CPU-profile checkpoint,
+not completion of every feature combination in the STM32 catalog.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
@@ -61,10 +67,13 @@ It also proves the exact selected-port unresolved reverse surface, C-hidden and
 generated-assembly-load-only current-slot access, and both runtime ABI v1/v2
 mismatch directions. The exact selected-profile/context object-cohort anchor,
 build-owned expectation, and stale private-object negative links are active.
-The current H7 CubeIDE Debug and Release manifests also compile the expectation
-outside the port source group, retain its read-only linker section, and pass the
-final-ELF cohort and vector audit. Refreshed H7 board evidence remains the
-outstanding validation requirement.
+Earlier external H7 CubeIDE Debug and Release integration receipts compile the
+expectation outside the port source group, retain its read-only linker section,
+and pass the final-ELF cohort and vector audit for their captured inputs. The
+Context-owned managed-source admission repair is recorded separately in
+`H7_RUNTIME_VALIDATION.md`; clean regenerated builds and a fresh ELF audit are
+still required for that repaired project. Refreshed board evidence remains
+separate and pending.
 
 `CONTEXT_FIBER_ARCHITECTURE.md` freezes the post-port-freeze separation of this
 runtime into a processor execution-context engine, a portable stackful Fiber

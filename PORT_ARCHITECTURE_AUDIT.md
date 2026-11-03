@@ -3895,3 +3895,55 @@ overlay, 1,016 files and zero drift. Receipt:
 `F63FD129250E866897F1C5ECB743E25F727D4FF060D34D664117019534268E89`.
 The 109-check execution-policy regression also passes. These focused links do
 not replace a fresh aggregate or establish CPU/board execution.
+
+### Post-Context Combined Compile Qualification
+
+The complete maintained `tools/compile_matrix.ps1` passes against a fresh Git
+archive of `847953da273a30b1594a66bd3facfb8ecf1ac902`, without source overlays:
+1,016 source files, zero drift, exit code zero and 1,931.19 seconds. The final
+settings positives/negatives and source-inventory `finally` check complete
+before the final PASS. All earlier aggregate FAIL receipts above remain FAIL;
+none is reused as evidence for this later source.
+
+The snapshot is `C:/fcq-ed1be3f107/experiments/h7s_fiber_test/Boot/app_core/fiber`
+and the retained build is `C:/fcqm-ed1be3f107`. Qualification files:
+
+| File under `C:/fcq-ed1be3f107` | SHA-256 |
+| --- | --- |
+| `matrix-result.json` | `4C2783E71F1D4D8440CC526A7ED4F2D2595B935B552E1352C3B8E8ADA462E065` |
+| `matrix.log` | `5DCB60B6FF0D88F77619FA0BD3329FB0E66274CC55B6B578DB066B0EC0E90525` |
+| `source-before.json` | `22EBDF995518A54DECC52084C12C12D6C2BC823A3DBC64683AEBA4200E397EE0` |
+| `qualification-plan.json` | `57A439B6034A49AD7D6012F4C2D296F363BBC4D731F4E50645BDEB69A846D688` |
+
+The exported source ZIP hashes to
+`C93CF9AB812F478971D0F7434B97021EDE0C8D3FA9F09EF926F193DDFE0E2E30`.
+The reference remains the clean local FreeRTOS pin
+`a50edad08b29052631aa469d4df6e6ec7ff68878`; GNU Arm GCC 14.3.1 is used.
+
+This aggregate covers the actual Context owner and separate Fiber consumer,
+the 109 execution-policy controls, pinned O2/Os assembly parity, the applicable
+constructor/attribute/compiler gates, forward/reverse ABI and current-slot
+isolation, exact storage/profile cohorts, stale-object/archive negatives,
+GC/LTO/vector ownership, concrete/staged integration gates, the 42 generic
+compile cells and final settings contract. The repaired C55S inventory and
+CM33 TF-M identity checks now pass inside the full run, not only as focused
+replays. A separate read-only architecture review finds no confirmed new
+layering defect for the F0/G0/G4/H7/H7S CPU-profile baseline.
+
+`RequireArchitectureExecution=false` and no QEMU root is supplied. Conditional
+QEMU architecture/Secure gates, the C5TF R9 execution probe and C3FT actual
+execution are explicitly NOT_RUN. The selected host scenarios and bounded
+ARM constructor/FPU-policy calls do execute; they do not establish complete
+post-inversion classic SVC/PendSV/exception/FP behavior. No board is programmed.
+
+This is a bounded local compile/link/codegen checkpoint. It does not activate
+staged profiles, complete missing feature combinations, establish global
+all-optimization/final-linked-LTO FreeRTOS equivalence, certify external H7S
+regeneration/builds, provide exact-SHA CI evidence or declare an all-profile
+software/hardware freeze. Those remaining gates are retained in
+`CONTEXT_REFACTOR_BASELINE.md` and `STM32_PROFILE_BACKLOG.md`.
+
+Independent read-only review rehashes all 1,016 declared source files against
+both the inventory and archive bytes without mismatch, confirms the exact
+receipt hash, and verifies that the sole final PASS follows the late settings
+and `finally` checks. The generated Python cache is not a source overlay.

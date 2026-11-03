@@ -94,8 +94,30 @@ are not implemented by this ownership extraction.
 Pre-extraction and post-inversion aggregate failures remain separate captured
 receipts in `PORT_ARCHITECTURE_AUDIT.md`. Focused mechanical and repair receipts
 qualify their exact inputs, not the entire later tree. They cannot replace a
-fresh combined replay or be relabeled as a software freeze. The current combined
-qualification status is summarized in `STM32_PROFILE_BACKLOG.md`.
+fresh combined replay or be relabeled as a software freeze.
+
+The fresh immutable `847953da273a30b1594a66bd3facfb8ecf1ac902` combined
+compile/link/codegen replay passes: 1,016 source files, zero drift, all final
+settings and source-inventory checks complete. The receipt, hashes and exact
+scope are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#post-context-combined-compile-qualification` and
+summarized in `STM32_PROFILE_BACKLOG.md`. This accepts the bounded Context/Fiber
+implementation and its selected software gates, not the entire port roadmap.
+
+| Bounded milestone | Status |
+| --- | --- |
+| Concrete-only selection; transitional fallback removed | Implemented |
+| Context engine/state/panic ownership; one-way legacy adapter | Implemented |
+| Distinct static-storage Fiber lifecycle consumer | Implemented and separately qualified |
+| Combined compile/link/codegen matrix for the captured source | PASS at `847953d` |
+| Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
+| Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
+| Exact-commit release-blocking CI | Not established |
+| C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
+
+The F0/G0/G4/H7/H7S mappings remain CPU-profile claims. The local H7S managed
+source-admission repair is separately recorded in `H7_RUNTIME_VALIDATION.md`;
+it is not a regenerated-build or hardware receipt.
 
 ## Evidence Boundary
 
