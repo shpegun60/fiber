@@ -4160,3 +4160,96 @@ artifacts and 225 generated inputs without mismatch, reconciles all 288
 executions, 32 assembled checker controls, eight references and 64 associations,
 and confirms the result hash above. All fourteen non-Markdown overlays still
 match live bytes. Post-export README prose is outside that qualification.
+
+## Post-Context CM7 FP Runtime
+
+The 2026-11-03 CM7 adaptation and independent CM4 regression replay pass from
+one immutable export of `471ec5cfd1e69aefc273f6dd47d487bb1b4e5c6a` plus eighteen
+explicit owned overlays. The export contains 1,058 source files. Both complete
+suites have zero source, dependency, tool, QEMU-library and inventory drift.
+No production C, frame layout, handler assembly or public ABI is changed.
+
+The shared runner now has two immutable explicit Profiles, default CM4 and
+separately selected CM7. CPU/FPU arguments, machine, fixture/provider/reference
+paths, exact runtime/storage identities, report size and terminal policy follow
+that selection. The bounded `Image` ELF/CFG checker and its 32 compiled control
+cases are unchanged from `471ec5c`; they are neither copied nor relaxed. Nine
+parser, twenty terminal, three decoder and fifteen binding controls remain.
+Thirty-two additional synthetic classifier controls reject foreign profile
+terminals, capability flags, cohorts/storage, missing model identity and wrong
+BASEPRI envelopes. These are checker controls, not extra firmware executions.
+
+Each profile independently passes 288 actual firmware executions: 64 positive
+and 224 exact compiled causal controls. The grid is Context/Fiber, O2/Os,
+ordinary/final-linked LTO, direct/archive, eager/lazy, and hash/map 0/0 versus
+1/1. Seven mutations across the 32 primary tuples preserve the prior exact
+failure map. Incidental fault, panic, compile failure or timeout cannot satisfy
+a register/frame/publication oracle. Both reference cohorts contain eight
+actual pinned upstream final ELFs and 64 positive/reference associations.
+They are link-only references, not executed FreeRTOS kernels.
+
+The M7 fixture executes actual Context/Fiber and `ARM_CM7/r0p1` providers on
+AN500. Its firmware checks CPUID `0x411FC272`, MVFR0 `0x10110221`, MVFR1
+`0x12000011`, MVFR2 `0x40` before emitting an exact model marker. The manifest
+uses Cortex-M7, FPv5-D16 hard ABI, NVIC8, PendSV 0xFF and BASEPRI 0x80. Its
+316-byte report is distinct from CM4's 312-byte report and the synthetic
+320-byte compiled-checker object. S0-S31 storage checks cover D0-D15 bits, not
+double-precision arithmetic accuracy. The public-call and assembly-only direct
+PendSV phases retain their separate AAPCS and all-FP observation contracts.
+
+Actual pinned `GCC/ARM_CM7/r0p1/port.c` and headers supply the eight reference
+ELFs. Ordered transfers, EXC_RETURN predicates, vectors, first SVC and bounded
+CPACR evidence remain required. The M7 BASEPRI classifier separately requires
+upstream's `cpsid i; msr BASEPRI; dsb; isb; cpsie i` followed by later clearing,
+versus Fiber's PRIMASK-preserving writes and saved BASEPRI restore. It rejects
+unconditional IRQ re-enabling in the Fiber envelope. Eager initialization
+remains an intentional difference from upstream's always-lazy policy.
+
+The fresh CM4 replay additionally compares all 296 native ELFs (288 executions
+plus eight nonexecuted references) to `C:/cfrb-a95232dc6f`. Allocated executable
+section names, addresses, sizes and bytes match exactly, with zero input drift.
+This is not whole-ELF, object, relocation or cross-kernel byte identity.
+
+Retained export: `C:/cf47q-f0254f0288`. Separate builds:
+`C:/cf47b-cm4-f0254f0288` (623.57 seconds) and
+`C:/cf47b-cm7-f0254f0288` (679.61 seconds). Each records 3,402 inputs, 21,763
+verified artifacts and 225 generated inputs. The outer driver exits zero with
+zero source/inventory drift; outer PASS alone is not the semantic proof above.
+
+| File | SHA-256 |
+| --- | --- |
+| CM4 build `results.json` | `FF7640A507553FF736255EE4D18808A0B8CD110FA1F4A683426E7FBD4190DA9E` |
+| CM4 build `artifacts.json` | `456138839ADC50E21673649FF4CDB98C3D41C6E899E9EEDA6ECE1AB19DD53E1E` |
+| CM7 build `results.json` | `C8E37D9150A5DC1512344649B48120A60DF24A0652F37B1480E42E86D1D65D61` |
+| CM7 build `artifacts.json` | `993BA11B711F25E0EDA6E1A836FEDA11E07C1378EDAD0641C29947CB26D7547F` |
+| Export `qualification-result.json` | `98C34B3F671CFA73967E9B8997DC9A4D429589EBA99806F3A79128E28BABF39F` |
+| Export `cm4-native-code-identity.json` | `54521DCC8E95BF540707E8525E0F105E2F6C98C0361E4A7FC89E96F00BD5AC61` |
+| Export `source-before.json` | `FE6A8D5B44D2B8E1A4D606A4D11CAA65D1E0088C25ACB2C6A33EBC5E6DCF1A98` |
+| Export `overlays.json` | `24916E9382BCF9B25D1606B69F3A83DBF5F8D8F7645C4A47E8D4116831000B29` |
+| Export `qualification-plan.json` | `0E65CA4C0249A817B8225858CF77CA93BFE803B79BB215B29F8288679CCB909F` |
+| Export `source.zip` | `5BC3216F14063F97F8CF44ABFC5F23FAB4C7E50E1A957DA669F59304D80F3A58` |
+
+Development smokes remain incomplete receipts: each has nine executions, eight
+references and `CompleteSuite=false`. Preserved CM7 development output
+`C:/cfp-profile-cm7-dev-2479d8d248/results.json`, SHA-256
+`47123864D25C65093A0809B2E1A81A3A34026165F5D6A0C75A3B683D70F96B98`,
+remains FAIL for real mid-run README drift. It is not waived or a runtime bug.
+
+The model is M7 r1p2, not affected r0p0/r0p1 silicon. No H7/H7S board,
+device-priority-width, cache/TCM, peripheral, erratum-effectiveness, softfp,
+arithmetic, complete startup/panic suite, global all-optimization/final-LTO
+reference equivalence or exact-SHA CI claim follows. Other profiles and the old
+aggregate are not requalified by these focused receipts.
+
+Conditional CM7 dispatch has a separate 124-check execution-policy PASS at
+`%TEMP%/matrix-execution-policy-5faca0bd6ece46b1800f8778e1bcd597`.
+Later dispatch and documentation changes are outside the captured export;
+this is not a current-tree or clean-commit combined qualification.
+
+Independent read-only reviewers rehash both complete cohorts without mismatch.
+CM7 additionally reconciles 3,200 dependency records / 69,080 references and
+replays the retained ELF audits, exact terminal policy and all 32 profile
+controls. The separate CM4 reviewer verifies the unchanged checker and live
+non-documentation overlay hashes; the 296-image native comparison is also
+independently reproduced. All sixteen non-Markdown overlays match live bytes;
+only later README prose differs. No new blocker is found in this bounded scope.

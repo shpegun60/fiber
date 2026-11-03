@@ -13,6 +13,7 @@ import re
 import struct
 import sys
 import traceback
+from typing import NamedTuple
 
 sys.dont_write_bytecode = True
 os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -42,14 +43,61 @@ REF_ROOTS = ("pxPortInitialiseStack", "xPortStartScheduler")
 REF_BOUNDARIES = ("vTaskSwitchContext", "xTaskIncrementTick", "reference_assert_failed")
 
 
-def expected_terminal(lazy, validation, mutant=None):
+class Profile(NamedTuple):
+    name: str
+    label: str
+    cpu: str
+    fpu: str
+    fixture_relative: str
+    wrapper_relative: str
+    port_relative: str
+    machine: str
+    runtime_prefix: str
+    storage_symbol: str
+    fp_attribute: str
+    report_bytes: int
+    upstream_relative: str
+    header_facts: tuple[int, ...]
+    check_line: str
+    model_line: str | None
+    scope: str
+
+    @property
+    def cpu_flags(self):
+        return ("-mcpu="+self.cpu, "-mthumb", "-mfpu="+self.fpu, "-mfloat-abi=hard")
+
+    @property
+    def pass_line(self):
+        return "PASS:"+self.label+"-CONTEXT-RUNTIME"
+
+    @property
+    def evidence_paths(self):
+        paths = (*EXPLICIT[:3], self.wrapper_relative)
+        return paths if self.name == "CM4" else (*paths, "tools/fixtures/classic_fp_context_runtime/run.py")
+
+
+CM4 = Profile("CM4", "CM4F", "cortex-m4", "fpv4-sp-d16", "tools/fixtures/classic_fp_context_runtime",
+    "tools/test_classic_fp_context_runtime.ps1", "fiber/port/ARM_CM4", "mps2-an386",
+    "fiber_port_context_cohort_armv7em_p0x434D3034u_", "fiber_port_storage_cohort_arm_cm4_v1_r0", "VFPv4-D16",
+    312, "portable/GCC/ARM_CM4F", (1, 4, 4, 4, 8, 4, 1, 0x80), CHECK, None,
+    "QEMU mps2-an386 Cortex-M4F fpv4-sp-d16 hard-float; NVIC8/PendSVFF/BASEPRI80; no STM32 NVIC-width, softfp, board, whole-kernel or global parity claim")
+CM7 = Profile("CM7", "CM7F", "cortex-m7", "fpv5-d16", "tools/fixtures/classic_cm7_fp_context_runtime",
+    "tools/test_classic_cm7_fp_context_runtime.ps1", "fiber/port/ARM_CM7/r0p1", "mps2-an500",
+    "fiber_port_context_cohort_armv7em_p0x434D3701u_", "fiber_port_storage_cohort_arm_cm7_r0p1_v1_r0", "FPv5/FP-D16 for ARMv8",
+    316, "portable/GCC/ARM_CM7/r0p1", (1, 4, 4, 4, 8, 14, 1, 0x80),
+    "CHECK:CM7F:CPUID=C27:FPV5=DP-D16:WORKERS=3:INACTIVE=1:SELF=1:BIDIR=1:ROUNDS=16:PUBLIC+DIRECT=1:FP=S0-S31",
+    "MODEL:CM7F:CPUID=411FC272:MVFR0=10110221:MVFR1=12000011:MVFR2=00000040",
+    "QEMU mps2-an500 Cortex-M7 r1p2 fpv5-d16 hard-float; NVIC8/PendSVFF/BASEPRI80; S0-S31 storage only, not DP arithmetic, STM32, affected-r0p1 erratum, cache/TCM, board, whole-kernel or global parity qualification")
+
+
+def expected_terminal(lazy, validation, mutant=None, profile=CM4):
     if mutant:
-        return dict(Exit=66, Lines=["REASON:%08X" % MUTANTS[mutant], "FAIL:CM4F-ORACLE"])
-    observation = "OBS:CM4F:PRE_SAVE=DISABLED"
+        return dict(Exit=66, Lines=["REASON:%08X" % MUTANTS[mutant], "FAIL:"+profile.label+"-ORACLE"])
+    observation = "OBS:"+profile.label+":PRE_SAVE=DISABLED"
     if validation:
-        observation = ("OBS:CM4F:LAZY=1:PRE_LSPACT=FP1-GRO0:POST_LSPACT=0" if lazy else
-                       "OBS:CM4F:LAZY=0:PRE_LSPACT=FP0-GRO0:POST_LSPACT=0")
-    return dict(Exit=0, Lines=[CHECK, observation, PASS])
+        observation = "OBS:"+profile.label+(":LAZY=1:PRE_LSPACT=FP1-GRO0:POST_LSPACT=0" if lazy else
+                                           ":LAZY=0:PRE_LSPACT=FP0-GRO0:POST_LSPACT=0")
+    return dict(Exit=0, Lines=([profile.model_line] if profile.model_line else [])+[profile.check_line, observation, profile.pass_line])
 
 
 def terminal(actual, expected):
@@ -59,11 +107,11 @@ def terminal(actual, expected):
             "\n".join(expected["Lines"]) + "\n")
 
 
-def terminal_controls():
-    eager = expected_terminal(False, True)
-    lazy = expected_terminal(True, True)
-    primary = expected_terminal(True, False)
-    oracle = expected_terminal(True, False, "high-fp-save")
+def terminal_controls(profile=CM4):
+    eager = expected_terminal(False, True, profile=profile)
+    lazy = expected_terminal(True, True, profile=profile)
+    primary = expected_terminal(True, False, profile=profile)
+    oracle = expected_terminal(True, False, "high-fp-save", profile=profile)
     def result(expectation, **changes):
         value = dict(Exit=expectation["Exit"], Stdout="", Stderr="\n".join(expectation["Lines"])+"\n", TimedOut=False)
         value.update(changes)
@@ -79,18 +127,109 @@ def terminal_controls():
              ("timeout-exit", result(oracle, Exit=124), oracle, False),
              ("signal-exit", result(oracle, Exit=-15), oracle, False),
              ("boolean-exit", result(primary, Exit=False), primary, False),
-             ("fault", result(oracle, Exit=65, Stderr="FAIL:CM4F-FAULT\n"), oracle, False),
+             ("fault", result(oracle, Exit=65, Stderr="FAIL:"+profile.label+"-FAULT\n"), oracle, False),
              ("panic", result(oracle, Exit=64, Stderr="PANIC:x\n"), oracle, False),
-             ("wrong-reason", result(oracle, Stderr="REASON:00000086\nFAIL:CM4F-ORACLE\n"), oracle, False),
-             ("missing-reason", result(oracle, Stderr="FAIL:CM4F-ORACLE\n"), oracle, False),
+             ("wrong-reason", result(oracle, Stderr="REASON:00000086\nFAIL:"+profile.label+"-ORACLE\n"), oracle, False),
+             ("missing-reason", result(oracle, Stderr="FAIL:"+profile.label+"-ORACLE\n"), oracle, False),
              ("duplicate", result(oracle, Stderr=result(oracle)["Stderr"]*2), oracle, False),
              ("prefix", result(oracle, Stderr="debug\n"+result(oracle)["Stderr"]), oracle, False),
              ("traceback", result(oracle, Stderr="RuntimeError: "+result(oracle)["Stderr"]), oracle, False),
-             ("truncated", result(eager, Stderr=CHECK+"\n"+PASS+"\n"), eager, False),
+             ("truncated", result(eager, Stderr=profile.check_line+"\n"+profile.pass_line+"\n"), eager, False),
              ("trailing", result(eager, Stderr=result(eager)["Stderr"]+"\n"), eager, False)]
     for name, actual, expected, accepted in tests:
         need(terminal(actual, expected) == accepted, "CM4F terminal control: "+name)
     return [dict(Name=n, Accepted=v) for n, _, _, v in tests]
+
+
+def capability_matches(profile, attributes, flags):
+    exact = {"-mcpu=": profile.cpu, "-mfpu=": profile.fpu, "-mfloat-abi=": "hard"}
+    return (all([f[len(prefix):] for f in flags if f.startswith(prefix)] == [value]
+                for prefix, value in exact.items()) and "-mthumb" in flags and "-marm" not in flags and
+            re.findall(r"(?m)^\s*Tag_CPU_arch:\s*([^\r\n]+)", attributes) == ["v7E-M"] and
+            re.findall(r"(?m)^\s*Tag_FP_arch:\s*([^\r\n]+)", attributes) == [profile.fp_attribute] and
+            re.findall(r"(?m)^\s*Tag_ABI_VFP_args:\s*([^\r\n]+)", attributes) == ["VFP registers"])
+
+
+def cohort_matches(profile, runtime, storage):
+    return (len(runtime) == len(storage) == 1 and runtime[0].startswith(profile.runtime_prefix) and
+            storage[0] == profile.storage_symbol)
+
+
+def basepri_patterns(profile, reference):
+    scheduler = "vTaskSwitchContext" if reference else "fiber_port_scheduler_pick_next_from_pendsv"
+    call = r"\bbl\s+[^\n]*<"+scheduler+r">"
+    if profile.name == "CM4":
+        return ([r"\bmov[^\n]*#(?:128|0x80)\b", r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b",
+                 call, r"\bmov[^\n]*#0\b", r"\bmsr\s+BASEPRI"] if reference else
+                [r"\bmrs[^\n]*BASEPRI", r"\bmov[^\n]*#(?:128|0x80)\b", r"\bpush\b",
+                 r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b", call,
+                 r"\bpop\b", r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b"])
+    need(profile.name == "CM7", "Unknown BASEPRI profile")
+    if reference:
+        return [r"\bmov[^\n]*r0,\s*#(?:128|0x80)\b", r"\bcpsid\s+i\b", r"\bmsr\s+BASEPRI,\s*r0\b",
+                r"\bdsb\b", r"\bisb\b", r"\bcpsie\s+i\b", call,
+                r"\bmov[^\n]*r0,\s*#0\b", r"\bmsr\s+BASEPRI,\s*r0\b"]
+    sync = lambda reg: [r"\bmrs\s+r12,\s*PRIMASK\b", r"\bcpsid\s+i\b", r"\bmsr\s+BASEPRI,\s*"+reg+r"\b",
+                        r"\bdsb\b", r"\bisb\b", r"\bmsr\s+PRIMASK,\s*r12\b", r"\bdsb\b", r"\bisb\b"]
+    return ([r"\bmrs\s+r3,\s*BASEPRI\b", r"\bmov[^\n]*r2,\s*#(?:128|0x80)\b",
+             r"\bpush[^\n]*\{r2,\s*r3\}"]+sync("r2")+[call, r"\bpop[^\n]*\{r2,\s*r3\}"]+sync("r3"))
+
+
+def check_basepri(profile, reference, text):
+    patterns = basepri_patterns(profile, reference)
+    cursor = 0
+    for pattern in patterns:
+        match = re.search(pattern, text[cursor:], re.I)
+        need(match is not None, "BASEPRI scheduler envelope missing: "+pattern)
+        cursor += match.end()
+    if profile.name == "CM4":
+        need(not re.search(r"\b(?:cpsid|cpsie)\b|\b(?:mrs|msr)[^\n]*PRIMASK", text, re.I),
+             "BASEPRI profile acquired a foreign CM7 PRIMASK sequence")
+    elif not reference:
+        need(not re.search(r"\bcpsie\b", text, re.I), "BASEPRI CM7 owner must restore PRIMASK, not unconditionally enable IRQs")
+    return patterns
+
+
+def profile_controls():
+    controls = []
+    def check(name, actual, expected):
+        need(actual == expected, "Profile discriminator control: "+name)
+        controls.append(dict(Name=name, Accepted=actual))
+    for p, other in ((CM4, CM7), (CM7, CM4)):
+        expected = expected_terminal(True, True, profile=p)
+        own = dict(Exit=0, Stdout="", Stderr="\n".join(expected["Lines"])+"\n", TimedOut=False)
+        foreign = dict(own, Stderr="\n".join(expected_terminal(True, True, profile=other)["Lines"])+"\n")
+        check(p.name+"-terminal", terminal(own, expected), True)
+        check(p.name+"-foreign-terminal", terminal(foreign, expected), False)
+        attrs = "Tag_CPU_name: 7E-M\nTag_CPU_arch: v7E-M\nTag_FP_arch: "+p.fp_attribute+"\nTag_ABI_VFP_args: VFP registers\n"
+        check(p.name+"-capability", capability_matches(p, attrs, p.cpu_flags), True)
+        check(p.name+"-foreign-capability", capability_matches(other, attrs, p.cpu_flags), False)
+        check(p.name+"-foreign-flags", capability_matches(p, attrs, other.cpu_flags), False)
+        check(p.name+"-masked-flags", capability_matches(p, attrs, (*p.cpu_flags, "-mfpu="+other.fpu)), False)
+        check(p.name+"-cohort", cohort_matches(p, [p.runtime_prefix+"test"], [p.storage_symbol]), True)
+        check(p.name+"-foreign-cohort", cohort_matches(p, [other.runtime_prefix+"test"], [other.storage_symbol]), False)
+        check(p.name+"-foreign-storage", cohort_matches(p, [p.runtime_prefix+"test"], [other.storage_symbol]), False)
+    cm4_ours = "mrs r3,BASEPRI\nmovs r2,#128\npush {r2,r3}\nmsr BASEPRI,r2\ndsb\nisb\nbl 100 <fiber_port_scheduler_pick_next_from_pendsv>\npop {r2,r3}\nmsr BASEPRI,r3\ndsb\nisb"
+    cm4_ref = "mov r0,#128\nmsr BASEPRI,r0\ndsb\nisb\nbl 100 <vTaskSwitchContext>\nmov r0,#0\nmsr BASEPRI,r0"
+    cm7_ref = "mov r0,#128\ncpsid i\nmsr BASEPRI,r0\ndsb\nisb\ncpsie i\nbl 100 <vTaskSwitchContext>\nmov r0,#0\nmsr BASEPRI,r0"
+    sync = lambda reg: "mrs r12,PRIMASK\ncpsid i\nmsr BASEPRI,"+reg+"\ndsb\nisb\nmsr PRIMASK,r12\ndsb\nisb"
+    cm7_ours = "mrs r3,BASEPRI\nmovs r2,#128\npush {r2,r3}\n"+sync("r2")+"\nbl 100 <fiber_port_scheduler_pick_next_from_pendsv>\npop {r2,r3}\n"+sync("r3")
+    for p, reference, text, other in ((CM4, False, cm4_ours, cm7_ours), (CM4, True, cm4_ref, cm7_ref),
+                                    (CM7, False, cm7_ours, cm4_ours), (CM7, True, cm7_ref, cm4_ref)):
+        for name, value, expected in (("own", text, True), ("foreign", other, False),
+                                      ("missing-msr", text.replace("msr BASEPRI", "nop @ removed BASEPRI"), False)):
+            try:
+                check_basepri(p, reference, value)
+                accepted = True
+            except RuntimeError as error:
+                need(str(error).startswith("BASEPRI"), "Incidental profile mask rejection")
+                accepted = False
+            check(p.name+("-reference-" if reference else "-owner-")+name, accepted, expected)
+    model = expected_terminal(False, False, profile=CM7)
+    check("CM7-missing-model", terminal(dict(Exit=0, Stdout="", Stderr="\n".join(model["Lines"][1:])+"\n", TimedOut=False), model), False)
+    check("CM7-wrong-model", terminal(dict(Exit=0, Stdout="", Stderr="\n".join(model["Lines"]).replace("411FC272", "411FC271")+"\n", TimedOut=False), model), False)
+    need(len(controls) == 32, "Literal cross-profile discriminator count")
+    return dict(Controls=controls, Scope="Synthetic classifier controls, not production manifests, additional runtime cases or reference execution")
 
 
 def instructions(text):
@@ -553,17 +692,19 @@ class Image:
 
 
 class Suite(common.Suite):
-    def __init__(self, args):
+    def __init__(self, args, profile=CM4):
+        need(profile in (CM4, CM7), "Only the two immutable classic FP profiles are admitted")
+        self.profile = profile
         super().__init__(args)
-        self.fixture = HERE
+        self.fixture = self.repo/profile.fixture_relative
         self.pairs = []
-        self.report.update(Scope="QEMU mps2-an386 Cortex-M4F fpv4-sp-d16 hard-float; NVIC8/PendSVFF/BASEPRI80; no STM32 NVIC-width, softfp, board, whole-kernel or global parity claim",
+        self.report.update(Scope=profile.scope, Profile=profile._asdict(),
                            ReferencePairs=self.pairs, ReferenceExecuted=False,
                            ReferencePolicy="Pinned upstream always lazy; Fiber eager is an intentional divergence")
 
     def repo_inventory(self):
         super().repo_inventory()
-        for name in EXPLICIT:
+        for name in self.profile.evidence_paths:
             self.enroll(self.repo/name, "ExplicitEvidenceHelper")
         relative = {Path(k).relative_to(self.repo).as_posix(): v["Sha256"] for k, v in self.inputs.items()
                     if Path(k).is_relative_to(self.repo)}
@@ -578,7 +719,7 @@ class Suite(common.Suite):
         else:
             paths = set(common.directory_files(self.repo))
         paths.update(common.directory_files(self.fixture))
-        paths.update(self.repo/n for n in (*EXPLICIT, "tools/test_classic_context_runtime.ps1",
+        paths.update(self.repo/n for n in (*self.profile.evidence_paths, "tools/test_classic_context_runtime.ps1",
             "tools/freertos_asm_parity.ps1", "tools/runtime_sources.py", "tools/runtime_sources.ps1", "tools/runtime_sources.json"))
         relative = {p.relative_to(self.repo).as_posix() for p in paths}
         self.report["RepositoryInventoryDrift"] = sorted(relative ^ self.repo_paths_before)
@@ -599,14 +740,15 @@ class Suite(common.Suite):
             need(path.is_file() and path.stat().st_size, "Missing QEMU identity: "+filename)
             if filename != "qemu-ldd.txt":
                 result[filename] = digest(path)
-        need(re.search(r"(?m)^mps2-an386\s", (directory/"qemu-machines.txt").read_text()), "QEMU lacks mps2-an386")
+        need(re.search(r"(?m)^"+re.escape(self.profile.machine)+r"\s", (directory/"qemu-machines.txt").read_text()), "QEMU lacks "+self.profile.machine)
         return result
 
     def preflight(self):
         super().preflight()
         self.tools["nm"] = (self.tools["gcc"].parent/"arm-none-eabi-gcc-nm.exe").resolve(strict=True)
         self.enroll(self.tools["nm"], "SlimLtoNm")
-        self.report["TerminalControls"] = terminal_controls()
+        self.report["TerminalControls"] = terminal_controls(self.profile)
+        self.report["ProfileControls"] = profile_controls()
         self.report["DecoderControls"] = decoder_controls()
         self.report["ObserverParserControls"] = self.observer_parser_controls()
         self.report["ObserverCompiledControls"] = self.observer_compiled_controls()
@@ -690,7 +832,7 @@ class Suite(common.Suite):
         directory = self.build/"observer-compiled-controls"
         directory.mkdir()
         source = directory/"controls.S"
-        lines = [".syntax unified", ".thumb", ".cpu cortex-m4", ".fpu fpv4-sp-d16", ".text", ".balign 4"]
+        lines = [".syntax unified", ".thumb", ".cpu "+self.profile.cpu, ".fpu "+self.profile.fpu, ".text", ".balign 4"]
         for name, body, _ in cases:
             symbol = "control_"+name
             lines += [".global "+symbol, ".type "+symbol+",%function", ".thumb_func", symbol+":", body,
@@ -701,8 +843,8 @@ class Suite(common.Suite):
         source.write_text("\n".join(lines)+"\n", encoding="ascii", newline="\n")
         self.generated[str(source.resolve())] = dict(Path=str(source.resolve()), Sha256=digest(source), Role="CompiledObserverCheckerControls")
         obj, elf = directory/"controls.o", directory/"controls.elf"
-        compile_record = self.command([self.tools["gcc"], *CPU, "-c", source, "-o", obj], "compile actual observer controls")
-        link_record = self.command([self.tools["gcc"], *CPU, "-nostdlib", "-Wl,--no-undefined,--fatal-warnings,-z,noexecstack",
+        compile_record = self.command([self.tools["gcc"], *self.profile.cpu_flags, "-c", source, "-o", obj], "compile actual observer controls")
+        link_record = self.command([self.tools["gcc"], *self.profile.cpu_flags, "-nostdlib", "-Wl,--no-undefined,--fatal-warnings,-z,noexecstack",
             "-Wl,-Ttext=0x1000,-Tbss=0x20000000,-e,control_report", obj, "-o", elf], "link actual observer controls")
         dis = self.command([self.tools["objdump"], "-drwC", "-Mreg-names-std", elf], "disassemble actual observer controls")
         elf.with_suffix(".dis").write_text(dis["Stdout"], encoding="ascii")
@@ -746,7 +888,7 @@ class Suite(common.Suite):
                              "lazy" if lazy else "eager", policy, mutant or "positive"))
             self.rows.append(dict(Name=name, Consumer=consumer, Optimization=opt, LTO=lto, Archive=archive,
                 Lazy=lazy, Policy=policy, Mutant=mutant, Kind="CompiledControl" if mutant else "Positive",
-                Expected=expected_terminal(lazy, policy == "validation", mutant), Status="STAGED"))
+                Expected=expected_terminal(lazy, policy == "validation", mutant, profile=self.profile), Status="STAGED"))
         if self.a.development_smoke:
             add("context", "O2", False, False, False, "primary")
             add("fiber", "O2", True, True, True, "validation")
@@ -819,7 +961,7 @@ class Suite(common.Suite):
             need(str(original.resolve()) in self.inputs, "Source was not enrolled before compilation: "+str(original))
             source = original
             if mutant and ((mutant == "publication" and original == self.repo/"context/context_runtime_state.c") or
-                           (mutant != "publication" and original == self.repo/"fiber/port/ARM_CM4/fiber_port.c")):
+                           (mutant != "publication" and original == self.repo/self.profile.port_relative/"fiber_port.c")):
                 source = self.mutate(source, mutant, directory)
             obj = directory/("%02d-" % index+original.stem+".o")
             dep = obj.with_suffix(".d")
@@ -848,7 +990,7 @@ class Suite(common.Suite):
         else:
             linked = objects
         elf = directory/"runtime.elf"
-        flags = [*CPU, "-"+row["Optimization"], "-nostdlib"]+(["-flto"] if row["LTO"] else [])
+        flags = [*self.profile.cpu_flags, "-"+row["Optimization"], "-nostdlib"]+(["-flto"] if row["LTO"] else [])
         self.command([self.tools["gcc"], *flags, "-Wl,--gc-sections,--no-undefined,--fatal-warnings,-z,noexecstack",
                       "-T", script, "-Wl,-Map="+str(directory/"runtime.map"), *linked, "-o", elf], "link actual final ELF")
         for tool, args, suffix in (("objdump", ["-drwC", "-Mreg-names-std"], ".dis"),
@@ -860,9 +1002,8 @@ class Suite(common.Suite):
 
     def audit_architecture(self, image, flash=0x80000):
         attrs = image.path.with_suffix(".readelf.txt").read_text()
-        need("Tag_CPU_arch: v7E-M" in attrs and "Tag_FP_arch: VFPv4-D16" in attrs and
-             "Tag_ABI_VFP_args: VFP registers" in attrs and "Tag_THUMB_ISA_use: Thumb-2" in attrs,
-             "Final ELF is not the hard-float CM4 FPv4-SP-D16 cohort")
+        need(capability_matches(self.profile, attrs, self.profile.cpu_flags) and "Tag_THUMB_ISA_use: Thumb-2" in attrs,
+             "Final ELF is not the selected hard-float "+self.profile.name+" cohort")
         need(not re.search(r"Tag_(MVE_arch|Advanced_SIMD_arch|PAC_extension|BTI_extension):", attrs), "Foreign ISA feature")
         stacks = [s for s in image.segments if s["Type"] == "PT_GNU_STACK"]
         need(len(stacks) == 1 and not stacks[0]["Flags"] & 1, "Missing/executable GNU_STACK")
@@ -896,8 +1037,7 @@ class Suite(common.Suite):
             image.symbol(common.CONFIG, "STT_FUNC")
         runtime = [n for n in image.symbols if n.startswith("fiber_port_context_cohort_arm")]
         storage = [n for n in image.symbols if n.startswith("fiber_port_storage_cohort_") and "consumer_expectation" not in n]
-        need(len(runtime) == len(storage) == 1 and runtime[0].startswith("fiber_port_context_cohort_armv7em_p0x434D3034u_") and
-             storage[0] == "fiber_port_storage_cohort_arm_cm4_v1_r0", "Wrong actual CM4 runtime/storage cohort")
+        need(cohort_matches(self.profile, runtime, storage), "Wrong actual "+self.profile.name+" runtime/storage cohort")
         for name in runtime+storage:
             need(image.bytes(image.symbol(name, "STT_OBJECT")) == b"\x01", "Cohort provider value")
         self.audit_vectors(image, "Reset_Handler", ((11, "SVC_Handler"), (14, "PendSV_Handler")), 0x20010000)
@@ -913,7 +1053,7 @@ class Suite(common.Suite):
         observer_owners = json.loads((elf.parent/"observer-object-owners.json").read_text())
         need(set(observer_owners) == {"fixture_report", "fixture_observer_arm"}, "Exact observer prelink owner proof missing")
         image.observer_local_objects = set(observer_owners) if row["LTO"] else set()
-        for name, size in (("fixture_report", 312), ("fixture_observer_arm", 4)):
+        for name, size in (("fixture_report", self.profile.report_bytes), ("fixture_observer_arm", 4)):
             record = image.symbol(name, "STT_OBJECT", local=name in image.observer_local_objects)
             section = image.sections[record["Section"]]
             need(record["Size"] == size and section["Flags"] & 3 == 3 and section["Type"] == "SHT_NOBITS" and
@@ -923,7 +1063,7 @@ class Suite(common.Suite):
         observer["PrelinkObjectOwners"] = observer_owners
         return image, dict(StrongHandlers=True, NoUnresolved=True, NoLegacy=True, RuntimeCohort=runtime[0],
             StorageCohort=storage[0], ExpectationPointers=expected, CommonPrivateBindings=bindings,
-            PrelinkCommonOwners=proof, Observer=observer, Architecture="CM4 hard-float FPv4-SP-D16",
+            PrelinkCommonOwners=proof, Observer=observer, Architecture=self.profile.name+" hard-float "+self.profile.fpu,
             ForwardDefinitions="All eight actual input-object definitions checked; unused panic-wait may be GCed")
 
     def audit_vectors(self, image, reset, handlers, top):
@@ -970,12 +1110,12 @@ class Suite(common.Suite):
         sources = list(reader.get_runtime_source_paths(self.repo, roles))
         if row["Consumer"] == "fiber":
             sources.append(self.repo/"fiber/lifecycle/fiber_v1.c")
-        port = self.repo/"fiber/port/ARM_CM4"
+        port = self.repo/self.profile.port_relative
         providers = [port/n for n in ("fiber_port.c", "fiber_port_boot.c", "fiber_port_exception.c")]
         sources += providers+[self.fixture/n for n in ("application.c", "startup.S", "probe.S")]
         sources.append(self.repo/"fiber/port/fiber_port_context_cohort_expectation.c")
         validation = int(row["Policy"] == "validation")
-        flags = [*CPU, *COMPILE, "-"+row["Optimization"], "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7EM=1",
+        flags = [*self.profile.cpu_flags, *COMPILE, "-"+row["Optimization"], "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_PORT_ARMV7EM=1",
             "-DFIXTURE_CASE=0", "-DFIXTURE_USE_FIBER="+str(int(row["Consumer"] == "fiber")),
             "-DFIXTURE_FP_LAZY="+str(int(row["Lazy"])), "-DFIBER_FPU_LAZY="+str(int(row["Lazy"])),
             "-DFIBER_VALIDATE_BOOT_RECORD_HASH_ON_SWITCH="+str(validation),
@@ -1000,8 +1140,8 @@ class Suite(common.Suite):
                    ElfAudit=str(directory/"elf-audit.json"), CommonPrivateProviders=str(directory/"common-private-providers.json"))
         result = self.command(["wsl.exe", "-d", self.a.wsl_distro, "--", "bash",
             self.wsl_path(self.repo/"tools/fixtures/arm_control/qemu.sh"), "run", self.a.qemu_root,
-            self.wsl_path(directory), "mps2-an386", self.wsl_path(elf), "20"],
-            "actual CM4F "+row["Name"], timeout=35, expected=None)
+            self.wsl_path(directory), self.profile.machine, self.wsl_path(elf), "20"],
+            "actual "+self.profile.label+" "+row["Name"], timeout=35, expected=None)
         row["Actual"] = result
         need(terminal(result, row["Expected"]), "Wrong exact FP terminal outcome: "+row["Name"]+"; "+result["Record"])
         row["Status"] = "PASS"
@@ -1051,9 +1191,9 @@ class Suite(common.Suite):
             row = dict(Name=name, Optimization=opt, LTO=lto, Archive=archive, Status="STAGED", Executed=False)
             self.parity.append(row)
             ref = self.fixture/"reference"
-            port = Path(self.a.freertos).resolve()/"portable/GCC/ARM_CM4F"
+            port = Path(self.a.freertos).resolve()/self.profile.upstream_relative
             sources = [ref/n for n in ("main.c", "providers.c", "startup.S")]+[port/"port.c"]
-            flags = [*CPU, *COMPILE, "-"+opt, "-I"+str(ref), "-I"+str(Path(self.a.freertos).resolve()/"include"), "-I"+str(port)]
+            flags = [*self.profile.cpu_flags, *COMPILE, "-"+opt, "-I"+str(ref), "-I"+str(Path(self.a.freertos).resolve()/"include"), "-I"+str(port)]
             if lto:
                 flags.append("-flto")
             objects, maps = self.compile_objects(sources, directory, flags, reference=True)
@@ -1070,7 +1210,7 @@ class Suite(common.Suite):
             need(root_section["Flags"] & 2 and not root_section["Flags"] & 1 and root_section["Data"] == struct.pack("<2I", *roots),
                  "Reference retained roots are not exactly the actual upstream functions")
             facts = image.sections[".reference_contract"]
-            need(not facts["Flags"] & 1 and facts["Data"] == struct.pack("<8I", 1, 4, 4, 4, 8, 4, 1, 0x80), "Reference real header facts")
+            need(not facts["Flags"] & 1 and facts["Data"] == struct.pack("<8I", *self.profile.header_facts), "Reference real header facts")
             tcb = image.symbol("pxCurrentTCB", "STT_OBJECT")
             need(tcb["Size"] == 4 and image.sections[tcb["Section"]]["Type"] == "SHT_NOBITS", "Reference null opaque TCB boundary")
             for boundary in REF_BOUNDARIES:
@@ -1133,17 +1273,7 @@ class Suite(common.Suite):
                      int(target[1], 16) == transfer["Address"]+len(transfer["Bytes"]),
                      "Fiber FP guard no longer skips exactly its transfer")
             conditional.append(dict(Test=test["Text"], Guard=guard["Text"], Transfer=transfer["Text"]))
-        scheduler = "vTaskSwitchContext" if reference else "fiber_port_scheduler_pick_next_from_pendsv"
-        envelope = ([r"\bmov[^\n]*#(?:128|0x80)\b", r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b",
-                     r"\bbl\s+[^\n]*<"+scheduler+r">", r"\bmov[^\n]*#0\b", r"\bmsr\s+BASEPRI"] if reference else
-                    [r"\bmrs[^\n]*BASEPRI", r"\bmov[^\n]*#(?:128|0x80)\b", r"\bpush\b",
-                     r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b", r"\bbl\s+[^\n]*<"+scheduler+r">",
-                     r"\bpop\b", r"\bmsr\s+BASEPRI", r"\bdsb\b", r"\bisb\b"])
-        cursor = 0
-        for pattern in envelope:
-            match = re.search(pattern, text[cursor:], re.I)
-            need(match is not None, "BASEPRI scheduler envelope missing: "+pattern)
-            cursor += match.end()
+        envelope = check_basepri(self.profile, reference, text)
         svc = "vPortSVCHandler" if reference else "SVC_Handler"
         svc_text = "\n".join(i["Text"] for i in image.body(svc))
         need(re.search(r"\bldmia[^\n]*\{r4[^\n]*(?:lr|r14)\}", svc_text) and re.search(r"\bmsr\s+PSP", svc_text, re.I) and
@@ -1170,7 +1300,8 @@ class Suite(common.Suite):
                     BasepriEnvelopePatterns=envelope, CpacrHelper=cpacr_names[0],
                     FirstRestore=svc, FirstStart=names[0], Reference=reference,
                     Scope="Bounded ordered/predicate/mask/CPACR patterns plus execution; not whole-provider or byte equivalence",
-                    Differences=["SVC number and provenance/seals", "common vs TCB publication", "r9 initialization policy", "eager initialization when selected"])
+                    Differences=["SVC number and provenance/seals", "common vs TCB publication", "r9 initialization policy", "eager initialization when selected"]+
+                    (["Upstream unconditionally re-enables IRQs; Fiber restores PRIMASK and saved BASEPRI"] if self.profile.name == "CM7" else []))
 
     def finish(self, error):
         self.report["Error"] = error
@@ -1200,13 +1331,13 @@ class Suite(common.Suite):
             self.artifact_manifest(verify=True)
 
 
-def main():
+def main(profile=CM4):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("repo", "gcc", "cmsis", "freertos", "qemu-root", "wsl-distro", "build-root"):
         parser.add_argument("--"+name, required=True)
     parser.add_argument("--development-smoke", action="store_true")
     args = parser.parse_args()
-    suite = Suite(args)
+    suite = Suite(args, profile=profile)
     print("Classic FP Context runtime evidence: "+str(suite.build), flush=True)
     error = None
     try:

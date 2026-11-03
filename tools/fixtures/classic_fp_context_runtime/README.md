@@ -14,7 +14,13 @@ MVFR1 is additionally recorded, not comprehensively validated. The QEMU
 manifest uses eight priority bits, PendSV priority `0xFF` and scheduler BASEPRI
 `0x80`; it is not an STM32G4 priority-width manifest. This is a CPU execution
 fixture, not STM32G4 peripheral or board qualification. Softfp and subsequent
-CM7/H7/H7S execution require separate applicable evidence.
+CM7/H7/H7S execution require separate applicable evidence. The subsequent
+CM7/AN500 gate has its own fixture, entry point and captured receipt at
+`PORT_ARCHITECTURE_AUDIT.md#post-context-cm7-fp-runtime`; it does not inherit
+this CM4 receipt. A shared immutable Profile selects its inputs without copying
+or weakening the bounded `Image` checker. Thirty-two synthetic discriminator
+controls reject cross-profile terminals, capability flags, cohorts and mask
+sequences; they are not additional firmware executions.
 
 Use the real Context engine/state/panic providers and actual `ARM_CM4` backend.
 The Fiber variant adds the real Fiber v1 consumer and configuration provider.

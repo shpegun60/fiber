@@ -74,6 +74,16 @@ mechanism checks. This is neither whole-kernel equivalence nor a G4 board,
 device-priority-width, softfp, CM7, complete panic-suite or arithmetic claim.
 The earlier aggregate is not rerun or promoted by that focused receipt.
 
+The separate [post-Context CM7 FP-state suite](PORT_ARCHITECTURE_AUDIT.md#post-context-cm7-fp-runtime)
+passes 288 actual AN500 cases with the same consumer/policy/optimization/link
+grid, eight actual pinned CM7/r0p1 final reference ELFs, and independent exact
+M7 capability, cohort, terminal and PRIMASK-preserving BASEPRI checks. Both
+profiles are replayed from one immutable snapshot; all 296 CM4 executable
+images match the earlier accepted executable sections. This is modeled M7 r1p2
+CPU evidence, not H7/H7S board, cache/TCM, affected-r0p1 silicon, complete panic
+suite or global all-optimization qualification. The aggregate above remains
+historical; later conditional dispatch/documentation are separately checked.
+
 The separate [complete admitted raw-compiler replay](PORT_ARCHITECTURE_AUDIT.md#complete-admitted-concrete-raw-inventory)
 passes 348 cells / 1,769 controls across all 27 admitted registry groups at
 O2/Os, ordinary and both native-LTO layouts. This covers primary ABI/eight-region

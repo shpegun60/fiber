@@ -55,6 +55,13 @@ consumers. Eight actual upstream final ELFs provide bounded paired mechanisms,
 not whole-kernel equivalence. G4 peripheral/NVIC-width integration, CM7, softfp,
 full panic suites and boards remain separate qualifications.
 
+A separate [CM7 FP-state execution receipt](PORT_ARCHITECTURE_AUDIT.md#post-context-cm7-fp-runtime)
+passes 288 captured AN500 cases and eight actual pinned CM7/r0p1 reference
+final ELFs. The same immutable snapshot independently reruns CM4; all 296 CM4
+executable images preserve their previously qualified executable sections.
+This establishes bounded CPU mechanics on the M7 r1p2 model, not H7/H7S board,
+cache/TCM, affected-r0p1 erratum, complete panic-suite or global parity evidence.
+
 The five-function cooperative API is the active v2 porting and validation
 baseline while CPU context storage is selected-port-owned. `fiber_core.h`
 completes `FiberContext` through one selected public type-only port header, and
