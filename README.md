@@ -88,10 +88,12 @@ build-owned expectation, and stale private-object negative links are active.
 Earlier external H7 CubeIDE Debug and Release integration receipts compile the
 expectation outside the port source group, retain its read-only linker section,
 and pass the final-ELF cohort and vector audit for their captured inputs. The
-Context-owned managed-source admission repair is recorded separately in
-`H7_RUNTIME_VALIDATION.md`; clean regenerated builds and a fresh ELF audit are
-still required for that repaired project. Refreshed board evidence remains
-separate and pending.
+Context-owned managed-source admission repair and the later isolated, freshly
+generated Debug/Release builds are recorded in
+`H7_RUNTIME_VALIDATION.md#isolated-post-context-debugrelease-build`.
+That captured project passes its 35-object and final-ELF audits without using
+the live build directories. CubeMX regeneration and refreshed board evidence
+remain separate and pending.
 
 `CONTEXT_FIBER_ARCHITECTURE.md` freezes the post-port-freeze separation of this
 runtime into a processor execution-context engine, a portable stackful Fiber

@@ -116,12 +116,15 @@ implementation and its selected software gates, not the entire port roadmap.
 | Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
 | Bounded CM0/CM0+ non-MPU seven-mode parity | Separate captured five-option/final-LTO gate: 28 final pairs, 56 positive ELFs and 84 compiled controls PASS; not global parity or G0 execution |
+| Isolated H7S managed Debug/Release integration | Fresh headless-generated 35-object builds and final-ELF audits PASS for the captured application and pinned production export; not CubeMX regeneration or board execution |
 | Exact-commit release-blocking CI | Not established |
 | C++ Task/Kernel, timer/ISR preemption, reclamation and SMP | Separate future contracts and implementation |
 
 The F0/G0/G4/H7/H7S mappings remain CPU-profile claims. The local H7S managed
-source-admission repair is separately recorded in `H7_RUNTIME_VALIDATION.md`;
-it is not a regenerated-build or hardware receipt.
+source-admission repair and later isolated Debug/Release build receipt are
+separately recorded in `H7_RUNTIME_VALIDATION.md`. The latter regenerates build
+recipes from the captured project, not CubeMX application sources. It does not
+migrate the board application to Fiber v1 or establish board execution.
 
 ## Evidence Boundary
 

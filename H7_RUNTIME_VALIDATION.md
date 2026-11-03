@@ -1,5 +1,66 @@
 # STM32H7 Runtime Validation Checklist
 
+## Isolated Post-Context Debug/Release Build
+
+The maintained `tools/test_h7s_snapshot_build.ps1` passes both fresh headless
+managed builds in `C:/h7sb-68b7390d6731`, without using the live Boot build
+directories or IDE workspace, or changing the installation or user preferences.
+CubeIDE regenerates make recipes from the captured project in its private workspace.
+CubeMX source regeneration, QEMU, programming and board execution are NOT_RUN.
+
+Production inputs are an exact Git-blob-verified 331-file export of
+`471ec5cfd1e69aefc273f6dd47d487bb1b4e5c6a` (`context/`, `fiber/`,
+`basic_types.h`, `mcu_core.h`). The outer application, project, linker scripts,
+Core and Drivers are captured and hashed separately; they do not belong to
+that library commit. Later library C/header/assembly files through `cf56546`
+are unchanged; later documentation is not part of the exported source receipt.
+
+Each configuration compiles exactly 35 associated source/object/dependency
+triples: 33 C, one C++ and the expected startup assembler. The regenerated
+inventory includes `fiber/lifecycle/fiber_v1.c`; this is not an application
+migration from the legacy five-call API. Debug retains C O2/C++ O1/GNU++20;
+Release retains Os/GNU++14. Both use M7/FPv5-D16/hard ABI without LTO or imported
+QEMU priority settings. Unused APIs and the configuration service may be removed
+by section GC.
+
+Prelink ownership and final ELF audits pass: one Context current slot and
+reverse-v1 owner, exact Context/legacy/forward providers, strong port SVC and
+PendSV, exact Thumb vector slots, device memory placement and one runtime and
+storage cohort. SVC/PendSV prelink ownership permits only the selected strong
+port definition and the two known weak application/startup definitions. Reset
+is separately required to retain its startup-owned weak Thumb definition and
+match the ELF entry, vector slot 1 and initial MSP `0x20010000`.
+
+The read-only expectation section now has three pointers (12 bytes): storage
+expectations from `app_core.o` and `fiber_v1.o`, and the runtime expectation from
+`fiber_port_context_cohort_expectation.o`. It must not be compared with the
+historical two-pointer output below. Eighteen maintained admission-control groups
+and eleven changed actual-ELF rejection controls per configuration pass. All
+19,711 enrolled inputs, 525 copies and 1,594 artifacts retain their identities.
+
+| Captured file | SHA-256 |
+| --- | --- |
+| `results.json` | `911EF8B9D1B8655C52D9938B646EFAF4ED070F37BF53C22052043B0CAAE2DB44` |
+| `artifacts.json` | `86BCB13BA019606F2F6BE33F5057C1B7D15A0BAED98E161F85BE8B2474975AE8` |
+| Debug `h7s_fiber_test_Boot.elf` | `533379EBDAC5F4D7B6684F8EF46183CB6C099CE62546E71E34358E40F178C159` |
+| Release `h7s_fiber_test_Boot.elf` | `73BF7CD589F2685F6B27823943E559D6A30AA51D19CC13420AB9FECE3E3AC16F` |
+
+Revision 2 requires executable, allocated, file-backed handler extents, aligned
+writable RAM for the complete current slot, and valid physical file-load
+extents. The corresponding three malformed ELF cases previously passed the
+initial oracle. That historical receipt at `C:/h7sb-44f0b729e833`, SHA-256
+`3E18C92F0ED00B9467B4384FFD191C97C84DEBE8AF2C2DD926ADE4BCD0926075`,
+remains unchanged but is superseded for ELF admission. These were oracle gaps,
+not observed firmware defects; revision 2 requires fresh builds and exact
+negative diagnostics rather than accepting the old PASS.
+
+Final vector words (Reset/SVC/PendSV) are `08000A25/08003EB1/08003F99` in Debug
+and `080009D5/08003901/080039E9` in Release. This is a bounded offline
+build/link receipt, not active-VTOR readback, interrupt/FP behavior, erratum
+effectiveness, hardware validation or a new complete matrix/CI result.
+The retained earlier failed harness attempts are listed in
+`PORT_ARCHITECTURE_AUDIT.md#isolated-h7s-managed-build-qualification`.
+
 ## Context Owner Managed Source Admission
 
 The external H7S `Boot/.cproject` now excludes `ARM_CM33F`, `ARM_CM33F_TFM`,
@@ -28,10 +89,12 @@ After  4FD77ABCD1ED56203225AF1A3460278355EC5FAD0353309E41CE5EACD335DE1A
 
 The application project is outside this library repository; this document
 records its local change, not publication of `.cproject` in the library commit.
-This proof is XML/source-inventory replay and preprocessing only. Actual CubeIDE
-regeneration, a subsequent clean Debug/Release build, final ELF re-audit and board
-execution remain NOT_RUN for this metadata checkpoint. The earlier generated
-make builds below do not prove regeneration safety or reactivate a hardware claim.
+This historical proof is XML/source-inventory replay and preprocessing only.
+CubeIDE regeneration, clean Debug/Release builds, final ELF re-audit and board
+execution were NOT_RUN for that metadata checkpoint. The later isolated receipt
+above closes its captured managed-build and ELF follow-up, not CubeMX source
+regeneration or hardware validation. Earlier generated make builds below do not
+prove regeneration safety or reactivate a hardware claim.
 
 ## E6b8149 Offline Rebuild
 

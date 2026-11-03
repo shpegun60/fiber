@@ -4327,3 +4327,104 @@ Later documentation is outside the captured export. This is not a fresh full
 default matrix or exact-commit CI result. CM0+ VTOR=0, MPU, reserved-r9 and other
 policy combinations, other profiles, global parity, G0 CPU execution and board
 qualification remain separate; the earlier M0 QEMU receipt is not extended.
+
+## Isolated H7S Managed Build Qualification
+
+The separate 2026-11-03 offline integration gate passes both fresh managed
+Debug and Release builds at `C:/h7sb-68b7390d6731`. Its four maintained harness
+files are `tools/test_h7s_snapshot_build.ps1` and the README, `audit.py` and
+`test_audit.py` in `tools/fixtures/h7s_snapshot_build/`. No production source,
+layout, transfer sequence or live project metadata changes in this slice.
+
+The exact 331-file production export is pinned to
+`471ec5cfd1e69aefc273f6dd47d487bb1b4e5c6a` and checked against Git blob IDs.
+Only `context/`, `fiber/`, `basic_types.h` and `mcu_core.h` enter it. No live
+tools, untracked WIPs or old build outputs are imported. Outer Boot application,
+Core, project, linker and Drivers files are separately content-addressed, not
+attributed to the library commit. Production C/header/assembly remains unchanged
+through `cf56546`; later per-port Markdown is outside this captured export.
+
+Private configuration, p2 metadata, workspace, Java home and temporary paths
+isolate the actual installed CubeIDE 2.2.0 launch. The installation directory's
+name still says 2.0.0; that name is not used as its version identity. GCC is the
+existing GNU Arm 14.3.1 toolchain. No package provisioning, live IDE/workspace
+access, CubeMX source regeneration, debugger, programming or board run occurs.
+The helper rejects build hooks, unexpected builders, escaped linked inputs,
+alternate ports and reused output roots; originals are sealed apart from the
+private generated metadata.
+
+Both generated builds admit exactly 35 objects, including Fiber v1: 33 C, one
+C++ and the real startup assembler, each reconciled with its source and depfile.
+Debug preserves C O2/C++ O1/GNU++20; Release preserves Os/GNU++14, with M7,
+FPv5-D16/hard ABI and no LTO or QEMU-derived priority policy. The board application
+still uses the legacy five calls; compiling Fiber v1 is not consumer migration.
+
+Prelink provider audits accept exactly the canonical Context/current/reverse
+owners and the legacy/forward providers. Only SVC/PendSV permit the exact two
+known weak application/startup definitions alongside the strong selected-port
+definition. Final SVC/PendSV are strong global functions. Reset instead must
+have its exact startup-only weak owner and final weak Thumb function extent,
+with matching entry/vector 1 and MSP `0x20010000`. The final ELF audits also
+check no undefined symbols, device memory placement, exact runtime/storage
+cohorts and the read-only twelve-byte expectation section. Its three pointers
+come from `app_core.o`, `fiber_v1.o` and the explicit runtime expectation unit;
+older eight-byte receipts are not silently reused. Unused APIs/configuration
+may be collected normally.
+
+Revision 2 requires whole executable/allocated/file-backed handler extents,
+aligned writable RAM containing the complete current slot, and valid physical
+file-load extents as well as virtual memory extents. Eighteen maintained
+admission-control groups pass. Each configuration also
+rejects eleven changed copies of its actual ELF for the assigned vector,
+expectation, handler-binding, Reset-binding, entry or MSP reason. These are
+also extended by exact handler-extent, current-slot writable-RAM and physical-load
+extent rejections. These are audit controls, not extra firmware executions.
+The complete receipt enrolls
+19,711 inputs, 525 copies and 1,594 artifacts with zero identity drift.
+
+| Captured file | SHA-256 |
+| --- | --- |
+| `results.json` | `911EF8B9D1B8655C52D9938B646EFAF4ED070F37BF53C22052043B0CAAE2DB44` |
+| `artifacts.json` | `86BCB13BA019606F2F6BE33F5057C1B7D15A0BAED98E161F85BE8B2474975AE8` |
+| Debug ELF | `533379EBDAC5F4D7B6684F8EF46183CB6C099CE62546E71E34358E40F178C159` |
+| Release ELF | `73BF7CD589F2685F6B27823943E559D6A30AA51D19CC13420AB9FECE3E3AC16F` |
+| Launcher | `A2508259E7865FA8810D6DDE22A44A86AD56B3762A1F714404DBD98E40066D45` |
+| `audit.py` | `F8D2324A282C0F3F33F616276CFF045F93594D12C3B9F164223AC34C8E9F5C01` |
+| `test_audit.py` | `B1709F23FCC00F03BB3EDDF1C609BCC40DCF3C9A20F23BBDEC0729B58BD4861A` |
+
+Independent review of the initial complete PASS at `C:/h7sb-44f0b729e833`,
+receipt SHA-256
+`3E18C92F0ED00B9467B4384FFD191C97C84DEBE8AF2C2DD926ADE4BCD0926075`,
+reproduced six false passes: each of two ELFs accepted a foreign handler address,
+a current slot in read-only flash, and a foreign physical load address. These
+are oracle defects, not observed defects in the original binaries. That receipt
+is preserved unchanged but superseded for ELF admission. Reproductions remain
+at `C:/h7sr-p2-5f6e74cff1`; revision 2 explicitly names the superseded receipt
+and rejects all three cases by exact diagnostic before fresh acceptance.
+
+Earlier attempts retain their FAIL verdicts and receipts; none is waived:
+
+| Root | Failure | `results.json` SHA-256 |
+| --- | --- | --- |
+| `C:/h7sf-bootstrap-13ef946bbd` | PS5 default path binding | `077D30BB98622908513204EC78B0BD0090043C476BDEA4A33502D737FD39981D` |
+| `C:/h7sp-fed7c1fdaed9` | Archive CRLF conversion violates exact blob identity | `18F19070DED33CBD199A330B8812BC74B56D72390BEE01432BEEA44D50E8A485` |
+| `C:/h7sp-ff81e2ed35a8` | SystemRoot environment-key casing | `2CB47759E57DF80C234D1EB3B3EEB63D56157231C1CCD147385C8602A799463D` |
+| `C:/h7sb-8e9d5c02feff` | Harness incorrectly demands C optimization on startup assembler | `E46F419DDCE997939EB1DD6312DAFB4300383BE715DDF5CE4A3902DA789F3F51` |
+| `C:/h7sb-2855cf2ea442` | Harness rejects the known weak/strong handler ownership set | `D3E8016BEBF365FDC9FEF0F18A0759B79E789F50D0C7F576AF5DC459383D5601` |
+
+The later Reset-owner correction was made before the accepted fresh launch;
+requiring a strong Reset would have contradicted the real STM32 startup.
+The positive/negative owner checks now distinguish Reset from the port's strong
+exception handlers. This scope accepts captured offline integration only.
+Active VTOR, real exception/FP behavior, cache/TCM, affected-silicon erratum,
+H7/H7S boards, global parity and exact-SHA CI remain separate open evidence.
+
+Independent read-only revision-2 review rehashes 21,830 input/copy/artifact
+entries (20,876 unique files) twice without mismatch, missing files or extras,
+and confirms all four live helpers and 331 exported Git blobs. The reviewer
+replays eighteen control groups, twenty-two retained ELF negatives and all six
+historical false passes with their exact revised rejections. Both configurations
+retain all eleven allocated sections' geometry and bytes versus revision 1
+(NOBITS geometry is compared separately). Release is whole-ELF identical;
+Debug is not, so whole-image identity is not claimed for Debug. No confirmed
+residual admission defect is found within this bounded offline scope.
