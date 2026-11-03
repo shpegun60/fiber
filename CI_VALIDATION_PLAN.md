@@ -17,6 +17,15 @@ broader freeze. They are not waived or retrospectively reported as completed.
 CI is a software evidence layer. It does not run a board and cannot create a
 hardware support claim.
 
+The initial executable inventory/planner is `tools/freeze_cohorts.py`, with
+explicit tuples in `tools/freeze_cohorts.json`. It requires the five object
+and seven final modes below, and separates runtime forward-eight/reverse-v1
+obligations from paired Secure-companion obligations. It is not a compiler
+driver or CI workflow: every generated cell starts as `NOT_RUN`, and even a
+complete synthetic key-accounting result leaves `GlobalFreezeQualified=false`.
+The 141 initial rows do not exhaust all admitted axes; their reconciliation
+and unimplemented required tuples remain visible in `scope_backlog`.
+
 ## Reproducible Inputs
 
 Every acceptance run must record and pin:

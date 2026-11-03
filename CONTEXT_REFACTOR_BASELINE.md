@@ -117,6 +117,7 @@ and its selected software gates, not the entire port roadmap. The later
 | Post-inversion CM7 Context/Fiber FP-state execution | Separate captured AN500 r1p2 suite: 288 cases PASS and eight paired upstream final ELFs; fresh CM4 replay and 296 executable-image comparisons pass. Not H7/H7S hardware or affected-r0p1 erratum evidence |
 | Complete post-inversion classic exception/FP runtime and board suites | Pending; not established by that aggregate |
 | Global O0/Og/O2/Os/O3 and final-linked-LTO FreeRTOS parity | Pending |
+| Exact-cohort global coverage inventory | Initial 27-group/141-row declaration and 2,755-cell plan; no new compiler/ELF/CPU proof, exhaustive reconciliation and execution pending |
 | Bounded CM0/CM0+ non-MPU seven-mode parity | Separate captured five-option/final-LTO gate: 28 final pairs, 56 positive ELFs and 84 compiled controls PASS; not global parity or G0 execution |
 | Bounded CM4F/CM7 hard-FP seven-mode runtime/parity | Separate opt-in full grids: 504 executions, fourteen link-only reference final ELFs and 112 associations per profile PASS; old 296-image executable subsets unchanged. Not softfp, MPU, global parity or board evidence |
 | Classic MPU CONTROL repair and basic CM4 pilot | Separate seven-image AN386 pilot PASS for Context/Fiber return and two fault cases; not FP-active/lazy, final-LTO, other MPU CPUs or board evidence |

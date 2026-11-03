@@ -5265,3 +5265,62 @@ captured backend/plugin contract and semantic
 symbol/archive-index controls, not just a subprocess exit code. That future
 hardening is separate from the classic MPU CONTROL repair; no universal host/OS
 dependency-closure claim is made here.
+
+## Exact-Cohort Inventory and Coverage Plan
+
+The 2026-11-04 inventory slice changes no production C, context/frame layout,
+handler assembly, dispatcher or public ABI. `tools/freeze_cohorts.json` lists
+27 canonical source groups with 77 C files and 141 explicit declared cohorts.
+Four NS/Secure pairs yield 145 separately typed artifacts. The required plan
+contains 725 object cells (O0/Og/O2/Os/O3) and 2,030 final cells (the same modes
+plus O2-lto/Os-lto, each direct/archive): 2,755 keys, all initially `NOT_RUN`.
+Secure companions do not acquire a fictitious forward-eight/reverse-v1 runtime.
+The runtime and common proof obligations retain the real directional ABI,
+current-slot, handler, vector, exact-cohort and negative-link requirements.
+
+This is not an exhaustive admitted-vector inventory or a new global parity
+receipt. Twenty-three Pending and three ReferenceOnly backlog entries preserve
+missing feature tuples and reconciliation work. Compiler admission, source
+runtime selectability and scope are distinct facts; staged headers remain
+non-selectable. M23's reserved PSPLIM format word does not imply an accessible
+Non-secure PSPLIM register, and companion BASEPRI zero means not-applicable.
+
+The standard-library CLI uses the full canonical runtime-source reader and
+captures all six source roles. Duplicate identities ignore independent option
+ordering and metadata-only policy assertions. Known policy, FP-lazy, R9,
+BASEPRI and MPU-region defines are checked against the declared tuple.
+Coverage accounting recomputes the complete expected plan from the manifest;
+empty/truncated replacement plans, mixed snapshots, wrong cohorts, duplicates
+and unexecuted statuses cannot satisfy its key checks. Even complete synthetic
+accounting remains `KEY_ACCOUNTING_NOT_CPU_PROOF`, not a processor verdict.
+
+Fresh `C:/fzin-20261104-e5` returns `INVENTORY-PLAN-PASS`, with 339 captured
+inputs, 369 artifacts, zero closing drift and 28 read-only Git commands.
+All 26 declared upstream C-source bindings match the pinned LF Git blobs after
+the explicitly permitted whole-file LF-to-CRLF checkout expansion; both raw
+hashes and blobs are retained. This is not header/compiler dependency closure.
+No ARM compiler, archiver, linker, emulator or board executed in this slice.
+The first `e1` FAIL (raw CRLF-versus-blob mismatch) and the earlier `e2`
+inventory-only PASS remain separate, unchanged receipts. The later e3/e4
+snapshots also remain separate; e4 captures the runtime manifest before provider
+selection and rejects C octal/invalid leading-zero define spellings. E5 repeats
+that version after removing an extra trailing blank line from the input JSON;
+the parsed inventory and required-cell plan are unchanged. Later prose records
+the captured e5 snapshot; it does not make that run exact-commit CI evidence.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzin-20261104-e5/results.json` | `F35FDD7211F7FA3D00113C04442AA9E6754343FAF08D07FF0E4465B4F1986088` |
+| `C:/fzin-20261104-e5/artifacts.json` | `C1BA370F46DD29F3172E22945008E5B9A585365E909C903F11FBA25AE2D1A82C` |
+| `C:/fzin-20261104-e5/capture.json` | `2EF12C0F38D6C2EA0884E466D5F6FB3BAE6493FE62F27A788AB415ECDDC9AF50` |
+| `tools/freeze_cohorts.json` input | `A988CD5D7A2BFA197E43950AB42A1E09CAD6BF5AE2A585165E676F76C904B689` |
+| Pure control results | `6F1CC749A8EB3FE753D6A722F8B6281681C07C38B8F089C0360EF0F488309F6D` |
+
+The separately retained pure run is at
+`%TEMP%/freeze-inventory-controls-20261104-e2/results.json`: 128 controls
+(31 positive and 97 expected rejections) pass, with no compiler/CPU execution.
+Its final test-source SHA-256 is
+`F50CA2F8A50507A43E266B17CA5CACFA0997B5FDB65BC070E194C7913961BBE2`.
+These parser/accounting controls cannot validate asserted CPU-proof hash bytes.
+The default combined matrix, global optimization/final-LTO parity, staged
+profile admission, hosted CI and hardware evidence are unchanged and pending.

@@ -445,6 +445,14 @@ cohort, final runtime link, exception execution or hardware was qualified.
 
 ## Retained Full-Roadmap Freeze Gates
 
+The initial [machine-readable cohort inventory](tools/fixtures/freeze_cohorts/README.md)
+enumerates 27 source groups and 141 exact declared rows, including four paired
+NS/Secure rows. These produce 2,755 required object/final/linkage cells, not
+2,755 executed proofs. Its 23 Pending and three ReferenceOnly backlog entries
+retain missing tuples, unreconciled admitted axes and the global CI/parity
+work. They do not narrow the full-roadmap boundary to the current finite rows.
+Inventory/key validation cannot promote a profile or close this freeze gate.
+
 The complete-profile freeze still requires the processor-state contracts and
 evidence in [`CONTEXT_FIBER_ARCHITECTURE.md`](CONTEXT_FIBER_ARCHITECTURE.md).
 The later bounded scope decision permits the implemented Context/Fiber

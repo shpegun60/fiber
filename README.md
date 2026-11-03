@@ -1267,6 +1267,13 @@ after the port inventory is complete. The plan also defines pinned inputs and
 the ELF/disassembly/map artifacts required from a freeze run. No CI workflow is
 currently committed.
 
+The machine-readable [freeze inventory](tools/fixtures/freeze_cohorts/README.md)
+lists explicit processor tuples separately from source groups and retains
+unreconciled axes as backlog. Its standard-library planner requires five object
+modes and seven final-ELF modes with direct/archive forms. Inventory validation
+does not run those checks, accept historical receipts as new coverage, activate
+staged profiles or declare software freeze.
+
 See `FIBER_SETTINGS.md` for settings ownership, `DECISIONS.md` for the current
 context-switch decision log,
 `H7_RUNTIME_VALIDATION.md` for the STM32H7 hardware validation checklist, and
