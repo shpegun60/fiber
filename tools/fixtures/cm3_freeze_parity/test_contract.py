@@ -44,6 +44,24 @@ def main():
             GeneratedAssemblyParity=False, FinalElfProof=False, CpuExecution=False,
             Recipe=dict(ExactTargetRecipe=True, WitnessKind="none")) for mode in f.inventory.OBJECT_MODES]
         test(prefix + "complete-five", lambda: f.cells_for(result, manifest, source_sha, reference), True)
+        for group, cpu in (("CM4", "cortex-m4"), ("CM7", "cortex-m7")):
+            identity = group.lower() + "-" + cpu + "-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default"
+            declared = next(c for c in manifest["cohorts"] if c["id"] == identity)
+            alternate = deepcopy(result)
+            alternate["SelectedCohorts"] = [identity]
+            for row in alternate["Cells"]:
+                row.update(Cohort=identity, SourceGroup=group,
+                           CohortSha256=f.inventory.cohort_fingerprint(declared))
+            test(prefix + group + "-explicit-filter", lambda r=alternate, c=identity, g=group:
+                 f.need(set(f.cells_for(r, manifest, source_sha, reference, cohort=c, source_group=g)) ==
+                        set(f.inventory.OBJECT_MODES), "explicit-filter-control"), True)
+            test(prefix + group + "-no-implicit-default-change",
+                 lambda r=alternate: f.cells_for(r, manifest, source_sha, reference), False)
+            if reference:
+                bad_witness = deepcopy(alternate)
+                bad_witness["Cells"][0]["Recipe"]["WitnessKind"] = "softfp"
+                test(prefix + group + "-explicit-witness-reject", lambda r=bad_witness, c=identity, g=group:
+                     f.cells_for(r, manifest, source_sha, reference, cohort=c, source_group=g), False)
         mutations = [
             ("failed-receipt", lambda r: r.update(Verdict="FAIL")),
             ("error", lambda r: r.update(Error="synthetic")),

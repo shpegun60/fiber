@@ -1,5 +1,23 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Captured Classic-FP Roots At Five Optimizations
+
+`tools/freeze_classic_fp_mechanisms.py` adds a bounded complete-root gate for
+the exact CM4 and CM7 hard-FP/eager, no-MPU, p4/b16, ordinary-AAPCS cohorts.
+It joins previously captured native/reference groups at O0/Og/O2/Os/O3 and
+matches the complete first-start, SVC and PendSV protocols on both sides.
+Local branches, FP predicates/registers/extents, mask restoration, literal
+islands, relocations/addends and optimization-specific tail NOPs remain exact.
+The fixture README defines scope and reproducible controls; retained results
+are recorded in `PORT_ARCHITECTURE_AUDIT.md`.
+
+This does not qualify constructor/C-helper semantics, whole-object ownership,
+final direct/archive/LTO ELFs, CPU execution or required global parity cells.
+Native eager FPCCR versus reference ASPEN=1/LSPEN=1 remains an explicit
+unresolved policy obligation, not an erased difference or equivalence claim.
+The shared CM3 receipt join now permits explicit profile/cohort arguments;
+its default CM3 behavior is replayed separately and is not broadened.
+
 ## C33S Dual-Origin And C3SO Closed Bodies
 
 The maintained `cm33_secure_parity` fixture is dispatched by the parity driver

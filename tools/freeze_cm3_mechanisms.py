@@ -137,7 +137,7 @@ def bind_source_inputs(source, compiler, required):
     need(set(required) <= found, "comparison-required-source-binding")
 
 
-def cells_for(result, manifest, source_sha, reference):
+def cells_for(result, manifest, source_sha, reference, *, cohort=COHORT, source_group="CM3"):
     status = "REFERENCE-COMPILE-PREFLIGHT-PASS" if reference else "COMPILE-PREFLIGHT-PASS"
     scope = "REFERENCE_COMPILE_PREFLIGHT_ONLY" if reference else "NATIVE_COMPILE_PREFLIGHT_ONLY"
     need(result["Verdict"] == status and result["ProofScope"] == scope and result["Error"] is None and
@@ -153,7 +153,7 @@ def cells_for(result, manifest, source_sha, reference):
     cohorts = {row["id"]: row for row in manifest["cohorts"]}
     selected, modes = result["SelectedCohorts"], result["Modes"]
     need(type(selected) is list and len(selected) == len(set(selected)) and
-         set(selected) <= set(cohorts) and COHORT in selected, "comparison-selected-cohorts")
+         set(selected) <= set(cohorts) and cohort in selected, "comparison-selected-cohorts")
     need(type(modes) is list and len(modes) == len(set(modes)) and
          set(modes) == set(inventory.OBJECT_MODES), "comparison-five-modes-required")
     expected = {(name, a["role"], a["source_group_id"], mode,
@@ -168,14 +168,14 @@ def cells_for(result, manifest, source_sha, reference):
              all(row[n] is False for n in
                  ("RequiredCellSatisfied", "GeneratedAssemblyParity", "FinalElfProof", "CpuExecution")),
              "comparison-cell-scope")
-        if reference and row["Cohort"] == COHORT:
+        if reference and row["Cohort"] == cohort:
             need(row["Recipe"]["ExactTargetRecipe"] is True and row["Recipe"]["WitnessKind"] == "none",
-                 "comparison-cm3-reference-witness")
+                 "comparison-reference-witness")
         found[key] = row
     need(set(found) == expected and type(result["ExpectedCompileCells"]) is int and
          result["ExpectedCompileCells"] == len(expected), "comparison-cell-completeness")
     return {row["Mode"]: row for row in found.values()
-            if row["Cohort"] == COHORT and row["ArtifactRole"] == "runtime" and row["SourceGroup"] == "CM3"}
+            if row["Cohort"] == cohort and row["ArtifactRole"] == "runtime" and row["SourceGroup"] == source_group}
 
 
 def require_cm3_attributes(attributes):

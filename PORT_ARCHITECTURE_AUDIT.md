@@ -5634,3 +5634,67 @@ Independent bounded review finds no concrete blocker in the new manifest row,
 selected 5+5 cell identities, target headers, dependencies or C-source binding;
 all 30 source-object/group hashes agree. Its verdict applies to captured e9
 inputs, not subsequent live-document identity, and adds no parity/CPU claim.
+
+## Captured CM4 And CM7 Closed FP Roots
+
+`tools/freeze_classic_fp_mechanisms.py` reuses the closed e8/e4/e5 inventory,
+native and reference bundles, rather than merging the later CM0/MPU partial
+compile into a new global receipt. Exact CM4 and CM7 hard/eager, no-MPU,
+ordinary-AAPCS, VTOR1, p4/b16 cohorts each pass O0/Og/O2/Os/O3. The driver
+requires every declared target fact and exact compile flags; its admission
+guard rejects a p5 target retaining a p4 name, boolean/integer aliases and
+other mismatched target facts. Independent review found this missing p4 guard
+before publication; the repair changes tooling only, not production behavior.
+
+Each profile closes the native/reference first-start, SVC and PendSV roots:
+five paired cells, six complete bodies per cell, 30 bodies and 15 mechanism
+comparisons. The complete protocol consumes every instruction, local branch,
+FP predicate/register transfer, stack extent, mask operation, call/literal
+relocation, literal island and padding NOP. Reference recipes retain their
+threshold binding and eager/lazy differences. The native CM7 PRIMASK-preserving
+BASEPRI sequences retain r12 scratch explicitly. Source-to-protocol review
+finds no remaining confirmed blocker in these bounded rules.
+
+The final e2 receipts below capture the completed checker, driver and ledger.
+The earlier e1 runs are retained separately, not relabelled. Their results
+remain captured-source proof, not exact-commit hosted CI. No compiler or CPU
+is invoked by this comparison driver.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzcm4-20261104-e2/results.json` | `3BA212B5B3A7D8F618187EBDDD801F8DA9747DBC8AFEFA8D62E2348B8EF6E878` |
+| `C:/fzcm4-20261104-e2/artifacts.json` | `C9214C5C4F78E3F4A47BDBD0AB45962AD16BF8C3DF8FFB952DC620FD74D16E47` |
+| `C:/fzcm7-20261104-e2/results.json` | `BFB0F59C0046D244A11933125C157B08F942B73CBB03046DF2539452EA54E954` |
+| `C:/fzcm7-20261104-e2/artifacts.json` | `3412C950FD495B2FA1074C09E78C60D68AAF474003419B9EB8CCF17DA1054A5F` |
+| Both e2 `readers.json` files | `09321C1F5EA8838B6BCAA395A3D06309E10FC85DC0CF4D8AB11D6EA97726E79A` |
+
+The parent-run retained-ELF suite passes 18 tests, 529 pure token mutations,
+29 actual byte/disassembly mutations and all ten original pairs/60 bodies.
+Changed bit-4 predicates, S16-S31 sets, FP frame extents, BASEPRI snapshots,
+CM7 PRIMASK operands, literal/call relocations and extra instructions fail.
+Original receipts rehash without drift; mutated objects are never executed.
+The outer driver's 118 pure controls pass, including 14 positives and 104
+negative admission/result/attribute cases. Neither suite invokes a compiler
+or target CPU. Their separate records under system TEMP are:
+
+| Control Record | SHA-256 |
+| --- | --- |
+| `classic-fp-negative-parent-20261104-e1/results.json` | `F088E2D7641961E41EAFB636FDCD64197989C166F9CEF2EE79E92D001E018EA9` |
+| `classic-fp-driver-controls-20261104-e2.json` | `8338F57CA83B8B5F79409F6F652FEC67E41B75030AEDB36267E86EB1F8D36B24` |
+
+The shared CM3 receipt join accepts explicit cohort/source-group arguments;
+its defaults remain CM3. Replayed `C:/fzcm3-20261104-e4` again closes all
+five CM3 pairs. Its result hash equals the earlier e3 result
+`7F9CF0FAA844B972179E3B67EA1FB48C57A6BCCE283E420782A46CDC006FF54D`;
+its changed captured-reader artifact manifest is
+`EDD0E65DB2FAB8B475805DBC8C0FA2FE3CCCFE1BCE9FD7672305C903E17BC60E`.
+The expanded 96 join/scope controls pass at
+`%TEMP%/cm3-receipt-controls-20261104-e8.json`, SHA-256
+`C7880A76537995BE0E9D79AD6FF6010F26F8D6E30C4AC225B2527CAEFE0EED4E`.
+
+These roots do not close C-callee/constructor semantics, whole-object ABI,
+vector routing, SVC nonreturn, final executable direct/archive/LTO links or
+CPU/board behavior. Native eager FPCCR versus the reference's ASPEN=1/LSPEN=1
+is explicitly `UNRESOLVED-BY-THREE-ROOTS`; policy equivalence is false. All
+required global cells remain unsatisfied by this bounded gate. Default matrix,
+runtime C/assembly, profile promotion, CI and hardware claims are unchanged.
