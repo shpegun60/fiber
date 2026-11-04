@@ -1,4 +1,4 @@
-"""Strict native CM4 O2 final-image structural reader, not a parity proof.
+"""Strict native classic CM4/CM7 final-image reader, not a parity proof.
 
 The caller separately checks the prelink object's source-transcribed protocol.
 Ordinary instructions are bound byte-for-byte, not independently decompiled.
@@ -8,7 +8,9 @@ GNU ld --emit-relocs retains applied relocation metadata:
 https://sourceware.org/binutils/docs/ld/Options.html#index-_002d_002demit_002drelocs
 REL application destroys the original addend; take it only from prelink bytes:
 https://github.com/ARM-software/abi-aa/blob/main/aaelf32/aaelf32.rst#562-idempotency
-Thumb encodings: Arm DDI0403, B (T1/T2), BL (T1), LDR literal (T1).
+Thumb encodings: Arm DDI0403, B (T1/T2/T3), BL (T1), LDR literal (T1).
+T3 field layout also specified in Arm DDI0597 (2024-03), B, page 52:
+https://documentation-service.arm.com/static/66054b941bc22b03bca913ed
 """
 
 from bisect import bisect_right
@@ -96,8 +98,18 @@ def _address_form(raw, place):
                 return "bl", place + 4 + immediate, None, immediate
             require(form != 0xC000, "DECODE", "BLX immediate unsupported")
             require(form != 0x9000, "DECODE", "T32 B.W unsupported")
-            require(not (form == 0x8000 and (first >> 6) & 15 < 14),
-                    "DECODE", "T32 conditional branch unsupported")
+            if form == 0x8000 and (first >> 6) & 15 < 14:
+                require((first >> 6) & 15 == 1, "DECODE", "only T32 BNE.W conditional branch admitted")
+                # B T3 concatenates J2/J1 directly, unlike BL's complemented
+                # I1/I2 encoding. The signed immediate has 21 bits, not 25.
+                immediate = _signed((((first >> 10) & 1) << 20)
+                                    | (((second >> 11) & 1) << 19)
+                                    | (((second >> 13) & 1) << 18)
+                                    | ((first & 63) << 12) | ((second & 2047) << 1), 21)
+                return "bne", place + 4 + immediate, None, None
+            # Conditions 14/15 select related encodings (MRS/MSR/barriers),
+            # not branches. Leave ordinary decoding intact; branch text with
+            # no decoded branch form is rejected by function().
         require(first & 0xFF7F != 0xF85F, "DECODE", "T32 literal load unsupported")
     return None
 
@@ -487,7 +499,7 @@ class FinalImage:
         return body, result, data
 
     def function(self, name):
-        require(name in ROOTS, "SCOPE", "only three native CM4 transfer roots admitted")
+        require(name in ROOTS, "SCOPE", "only three native classic CM4/CM7 transfer roots admitted")
         original = self.prelink.symbol(name, "STT_FUNC", root=True)
         final = self.final.symbol(name, "STT_FUNC", root=True)
         require(original["size"] == final["size"], "PRESERVATION", "root extent changed")
@@ -593,6 +605,7 @@ class FinalImage:
                     require(argument is not None and int(argument[1], 16) == target_address,
                             "DECODE", "branch disassembly target disagrees with bits")
             else:
+                require(op not in CONDITIONS, "DECODE", "unsupported/reserved conditional branch encoding")
                 require(op in ORDINARY and re.search(r"\b(pc|r15)\b", operands, re.I) is None,
                         "DECODE", "unsupported instruction or PC use")
             output.append(dict(Offset=offset, Bytes=raw.hex(), Mnemonic=op,

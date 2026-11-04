@@ -886,6 +886,124 @@ class OriginTests(unittest.TestCase):
             reader.compare_load_images(f.plain, f.final)
 
 
+class WideConditionalTests(unittest.TestCase):
+    @staticmethod
+    def encode(displacement, condition=1):
+        if displacement % 2 or not -(1 << 20) <= displacement < (1 << 20):
+            raise ValueError("test B T3 displacement")
+        value = displacement & ((1 << 21) - 1)
+        first = 0xF000 | (((value >> 20) & 1) << 10) | (condition << 6) | ((value >> 12) & 63)
+        second = 0x8000 | (((value >> 18) & 1) << 13) | (((value >> 19) & 1) << 11) | ((value >> 1) & 2047)
+        return struct.pack("<HH", first, second)
+
+    def fixture(self, raw, *, target=BASE + 12, mnemonic="bne.w"):
+        temp = tempfile.TemporaryDirectory(prefix="classic-final-bne-")
+        self.addCleanup(temp.cleanup)
+        f = Fixture(temp.name)
+        # Replace two adjacent T16 instructions by one local T32 branch. This
+        # is synthetic coverage of decoder logic, never a production protocol.
+        f.source[8:12] = f.body[8:12] = raw
+        f.omitted.add(10)
+        first, second = struct.unpack("<HH", raw)
+        f.dis_overrides[8] = "%08x: %04x %04x %s %x" % (BASE + 8, first, second, mnemonic, target)
+        return f.write()
+
+    def test_observed_cm7_example(self):
+        form = reader._address_form(struct.pack("<HH", 0xF040, 0x8081), 6)
+        self.assertEqual(form[:2], ("bne", 0x10C))
+
+    def test_zero_displacement(self):
+        self.assertEqual(reader._address_form(self.encode(0), BASE)[1], BASE + 4)
+
+    def test_negative_displacement(self):
+        self.assertEqual(reader._address_form(self.encode(-8), BASE)[1], BASE - 4)
+
+    def test_positive_range_limit(self):
+        self.assertEqual(reader._address_form(self.encode((1 << 20) - 2), BASE)[1], BASE + 4 + (1 << 20) - 2)
+
+    def test_negative_range_limit(self):
+        self.assertEqual(reader._address_form(self.encode(-(1 << 20)), BASE)[1], BASE + 4 - (1 << 20))
+
+    def test_j1_direct_not_inverted(self):
+        self.assertEqual(reader._address_form(struct.pack("<HH", 0xF040, 0xA000), BASE)[1], BASE + 4 + (1 << 18))
+
+    def test_j2_direct_not_inverted(self):
+        self.assertEqual(reader._address_form(struct.pack("<HH", 0xF040, 0x8800), BASE)[1], BASE + 4 + (1 << 19))
+
+    def test_pc_not_word_aligned(self):
+        self.assertEqual(reader._address_form(self.encode(0), BASE + 2)[1], BASE + 6)
+
+    def test_complete_preserved_body(self):
+        f = self.fixture(self.encode(0))
+        self.assertTrue(reader.compare_load_images(f.plain, f.final)["Identical"])
+        proof = f.image().function(ROOT)
+        branch = next(item for item in proof["Instructions"] if item["Offset"] == 8)
+        self.assertEqual((branch["Mnemonic"], branch["Target"]), ("bne", BASE + 12))
+        self.assertEqual(proof["InstructionCount"], 7)
+
+    def test_branch_into_instruction_interior(self):
+        f = self.fixture(self.encode(-6), target=BASE + 6)
+        with self.assertRaisesRegex(reader.Rejected, "instruction boundary"):
+            f.image().function(ROOT)
+
+    def test_branch_into_data(self):
+        f = self.fixture(self.encode(6), target=BASE + 18)
+        with self.assertRaisesRegex(reader.Rejected, "instruction boundary"):
+            f.image().function(ROOT)
+
+    def test_branch_outside_root(self):
+        f = self.fixture(self.encode(244), target=BASE + 256)
+        with self.assertRaisesRegex(reader.Rejected, "instruction boundary"):
+            f.image().function(ROOT)
+
+    def test_wrong_text_target(self):
+        f = self.fixture(self.encode(0), target=BASE + 14)
+        with self.assertRaisesRegex(reader.Rejected, "target disagrees"):
+            f.image().function(ROOT)
+
+    def test_wrong_text_condition(self):
+        f = self.fixture(self.encode(0), mnemonic="beq.w")
+        with self.assertRaisesRegex(reader.Rejected, "mnemonic disagrees"):
+            f.image().function(ROOT)
+
+    def test_other_wide_conditions_not_admitted(self):
+        for condition in (0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+            with self.subTest(condition=condition), self.assertRaisesRegex(reader.Rejected, "only T32 BNE.W"):
+                reader._address_form(self.encode(0, condition), BASE)
+
+    def test_reserved_condition_14_not_branch(self):
+        f = self.fixture(self.encode(0, 14))
+        with self.assertRaisesRegex(reader.Rejected, "unsupported/reserved conditional"):
+            f.image().function(ROOT)
+
+    def test_reserved_condition_15_not_branch(self):
+        f = self.fixture(self.encode(0, 15))
+        with self.assertRaisesRegex(reader.Rejected, "unsupported/reserved conditional"):
+            f.image().function(ROOT)
+
+    def test_malformed_first_halfword(self):
+        f = self.fixture(struct.pack("<HH", 0xE840, 0x8000))
+        with self.assertRaisesRegex(reader.Rejected, "unsupported/reserved conditional"):
+            f.image().function(ROOT)
+
+    def test_unconditional_bw_still_rejected(self):
+        with self.assertRaisesRegex(reader.Rejected, "B.W unsupported"):
+            reader._address_form(struct.pack("<HH", 0xF040, 0x9000), BASE)
+
+    def test_blx_still_rejected(self):
+        with self.assertRaisesRegex(reader.Rejected, "BLX immediate unsupported"):
+            reader._address_form(struct.pack("<HH", 0xF040, 0xC000), BASE)
+
+    def test_truncated_wide_branch(self):
+        with self.assertRaisesRegex(reader.Rejected, "width"):
+            reader._address_form(struct.pack("<H", 0xF040), BASE)
+
+    def test_related_system_encodings_unchanged(self):
+        for raw in ("eff30583", "eff3108c", "83f31188", "bff34f8f", "bff36f8f"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(reader._address_form(bytes.fromhex(raw), BASE))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)

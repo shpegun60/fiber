@@ -1,4 +1,4 @@
-"""One native CM4 O2 direct-link witness; no target execution or parity promotion."""
+"""Native classic-FP direct-link witnesses; no target execution or parity promotion."""
 import argparse
 import hashlib
 import importlib.util
@@ -10,9 +10,11 @@ import struct
 import sys
 
 
-COHORT = "cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default"
-PORT_SOURCES = tuple("fiber/port/ARM_CM4/" + name for name in
-                     ("fiber_port.c", "fiber_port_boot.c", "fiber_port_exception.c"))
+PROFILES = {
+    "CM4": ("cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM4", "arm_cm4"),
+    "CM7": ("cm7-cortex-m7-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM7/r0p1", "arm_cm7_r0p1"),
+}
+MODES = ("O0", "Og", "O2", "Os", "O3")
 COMMON_SOURCES = ("context/context_core.c", "context/context_runtime_state.c", "context/context_panic.c")
 FIXTURE_FILES = ("run.py", "application.c", "startup.S", "link.ld", "README.md", "CONTRACT.md", "elf.py", "test_run.py")
 HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms.py",
@@ -22,9 +24,19 @@ HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms
            "tools/fixtures/cm55_tfm_parity/elf.py", "tools/fixtures/cm4_cm7_freeze_parity/check.py")
 
 
-def scope_report():
-    return dict(Verdict="FAIL", Error=None, ProofScope="NATIVE_CM4_O2_DIRECT_TWIN_BUILD_ONLY",
-                Cohort=COHORT, Mode="O2", Linkage="direct", LTO=False, ReferenceBuilt=False,
+def selection(profile, mode):
+    need(type(profile) is str and profile in PROFILES, "unsupported native profile")
+    need(type(mode) is str and mode in MODES, "unsupported native mode")
+    cohort, directory, storage = PROFILES[profile]
+    sources = tuple("fiber/port/" + directory + "/" + name for name in
+                    ("fiber_port.c", "fiber_port_boot.c", "fiber_port_exception.c"))
+    return cohort, directory, storage, sources
+
+
+def scope_report(profile="CM4", mode="O2"):
+    cohort, _, _, _ = selection(profile, mode)
+    return dict(Verdict="FAIL", Error=None, ProofScope="NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY",
+                Profile=profile, Cohort=cohort, Mode=mode, Linkage="direct", LTO=False, ReferenceBuilt=False,
                 RequiredCellSatisfied=False, RequiredCellsSatisfied=0, FinalElfProof=False,
                 FinalRootRelocationProof=False, CompleteObjectProof=False,
                 PolicyEquivalence=False, CpuExecution=False, BoardExecution=False,
@@ -118,6 +130,8 @@ class Pilot:
     def __init__(self, args):
         self.repo = Path(__file__).resolve().parents[3]
         self.fixture = self.repo / "tools/fixtures/classic_final_image"
+        self.profile, self.mode = getattr(args, "profile", "CM4"), getattr(args, "mode", "O2")
+        self.cohort, self.port_directory, self.storage, self.port_sources = selection(self.profile, self.mode)
         lexical = Path(os.path.abspath(args.output_dir))
         for path in (lexical, *lexical.parents):
             if path.exists() or path.is_symlink():
@@ -130,7 +144,7 @@ class Pilot:
         self.output.mkdir(parents=True)
         self.output = self.output.resolve(strict=True)
         need(not self.output.is_relative_to(self.repo) and not self.repo.is_relative_to(self.output), "output aliases repository")
-        self.args, self.report = args, scope_report()
+        self.args, self.report = args, scope_report(self.profile, self.mode)
         self.inputs, self.generated, self.tools, self.commands = {}, {}, {}, []
         self.root = self.output / "source"
         self.environment = process_environment(os.environ)
@@ -203,18 +217,18 @@ class Pilot:
             self.capture(inventory_root / relative, expected=digest)
         self.bundle = self.classic.shared.Bundle(inventory_root)
         manifest = self.classic.shared.captured_inventory(self.bundle)
-        cohort = [row for row in manifest["cohorts"] if row["id"] == COHORT]
+        cohort = [row for row in manifest["cohorts"] if row["id"] == self.cohort]
         need(len(cohort) == 1 and len(cohort[0]["artifacts"]) == 1, "unique cohort")
         self.artifact = cohort[0]["artifacts"][0]
-        self.classic.require_cohort(self.artifact, "CM4")
+        self.classic.require_cohort(self.artifact, self.profile)
         need(self.artifact["defines"] == dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1",
              FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"), "exact defines")
-        groups = [g for g in manifest["source_groups"] if g["id"] == "CM4"]
-        need(len(groups) == 1 and tuple(groups[0]["sources"]) == PORT_SOURCES, "exact source group")
+        groups = [g for g in manifest["source_groups"] if g["id"] == self.profile]
+        need(len(groups) == 1 and tuple(groups[0]["sources"]) == self.port_sources, "exact source group")
         self.report.update(SourceInventorySha256=self.bundle.result["SourceInventorySha256"],
                            CohortArtifact=self.artifact, SourceInventoryReceipt=str(inventory_root))
         directories = (self.repo, self.repo / "context", self.repo / "fiber", self.repo / "fiber/port",
-                       self.repo / "fiber/port/ARM_CM4")
+                       self.repo / "fiber/port" / self.port_directory)
         for directory in directories:
             self.memberships.append((directory, False, membership(directory)))
             for path in sorted(directory.glob("*.h")):
@@ -223,7 +237,7 @@ class Pilot:
         runtime = json.loads(runtime_path.read_bytes())
         runtime_paths = list(runtime["providers"].values())
         runtime_paths += [p for paths in runtime["compatibility"].values() for p in paths]
-        for relative in (*runtime_paths, *PORT_SOURCES, "fiber/port/fiber_port_context_cohort_expectation.c"):
+        for relative in (*runtime_paths, *self.port_sources, "fiber/port/fiber_port_context_cohort_expectation.c"):
             need(re.fullmatch(r"(?:context|fiber)/[A-Za-z0-9_./-]+\.c", relative) and ".." not in Path(relative).parts,
                  "runtime path")
             self.capture(self.repo / relative, self.root / relative)
@@ -236,9 +250,9 @@ class Pilot:
             self.capture(path, self.output / "cmsis" / path.relative_to(cmsis))
         self.fixture_copy = self.root / "tools/fixtures/classic_final_image"
         main = self.generated_file(self.fixture_copy / "main.h", self.recipe.cmsis_main(self.artifact["target"]).encode("ascii"))
-        self.flags = self.recipe.native_flags(self.artifact, "O2", self.fixture_copy,
-                        self.root / "fiber/port/ARM_CM4", self.root, self.output / "cmsis")
-        need(self.flags[:5] == [*self.artifact["compile_flags"], "-O2"] and str(main) == self.flags[-1], "exact recipe flags")
+        self.flags = self.recipe.native_flags(self.artifact, self.mode, self.fixture_copy,
+                        self.root / "fiber/port" / self.port_directory, self.root, self.output / "cmsis")
+        need(self.flags[:5] == [*self.artifact["compile_flags"], "-" + self.mode] and str(main) == self.flags[-1], "exact recipe flags")
         self.report["CompileFlags"] = self.flags
         self.report["Interpreter"] = dict(ReportedExecutable=sys.executable, ModulePath=str(interpreter_path()))
         self.capture(interpreter_path())
@@ -260,7 +274,7 @@ class Pilot:
             if directory.is_relative_to(gcc.parent.parent):
                 for path in directory.glob("*.dll"):
                     self.capture(path)
-        self.sources = [self.root / p for p in (*COMMON_SOURCES, *PORT_SOURCES,
+        self.sources = [self.root / p for p in (*COMMON_SOURCES, *self.port_sources,
                          "fiber/port/fiber_port_context_cohort_expectation.c")]
         self.sources += [self.fixture_copy / "application.c", self.fixture_copy / "startup.S"]
         need(len(self.sources) == 9, "nine translation units")
@@ -345,7 +359,7 @@ class Pilot:
             dep = obj.with_suffix(".discovery.d")
             actual_dep = obj.with_suffix(".compile.d")
             target = "pilot-source-" + str(index)
-            flags = ([*self.artifact["compile_flags"], "-O2", "-g0"] if source.suffix == ".S"
+            flags = ([*self.artifact["compile_flags"], "-" + self.mode, "-g0"] if source.suffix == ".S"
                      else [*self.flags, "-I" + str(source.parent)])
             self.command([self.tools["gcc"], *flags, "-M", "-MF", dep, "-MT", target, source],
                          "discover dependencies " + source.name)
@@ -370,7 +384,7 @@ class Pilot:
         finally:
             self.verify_objects("after-prelink")
         script = self.fixture_copy / "link.ld"
-        base = [*self.artifact["compile_flags"], "-O2", "-nostdlib",
+        base = [*self.artifact["compile_flags"], "-" + self.mode, "-nostdlib",
                 "-Wl,--gc-sections,--no-undefined,--fatal-warnings,--build-id=none,-z,noexecstack", "-T", script,
                 *self.objects]
         self.report["Links"] = []
@@ -380,7 +394,7 @@ class Pilot:
             link_map = self.output / (name + ".map")
             self.link_twin(name, [self.tools["gcc"], *base, *extra, "-Wl,-Map=" + str(link_map), "-o", elf])
             self.inspect(elf)
-            self.classic.require_attributes(elf.with_suffix(".attributes").read_text(), "CM4")
+            self.classic.require_attributes(elf.with_suffix(".attributes").read_text(), self.profile)
             self.audit_final(elf)
             finals.append(elf)
             self.report["Links"].append(dict(Kind=name, Path=str(elf), Sha256=sha(elf.read_bytes()),
@@ -409,8 +423,9 @@ class Pilot:
         port = self.objects[3]
         image = decoder.Object(port, port.with_suffix(".dis"))
         evidence = [checker._match(image, "Native", name, expected)
-                    for name, expected in checker._NATIVE["CM4"].items()]
-        need(len(evidence) == 3 and all(row["TailNops"] == 0 for row in evidence), "native O2 complete protocols")
+                    for name, expected in checker._NATIVE[self.profile].items()]
+        need(len(evidence) == 3 and all(row["TailNops"] == (1 if self.mode == "O0" else 0) for row in evidence),
+             "native complete protocols/tail layout")
         self.report["PrelinkNativeRoots"] = evidence
         self.report["PrelinkNativeProtocolScope"] = "THREE_NATIVE_ROOTS_ONLY_NOT_FINAL_RELOCATION_PROOF"
         definitions = {}
@@ -507,7 +522,7 @@ class Pilot:
              and not optional & names and not any(n.startswith("fiber_v1_") for n in names),
              "legacy/Fiber/optional configuration in pure Context image")
         providers = [n for n in names if n.startswith("fiber_port_context_cohort_arm")]
-        storage = [n for n in names if n.startswith("fiber_port_storage_cohort_arm_cm4_")]
+        storage = [n for n in names if n.startswith("fiber_port_storage_cohort_" + self.storage + "_")]
         need(len(providers) == len(storage) == 1, "unique private/storage providers")
         expected = [readonly_object(n)["value"] for n in providers + storage]
         section = image.elf.get_section_by_name(".fiber_port_context_cohort_expectation")
@@ -578,6 +593,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     for name in ("gcc", "cmsis", "inventory", "output-dir"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="CM4")
+    parser.add_argument("--mode", choices=MODES, default="O2")
     parser.add_argument("--python-modules", default=str(Path(os.environ.get("TEMP", ".")) / "fiber-classic-audit-python"))
     args = parser.parse_args(argv)
     pilot = Pilot(args)

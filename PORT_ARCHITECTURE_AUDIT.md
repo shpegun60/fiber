@@ -5925,3 +5925,91 @@ public/port ABI, default matrix, feature admission and hardware claims are
 unchanged. Declared inputs are captured, not the whole host OS/stdlib. This
 local source-capture evidence predates the receipt prose and is not hosted
 exact-commit CI.
+
+## Native Classic-FP Final Images At Five Optimizations
+
+The next proof-only slice extends the native direct twin pilot to precisely
+two hard/eager, no-MPU, VTOR1, p4/b16, ordinary-AAPCS cohorts:
+`cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default` and
+`cm7-cortex-m7-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default`.
+O0/Og/O2/Os/O3 each use fresh copies of actual Context/port/expectation
+providers, the typed consumer and startup. The exact cohort, private source
+directory, storage identity, CPU/FPU flags and transcribed prelink protocols
+are profile-bound. Unsupported profiles/modes fail before output creation.
+CM7 retains its PRIMASK-preserving 837070 policy; no runtime source changes.
+
+Startup no longer overrides the recorded compiler target with `.cpu cortex-m4`.
+Both links use the same nine frozen objects, script, target and optimization
+flags; only emit-relocs/output names differ. Strong vectors, owner identities,
+private/storage expectations, actual compilation dependencies, seven object
+checkpoints and closing input hashes remain mandatory. The O0-only post-island
+NOP remains part of each complete root, not filtered as compiler noise.
+
+CM7's longer PendSV requires one observed T32 BNE.W. Its displacement is
+decoded directly from S/J2/J1/imm6/imm11 with the branch PC bias, following
+[Arm's T3 encoding](https://documentation-service.arm.com/static/66054b941bc22b03bca913ed#page=55).
+The reader admits only this wide condition; it still rejects unconditional
+B.W, BLX and other unsupported transfers. Twenty-two focused tests cover
+signed limits, J1/J2, PC alignment, malformed/reserved conditions, text/bit
+disagreement, instruction-interior/data/out-of-root targets and unchanged
+system instructions. Existing origin, full-byte and relocation checks stay
+intact. The ET_REL reader and production assembly are unchanged.
+
+The fresh parent sweep `C:/fzfinal-grid-20261104-e2` passes exactly ten pairs:
+
+| Profile | Modes | Complete Roots | Root Bytes | Instructions | Applied References | Mutants |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| CM4 | O0/Og/O2/Os/O3 | 15 | 2,846 | 983 | 70 | 65 |
+| CM7/r0p1 | O0/Og/O2/Os/O3 | 15 | 3,126 | 1,058 | 70 | 65 |
+| Total | 10 pairs | 30 | 5,972 | 2,041 | 140 | 130 |
+
+It records 730 native-tool commands, 90 TUs, 20 final links, 70 object
+checkpoints, 8,180 artifact entries and 5,380 original/captured input bindings
+(per-build counts, not globally unique files), with zero closing drift.
+Each reader run passes 103 pure controls and all 13 actual-witness mutants.
+The separate pure build-envelope suite passes 33 controls without launching
+a native tool. The local sequential driver retains all commands and final
+case receipt hashes; it is an external orchestration artifact, not a hosted
+CI qualification or a new production runner.
+
+A complementary parent post-run audit binds each reader result to that case's
+exact thirteen unique inputs: nine provider objects and the final ELF,
+ordinary ELF, disassembly and map (the prelink object is already a provider).
+It recomputes list-derived counts and replays all 30 positive roots and twin
+comparisons, requiring exact equality with the retained proof records.
+Three in-memory negative receipts reject: a reader from another build,
+empty roots with claimed counters, and empty mutants with claimed counters.
+Its 305 watched files close without drift. This is receipt/positive-replay
+validation, not a second execution of the native tools or 130 new mutation
+classes; the retained suite contains thirteen classes applied to ten builds.
+
+The first sweep `C:/fzfinal-grid-20261104-e1` is retained as FAIL: CM4/Og
+positive roots passed, but its coherent-callee-retarget negative control
+could not find incidental unowned NOP padding. The fixture now explicitly
+retains two unowned Thumb NOPs outside Reset_Handler's function extent,
+with a synthetic-linker KEEP. The destination is deliberately not a valid
+callee origin. This fixes test reproducibility without weakening rejection
+or changing a production linker script. The e1 partial success is not
+counted as a complete sweep. Earlier standalone CM7/O2 exploration is also
+not added to the ten-pair count.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-grid-20261104-e2/results.json` | `D651FBC5492B7252C14F0D1B30A71C54966AD1504798331FDCC94EDEFD0F4588` |
+| `C:/fzfinal-grid-driver-20261104-e2/driver.py` | `F2E035445A9FC2C1A682E08B725EA7BA9A8FE6B195FD4C8ED7C783A436C4EC55` |
+| `C:/fzfinal-grid-parent-review-20261104-e1/results.json` | `D64F6F7472CBF2638782A42C954AE97A2B2A8B4C4E86F5CC95F6FD6C52DC6E10` |
+| `C:/fzfinal-grid-parent-review-20261104-e1/audit.py` | `092FE605B7716FD0847CC29F41F52007FEB75351138062729F6DA5B4609675BE` |
+| `%TEMP%/final-native-grid-command-20261104-e2.json` | `741FACC8A3866D88AA29FCFF407AFFFDAFFF2F3D4CFA34039F907EE59A447FC9` |
+| `tools/fixtures/classic_final_image/run.py` | `61AED9AE50CF7C0CE4D46E20479B1D0EB6174FF984B459B1C91E194FB021305A` |
+| `tools/fixtures/classic_final_image/elf.py` | `EFFE9004560827EFECBEFFAA1451E4E70DE9D734048F42D5D7BC3B89640FBB83` |
+| `tools/fixtures/classic_final_image/test_elf.py` | `3AE0136ECB6EED6F0DA660A8DE8B93C3003A59954739A89B27EA89794546AFAF` |
+| `tools/fixtures/classic_final_image/test_run.py` | `CCCA94B295F7675216AB5C0CB5104AB21D2ACCE8A75B5DB050894AEBAEC0CFCB` |
+
+Only native prelink-bound root preservation, applied root relocations and
+entry provenance are closed by this sweep. C-callee bodies/internal
+relocations, constructor semantics, successful MMIO, exception execution,
+native/reference policy equivalence, pinned-reference final images, archive
+and LTO remain separate obligations. All required global parity keys remain
+unsatisfied. No CPU/board ran; no default matrix, ABI, feature admission,
+hardware or hosted exact-commit CI claim changes. The earlier CM4/O2 pilot
+record remains historical rather than being rewritten as this larger run.

@@ -2,15 +2,21 @@
 
 ## Scope
 
-The first pilot admits exactly the native CM4 hard-FP, eager-stacking,
+The pilot admits exactly the native CM4 and CM7/r0p1 hard-FP, eager-stacking,
 no-MPU, VTOR-present, four-priority-bit, raw BASEPRI 16, ordinary-AAPCS
-cohort at `-O2`, with direct object linkage and without LTO. It uses actual
+cohorts at `-O0`, `-Og`, `-O2`, `-Os`, and `-O3`, with direct object linkage
+and without LTO. CM7 retains its PRIMASK-preserving 837070 policy. Each
+invocation selects one exact profile/mode pair. It uses actual
 Context providers, selected-port providers, a build-owned cohort expectation,
 and a typed Context consumer. It does not execute that consumer.
 
 The three complete roots are `fiber_port_start_first_context`,
 `SVC_Handler`, and `PendSV_Handler`. The prelink bodies must match the
-existing independently transcribed native CM4 protocol. A decoded body or a
+existing independently transcribed native protocol for that exact profile.
+The single post-island tail NOP at O0 must remain present; other modes have
+no such tail. Startup assembly takes its CPU/FPU target from the recorded
+compiler flags, not from a contradictory fixed `.cpu` directive.
+A decoded body or a
 hash observed in this pilot is not a new expected protocol.
 
 This is not a pinned-reference final-image comparison, a whole-provider
@@ -90,3 +96,7 @@ mutation applied identically to both twin images: twin equality alone must
 not authorize a changed instruction, call, literal, symbol or relocation.
 No receipt may promote this bounded pilot to whole-program semantics or
 required global parity coverage.
+
+The fixture deliberately retains two unowned Thumb NOPs for coherent-callee
+retarget controls. Negative tests must not depend on incidental padding that
+an optimization level may eliminate. These NOPs are not production code.

@@ -1,8 +1,38 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native Classic-FP Final Images At Five Optimizations
+
+The direct-link pilot now admits exactly the CM4 and CM7/r0p1 hard-FP,
+eager-stacking, no-MPU, VTOR1, p4/b16, ordinary-AAPCS cohorts at
+O0/Og/O2/Os/O3. A fresh ten-pair sweep builds 90 actual translation units
+and 20 final twin ELFs. Existing independently transcribed profile-specific
+protocols check all three complete prelink transfer roots in each pair.
+The ET_EXEC reader then preserves every root byte and checks the original
+REL addends, applied destinations, input-section origins and load images.
+
+CM7's observed wide conditional branch has its own narrow bit decoder:
+only BNE.W is admitted. BLX, unconditional B.W, other wide conditions and
+unsupported forms still fail closed. Twenty-two focused controls extend
+the original 81 reader tests. No ordinary instruction semantics are inferred
+from disassembly text, and no new body oracle is learned from these builds.
+
+The retained parent sweep closes 30 roots, 5,972 bytes, 2,041 instructions,
+140 applied references and 130 actual-witness mutants. All 103 reader
+controls run for each pair; 33 build-envelope controls also pass. Explicit
+fixture-only Thumb padding makes coherent-callee-retarget controls independent
+of incidental optimization padding. Actual source/assembly, public ABI and
+the existing native-versus-reference difference ledger are unchanged.
+
+These are native direct-link root-preservation witnesses, not pinned-reference
+final parity, C-callee/constructor semantics, archive extraction, LTO, CPU/board
+execution or global qualification. Required global parity coverage remains
+zero for this bounded gate. The earlier single CM4/O2 record below is historical;
+the exact new receipts and limitations are in
+`PORT_ARCHITECTURE_AUDIT.md#native-classic-fp-final-images-at-five-optimizations`.
+
 ## Native CM4 Final-Image Pilot
 
-`tools/fixtures/classic_final_image` adds one native CM4 hard/eager,
+The initial `tools/fixtures/classic_final_image` pilot added one CM4 hard/eager,
 no-MPU, VTOR1, p4/b16, ordinary-AAPCS `-O2` direct-link witness. Nine
 actual Context/port/expectation/consumer/startup units produce ordinary
 and `--emit-relocs` final ELFs from identical frozen objects and script.

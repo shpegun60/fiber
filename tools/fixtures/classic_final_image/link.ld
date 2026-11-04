@@ -11,6 +11,7 @@ SECTIONS {
     .isr_vector : ALIGN(1024) { KEEP(*(.isr_vector)) } > FLASH
     .text : ALIGN(4) {
         __pilot_text_begin = .;
+        KEEP(*(.text.pilot_origin_padding))
         *(.text .text.*)
         __pilot_text_end = .;
     } > FLASH

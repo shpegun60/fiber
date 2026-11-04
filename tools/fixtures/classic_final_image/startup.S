@@ -1,5 +1,4 @@
 .syntax unified
-.cpu cortex-m4
 .thumb
 .section .isr_vector,"a",%progbits
 .balign 1024
@@ -59,4 +58,10 @@ Reset_Handler:
     b .
     .ltorg
 .size Reset_Handler, .-Reset_Handler
+
+/* Deliberately unowned code for the coherent-callee-retarget negative test. */
+.section .text.pilot_origin_padding,"ax",%progbits
+.balign 2
+    nop
+    nop
 .section .note.GNU-stack,"",%progbits

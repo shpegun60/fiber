@@ -131,7 +131,8 @@ class ScopeControls(unittest.TestCase):
     def test_no_required_global_or_execution_claim(self):
         report = r.scope_report()
         self.assertEqual(report["Verdict"], "FAIL")
-        self.assertEqual(report["Cohort"], r.COHORT)
+        self.assertEqual(report["Cohort"], r.PROFILES["CM4"][0])
+        self.assertEqual(report["Profile"], "CM4")
         self.assertEqual(report["Mode"], "O2")
         self.assertEqual(report["Linkage"], "direct")
         self.assertIs(type(report["RequiredCellsSatisfied"]), int)
@@ -150,11 +151,46 @@ class ScopeControls(unittest.TestCase):
         self.assertEqual(second["Sources"], [])
         self.assertEqual(second["InputDrift"], [])
 
-    def test_source_groups_are_exactly_context_plus_concrete_cm4(self):
+    def test_source_groups_are_exactly_context_plus_concrete_profile(self):
         self.assertEqual(r.COMMON_SOURCES,
                          ("context/context_core.c", "context/context_runtime_state.c", "context/context_panic.c"))
-        self.assertEqual(r.PORT_SOURCES, tuple("fiber/port/ARM_CM4/" + name for name in
-                         ("fiber_port.c", "fiber_port_boot.c", "fiber_port_exception.c")))
+        expected = {
+            "CM4": ("cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM4", "arm_cm4"),
+            "CM7": ("cm7-cortex-m7-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM7/r0p1", "arm_cm7_r0p1"),
+        }
+        self.assertEqual(r.PROFILES, expected)
+        self.assertEqual(r.MODES, ("O0", "Og", "O2", "Os", "O3"))
+        for profile, (cohort, directory, storage) in expected.items():
+            for mode in r.MODES:
+                with self.subTest(profile=profile, mode=mode):
+                    self.assertEqual(r.selection(profile, mode), (cohort, directory, storage,
+                        tuple("fiber/port/" + directory + "/" + name for name in
+                              ("fiber_port.c", "fiber_port_boot.c", "fiber_port_exception.c"))))
+                    report = r.scope_report(profile, mode)
+                    self.assertEqual((report["Profile"], report["Cohort"], report["Mode"]), (profile, cohort, mode))
+                    self.assertIs(report["LTO"], False)
+                    self.assertIs(report["ReferenceBuilt"], False)
+                    self.assertEqual(report["RequiredCellsSatisfied"], 0)
+
+    def test_unsupported_selection_is_rejected_without_output(self):
+        for profile, mode in (("CM3", "O2"), ("cm4", "O2"), ("CM7", "O2-LTO"),
+                              ("CM4", "Ofast"), (None, "O2"), ("CM7", True)):
+            with self.subTest(profile=profile, mode=mode):
+                with patch.object(Path, "mkdir", side_effect=AssertionError("must reject before mkdir")):
+                    with self.assertRaisesRegex(RuntimeError, "unsupported native"):
+                        r.Pilot(SimpleNamespace(output_dir="uncreated", profile=profile, mode=mode))
+
+    def test_startup_uses_the_recorded_compiler_target(self):
+        source = (HERE / "startup.S").read_text(encoding="ascii")
+        self.assertNotRegex(source, r"(?m)^\s*\.(?:cpu|fpu|arch)\s")
+        self.assertIn(".thumb", source)
+
+    def test_origin_negative_control_has_owned_fixture_padding(self):
+        source = (HERE / "startup.S").read_text(encoding="ascii")
+        script = (HERE / "link.ld").read_text(encoding="ascii")
+        self.assertRegex(source, r'[.]section [.]text[.]pilot_origin_padding,"ax",%progbits\s+[.]balign 2\s+nop\s+nop')
+        self.assertIn("KEEP(*(.text.pilot_origin_padding))", script)
+        self.assertNotRegex(source, r'(?m)^[.]type\s+pilot_origin_padding')
 
     def test_fresh_output_admission_is_before_creation(self):
         with tempfile.TemporaryDirectory(prefix="classic-final-admission-") as directory:
