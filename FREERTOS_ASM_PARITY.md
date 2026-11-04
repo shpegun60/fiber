@@ -1,5 +1,37 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native CM3 Final Images At Five Optimizations
+
+The explicit native producer now admits the exact CM3 p4/b16,
+soft/no-FPU/no-MPU cohort at O0/Og/O2/Os/O3. It retains the actual nine
+source providers and the existing complete CM3 prelink protocols. The
+unchanged final reader preserves all three transfer roots, original REL
+addends, applied references, complete function extents and input-section/
+map/provider origins; no decoder or instruction allowlist is widened.
+
+A fresh fifteen-case sweep covers CM3 at all five modes and the previous
+five profiles at O0/O2. It passes 135 TUs, 30 direct final links, 45 roots,
+7,976 bytes, 2,900 instructions, 199 references and 195 actual ELF mutation
+applications. CM3's five cases contribute 15 roots, 2,466 bytes, 853
+instructions, 65 references and 65 mutants. Each case runs the same 176
+pure reader controls; separate envelope and CM3 admission suites pass
+65 and 20 controls. The sweep closes 12,292 artifact entries and 8,092
+original/captured input bindings without detected drift.
+
+Fresh independent replay authenticates producer receipts and manifests
+before parser import, reproduces all owning-object protocols, positive
+final roots and twins, and verifies exact reader-directory membership.
+It closes 14,073 watched files, including all 975 retained mutant files,
+without detected drift. It does not rerun pure controls or ELF mutations.
+
+This is bounded native producer/root preservation, not the pinned CM3
+reference producer or native/reference final mechanism join. It is not
+general C/kernel semantics, archive/final LTO, executed CPU/MMIO/handlers,
+hardware or global freeze. All required global keys remain unsatisfied.
+Runtime/assembly, ABI and default matrix are unchanged. Reproduction and
+scope are in `tools/fixtures/cm3_final_image/CONTRACT.md`; retained evidence
+is in `PORT_ARCHITECTURE_AUDIT.md#native-cm3-final-images-at-five-optimizations`.
+
 ## CM0-Family Final Mechanism Join
 
 `tools/fixtures/cm0_final_join` now composes the native and pinned-reference

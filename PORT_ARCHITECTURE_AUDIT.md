@@ -6787,3 +6787,98 @@ LTO, CPU/board or global freeze. Required global parity keys stay unsatisfied.
 Production runtime/assembly, public/port ABI, feature admission and default
 matrix are unchanged. No board is flashed/reset/run. Local receipts are not
 hosted exact-commit CI. The protected unrelated WIP remains untouched.
+
+## Native CM3 Final Images At Five Optimizations
+
+Reviewed locally on 2026-11-04. The existing native final-image envelope
+adds exactly `cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default`
+at O0/Og/O2/Os/O3. CM3 is an explicit helper route, not a fallthrough to
+CM4/CM7 FP admission. Its new pure model consumes the authoritative
+captured inventory, requires the exact source group, ARMv7-M, VTOR1,
+priority bits4, BASEPRI16 and soft/no-FPU/no-MPU target, and rejects extra
+or mistyped fields. ELF attributes require 7-M/v7/Microcontroller/Thumb-2
+and reject FP/VFP/MVE/PAC/BTI claims, including ABI_HardFP_use.
+Final soft-float ABI bits are exactly `0x200`.
+
+The source order remains three Context units, three concrete selected-port
+units, the application-owned cohort expectation, application and startup.
+All three roots belong to index-3 `fiber_port.c`; boot and exception code
+retain their separate providers. The source-derived CM3 checker remains
+unchanged. The final reader and shared instruction decoder also remain
+unchanged: this is not an allowlist expansion to admit unrelated C opcodes.
+O0 has exactly one in-symbol tail NOP per transfer root, other modes zero;
+following section padding is not absorbed into function `st_size`.
+
+The parent executes 65 build-envelope controls, including twelve new CM3
+methods, and twenty exact-manifest/attribute controls. Both suites pass
+without failures/errors/skips. The admission run authenticates the retained
+E8 inventory manifest before parsing it. The envelope receipt itself does
+not claim to contain source hashes; the parent separately checks the
+executed builder/test bytes before and after qualification.
+
+A real CM3/O2 smoke compiles and links successfully. The unchanged final
+reader passes 176 pure controls, three roots, 492 bytes, 170 instructions,
+thirteen applied references and thirteen actual retained ELF mutants.
+Eleven THM_CALL references preserve original addend -4 and two current-slot
+ABS32 references preserve addend zero. The native frame still stores its
+per-context EXC_RETURN; no comparison with reference first restore is
+inferred from this native-only result.
+
+The fresh grid contains exactly fifteen independent cases: CM3's five
+ordinary modes and O0/O2 regressions for CM0, CM0PLUS, CM0PLUSVTOR, CM4 and
+CM7. It passes 135 actual TUs, thirty direct final links, 105 ordered
+object checkpoints and 1,095 builder commands. Thirty Python children are
+separate from those builder commands. The actual final readers pass 45
+roots, 7,976 root bytes, 2,900 instructions, 199 applied references and
+195 retained ELF mutation applications. CM3 contributes 45 TUs, ten links,
+fifteen roots, 2,466 bytes, 853 instructions, 65 references and 65 mutants.
+Each case runs the same 176 pure controls, not 2,640 distinct test methods.
+All 12,292 artifact entries and 8,092 original/captured input bindings close;
+these are aggregate records, not counts of globally unique files.
+
+The first independent parent audit retains FAIL after the six CM0-family
+cases: it incorrectly applied the C hard-FP VFP_args requirement to the
+CM4 assembler startup object. The real producer's strict admission scope
+is the port object and both final images. A fresh E2 auditor matches that
+scope; all nine attribute files are still hash-bound and every compile
+command retains its exact CPU/ABI flags. No producer, ELF, protocol or
+runtime source changes were made for this auditor correction.
+
+E2 authenticates the grid and all grid-bound producer receipt/manifest
+buffers before captured parser import, independently reproduces all
+own-prelink protocols, positive final roots and load-image twins, and
+checks exact reader-directory membership. Each reader has 79 files:
+results, thirteen witness captures and 65 actual mutant files. All 1,185
+reader files are accounted for; all 975 mutant-file hashes close. The
+replay seals 14,073 watched files without drift. Pure controls and actual
+mutant rejection outcomes are authenticated retained evidence, explicitly
+not reexecuted by this independent audit. The original grid executed them.
+The auditor's own source is captured and watched too.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `%TEMP%/cm3-native-envelope-20261104-e1.json` | `326755364A125B3100F328398E42B242096F91329A9F0E9F5B73F7B33C7695D9` |
+| `%TEMP%/cm3-native-admission-20261104-e1.json` | `E069949FB33EA3CE845B2FCC9AC08701A9EADF36B50C57542D148C7EE028053E` |
+| `C:/fzfinal-native-cm3-smoke-20261104-e1/results.json` | `3A419DC71861C556FB79A4ED2CD5337CF2F1603791390532C57A3C2C05DFD396` |
+| `C:/fzfinal-native-cm3-smoke-reader-20261104-e1/results.json` | `A78419F297FECB7179EF39C5BAE20D523399A82677FBA70020679D2E5CB8D046` |
+| `C:/fzfinal-native-cm3-grid-20261104-e1/results.json` | `31FBAD0FC73103C60E013105BAAFBFB8213AB326D1F923092C3FDBA45EBE2AB5` |
+| `C:/fzfinal-native-cm3-grid-driver-20261104-e1/driver.py` | `1C1DCC2027E4112E3CD735CAFB39C77081E1A90CD465EC501F2BF87CF390FB55` |
+| `C:/fzfinal-native-cm3-parent-review-20261104-e1/results.json` | `E9B0B955DBDD3D47EE7AD5252862029DA8F022C828A65EFB4D5A0AADFA92127B` |
+| `C:/fzfinal-native-cm3-parent-review-20261104-e1-driver/audit.py` | `3F9C376C98E00274EBD1CC47FFE44214AD63BE21081E85C7BEC99F95EB1D0B74` |
+| `C:/fzfinal-native-cm3-parent-review-20261104-e2/results.json` | `144E009F4CBD0033BA6C61BF632D79E86E0CA92A1631DDA55709D1DE664BE270` |
+| `C:/fzfinal-native-cm3-parent-review-20261104-e2-driver/audit.py` | `DFA5FBB07564E2C01A13CE70FA49893B3E50D51E449C504377B58C7F0FECB025` |
+| `tools/fixtures/classic_final_image/run.py` | `FBCBA0C4FF480E139ADE401ECFA90822E9EA01A6AB554CEF157036EC9DE7F014` |
+| `tools/fixtures/classic_final_image/test_run.py` | `72F9200AA342F8E651E87A0F2410A92340B923F3498E84D875892F677B093C7A` |
+| `tools/fixtures/cm3_final_image/admission.py` | `2D1DA1B87129438717666E669B347A0E91F998F5A75BEB961CA9FDDE44F1D87D` |
+| `tools/fixtures/cm3_final_image/test_admission.py` | `82379904DBC34778A2286903F8760E1C60B3E772D3042FB1091A1D5F56A43EFC` |
+
+This qualifies bounded native final-image production and root preservation,
+not the separate pinned CM3 reference producer or 3+3-root final mechanism
+join. The upstream eight-word frame and synthesized EXC_RETURN must remain
+explicit differences when those later gates are implemented. General
+C/callee/kernel semantics, complete objects, dynamic exception targets,
+successful MMIO/handler execution, other cohorts, archives/final LTO and
+global freeze remain unproved. Required global counters stay integer zero.
+Runtime/assembly, public/port ABI, feature admission and default matrix are
+unchanged. No board is flashed/reset/run; local evidence is not hosted
+exact-commit CI. The four protected unrelated WIP entries remain untouched.

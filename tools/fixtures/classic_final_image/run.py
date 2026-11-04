@@ -16,6 +16,7 @@ PROFILES = {
     "CM0": ("cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
     "CM0PLUS": ("cm0-cortex-m0plus-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
     "CM0PLUSVTOR": ("cm0-cortex-m0plus-soft-nofpu-none-v1-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+    "CM3": ("cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default", "ARM_CM3", "arm_cm3"),
 }
 CM0_PROFILES = frozenset(("CM0", "CM0PLUS", "CM0PLUSVTOR"))
 MODES = ("O0", "Og", "O2", "Os", "O3")
@@ -27,6 +28,7 @@ HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms
            "tools/fixtures/freeze_cohorts/process_runner.py",
            "tools/fixtures/cm55_tfm_parity/elf.py", "tools/fixtures/cm4_cm7_freeze_parity/check.py")
 CM0_HELPERS = ("tools/freeze_cm0_mechanisms.py", "tools/fixtures/cm0_freeze_parity/closed_roots.py")
+CM3_HELPERS = ("tools/fixtures/cm3_final_image/admission.py", "tools/fixtures/cm3_freeze_parity/check.py")
 
 
 def selection(profile, mode):
@@ -38,9 +40,20 @@ def selection(profile, mode):
     return cohort, directory, storage, sources
 
 
+def select_helpers(profile):
+    helpers = {"CM4": (HELPERS[0], HELPERS[8]), "CM7": (HELPERS[0], HELPERS[8]),
+               "CM0": CM0_HELPERS, "CM0PLUS": CM0_HELPERS, "CM0PLUSVTOR": CM0_HELPERS,
+               "CM3": CM3_HELPERS}
+    need(type(profile) is str and profile in helpers, "unsupported native helper profile")
+    return helpers[profile]
+
+
 def scope_report(profile="CM4", mode="O2"):
     cohort, _, _, _ = selection(profile, mode)
-    scope = "NATIVE_CM0_DIRECT_TWIN_BUILD_ONLY" if profile in CM0_PROFILES else "NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY"
+    if profile == "CM3":
+        scope = "NATIVE_CM3_DIRECT_TWIN_BUILD_ONLY"
+    else:
+        scope = "NATIVE_CM0_DIRECT_TWIN_BUILD_ONLY" if profile in CM0_PROFILES else "NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY"
     return dict(Verdict="FAIL", Error=None, ProofScope=scope,
                 Profile=profile, Cohort=cohort, Mode=mode, Linkage="direct", LTO=False, ReferenceBuilt=False,
                 RequiredCellSatisfied=False, RequiredCellsSatisfied=0, FinalElfProof=False,
@@ -60,10 +73,13 @@ def require_manifest_selection(manifest, profile, mode, admission):
     cohorts = [row for row in manifest["cohorts"] if row["id"] == identity]
     need(len(cohorts) == 1 and len(cohorts[0]["artifacts"]) == 1, "unique cohort")
     artifact = cohorts[0]["artifacts"][0]
-    admission.require_cohort(artifact, identity if profile in CM0_PROFILES else profile)
-    defines = (dict(FIBER_PORT_ARMV6M="1", FIBER_PORT_BUILD_SELECTED="1") if profile in CM0_PROFILES else
-               dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1",
-                    FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"))
+    admission.require_cohort(artifact, identity if profile in CM0_PROFILES or profile == "CM3" else profile)
+    if profile == "CM3":
+        defines = dict(FIBER_PORT_ARMV7M="1", FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16")
+    else:
+        defines = (dict(FIBER_PORT_ARMV6M="1", FIBER_PORT_BUILD_SELECTED="1") if profile in CM0_PROFILES else
+                   dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1",
+                        FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"))
     need(artifact["defines"] == defines, "exact defines")
     groups = [row for row in manifest["source_groups"] if row["id"] == group]
     need(len(groups) == 1 and tuple(groups[0]["sources"]) == sources, "exact source group")
@@ -79,7 +95,7 @@ def startup_flags(artifact, mode):
 
 def require_final_float_flags(flags, profile):
     selection(profile, "O2")
-    expected = 0x200 if profile in CM0_PROFILES else 0x400
+    expected = 0x200 if profile in CM0_PROFILES or profile == "CM3" else 0x400
     need(type(flags) is int and flags & 0x600 == expected, "exact final float-ABI flags")
 
 
@@ -100,7 +116,10 @@ def startup_literal_guard(image, vtor):
 
 def match_native_protocols(image, profile, mode, checker):
     selection(profile, mode)
-    protocols = checker._protocols(mode)["Native"] if profile in CM0_PROFILES else checker._NATIVE[profile]
+    if profile == "CM3":
+        protocols = checker._NATIVE
+    else:
+        protocols = checker._protocols(mode)["Native"] if profile in CM0_PROFILES else checker._NATIVE[profile]
     need(tuple(protocols) == ("fiber_port_start_first_context", "SVC_Handler", "PendSV_Handler"),
          "exact native protocol roots")
     evidence = [checker._match(image, "Native", name, expected) for name, expected in protocols.items()]
@@ -262,16 +281,22 @@ class Pilot:
             save(path, record)
             save(self.output / "commands.json", self.commands)
 
+    def profile_admission(self):
+        admission_path, _ = select_helpers(self.profile)
+        if admission_path == HELPERS[0]:
+            return self.classic
+        family = "cm3" if self.profile == "CM3" else "cm0"
+        return load("classic_final_" + family + "_admission", self.root / admission_path)
+
     def prepare(self):
-        for relative in (*HELPERS, *(CM0_HELPERS if self.profile in CM0_PROFILES else ())):
+        for relative in dict.fromkeys((*HELPERS, *select_helpers(self.profile))):
             self.capture(self.repo / relative, self.root / relative)
         for name in FIXTURE_FILES:
             self.capture(self.fixture / name, self.root / "tools/fixtures/classic_final_image" / name)
         self.process = load("classic_final_process", self.root / HELPERS[6])
         self.recipe = load("classic_final_recipe", self.root / HELPERS[5])
         self.classic = load("classic_final_admission", self.root / HELPERS[0])
-        self.admission = (load("classic_final_cm0_admission", self.root / CM0_HELPERS[0])
-                          if self.profile in CM0_PROFILES else self.classic)
+        self.admission = self.profile_admission()
         inventory_root = Path(self.args.inventory).resolve(strict=True)
         manifest_path = regular(inventory_root / "artifacts.json")
         inventory_files = json.loads(manifest_path.read_bytes())["Artifacts"]
@@ -477,7 +502,7 @@ class Pilot:
 
     def require_attributes(self, path):
         attributes = path.with_suffix(".attributes").read_text()
-        if self.profile in CM0_PROFILES:
+        if self.profile in CM0_PROFILES or self.profile == "CM3":
             self.admission.require_attributes(attributes)
         else:
             self.admission.require_attributes(attributes, self.profile)
@@ -491,7 +516,7 @@ class Pilot:
                                 Object=str(startup), ObjectSha256=dict(self.object_hashes)[str(startup)])
         self.report["PrelinkStartupLiteralGuard"] = startup_evidence
         decoder = load("classic_final_prelink_decoder", self.root / HELPERS[7])
-        checker_path = CM0_HELPERS[1] if self.profile in CM0_PROFILES else HELPERS[8]
+        checker_path = select_helpers(self.profile)[1]
         checker = load("classic_final_prelink_protocol", self.root / checker_path)
         port = self.objects[3]
         self.require_attributes(port)

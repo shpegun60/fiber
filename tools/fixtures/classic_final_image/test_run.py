@@ -162,6 +162,7 @@ class ScopeControls(unittest.TestCase):
             "CM0": ("cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
             "CM0PLUS": ("cm0-cortex-m0plus-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
             "CM0PLUSVTOR": ("cm0-cortex-m0plus-soft-nofpu-none-v1-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+            "CM3": ("cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default", "ARM_CM3", "arm_cm3"),
         }
         self.assertEqual(r.PROFILES, expected)
         self.assertEqual(r.MODES, ("O0", "Og", "O2", "Os", "O3"))
@@ -182,9 +183,10 @@ class ScopeControls(unittest.TestCase):
                         self.assertIs(report[key], False)
 
     def test_unsupported_selection_is_rejected_without_output(self):
-        for profile, mode in (("CM3", "O2"), ("cm4", "O2"), ("CM7", "O2-LTO"),
+        for profile, mode in (("CM3MPU", "O2"), ("cm4", "O2"), ("CM7", "O2-LTO"),
                               ("CM4", "Ofast"), (None, "O2"), ("CM7", True),
-                              ("CM0+", "O2"), ("CM0PLUS", "O2-LTO"), ("CM0", "O1")):
+                              ("CM0+", "O2"), ("CM0PLUS", "O2-LTO"), ("CM0", "O1"),
+                              ("cm3", "O2"), ("CM3", "O2-LTO")):
             with self.subTest(profile=profile, mode=mode):
                 with patch.object(Path, "mkdir", side_effect=AssertionError("must reject before mkdir")):
                     with self.assertRaisesRegex(RuntimeError, "unsupported native"):
@@ -420,7 +422,7 @@ class CM0Controls(unittest.TestCase):
 
     def test_exact_soft_vs_hard_final_flags(self):
         for profile in r.PROFILES:
-            expected = 0x05000200 if profile in r.CM0_PROFILES else 0x05000400
+            expected = 0x05000200 if profile in r.CM0_PROFILES or profile == "CM3" else 0x05000400
             r.require_final_float_flags(expected, profile)
             for flags in (0x05000000, 0x05000600, expected ^ 0x600, True, False):
                 with self.subTest(profile=profile, flags=flags), self.assertRaises(RuntimeError):
@@ -471,6 +473,202 @@ class CM0Controls(unittest.TestCase):
                         attributes + "Tag_ABI_VFP_args: VFP registers\n", attributes + 'Tag_CPU_name: "6S-M"\n'):
             with self.subTest(attributes=changed), self.assertRaises(RuntimeError):
                 self.admission.require_attributes(changed)
+
+
+class CM3Controls(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        repo = HERE.parents[2]
+        cls.admission = r.load("classic_final_cm3_controls", repo / r.CM3_HELPERS[0])
+        cls.checker = r.load("classic_final_cm3_protocol_controls", repo / r.CM3_HELPERS[1])
+        cls.recipe = r.load("classic_final_cm3_recipe_controls", repo / r.HELPERS[5])
+
+    def manifest(self):
+        identity, _, _, sources = r.selection("CM3", "O2")
+        target = dict(cpu="cortex-m3", architecture="ARMV7M", float_abi="soft", fpu_present=False,
+            fpu_used=False, fpu_unit="", fp_stacking="none", vtor=True, mpu_regions=0,
+            security_role="classic", psplim_slot=False, psplim_register=False, mve="none",
+            pac=False, bti=False, errata_policy="none", r9_abi="aapcs", nvic_priority_bits=4,
+            scheduler_basepri=16)
+        artifact = dict(role="runtime", source_group_id="CM3", abi_contract="forward8", target=target,
+            compile_flags=["-mcpu=cortex-m3", "-mthumb", "-mfloat-abi=soft"],
+            defines=dict(FIBER_PORT_BUILD_SELECTED="1", FIBER_PORT_ARMV7M="1", FIBER_SCHEDULER_BASEPRI="16"),
+            upstream_sources=["portable/GCC/ARM_CM3/port.c"],
+            upstream_defines=dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0", FIBER_FREERTOS_PARITY_ENABLE_FPU="0",
+                                  FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0"))
+        return dict(cohorts=[dict(id=identity, artifacts=[artifact])],
+                    source_groups=[dict(id="CM3", sources=list(sources))])
+
+    def test_closed_helper_routes_and_base_helper_order(self):
+        self.assertEqual(r.HELPERS, (
+            "tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms.py",
+            "tools/freeze_cohorts.py", "tools/runtime_sources.py", "tools/runtime_sources.ps1",
+            "tools/fixtures/freeze_cohorts/build_recipe.py", "tools/fixtures/freeze_cohorts/process_runner.py",
+            "tools/fixtures/cm55_tfm_parity/elf.py", "tools/fixtures/cm4_cm7_freeze_parity/check.py"))
+        self.assertEqual(r.CM3_HELPERS, ("tools/fixtures/cm3_final_image/admission.py",
+                                       "tools/fixtures/cm3_freeze_parity/check.py"))
+        expected = {"CM4": (r.HELPERS[0], r.HELPERS[8]), "CM7": (r.HELPERS[0], r.HELPERS[8]),
+                    "CM0": r.CM0_HELPERS, "CM0PLUS": r.CM0_HELPERS, "CM0PLUSVTOR": r.CM0_HELPERS,
+                    "CM3": r.CM3_HELPERS}
+        self.assertEqual({profile: r.select_helpers(profile) for profile in r.PROFILES}, expected)
+        for profile in ("CM3MPU", "cm3", "CM33", None, True):
+            with self.subTest(profile=profile), self.assertRaisesRegex(RuntimeError, "unsupported native helper"):
+                r.select_helpers(profile)
+
+    def test_all_five_cm3_recipes_use_generic_cmsis_generator(self):
+        for mode in r.MODES:
+            with self.subTest(mode=mode):
+                manifest = self.manifest()
+                artifact = r.require_manifest_selection(manifest, "CM3", mode, self.admission)
+                self.assertIs(artifact, manifest["cohorts"][0]["artifacts"][0])
+                flags = self.recipe.native_flags(artifact, mode, "generated", "ARM_CM3", "repo", "cmsis")
+                self.assertEqual(flags[:4], ["-mcpu=cortex-m3", "-mthumb", "-mfloat-abi=soft", "-" + mode])
+                self.assertEqual([flag for flag in flags if flag.startswith("-D")],
+                    ["-DFIBER_PORT_ARMV7M=1", "-DFIBER_PORT_BUILD_SELECTED=1", "-DFIBER_SCHEDULER_BASEPRI=16"])
+                self.assertEqual(flags[-2:], ["-include", str(Path("generated") / "main.h")])
+                self.assertFalse(any(flag.startswith("-mfpu=") for flag in flags))
+                main = self.recipe.cmsis_main(artifact["target"])
+                self.assertIn('#include "core_cm3.h"', main)
+                for name, value in (("__NVIC_PRIO_BITS", 4), ("__VTOR_PRESENT", 1), ("__FPU_PRESENT", 0),
+                                    ("__FPU_USED", 0), ("__DSP_PRESENT", 0), ("__MPU_PRESENT", 0)):
+                    self.assertIn("#define %s %dU" % (name, value), main)
+                self.assertEqual(r.startup_flags(artifact, mode),
+                                 [*artifact["compile_flags"], "-" + mode, "-g0", "-DPILOT_HAS_VTOR=1"])
+
+    def test_cm3_admission_receives_exact_cohort_identity(self):
+        manifest = self.manifest()
+        admission = SimpleNamespace(require_cohort=unittest.mock.Mock())
+        artifact = r.require_manifest_selection(manifest, "CM3", "O2", admission)
+        admission.require_cohort.assert_called_once_with(artifact,
+            "cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default")
+        for name in ("FIBER_FPU_LAZY", "FIBER_PORT_ARMV6M", "FIBER_PORT_ARMV7EM"):
+            changed = self.manifest()
+            changed["cohorts"][0]["artifacts"][0]["defines"][name] = "0"
+            with self.subTest(define=name), self.assertRaisesRegex(RuntimeError, "exact defines"):
+                r.require_manifest_selection(changed, "CM3", "O2", admission)
+
+    def test_cm3_source_group_remains_exact_and_ordered(self):
+        original = self.manifest()["source_groups"][0]
+        sources = original["sources"]
+        for groups in ([], [original, copy.deepcopy(original)], [dict(original, id="CM4")],
+                       [dict(original, sources=list(reversed(sources)))],
+                       [dict(original, sources=sources[:-1])],
+                       [dict(original, sources=[source.replace("ARM_CM3", "ARM_CM4") for source in sources])]):
+            manifest = self.manifest()
+            manifest["source_groups"] = groups
+            with self.subTest(groups=groups), self.assertRaisesRegex(RuntimeError, "exact source group"):
+                r.require_manifest_selection(manifest, "CM3", "O2", self.admission)
+
+    def test_profile_admission_loads_only_captured_selected_helper(self):
+        root = Path("captured-source")
+        classic, selected = object(), object()
+        for profile in r.PROFILES:
+            pilot = SimpleNamespace(profile=profile, root=root, classic=classic)
+            with self.subTest(profile=profile), patch.object(r, "load", return_value=selected) as load:
+                actual = r.Pilot.profile_admission(pilot)
+                if profile in ("CM4", "CM7"):
+                    self.assertIs(actual, classic)
+                    load.assert_not_called()
+                else:
+                    self.assertIs(actual, selected)
+                    family = "cm3" if profile == "CM3" else "cm0"
+                    load.assert_called_once_with("classic_final_" + family + "_admission",
+                                                 root / r.select_helpers(profile)[0])
+
+    def test_prepare_captures_cm3_admission_and_checker_before_loading(self):
+        pilot = r.Pilot.__new__(r.Pilot)
+        pilot.profile, pilot.repo, pilot.root, pilot.fixture = "CM3", HERE.parents[2], Path("captured-source"), HERE
+        captured = {}
+        pilot.capture = lambda original, target: captured.setdefault(target, original)
+
+        def load(name, path):
+            self.assertIn(path, captured)
+            if path == pilot.root / r.CM3_HELPERS[0]:
+                for relative in r.CM3_HELPERS:
+                    self.assertEqual(captured[pilot.root / relative], pilot.repo / relative)
+                raise LookupError("selected helpers captured")
+            return SimpleNamespace()
+
+        with patch.object(r, "load", side_effect=load), self.assertRaisesRegex(LookupError, "selected helpers captured"):
+            pilot.prepare()
+
+    def test_prelink_loads_cm3_checker_from_captured_root(self):
+        root, fixture = Path("captured-source"), Path("captured-fixture")
+        sources = [Path("source-%d.c" % index) for index in range(8)] + [fixture / "startup.S"]
+        objects = [Path("object-%d.o" % index) for index in range(9)]
+        pilot = SimpleNamespace(root=root, fixture_copy=fixture, profile="CM3", sources=sources, objects=objects,
+            artifact=dict(target=dict(vtor=True)), object_hashes=[(str(path), "A" * 64) for path in objects],
+            report=dict(Sources=[dict(SourceSha256="B" * 64) for _ in sources]),
+            final_reader=SimpleNamespace(_ELF=unittest.mock.Mock()))
+        with patch.object(r, "startup_literal_guard", return_value={}), \
+                patch.object(r, "load", side_effect=[SimpleNamespace(), LookupError("captured checker")]) as load:
+            with self.assertRaisesRegex(LookupError, "captured checker"):
+                r.Pilot.prelink(pilot)
+        self.assertEqual(load.call_args_list, [
+            unittest.mock.call("classic_final_prelink_decoder", root / r.HELPERS[7]),
+            unittest.mock.call("classic_final_prelink_protocol", root / r.CM3_HELPERS[1])])
+
+    def test_attribute_dispatch_keeps_old_signatures_and_adds_cm3(self):
+        with tempfile.TemporaryDirectory(prefix="cm3-attribute-dispatch-") as directory:
+            path = Path(directory) / "port.o"
+            path.with_suffix(".attributes").write_text("synthetic attribute text", encoding="ascii")
+            for profile in r.PROFILES:
+                admission = SimpleNamespace(require_attributes=unittest.mock.Mock())
+                with self.subTest(profile=profile):
+                    r.Pilot.require_attributes(SimpleNamespace(profile=profile, admission=admission), path)
+                    expected = ("synthetic attribute text", profile) if profile in ("CM4", "CM7") else ("synthetic attribute text",)
+                    admission.require_attributes.assert_called_once_with(*expected)
+
+    def test_all_five_flat_cm3_native_protocols_and_mode_tails(self):
+        for mode in r.MODES:
+            calls = []
+            def function(name, **kwargs):
+                calls.append((name, kwargs))
+                return copy.deepcopy(self.checker._NATIVE[name]) + [("nop", "")] * int(mode == "O0")
+            evidence = r.match_native_protocols(SimpleNamespace(function=function), "CM3", mode, self.checker)
+            self.assertEqual([row["Name"] for row in evidence], list(self.checker._NATIVE))
+            self.assertEqual(calls, [(name, dict(literal_islands=True)) for name in self.checker._NATIVE])
+            self.assertEqual([row["TailNops"] for row in evidence], [int(mode == "O0")] * 3)
+
+    def test_cm3_complete_body_and_literal_descriptor_mutations_reject(self):
+        for mutation in ("missing", "extra", "literal"):
+            bodies = copy.deepcopy(self.checker._NATIVE)
+            root = "SVC_Handler"
+            if mutation == "missing":
+                bodies[root].pop(0)
+            elif mutation == "extra":
+                bodies[root].insert(0, ("nop", ""))
+            else:
+                descriptor = json.loads(bodies[root][-1][1])
+                descriptor["Relocations"][0]["Target"] = "unadmitted_slot"
+                bodies[root][-1] = ("@literal-island", json.dumps(descriptor, sort_keys=True, separators=(",", ":")))
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(RuntimeError, "complete protocol mismatch"):
+                r.match_native_protocols(SimpleNamespace(function=lambda name, **kwargs: bodies[name]), "CM3", "O2", self.checker)
+
+    def test_cm3_wrong_mode_and_boolean_tail_counters_reject(self):
+        for mode in r.MODES:
+            image = SimpleNamespace(function=lambda name, **kwargs:
+                copy.deepcopy(self.checker._NATIVE[name]) + [("nop", "")] * int(mode != "O0"))
+            with self.subTest(mode=mode), self.assertRaisesRegex(RuntimeError, "tail layout"):
+                r.match_native_protocols(image, "CM3", mode, self.checker)
+        for tail in (True, False, 1, None):
+            checker = SimpleNamespace(_NATIVE=self.checker._NATIVE, _match=lambda *args: dict(TailNops=tail))
+            with self.subTest(tail=tail), self.assertRaisesRegex(RuntimeError, "tail layout"):
+                r.match_native_protocols(None, "CM3", "O2", checker)
+
+    def test_cm3_scope_is_not_the_fp_scope(self):
+        for mode in r.MODES:
+            report = r.scope_report("CM3", mode)
+            self.assertEqual(report["ProofScope"], "NATIVE_CM3_DIRECT_TWIN_BUILD_ONLY")
+            self.assertIs(type(report["RequiredCellsSatisfied"]), int)
+            self.assertEqual(report["RequiredCellsSatisfied"], 0)
+            for name in ("ReferenceBuilt", "LTO", "RequiredCellSatisfied", "FinalElfProof", "FinalRootRelocationProof",
+                         "CompleteObjectProof", "PolicyEquivalence", "CpuExecution", "BoardExecution", "GlobalFreezeQualified"):
+                self.assertIs(report[name], False)
+        for profile in ("CM4", "CM7"):
+            self.assertEqual(r.scope_report(profile)["ProofScope"], "NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY")
+        for profile in r.CM0_PROFILES:
+            self.assertEqual(r.scope_report(profile)["ProofScope"], "NATIVE_CM0_DIRECT_TWIN_BUILD_ONLY")
 
 
 class ArtifactSealControls(unittest.TestCase):
@@ -704,7 +902,7 @@ def main():
     if path.exists() or not path.is_relative_to(Path(tempfile.gettempdir()).resolve()):
         raise SystemExit("requires a fresh report inside TEMP")
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(case)
-                              for case in (CommandControls, ScopeControls, CM0Controls, ArtifactSealControls,
+                              for case in (CommandControls, ScopeControls, CM0Controls, CM3Controls, ArtifactSealControls,
                                            ObjectControls))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     report = dict(Status="PASS" if result.wasSuccessful() else "FAIL", Tests=result.testsRun,

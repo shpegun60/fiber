@@ -2,9 +2,10 @@
 
 ## Scope
 
-The pilot admits five exact native, non-MPU, ordinary-AAPCS cohorts:
+The pilot admits six exact native, non-MPU, ordinary-AAPCS cohorts:
 CM0 with no VTOR, CM0+ without VTOR, CM0+ with VTOR (all soft/no-FPU,
-two-priority-bit, raw BASEPRI zero), plus CM4 and CM7/r0p1 (hard-FP,
+two-priority-bit, raw BASEPRI zero), CM3 (soft/no-FPU, VTOR present,
+four-priority-bit, raw BASEPRI 16), plus CM4 and CM7/r0p1 (hard-FP,
 eager-stacking, VTOR-present, four-priority-bit, raw BASEPRI 16).
 Each admits `-O0`, `-Og`, `-O2`, `-Os`, and `-O3`, with direct object linkage
 and without LTO. CM7 retains its PRIMASK-preserving 837070 policy. Each
@@ -22,6 +23,12 @@ loops must be Thumb-1-compatible, and its build-owned VTOR predicate comes
 from the admitted target fact. A VTOR0 image must not write VTOR.
 A decoded body or a
 hash observed in this pilot is not a new expected protocol.
+
+CM3 has its own closed helper route, fixed cohort/attribute admission and
+flat native protocol model. It does not select CM0's Thumb-1 protocol or
+the non-CM0 hard-FP fallback. Helper capture precedes loading. The CM3
+extension does not retroactively upgrade any earlier producer, final-reader
+or mechanism-join record; actual new evidence is recorded separately.
 
 This is not a pinned-reference final-image comparison, a whole-provider
 proof, a constructor/callee proof, or a CPU/board test. It satisfies no

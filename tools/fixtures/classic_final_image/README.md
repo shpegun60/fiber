@@ -1,7 +1,8 @@
 # Native Classic Cortex-M Final-Image Build Pilot
 
-Exactly five no-MPU cohorts are admitted: CM0/VTOR0, CM0+/VTOR0 and
-CM0+/VTOR1 (soft/no-FPU, p2/b0), plus CM4 and CM7/r0p1 (hard/eager,
+Exactly six no-MPU cohorts are admitted: CM0/VTOR0, CM0+/VTOR0 and
+CM0+/VTOR1 (soft/no-FPU, p2/b0), CM3 (soft/no-FPU, p4/b16, VTOR1),
+plus CM4 and CM7/r0p1 (hard/eager,
 p4/b16, VTOR1). O0/Og/O2/Os/O3 use direct linkage. One invocation selects
 one pair (default CM4/O2). Nine fresh actual translation units produce an ordinary ET_EXEC
 and an `--emit-relocs` ET_EXEC from identical objects and linker script.
@@ -39,11 +40,16 @@ then starts. Only its entry calls current/yield. It is not a board fixture.
 Processor coverage is not an exact device-manifest claim: these images use
 synthetic memory geometry, and M0+/VTOR1 does not qualify a G0 part's MPU.
 
-`--profile` admits only CM0/CM0PLUS/CM0PLUSVTOR/CM4/CM7; `--mode` admits only
+`--profile` admits only CM0/CM0PLUS/CM0PLUSVTOR/CM3/CM4/CM7; `--mode` admits only
 O0/Og/O2/Os/O3. Unsupported selection fails before output creation.
-For a twenty-five-pair sweep, invoke the
+For a thirty-pair sweep, invoke the
 builder and reader once for every Cartesian pair with fresh output directories;
 do not promote a subset or a failed attempt to a complete sweep.
+
+CM3-specific helper and attribute admission is described in
+`../cm3_final_image/CONTRACT.md`. Its initial producer extension does not
+claim the previously recorded final-root or reference-join qualification
+for CM3; those require their own actual image evidence.
 
 `Pilot.command(argv, label, timeout=60)` records the attempt before invoking
 the captured managed process runner, returns its byte Result, and records
