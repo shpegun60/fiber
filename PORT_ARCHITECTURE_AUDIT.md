@@ -6583,3 +6583,84 @@ execution, other cohorts, archive/final LTO or global freeze. All required
 global parity counters remain zero. No board was flashed/reset/run; local
 receipts are not hosted exact-commit CI. The protected unrelated WIP remains
 untouched.
+
+## Pinned CM0 Reference Final Roots At Five Optimizations
+
+Reviewed locally on 2026-11-04. The separate `cm0_final_roots` fixture
+consumes the exact qualified fifteen-case CM0 producer and E3 parent
+authentication record above. No new target, compiler, linker or objdump
+executes. Two prelink owners and five direct provider objects bind five
+complete reference roots to their final sections, symbols, map placements,
+raw instructions, REL addends and applied relocation fields. Original and
+captured input bytes, parser package and proof sources are authenticated
+before use, then checked again at closing.
+
+The strict reader reuses the unchanged structural/bit decoder without
+patching its globals. It handles the actual O0 C dispatcher separately
+from Og/O2/Os/O3, three out-of-function ABS32 pools, five bit-decoded literal
+loads, two exact calls and their source/provider-bound destinations. Helper
+Thumb tags, all NOPs, mapping boundaries, complete section extents and
+O0 external padding remain evidence, not normalization. Four exact BX
+sites are permitted by source-derived protocol; runtime stack contents,
+EXC_RETURN and successful exception targets are not inferred.
+
+The first actual CM0/O2 smoke retained FAIL because its root-size mutation
+correctly rejected at ORIGIN while the witness expected PRESERVATION.
+Only the expected reason was corrected; the reader was unchanged. The
+CM0/O0 smoke then passes all nineteen real mutation classes. The initial
+pure-reader run had four failed subtests due to test-layer expectations:
+the O0 external NOP reason and pool-addend validation at the reference
+layer rather than the section layer. Tests were corrected, not the reader.
+The initial witness-pure run failed because a synthetic stat mock lacked
+`st_mode`; fixing the mock does not change actual ELF admission.
+
+The first complete fifteen-case E1 replay passes all actual roots and
+mutations, but review identified a bounded admission gap: the aggregate
+accepted pure PASS/count/source-drift facts without explicitly rejecting
+nonzero Failures/Errors/Skipped or wrong pure scope/counters. All actual
+E1 receipts had correct zero values. E1 remains historical; its claim is
+not upgraded into malformed-receipt rejection evidence.
+
+E2 requires exact typed zero counters, literal false non-claim flags,
+fixed scope/pin/count, empty error/failure/drift records and nonempty source
+bindings. Fifty-one deliberate in-memory receipt variants reject for the
+intended admission reason. The complete actual sweep is repeated fresh
+with unchanged reader/witness and unchanged input ELFs: fifteen cases,
+75 roots, 2,586 bytes, 1,128 instructions, 75 applied references and
+45 external pool words. All 261 actual byte-mutant applications reject.
+Of these, 231 preserve equal mutant twins before exact root rejection;
+30 reject load/storage structure in the twin reader. This distinguishes
+real root validation from a same-image comparison.
+
+All 85 pure reader controls run in each case; fourteen separate witness
+controls pass. They remain synthetic controls, not additional real ELF
+mutations. E2 invokes thirty Python children and zero Arm tools/targets.
+Its closing replay reproduces every positive root, twin and actual mutant,
+closes exact artifact/input/source memberships and watches 13,912 files
+without detected drift. An independent read-only review confirms the E2
+admission changes and the preserved producer/root/mutant closure.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-cm0-root-smoke-20261104-e1/results.json` | `2DEE05102B58FF84F8E5FD825B77374B7904251DE17FA7ABA912B644099B9338` |
+| `C:/fzfinal-cm0-root-smoke-20261104-e2/results.json` | `5B758E5FC2364725F0DA618AA0FE297BF85D8ACE25F757003F3DD09FE2C14BC7` |
+| `C:/fzfinal-cm0-reader-parent-pure-20261104-e1/results.json` | `9118ADB44C38D23A33C731F397DD6FD6D8F85C65CD5B27ECF628F60E254CBFB1` |
+| `C:/fzfinal-cm0-reader-parent-pure-20261104-e2/results.json` | `D074375954D18CD3F574D3181B77D54F9438E80DC5BCC3869407A62A7415C51F` |
+| `%TEMP%/cm0-final-witness-parent-pure-20261104-e1.json` | `DC04499FCD40B56F71A6666C616C2648FD20625F7D7260A9D72A3B4FA2F895FC` |
+| `%TEMP%/cm0-final-witness-parent-pure-20261104-e3.json` | `9CB074B8B7F842C46BE89D465C67E9B11B21A7A53E9B4D083AE11A7CE457AF4F` |
+| `C:/fzfinal-cm0-roots-grid-20261104-e1/results.json` | `89786757369ACCBCCCF51AAECFFC20C38F09D712D6F57109BCB9C8E99A03E9DF` |
+| `C:/fzfinal-cm0-roots-grid-20261104-e2/results.json` | `4AB82488E96F003E71538DA414946FF79B351300FA24A4C3E7E346A5F05E7875` |
+| `C:/fzfinal-cm0-roots-grid-driver-20261104-e2/driver.py` | `CEDB5019DDC8030F43F51B835AB15C6914B1B60E6C6A2B2C3EE99747CE28ACDA` |
+| `tools/fixtures/cm0_final_roots/reference_elf.py` | `B4518296657268BBDCA59C87242D533D1BE43AA69A4FC6511456D75E015FB142` |
+| `tools/fixtures/cm0_final_roots/test_reference_elf.py` | `9C8F74920F75E7349CA778BEE7B287998C5175B58B05BDAFC40EB27FFE524E1E` |
+| `tools/fixtures/cm0_final_roots/reference_witness.py` | `E955AB9261EAA2B75DCF570187194315C18EE4CB4CDEE980BCD2C1E85029E1AD` |
+| `tools/fixtures/cm0_final_roots/test_reference_witness.py` | `F90129F8F40AD963D6CC6EC58F797D056B3B8408A9E9B0A3F4A34A8452283B6C` |
+
+This closes bounded reference final-root preservation only. The independent
+native/reference final mechanism join is next. General C/callee/kernel
+semantics, successful CPU/MMIO/handler execution, dynamic exception-target
+values, other cohorts, MPU/FP/security, archives/final LTO and global freeze
+are not proved. All required global counters remain integer zero. Runtime
+sources, assembly, ABI, feature admission and default matrix are unchanged.
+No board is flashed/reset/run; local receipts are not hosted exact-commit
+CI. The four protected unrelated WIP entries remain untouched.

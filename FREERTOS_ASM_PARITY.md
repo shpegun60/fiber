@@ -1,5 +1,31 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Pinned CM0 Reference Final Roots At Five Optimizations
+
+`tools/fixtures/cm0_final_roots` closes the independent five-root reader
+for the qualified CM0/M0+/M0+-VTOR reference producer at O0/Og/O2/Os/O3.
+Both actual source owners remain separate. Complete owning sections,
+instruction bytes, original REL addends, applied destinations and provider
+map origins are preserved; three external pool words and O0 padding are
+not silently absorbed into function extents. Only the exact source-derived
+indirect-branch sites are admitted, not arbitrary BX instructions.
+
+The authenticated fifteen-case replay passes 75 roots, 2,586 root bytes,
+1,128 instructions, 75 references and 45 out-of-function pool words.
+All 261 actual ELF mutation applications reject at their expected stage:
+231 preserve equal mutated twins before root rejection; 30 reject twin
+load/storage structure. Each case also passes 85 pure reader controls.
+Fourteen separate witness controls and 51 malformed pure-receipt controls
+pass. The closing replay watches 13,912 files without detected drift.
+
+This is bounded reference final-root preservation, not the native/reference
+final mechanism join, general C/kernel semantics, dynamic exception-target
+execution, archive/final LTO, CPU/board or global freeze. Global required
+counters remain integer zero. No production code, assembly, ABI or default
+matrix changes. Exact retained receipts and failed historical attempts are
+in `PORT_ARCHITECTURE_AUDIT.md#pinned-cm0-reference-final-roots-at-five-optimizations`;
+reproduction and caller obligations are in the fixture contract.
+
 ## Pinned CM0 Reference Final-Twin Producers
 
 `tools/fixtures/cm0_final_image` adds a separate producer for exact p2/b0,
