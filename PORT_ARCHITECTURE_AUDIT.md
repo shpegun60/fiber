@@ -5587,3 +5587,50 @@ not represented as additional real-object tests.
 | `cm3-receipt-controls-20261104-e6.json` | `D075D67E09CC5D9F8FC3F8B5FB3C857B46088A5282D8FD6A28E97F26D8315AB8` |
 | `cm3-actual-mutation-parent-20261104-e1/results.json` | `5789E2453692F119528084BCF0B7CEA3ADCE60E271F3C4C01EB2CF57DE77D1B3` |
 | `cm3-protocol-controls-20261104-e1.json` | `977F4A42DA6CB119E4E12B47D69BB62F18C9B0D78CD3FB1A53DE7C5C2A649449` |
+
+## CM0 MPU Two-Bit Priority Cohort
+
+The next inventory-only change adds one Pending CM0+/MPU8/VTOR1 cohort with
+two NVIC priority bits, BASEPRI not applicable and ordinary AAPCS. Existing
+CM0 non-MPU p2 rows already cover that declared axis; their evidence did not
+cover this protected context layout. The selected MPU header already admits
+this tuple. No port implementation, CPU mechanism, selection literal or public
+API is changed. This is a target-bound G0-oriented fixture, not a claim that
+every G0 device has these MPU/VTOR facts or that a board was qualified.
+
+The finite plan now has 142 cohorts, four NS/Secure pairs, 146 artifacts,
+730 object-mode keys and 2,044 final-mode keys: 2,774 required keys total.
+The old 141-cohort/725-cell receipts remain unchanged historical snapshots.
+They are not combined with this partial run to claim one current 730-cell
+qualified snapshot. Scope stays Pending despite compiler admission and the
+unchanged header's runtime-selectable literal; complete parity is still open.
+
+Fresh `C:/fzin-20261104-e9` returns `INVENTORY-PLAN-PASS`. The selected cohort
+passes all five native and five reference modes at O0/Og/O2/Os/O3 using that
+same source fingerprint,
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+Each side produces ten source objects and five native relocatable groups;
+native/reference record 45/61 commands, respectively, and zero closing drift.
+The generated native header explicitly binds NVIC bits 2, VTOR 1 and MPU 1;
+all five reference cells retain exact target recipes, not softfp witnesses.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzin-20261104-e9/results.json` | `1910B53001FD37DF4B6DC57805EE49E4381B2529E1E3ECB47FDB312EB43A4DFC` |
+| `C:/fzcn-cm0mpu-p2-20261104-e1/results.json` | `77913D948B911210CCFA509CD4B396C50A93A7AF5C467A092E2C44BDD6BBD24B` |
+| `C:/fzcn-cm0mpu-p2-20261104-e1/artifacts.json` | `82E0B352BB1C63100F74A00AF0E20461E9ABC9B921F4CACC3E08F016DBE552A6` |
+| `C:/fzrc-cm0mpu-p2-20261104-e1/results.json` | `DE761547CC6BCE7FD9D11F936B5AFF0669B6C9D4E214B372A1D042D067B86530` |
+| `C:/fzrc-cm0mpu-p2-20261104-e1/artifacts.json` | `182F96B6FE534E62D9148795412025F98A8AB9D66F6F6541AC6D5F7656A63813` |
+
+The separate `%TEMP%/freeze-p2-pure-20261104-e1` run repeats 128 inventory,
+65 native receipt, 39 reference receipt and 248 reference recipe controls,
+all passing without compiler/CPU execution. The two actual compile preflights
+satisfy zero required parity keys and perform no final executable links, LTO,
+CPU or board execution. Later receipt prose makes this captured-source
+evidence, not exact-commit CI. The default matrix and hardware claims are
+unchanged. No VTOR0/fixed-R9 or additional M23 tuple is silently added.
+
+Independent bounded review finds no concrete blocker in the new manifest row,
+selected 5+5 cell identities, target headers, dependencies or C-source binding;
+all 30 source-object/group hashes agree. Its verdict applies to captured e9
+inputs, not subsequent live-document identity, and adds no parity/CPU claim.

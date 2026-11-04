@@ -419,6 +419,26 @@
       "claim_refs": [{"path":"tools/freertos_asm_parity.ps1","selector":"ports:ARM_CM0_MPU","proof_scope":"current O2/Os mechanism or staged object inventory; not runtime admission"}]
     },
     {
+      "id": "cm0mpu-cortex-m0plus-soft-nofpu-none-v1-mpu8-p2-b0-aapcs-default",
+      "scope": "Pending", "compiler_admission": "Admitted", "runtime_selectable": true,
+      "artifacts": [
+        {
+          "role": "runtime", "source_group_id": "CM0MPU", "abi_contract": "forward8",
+          "target": {"cpu":"cortex-m0plus","architecture":"ARMV6M","float_abi":"soft","fpu_present":false,"fpu_used":false,"fpu_unit":"","fp_stacking":"none","vtor":true,"mpu_regions":8,"security_role":"classic","psplim_slot":false,"psplim_register":false,"mve":"none","pac":false,"bti":false,"errata_policy":"none","r9_abi":"aapcs","nvic_priority_bits":2,"scheduler_basepri":0},
+          "compile_flags": ["-mcpu=cortex-m0plus","-mthumb","-mfloat-abi=soft"],
+          "defines": {"FIBER_PORT_BUILD_SELECTED":"1","FIBER_PORT_ARMV6M":"1"},
+          "upstream_sources": ["portable/GCC/ARM_CM0/port.c","portable/GCC/ARM_CM0/portasm.c"],
+          "upstream_defines": {"FIBER_FREERTOS_PARITY_ENABLE_MPU":"1","FIBER_FREERTOS_PARITY_ENABLE_FPU":"0","FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE":"0","FIBER_FREERTOS_PARITY_MPU_REGIONS":"8"}
+        }
+      ],
+      "policy": {},
+      "claim_refs": [
+        {"path":"fiber/port/ARM_CM0_MPU/fiber_portmacro.h","selector":"__NVIC_PRIO_BITS;__VTOR_PRESENT;fiber_portMPU_TOTAL_REGIONS;FIBER_PORT_RUNTIME_SELECTABLE","proof_scope":"Source admission only: p2/VTOR1/MPU8; exact cohort Pending; no measured parity or runtime qualification"},
+        {"path":"tools/fixtures/freeze_cohorts/build_recipe.py","selector":"cmsis_main;native_flags","proof_scope":"Declared target-bound CMSIS/native recipe; five object modes need independent evidence"},
+        {"path":"tools/fixtures/freeze_cohorts/reference_recipe.py","selector":"_PORTS:CM0MPU;reference_recipe","proof_scope":"ARM_CM0 MPU reference recipe; no assembly/runtime/final qualification"}
+      ]
+    },
+    {
       "id": "cm3mpu-cortex-m3-soft-nofpu-none-v1-mpu8-p4-b16-aapcs-default",
       "scope": "Claimed", "compiler_admission": "Admitted", "runtime_selectable": true,
       "artifacts": [

@@ -1,8 +1,10 @@
 # Freeze Cohort Inventory
 
 `tools/freeze_cohorts.json` is inventory input, not a qualification receipt.
-This initial file lists 27 canonical source groups (77 C files),
-141 explicit cohort rows, including four paired rows: 145 artifacts in total.
+The current file lists 27 canonical source groups (77 C files),
+142 explicit cohort rows, including four paired rows: 146 artifacts in total.
+The extra CM0 MPU p2/VTOR1 row is Pending; older 141-cohort receipts do not
+silently acquire coverage for this target-bound fixture.
 The 26 backlog entries comprise 23 Pending and three ReferenceOnly obligations.
 It does not claim complete enumeration of every admitted test vector, a global
 optimization gate, hosted CI, runtime activation or STM32 hardware validation.
@@ -75,7 +77,7 @@ labels cannot create duplicate artifact cohorts; evidence references belong
 to the same exact artifact tuple instead.
 The remaining positive identity/policy, measured-model, Secure pairing and
 compiler-flag spelling reconciliation is explicitly pending. Do not interpret
-the 141 rows as an exhaustive list or shrink the freeze requirement to this file.
+the 142 rows as an exhaustive list or shrink the freeze requirement to this file.
 Do not derive a new claim from an unexecuted candidate or a negative test.
 
 `compile_flags` contains only target/R9 options, with no optimization or LTO.
@@ -88,7 +90,7 @@ closure obligations; this file is not a complete executable build recipe.
 Object mode keys are O0/Og/O2/Os/O3. Final mode keys additionally include O2-lto
 and Os-lto. These are required coverage keys, not recorded successful tests.
 Each artifact requires five object cells and seven final modes in both direct
-and archive forms: 145 * (5 + 7 * 2) = 2755 required cells.
+and archive forms: 146 * (5 + 7 * 2) = 2774 required cells.
 Final LTO means the final executable image, never only a relocatable native
 group. A future driver must bind exact inputs and complete expected/observed
 inventories before any separate qualification decision.
@@ -182,7 +184,7 @@ prove the forward/reverse ABI, link final direct/archive/LTO images or run a CPU
 It cannot emit observed PASS cells for the inventory coverage accountant.
 Global parity, hosted CI, profile activation and hardware remain separate gates.
 
-The repaired full declared-inventory run at `C:/fzcn-20261104-e4` passes 725
+The repaired 141-cohort snapshot at `C:/fzcn-20261104-e4` passes 725
 native cells, with 2,085 source objects, 725 relocatable groups, 6,355 commands
 and zero closing drift. Complete capture membership is recomputed; omitting a
 header from a resealed receipt cannot hide that header's drift. Relative CMSIS
