@@ -111,7 +111,7 @@ class Object:
         require(0 <= address <= s[5] and address+count <= s[5], "ELF", "section bounds")
         return self.data[s[4]+address:s[4]+address+count]
 
-    def function(self, name, *, literal_islands=False):
+    def function(self, name, *, literal_islands=False, thumb1_tail_nop=False):
         """Decode a complete body; optionally retain one structural literal island.
 
         The opt-in form returns an @literal-island descriptor in address order
@@ -119,8 +119,12 @@ class Object:
         Local branch indices count descriptor tokens as well as instructions.
         Consumers must match the complete returned sequence, including data
         descriptors and the exact bounded (zero, one or two) tail NOP count.
+        thumb1_tail_nop additionally admits exact 46c0 (mov r8,r8) tails,
+        retaining their existing nop/mov tokens; it requires literal_islands.
         """
         require(type(literal_islands) is bool, "DECODE", "literal-islands option must be boolean")
+        require(type(thumb1_tail_nop) is bool, "DECODE", "thumb1-tail-nop option must be boolean")
+        require(not thumb1_tail_nop or literal_islands, "DECODE", "thumb1-tail-nop requires literal-islands")
         symbols = [s for s in self.symbols if s["name"] == name and s["section"] != 0]
         require(len(symbols) == 1 and symbols[0]["info"] & 15 == 2 and symbols[0]["info"] >> 4 in (0, 1) and symbols[0]["size"],
                 "SYMBOL", "missing/ambiguous function " + name)
@@ -159,7 +163,11 @@ class Object:
                 a, b = data_ranges[0]
                 tail = [row for row in decoded if row[0] >= b]
                 require(len(tail) <= 2 and all(
-                    row[0] == b+2*i and row[1:3] == ("nop", "") and row[3] == b"\x00\xbf"
+                    row[0] == b+2*i and (
+                        row[1:3] == ("nop", "") and row[3] == b"\x00\xbf" or
+                        thumb1_tail_nop and row[3] == b"\xc0\x46" and (
+                            row[1] == "mov" and canonical(row[2]) == "r8,r8" or
+                            row[1] == "nop" and not re.split(r"[;@]", row[2])[0].strip()))
                     for i, row in enumerate(tail)), "DECODE", "unsupported literal-island executable tail")
                 require((tail[-1][0]+2 if tail else b) == end,
                         "DECODE", "literal-island tail extent")

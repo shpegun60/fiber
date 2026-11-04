@@ -1,5 +1,8 @@
 # CM0 / CM0+ Bounded Freeze Parity
 
+The separate captured-object, five-mode complete-root gate is documented in
+`CLOSED_ROOTS.md`. It does not replace or qualify this final-ELF fixture.
+
 This is a software code-generation and link gate, not global parity, G0 CPU
 execution, peripheral/board qualification or full FreeRTOS equivalence. No
 firmware is executed. Nothing provisions packages or programs a board.

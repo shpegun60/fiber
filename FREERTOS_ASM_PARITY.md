@@ -1,5 +1,22 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Captured CM0/M0+ Roots At Five Optimizations
+
+`tools/freeze_cm0_mechanisms.py` consumes three explicit non-MPU p2/no-FP
+M0/M0+ cohorts with/without VTOR. O0/Og/O2/Os/O3 each close three native and
+five pinned-reference roots: first start, SVC dispatcher/C helper/first
+restore, and PendSV. `cm0_freeze_parity/CLOSED_ROOTS.md` separates this gate
+from the existing final-ELF fixture. No NOP, literal, relocation, instruction
+or branch is discarded to make the two different implementations agree.
+
+An explicit Thumb-1 decoder option admits exact `46c0` alias tails while
+retaining their tokens and the existing tail bounds. Default reader behavior,
+including rejections, is independently replayed on the full retained corpus.
+These complete-root checks do not imply constructor/other C-callee closure,
+whole-object ABI, vectors, final direct/archive/LTO, CPU, board or global
+qualification. Retained results and independent controls belong in the audit
+record; all required global parity keys remain unsatisfied by this gate.
+
 ## Captured Classic-FP Roots At Five Optimizations
 
 `tools/freeze_classic_fp_mechanisms.py` adds a bounded complete-root gate for

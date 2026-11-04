@@ -41,6 +41,15 @@ as classified in their individual ledgers, not the FreeRTOS kernel API.
 | Staged `ARM_CM33F/non_secure`, `ARM_CM33F/secure` | The same `ARM_CM33` source pair with FPU enabled, MPU/MVE disabled; distinct Fiber paired identity and staged feature implementation |
 | `ARM_CM55/non_secure`, `ARM_CM55/secure` | `ARM_CM55/non_secure`, `ARM_CM55/secure` |
 
+The comparison-only instruction protocols in
+`tools/fixtures/cm3_freeze_parity/check.py`,
+`tools/fixtures/cm4_cm7_freeze_parity/check.py` and
+`tools/fixtures/cm0_freeze_parity/closed_roots.py` also transcribe/adapt portions
+of the corresponding pinned `ARM_CM3`, `ARM_CM4F`, `ARM_CM7/r0p1` and `ARM_CM0`
+sources. The notices and MIT permission text below cover those upstream
+portions too; they are not a license assignment for independently authored
+checker/driver logic. Test protocols are not additional production ports.
+
 ### Retained File-Level Notices
 
 The following text is retained verbatim from upstream headers, with C comment

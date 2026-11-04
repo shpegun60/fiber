@@ -5698,3 +5698,77 @@ CPU/board behavior. Native eager FPCCR versus the reference's ASPEN=1/LSPEN=1
 is explicitly `UNRESOLVED-BY-THREE-ROOTS`; policy equivalence is false. All
 required global cells remain unsatisfied by this bounded gate. Default matrix,
 runtime C/assembly, profile promotion, CI and hardware claims are unchanged.
+
+## Captured CM0/M0+ Eight-Root Protocols
+
+`tools/freeze_cm0_mechanisms.py` closes the three declared non-MPU p2,
+soft/no-FP ordinary-AAPCS cohorts: M0/VTOR0, M0+/VTOR0 and M0+/VTOR1.
+Each requires O0/Og/O2/Os/O3 against the same closed e8/e4/e5 inventory,
+native and reference snapshots used above. The later CM0/MPU p2 partial
+compile is not merged into these old snapshots or used as non-MPU proof.
+These are F0/G0-oriented architecture tuples, not physical board claims.
+
+All 15 paired rows pass: 120 complete bodies and 45 mechanism comparisons.
+Three native roots cover first request, SVC and PendSV. Five actual pinned
+reference roots additionally close its `vPortSVCHandler_C` dispatcher and
+`vRestoreContextOfFirstTask` helper. The C helper's three emitted mode layouts
+retain their complete prologues, PC+24/byte-PC-2/SVC100 dispatch, call relocation,
+assertion loop, epilogue and padding. The native SVC70, full staged-register
+restore versus reference first-restore GPR skip, validation and preserved
+PRIMASK remain explicit differences; neither register-value equivalence nor
+actual SVC routing/nonreturn is inferred.
+
+The new `closed_roots.py` does not replace the existing CM0 final-ELF
+`check.py`/`run.py`. The driver validates every declared target fact and exact
+compiler flags, Thumb-1 attributes, complete receipt membership, captured
+source/compiler bindings, reader bytes and closing inputs/outputs. An early
+pure-driver admission failure expected `fpu_unit="none"` where the manifest
+uses the empty string. It was corrected before actual receipt comparison;
+the failing e1 pure output remains separate from later passes.
+
+The exact Thumb-1 `46c0` tail admission is an additional explicit reader option
+requiring literal-island opt-in. It retains tokens/counts and makes no CFG or
+unreachability claim. Parent-run decoder controls pass 33 cases; all 90 selected
+roots decode and 180 pre-existing API comparisons remain unchanged. Independent
+source review finds no confirmed reader blocker. A separate default-API replay
+over all 725 native and 725 reference groups again finds 4,230 equal outcomes:
+3,668 complete token lists and 562 identical rejections, with 40 typed companion
+skips. All 2,900 consumed ELF/disassembly files rehash without drift.
+
+The parent-run closed-protocol suite passes 26 tests, including 1,409 token
+mutation cases, 80 structural controls and 20 private retained-byte mutations.
+It repeats all 15 successful pairs/120 bodies. Source/frame/mask/dispatch,
+literal/relocation, branch, tail and byte-binding changes fail with expected
+diagnostics. Original inputs remain unchanged and no mutated object executes.
+The outer driver's expanded 253 pure admission/result controls pass. No
+compiler, objdump, CPU or board is invoked by these new gates.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzcm0-20261104-e2/results.json` | `F4FF47203438DDCC8D43789D066D5C63EA4031F47F02649857F758F28FBF49E7` |
+| `C:/fzcm0-20261104-e2/artifacts.json` | `38A32305D5EE7A283733134846E3B77383104B143D2E8A82927AB3A3641A9D0C` |
+| `C:/fzcm0-20261104-e2/readers.json` | `88E3E95CD1C32ED7C09DAB418891BC79669A39E4BB326FA82E5E72130C86C720` |
+| `%TEMP%/cm0-closed-negative-parent-20261104-e1/results.json` | `FF0CCECDCA083A205E91491CF36D3515788C09EE2F3B695D26CD556BC52BB68E` |
+| `%TEMP%/cm0-driver-controls-20261104-e3.json` | `9D34A69BE3B68935453D170F81CDA95F7874513B98147BC467B993431505A3C8` |
+| `%TEMP%/freeze-cm0-decoder-parent-20261104-e1/results.json` | `CC14FF0D2F1B38BD8F6B683D32BBDC54D30484630EBC1298740C3708103218D0` |
+| `C:/fzreader-review-20261104-e2/results.json` | `33894DEAB71E9ED71AC39CD1A3B7D325FFF1C53397A39E7969888F48F5605C7D` |
+| `C:/fzreader-review-20261104-e2/artifacts.json` | `5D6E89FA5F6BB7F4A568B3920514DF8A8D27772692B271D9679E198FAB5A5DDB` |
+
+The reference/non-MPU protocol source review and the e1/e2 positive comparisons
+are independent of the mutation-control generation. The new reader also passes
+the existing 905 CM3 pure controls, 13 CM3 retained tests (221 token/eight byte
+mutations, five pairs) and 18 CM4/CM7 tests (529 token/29 byte mutations, ten
+pairs). Fresh reports are `%TEMP%/cm3-protocol-controls-20261104-e2.json`,
+`%TEMP%/cm3-actual-mutation-parent-20261104-e2/results.json` and
+`%TEMP%/classic-fp-negative-parent-20261104-e2/results.json`; their SHA-256
+values are respectively
+`977F4A42DA6CB119E4E12B47D69BB62F18C9B0D78CD3FB1A53DE7C5C2A649449`,
+`AC390BACAA6652D123ADBFB8F7A275690FFA7193DA6FF02BA998343D8CD7275D`
+and `B0C79788BF738F63BD30293959E20DAA8B5422716183442786F0B121DF568F50`.
+
+These records do not qualify context construction/other C callees, whole-object
+ABI, final direct/archive/LTO images, exception routing or CPU/board behavior.
+All required global parity cells remain unsatisfied by this bounded gate.
+Production C/assembly, public ABI, default matrix, runtime admission, CI and
+hardware claims are unchanged. Receipt prose is later than the captured code
+and is not exact-commit hosted CI; no earlier failed/partial run is relabelled.
