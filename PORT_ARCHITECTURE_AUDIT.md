@@ -5460,3 +5460,55 @@ are not relabelled as evidence for changed runners. Root-level public headers
 are additionally enrolled in new inventory captures. Runtime C/assembly and
 hardware claims remain unchanged. Global mechanism/final-LTO parity, hosted
 CI, staged-profile activation and board qualification are still pending.
+
+### Repaired-Runner Paired Qualification
+
+Fresh inventory `C:/fzin-20261104-e8` and native/reference runs
+`C:/fzcn-20261104-e4` / `C:/fzrc-20261104-e5` close successfully after the
+three tooling repairs above. Both compiler runs bind the same source-inventory
+fingerprint, `E99DFC023B9F11F19A6109E37338E81DBE37574B8831B99244378A21D52179A3`,
+and all 725 declared artifact/mode keys. The native run retains 2,085 source
+objects, 725 groups, 6,355 commands, 1,014 input bindings and 13,772 artifacts.
+The reference run retains 1,320 source objects, 725 groups, 4,895 commands,
+1,558 input bindings and 11,322 artifacts. Both close with zero input drift,
+zero final executable links and zero required parity cells satisfied.
+
+The repaired input verifier recomputes complete capture membership, including
+root-level public headers, rather than accepting a resealed subset. The native
+run deliberately uses a relative CMSIS path, resolved before compiler cwd
+changes. Tool commands are recorded before execution and on failure/timeout;
+managed processes use a Windows Job assigned before the suspended primary
+thread resumes. Timeout and abnormal descendant cleanup fail closed. This is
+bounded process containment, not a complete host/OS dependency-closure claim.
+
+The separate pure controls pass: 65 native receipt/path cases, 39 reference
+adapter cases, 248 reference recipe cases and 12 command-record cases. The
+18 process-runner controls include five actual Python-only process cases;
+they exercise binary output, nonzero exit, timeout/descendant cleanup, orphan
+rejection and resume-failure containment without executing ARM, Git or a board.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzin-20261104-e8/results.json` | `35642CD737ADBE9186065DCBBF1762673E137B68935413A7120A0C113819D141` |
+| `C:/fzcn-20261104-e4/results.json` | `E6A401727808D2D3FC353B707E95FDC9FD7933593ACD4D06CEC592C0D2F7E2E0` |
+| `C:/fzcn-20261104-e4/artifacts.json` | `199068E8880FABB612233FA393CEF3A97A2BC5CC1DCBE4456CC08B8387A6548F` |
+| `C:/fzcn-20261104-e4/inputs.json` | `D598D3E7109389EC035FE115596C99696A114A37B47D030A108C8B2A1D6B183E` |
+| `C:/fzrc-20261104-e5/results.json` | `690032B130C5B5E25880ECDA64D00109FCC154BFBAAFADEE82153FF0BF0594B9` |
+| `C:/fzrc-20261104-e5/artifacts.json` | `246BC05B768CEF85115FBD2667688062B3E2816CB99F6604EB4D61AFA1DC094E` |
+| `C:/fzrc-20261104-e5/inputs.json` | `20DB71F4E5B388A820C104AE30885A59F58A09C1A514BBEA09CEAAF19CEC8947` |
+| Python process controls | `0632E4B4EA19ABD27DFFA1B5B94DA964A7418B57D26551EC05E3F470B42FA921` |
+
+The four pure JSON outputs are under
+`%TEMP%/freeze-reference-pure-20261104-e2`; process controls are under
+`%TEMP%/freeze-process-parent-20261104-e1`. These are new receipts for changed
+tooling, not replacements for historical failures or earlier successful runs.
+The captured runner bytes were published in `8a5f199`; later receipt prose does
+not retrospectively make the captured snapshot exact-commit hosted CI.
+
+Compilation alone still proves neither mechanism equivalence nor a global
+freeze. The 35 softfp witness cells, eager/lazy policy differences and separate
+Secure/TF-M integration obligations remain explicit. All 2,755 required parity
+keys, including 2,030 final direct/archive/LTO keys, remain unqualified by these
+preflights. Complete-body mechanism comparisons and their negative controls
+are the next independent layer; runtime, staged admission, CI and hardware
+claims remain unchanged.

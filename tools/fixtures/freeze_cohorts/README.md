@@ -182,10 +182,45 @@ prove the forward/reverse ABI, link final direct/archive/LTO images or run a CPU
 It cannot emit observed PASS cells for the inventory coverage accountant.
 Global parity, hosted CI, profile activation and hardware remain separate gates.
 
-The current full declared-inventory run at `C:/fzcn-20261104-e2` passes 725
+The repaired full declared-inventory run at `C:/fzcn-20261104-e4` passes 725
 native cells, with 2,085 source objects, 725 relocatable groups, 6,355 commands
-and zero closing drift. Forty receipt and 53 recipe pure controls pass
-separately. Exact hashes, independent review and the still-open reference
-recipe prerequisites are recorded in
-`PORT_ARCHITECTURE_AUDIT.md#exact-cohort-native-compile-preflight`. This is
+and zero closing drift. Complete capture membership is recomputed; omitting a
+header from a resealed receipt cannot hide that header's drift. Relative CMSIS
+paths are resolved before changing compiler cwd. Failed/timed-out tool attempts
+are retained and descendant processes are contained and cleaned up. These
+checks do not establish transitive host/OS dependency closure.
+
+## Reference Compile Preflight
+
+The separate adapter compiles the manifest's pinned upstream translation units:
+
+```text
+python tools/freeze_reference_compile.py --repo ROOT --inventory INVENTORY_RECEIPT --freertos PINNEDROOT --arm-gcc GCC --git GIT --output-dir OTHERFRESHEXTERNAL --all-cohorts
+```
+
+Use the same inventory receipt as the native run. Explicit `--cohort ID` and
+`--mode O2` support partial runs, never implicit full coverage. One actual
+`portmacro.h` provider is selected per runtime translation unit and verified
+through compiler dependencies. Generated FreeRTOS config uses the already
+shifted scheduler threshold; companion counts are explicitly bound. Every
+discovered upstream file is checked against the pinned Git blob, including
+the same narrowly allowed LF-to-CRLF checkout expansion as the inventory.
+
+The default `--tfm-include` is the pinned real TF-M v2.0.0 header fixture in
+`tfm_v2/interface/include`. The original license and hardcoded file hashes are
+required. A custom path must supply the same bytes/layout, not a replacement
+stub. This is a compile interface, not a TF-M firmware/runtime qualification.
+
+Reference `C:/fzrc-20261104-e5` passes the same 725 keys and inventory fingerprint
+as native e4, with 1,320 source objects, 725 groups, 4,895 commands and zero
+closing drift. Seven soft-ABI artifacts use an explicitly limited softfp
+reference witness because the pinned FP-only port cannot compile with a pure
+soft target. Eager-versus-lazy FPCCR policy remains a recorded difference.
+No compiler option or difference label by itself establishes equivalence.
+
+Both adapters keep every `RequiredCellSatisfied` false and execute no CPU or
+final executable link. The 65 native, 39 reference, 248 recipe and 12 command
+record pure controls, plus 18 bounded Python process controls, are separate
+from compiler evidence. Exact hashes and historical receipts are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#repaired-runner-paired-qualification`. This is
 captured-source evidence, not exact-commit hosted CI or an exhaustive freeze.
