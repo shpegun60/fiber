@@ -6140,3 +6140,42 @@ the historical 25-case sweep, qualify other modes or satisfy global parity
 keys. The scope remains prelink-bound native root preservation, not
 callee/constructor semantics, pinned-reference final parity, archive/LTO,
 CPU/board or hosted exact-commit CI qualification.
+
+## Native Artifact Seal Failure Handling
+
+Source review of the reference companion identified the inherited native
+standalone finalization gap: it checked only already-enumerated artifact
+bytes, missing a late addition, and could raise after saving PASS without
+replacing that receipt with FAIL. Historical sweep evidence remains bound
+to its independent outer membership/hash closure; it is not reclassified.
+
+The native `finish()` now compares freshly enumerated complete artifact
+path/hash dictionaries after manifest writing. Detected sealing failures
+set FAIL and an explicit error, return false and refresh the failure
+manifest where readable. Recovery write errors retain separate diagnostics.
+Five pure controls cover normal closure, additions, modifications, deletions
+and manifest-write failure. All 53 build-envelope controls pass without a
+tool invocation. No compile/admission/protocol/ELF or production changes.
+
+The parent fresh build `C:/fzfinal-native-seal-20261104-e1` passes CM7/O2
+with nine actual TUs, two direct final links, seven object checkpoints and
+73 native-tool commands. The read-only post-auditor verifies the full set
+of 818 artifact entries, 538 original/captured input bindings and generated
+inputs; its 1,358 watched files close without drift. The separate current
+reader passes 176 pure controls and all thirteen actual mutants, preserving
+three complete roots, 624 bytes, 211 instructions and fourteen references.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-native-seal-20261104-e1/results.json` | `A6A03CA7E8AA507513285272F11D7B08C2F1C41FEFFB2521B41E01064F4CA39C` |
+| `C:/fzfinal-native-seal-parent-20261104-e1/results.json` | `7C49F55E8BF37C792EF7FC8CBDB8652B84161EF7B826AE3BA7251895BF21B7F8` |
+| `C:/fzfinal-native-seal-parent-20261104-e1/audit.py` | `37A0F4C2621F7918DC6BBFBDAA165EA7A4AA009002ADEFF39E09AA7D1AE910A1` |
+| `C:/fzfinal-native-seal-reader-20261104-e1/results.json` | `04FBAEED4AF69E41DB3BC7C535BC67748A9E264BE5D24F5D9D9D49EA0829CAE6` |
+| `%TEMP%/native-final-parent-seal-20261104-e1.json` | `7CD753F814DC106A51C9E1FD9EEB257223C9BDA6BEDCE3AB2D2EE3E44B814D10` |
+| `tools/fixtures/classic_final_image/run.py` | `254A28FA9E18DB7155164D5CA9FE2F1CBCB5160DF00D03247A497D15ECEEE813` |
+| `tools/fixtures/classic_final_image/test_run.py` | `A8711444DFDF7A363C4B4FAC252E35376D9F48DA68D6B80E70B0413311D8BEAC` |
+
+This is a focused standalone sealing repair and one fresh native CM7/O2
+replay, not a new all-profile/optimization sweep or pinned-reference final
+parity. C-callee, constructor, MMIO, archive/LTO, CPU/board, hosted CI and
+global freeze obligations are unchanged. No target image runs.

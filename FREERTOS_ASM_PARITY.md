@@ -1,5 +1,21 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native Artifact Seal Failure Handling
+
+Native build finalization now compares complete fresh artifact path/hash
+dictionaries after manifest writing. Detected additions, modifications,
+deletions and manifest-write errors return failure and persist a failed
+receipt, refreshing the failure manifest where readable. This closes the
+standalone stale-PASS gap; earlier independently sealed sweep records stay
+historical. Five focused controls extend the build-envelope suite to 53.
+
+A fresh CM7/O2 build passes both final links and seven object checkpoints;
+an independent post-audit closes all 818 artifacts and 538 captured-input
+bindings. The unchanged strict reader passes 176 controls, all three roots
+and thirteen actual mutants on these fresh ELFs. Production runtime,
+assembly, ABI, reader semantics and global qualification are unchanged.
+See `PORT_ARCHITECTURE_AUDIT.md#native-artifact-seal-failure-handling`.
+
 ## Native Witness Input Identity
 
 Standalone native actual-witness admission now requires five distinct roles,

@@ -651,12 +651,31 @@ class Pilot:
             self.report["Error"] = "incomplete build stages"
         if error is None and not drift and complete:
             self.report["Verdict"] = "NATIVE-FINAL-TWIN-BUILD-PASS"
-        save(self.output / "inputs.json", dict(Files=list(self.inputs.values()), Generated=self.generated))
-        save(self.output / "results.json", self.report)
-        files = {p.relative_to(self.output).as_posix(): sha(p.read_bytes()) for p in self.output.rglob("*")
-                 if p.is_file() and p != self.output / "artifacts.json"}
-        save(self.output / "artifacts.json", dict(Artifacts=files))
-        need(all(sha((self.output / p).read_bytes()) == digest for p, digest in files.items()), "artifact drift")
+        def artifacts():
+            return {path.relative_to(self.output).as_posix(): sha(path.read_bytes())
+                    for path in self.output.rglob("*")
+                    if path.is_file() and path != self.output / "artifacts.json"}
+
+        try:
+            save(self.output / "inputs.json", dict(Files=list(self.inputs.values()), Generated=self.generated))
+            save(self.output / "results.json", self.report)
+            files = artifacts()
+            save(self.output / "artifacts.json", dict(Artifacts=files))
+            need(artifacts() == files, "artifact membership/hash drift")
+        except Exception as failure:
+            self.report["Verdict"] = "FAIL"
+            message = "artifact sealing failed: " + type(failure).__name__ + ": " + str(failure)
+            self.report["Error"] = (self.report["Error"] + "; " + message) if self.report["Error"] else message
+            try:
+                save(self.output / "results.json", self.report)
+                save(self.output / "artifacts.json", dict(Artifacts=artifacts()))
+            except Exception as recovery:
+                self.report["ArtifactSealRecoveryError"] = type(recovery).__name__ + ": " + str(recovery)
+                try:
+                    save(self.output / "results.json", self.report)
+                except Exception:
+                    pass
+            return False
         return self.report["Verdict"] == "NATIVE-FINAL-TWIN-BUILD-PASS"
 
 

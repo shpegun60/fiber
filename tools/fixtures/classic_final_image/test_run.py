@@ -473,6 +473,95 @@ class CM0Controls(unittest.TestCase):
                 self.admission.require_attributes(changed)
 
 
+class ArtifactSealControls(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="classic-final-artifact-seal-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.pilot = r.Pilot.__new__(r.Pilot)
+        self.pilot.output = self.root
+        self.pilot.inputs, self.pilot.generated = {}, {}
+        self.pilot.memberships, self.pilot.copy_memberships = [], []
+        self.pilot.commands = [dict(Status="PASS")]
+        self.pilot.report = r.scope_report()
+        self.pilot._prepared = self.pilot._built = True
+        self.pilot._prelink_verified = self.pilot._twins_verified = True
+        self.pilot.objects = []
+        for index in range(9):
+            path = self.root / ("object-%d.o" % index)
+            path.write_bytes(bytes([index]))
+            self.pilot.objects.append(path)
+            self.pilot.report["Sources"].append(dict(Object=str(path), ObjectSha256=r.sha(path.read_bytes()),
+                                                     CompileDependenciesVerified=True))
+        self.pilot.freeze_objects()
+        self.pilot.report["Links"] = [dict(Kind=name) for name in ("ordinary", "emit-relocs")]
+        self.pilot.report["PrelinkNativeRoots"] = [dict(Name=name) for name in
+            ("fiber_port_start_first_context", "SVC_Handler", "PendSV_Handler")]
+        self.pilot.report["PrelinkStartupLiteralGuard"] = dict(LiteralPredicateSatisfied=True)
+        self.pilot.report["ObjectChecks"] = [dict(Stage=stage, Status="PASS", Error=None) for stage in
+            ("before-prelink", "after-prelink", "before-link-ordinary", "after-link-ordinary",
+             "before-link-emit-relocs", "after-link-emit-relocs")]
+        self.payload = self.root / "payload.bin"
+        self.payload.write_bytes(b"retained artifact")
+
+    def assert_closed_report(self, verdict):
+        self.assertEqual(self.pilot.report["Verdict"], verdict)
+        self.assertEqual(json.loads((self.root / "results.json").read_bytes()), self.pilot.report)
+        recorded = json.loads((self.root / "artifacts.json").read_bytes())["Artifacts"]
+        actual = {path.relative_to(self.root).as_posix(): r.sha(path.read_bytes())
+                  for path in self.root.rglob("*") if path.is_file() and path.name != "artifacts.json"}
+        self.assertEqual(recorded, actual)
+        self.assertEqual(self.pilot.report["RequiredCellsSatisfied"], 0)
+        for key in ("RequiredCellSatisfied", "FinalElfProof", "FinalRootRelocationProof", "PolicyEquivalence",
+                    "CpuExecution", "BoardExecution", "GlobalFreezeQualified"):
+            self.assertIs(self.pilot.report[key], False)
+
+    def injected_failure(self, fault):
+        save = r.save
+        fired = []
+
+        def intercept(path, value):
+            if path == self.root / "artifacts.json" and not fired:
+                fired.append(fault)
+                if fault == "manifest-write":
+                    raise OSError("injected manifest write error")
+                save(path, value)
+                if fault == "addition":
+                    (self.root / "late.bin").write_bytes(b"late artifact")
+                elif fault == "modification":
+                    self.payload.write_bytes(b"late changed artifact")
+                elif fault == "deletion":
+                    self.payload.unlink()
+                else:
+                    raise AssertionError("unknown seal fault")
+            else:
+                save(path, value)
+
+        with patch.object(r, "save", side_effect=intercept):
+            self.assertFalse(self.pilot.finish(None))
+        self.assertEqual(fired, [fault])
+        self.assertIn("artifact sealing failed", self.pilot.report["Error"])
+        self.assertNotIn("ArtifactSealRecoveryError", self.pilot.report)
+        self.assert_closed_report("FAIL")
+
+    def test_unchanged_artifacts_close_successfully(self):
+        self.assertTrue(self.pilot.finish(None))
+        self.assert_closed_report("NATIVE-FINAL-TWIN-BUILD-PASS")
+        self.assertIsNone(self.pilot.report["Error"])
+
+    def test_late_artifact_addition_persists_failure(self):
+        self.injected_failure("addition")
+
+    def test_late_artifact_modification_persists_failure(self):
+        self.injected_failure("modification")
+
+    def test_late_artifact_deletion_persists_failure(self):
+        self.injected_failure("deletion")
+
+    def test_manifest_write_error_persists_failure(self):
+        self.injected_failure("manifest-write")
+
+
 class ObjectControls(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="classic-final-object-controls-")
@@ -615,7 +704,8 @@ def main():
     if path.exists() or not path.is_relative_to(Path(tempfile.gettempdir()).resolve()):
         raise SystemExit("requires a fresh report inside TEMP")
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(case)
-                              for case in (CommandControls, ScopeControls, CM0Controls, ObjectControls))
+                              for case in (CommandControls, ScopeControls, CM0Controls, ArtifactSealControls,
+                                           ObjectControls))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     report = dict(Status="PASS" if result.wasSuccessful() else "FAIL", Tests=result.testsRun,
                   Failures=len(result.failures), Errors=len(result.errors), Skipped=len(result.skipped),
