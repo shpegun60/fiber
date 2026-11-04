@@ -1,5 +1,37 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native Classic Final Images Including CM0
+
+The direct-link pilot now also admits three exact soft/no-FPU, no-MPU,
+p2/b0 CM0-family cohorts: M0 without VTOR, M0+ without VTOR and M0+ with
+VTOR. A fresh complete five-profile by five-optimization sweep reruns CM4
+and CM7 as well: 25 twin pairs, 225 actual translation units and 50 links.
+The same independent prelink protocols and strict ET_EXEC origin/REL reader
+close 75 complete transfer roots, 13,730 bytes, 5,095 instructions and
+335 applied references. All 162 pure reader controls run for each pair;
+48 separate build-envelope controls and 325 retained actual mutants pass.
+
+Only exact additional Thumb-1 byte/operand forms are admitted. Soft versus
+hard final ELF flags are selected from the admitted cohort, not guessed.
+Fixture startup uses Thumb-1-safe loops and a build-owned VTOR predicate;
+the actual prelink Reset_Handler bytes receive a separate aligned-literal
+check. That check explicitly is not a full MMIO or startup-semantic proof.
+These synthetic no-MPU processor cohorts do not qualify an exact G0 silicon
+manifest or its MPU. No production runtime, ABI or linker script changes.
+
+A separate read-only parent audit replays all 75 roots and twin comparisons,
+binds each receipt to its exact thirteen unique build inputs, rejects three
+malformed receipt controls and closes 755 watched files without drift.
+The sweep itself closes all artifact/input memberships and hashes. Receipt
+identities and limitations are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#native-classic-final-images-including-cm0`.
+
+This is native direct-link root preservation, not pinned-reference final
+parity, C-callee/constructor semantics, archive/LTO, CPU/board execution or
+global freeze qualification. Required global parity coverage remains zero
+for this bounded gate. Earlier ten-pair and single-pair records below stay
+historical; their counts are not silently upgraded to this sweep.
+
 ## Native Classic-FP Final Images At Five Optimizations
 
 The direct-link pilot now admits exactly the CM4 and CM7/r0p1 hard-FP,

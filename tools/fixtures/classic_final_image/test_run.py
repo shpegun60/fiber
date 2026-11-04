@@ -1,8 +1,10 @@
 """Pure controls for the final-image pilot's command envelope and claim scope."""
 import argparse
+import copy
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -157,6 +159,9 @@ class ScopeControls(unittest.TestCase):
         expected = {
             "CM4": ("cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM4", "arm_cm4"),
             "CM7": ("cm7-cortex-m7-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM7/r0p1", "arm_cm7_r0p1"),
+            "CM0": ("cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+            "CM0PLUS": ("cm0-cortex-m0plus-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+            "CM0PLUSVTOR": ("cm0-cortex-m0plus-soft-nofpu-none-v1-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
         }
         self.assertEqual(r.PROFILES, expected)
         self.assertEqual(r.MODES, ("O0", "Og", "O2", "Os", "O3"))
@@ -171,10 +176,15 @@ class ScopeControls(unittest.TestCase):
                     self.assertIs(report["LTO"], False)
                     self.assertIs(report["ReferenceBuilt"], False)
                     self.assertEqual(report["RequiredCellsSatisfied"], 0)
+                    for key in ("RequiredCellSatisfied", "FinalElfProof", "FinalRootRelocationProof",
+                                "CompleteObjectProof", "PolicyEquivalence", "CpuExecution",
+                                "BoardExecution", "GlobalFreezeQualified"):
+                        self.assertIs(report[key], False)
 
     def test_unsupported_selection_is_rejected_without_output(self):
         for profile, mode in (("CM3", "O2"), ("cm4", "O2"), ("CM7", "O2-LTO"),
-                              ("CM4", "Ofast"), (None, "O2"), ("CM7", True)):
+                              ("CM4", "Ofast"), (None, "O2"), ("CM7", True),
+                              ("CM0+", "O2"), ("CM0PLUS", "O2-LTO"), ("CM0", "O1")):
             with self.subTest(profile=profile, mode=mode):
                 with patch.object(Path, "mkdir", side_effect=AssertionError("must reject before mkdir")):
                     with self.assertRaisesRegex(RuntimeError, "unsupported native"):
@@ -246,6 +256,221 @@ class ScopeControls(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "ambient compiler override"):
                         r.process_environment({"PATH": "toolchain", spelling: "injected"})
         self.assertEqual(r.process_environment({"PATH": "toolchain", "CPATH": ""}), {"PATH": "toolchain"})
+
+
+class CM0Controls(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        repo = HERE.parents[2]
+        cls.admission = r.load("classic_final_cm0_controls", repo / r.CM0_HELPERS[0])
+        cls.checker = r.load("classic_final_cm0_protocol_controls", repo / r.CM0_HELPERS[1])
+        cls.recipe = r.load("classic_final_recipe_controls", repo / r.HELPERS[5])
+
+    def manifest(self, profile):
+        identity, _, _, sources = r.selection(profile, "O2")
+        cpu, vtor = self.admission.COHORTS[identity]
+        target = dict(cpu=cpu, architecture="ARMV6M", float_abi="soft", fpu_present=False,
+            fpu_used=False, fpu_unit="", fp_stacking="none", vtor=vtor, mpu_regions=0,
+            security_role="classic", psplim_slot=False, psplim_register=False, mve="none",
+            pac=False, bti=False, errata_policy="none", r9_abi="aapcs",
+            nvic_priority_bits=2, scheduler_basepri=0)
+        artifact = dict(role="runtime", source_group_id="CM0", abi_contract="forward8", target=target,
+            compile_flags=["-mcpu=" + cpu, "-mthumb", "-mfloat-abi=soft"],
+            defines=dict(FIBER_PORT_BUILD_SELECTED="1", FIBER_PORT_ARMV6M="1"))
+        return dict(cohorts=[dict(id=identity, artifacts=[artifact])],
+                    source_groups=[dict(id="CM0", sources=list(sources))])
+
+    def test_exact_three_authoritative_cohorts(self):
+        self.assertEqual(r.CM0_PROFILES, {"CM0", "CM0PLUS", "CM0PLUSVTOR"})
+        self.assertEqual({r.PROFILES[p][0] for p in r.CM0_PROFILES}, set(self.admission.COHORTS))
+        self.assertEqual(r.CM0_HELPERS, ("tools/freeze_cm0_mechanisms.py",
+                                        "tools/fixtures/cm0_freeze_parity/closed_roots.py"))
+
+    def test_all_fifteen_manifest_recipes_are_exact(self):
+        for profile in sorted(r.CM0_PROFILES):
+            for mode in r.MODES:
+                with self.subTest(profile=profile, mode=mode):
+                    manifest = self.manifest(profile)
+                    artifact = r.require_manifest_selection(manifest, profile, mode, self.admission)
+                    self.assertIs(artifact, manifest["cohorts"][0]["artifacts"][0])
+                    flags = self.recipe.native_flags(artifact, mode, "generated", "ARM_CM0", "repo", "cmsis")
+                    self.assertEqual(flags[:4], [*artifact["compile_flags"], "-" + mode])
+                    self.assertEqual([f for f in flags if f.startswith("-D")],
+                        ["-DFIBER_PORT_ARMV6M=1", "-DFIBER_PORT_BUILD_SELECTED=1"])
+                    main = self.recipe.cmsis_main(artifact["target"])
+                    self.assertIn('#include "core_cm0%s.h"' % ("plus" if profile != "CM0" else ""), main)
+                    self.assertIn("#define __NVIC_PRIO_BITS 2U", main)
+                    self.assertIn("#define __FPU_PRESENT 0U", main)
+                    self.assertIn("#define __VTOR_PRESENT %dU" % int(profile == "CM0PLUSVTOR"), main)
+
+    def test_cohort_count_and_artifact_count_are_strict(self):
+        for kind in ("no-cohort", "duplicate-cohort", "no-artifact", "duplicate-artifact"):
+            manifest = self.manifest("CM0")
+            rows = manifest["cohorts"]
+            if kind == "no-cohort":
+                rows.clear()
+            elif kind == "duplicate-cohort":
+                rows.append(copy.deepcopy(rows[0]))
+            elif kind == "no-artifact":
+                rows[0]["artifacts"].clear()
+            else:
+                rows[0]["artifacts"].append(copy.deepcopy(rows[0]["artifacts"][0]))
+            with self.subTest(kind=kind), self.assertRaisesRegex(RuntimeError, "unique cohort"):
+                r.require_manifest_selection(manifest, "CM0", "O2", self.admission)
+
+    def test_source_group_is_cm0_not_cli_profile_alias(self):
+        for profile in ("CM0PLUS", "CM0PLUSVTOR"):
+            for side in ("artifact", "source-group"):
+                manifest = self.manifest(profile)
+                if side == "artifact":
+                    manifest["cohorts"][0]["artifacts"][0]["source_group_id"] = profile
+                else:
+                    manifest["source_groups"][0]["id"] = profile
+                with self.subTest(profile=profile, side=side), self.assertRaises(RuntimeError):
+                    r.require_manifest_selection(manifest, profile, "O2", self.admission)
+
+    def test_source_group_membership_order_and_ownership_are_strict(self):
+        original = self.manifest("CM0")["source_groups"][0]
+        sources = original["sources"]
+        mutants = [[], [original, copy.deepcopy(original)],
+            [dict(original, sources=sources[:-1])], [dict(original, sources=list(reversed(sources)))],
+            [dict(original, sources=[*sources, sources[0]])],
+            [dict(original, sources=[s.replace("ARM_CM0", "ARM_CM4") for s in sources])]]
+        for groups in mutants:
+            manifest = self.manifest("CM0")
+            manifest["source_groups"] = groups
+            with self.subTest(groups=groups), self.assertRaisesRegex(RuntimeError, "exact source group"):
+                r.require_manifest_selection(manifest, "CM0", "O2", self.admission)
+
+    def test_foreign_target_flags_and_defines_are_rejected(self):
+        target_mutants = dict(cpu="cortex-m0plus", vtor=True, float_abi="hard", fpu_present=True,
+            fpu_used=True, fpu_unit="fpv4-sp-d16", nvic_priority_bits=4, scheduler_basepri=16,
+            mpu_regions=8, architecture="ARMV7EM", r9_abi="fixed-r9")
+        for field, value in target_mutants.items():
+            manifest = self.manifest("CM0")
+            manifest["cohorts"][0]["artifacts"][0]["target"][field] = value
+            with self.subTest(target=field), self.assertRaises(RuntimeError):
+                r.require_manifest_selection(manifest, "CM0", "O2", self.admission)
+        for flags in (["-mcpu=cortex-m0", "-mthumb"],
+                      ["-mcpu=cortex-m0", "-mthumb", "-mfloat-abi=soft", "-O2"],
+                      ["-mthumb", "-mcpu=cortex-m0", "-mfloat-abi=soft"]):
+            manifest = self.manifest("CM0")
+            manifest["cohorts"][0]["artifacts"][0]["compile_flags"] = flags
+            with self.subTest(flags=flags), self.assertRaises(RuntimeError):
+                r.require_manifest_selection(manifest, "CM0", "O2", self.admission)
+        for key in ("FIBER_FPU_LAZY", "FIBER_SCHEDULER_BASEPRI", "FIBER_PORT_ARMV7EM"):
+            manifest = self.manifest("CM0")
+            manifest["cohorts"][0]["artifacts"][0]["defines"][key] = "0"
+            with self.subTest(define=key), self.assertRaisesRegex(RuntimeError, "exact defines"):
+                r.require_manifest_selection(manifest, "CM0", "O2", self.admission)
+
+    def test_startup_flags_derive_only_literal_vtor_without_c_header(self):
+        for profile in r.CM0_PROFILES:
+            artifact = self.manifest(profile)["cohorts"][0]["artifacts"][0]
+            for mode in r.MODES:
+                with self.subTest(profile=profile, mode=mode):
+                    self.assertEqual(r.startup_flags(artifact, mode), [*artifact["compile_flags"],
+                        "-" + mode, "-g0", "-DPILOT_HAS_VTOR=" + str(int(profile == "CM0PLUSVTOR"))])
+            for malformed in (0, 1, "0", "1", None):
+                changed = copy.deepcopy(artifact)
+                changed["target"]["vtor"] = malformed
+                with self.subTest(malformed=malformed), self.assertRaisesRegex(RuntimeError, "literal startup VTOR"):
+                    r.startup_flags(changed, "O2")
+
+    def test_startup_thumb1_copy_zero_and_conditional_vtor(self):
+        source = (HERE / "startup.S").read_text(encoding="ascii")
+        self.assertNotRegex(source, r"\[r[01]\],\s*#4")
+        self.assertIn("ldr r3, [r0]\n    str r3, [r1]\n    adds r0, #4\n    adds r1, #4", source)
+        self.assertIn("str r3, [r1]\n    adds r1, #4", source)
+        self.assertRegex(source, r"#if PILOT_HAS_VTOR\s+ldr r0, =pilot_vectors\s+ldr r1, =0xE000ED08\s+str r0, \[r1\]\s+dsb\s+isb\s+#endif")
+        self.assertIn('#error "PILOT_HAS_VTOR must be the literal manifest fixture trait"', source)
+        script = (HERE / "link.ld").read_text(encoding="ascii")
+        for token in ("__data_load__", "__data_start__", "__data_end__", "__bss_start__", "__bss_end__"):
+            self.assertIn(token, source)
+            self.assertIn(token, script)
+        self.assertIn("ENTRY(Reset_Handler)", script)
+        self.assertIn("KEEP(*(.isr_vector))", script)
+
+    def test_actual_startup_literal_guard_vtor_zero_and_one(self):
+        for vtor in (False, True):
+            body = b"\x00\x00" + (struct.pack("<I", 0xE000ED08) if vtor else bytes(4)) + bytes(4)
+            image = SimpleNamespace(symbol=unittest.mock.Mock(return_value=dict(value=3, section=7, size=len(body))),
+                                    section_read=unittest.mock.Mock(return_value=body))
+            evidence = r.startup_literal_guard(image, vtor)
+            image.symbol.assert_called_once_with("Reset_Handler", "STT_FUNC", root=True)
+            image.section_read.assert_called_once_with(7, 2, len(body))
+            self.assertEqual(evidence["BodySha256"], r.sha(body))
+            self.assertIs(type(evidence["ExpectedLiteralCount"]), int)
+            self.assertEqual(evidence["ExpectedLiteralCount"], int(vtor))
+            self.assertEqual(evidence["ObservedLiteralCount"], int(vtor))
+            self.assertEqual(evidence["LiteralOffsets"], [2] if vtor else [])
+            self.assertIs(evidence["LiteralPredicateSatisfied"], True)
+            self.assertIs(evidence["FullMMIOProof"], False)
+
+    def test_actual_startup_literal_guard_rejects_wrong_count_and_nonbool(self):
+        literal = struct.pack("<I", 0xE000ED08)
+        for vtor, body in ((False, literal), (True, bytes(8)), (True, literal * 2)):
+            image = SimpleNamespace(symbol=lambda *args, **kwargs: dict(value=1, section=2, size=len(body)),
+                                    section_read=lambda *args: body)
+            with self.subTest(vtor=vtor, body=body), self.assertRaisesRegex(RuntimeError, "aligned-literal count"):
+                r.startup_literal_guard(image, vtor)
+        for malformed in (0, 1, "0", "1", None):
+            with self.subTest(vtor=malformed), self.assertRaisesRegex(RuntimeError, "literal startup VTOR trait"):
+                r.startup_literal_guard(None, malformed)
+
+    def test_exact_soft_vs_hard_final_flags(self):
+        for profile in r.PROFILES:
+            expected = 0x05000200 if profile in r.CM0_PROFILES else 0x05000400
+            r.require_final_float_flags(expected, profile)
+            for flags in (0x05000000, 0x05000600, expected ^ 0x600, True, False):
+                with self.subTest(profile=profile, flags=flags), self.assertRaises(RuntimeError):
+                    r.require_final_float_flags(flags, profile)
+
+    def test_all_fifteen_complete_native_protocols(self):
+        for profile in r.CM0_PROFILES:
+            for mode in r.MODES:
+                protocols = self.checker._protocols(mode)["Native"]
+                calls = []
+                def function(name, **kwargs):
+                    calls.append((name, kwargs))
+                    return copy.deepcopy(protocols[name])
+                evidence = r.match_native_protocols(SimpleNamespace(function=function), profile, mode, self.checker)
+                self.assertEqual([row["Name"] for row in evidence], list(protocols))
+                self.assertEqual(calls, [(name, dict(literal_islands=True, thumb1_tail_nop=True)) for name in protocols])
+                self.assertEqual([row["TailNops"] for row in evidence], [int(mode == "O0")] * 3)
+
+    def test_complete_protocol_rejects_added_missing_or_changed_token(self):
+        for mode in r.MODES:
+            protocols = self.checker._protocols(mode)["Native"]
+            for root in protocols:
+                for mutation in ("extra", "missing", "changed"):
+                    bodies = copy.deepcopy(protocols)
+                    if mutation == "extra":
+                        bodies[root].append(("nop", "@ (mov r8, r8)"))
+                    elif mutation == "missing":
+                        bodies[root].pop()
+                    else:
+                        bodies[root][0] = ("nop", "@ (mov r8, r8)")
+                    image = SimpleNamespace(function=lambda name, **kwargs: bodies[name])
+                    with self.subTest(mode=mode, root=root, mutation=mutation), self.assertRaisesRegex(RuntimeError, "complete protocol mismatch"):
+                        r.match_native_protocols(image, "CM0", mode, self.checker)
+
+    def test_protocol_tail_counter_does_not_accept_boolean_or_wrong_mode(self):
+        protocols = self.checker._protocols("O2")["Native"]
+        for tail in (True, False, 1, -1, None):
+            checker = SimpleNamespace(_protocols=lambda mode: dict(Native=protocols),
+                _match=lambda *args: dict(TailNops=tail))
+            with self.subTest(tail=tail), self.assertRaisesRegex(RuntimeError, "tail layout"):
+                r.match_native_protocols(None, "CM0", "O2", checker)
+
+    def test_cm0_attribute_gate_rejects_thumb2_and_fp(self):
+        attributes = ('Tag_CPU_name: "6S-M"\nTag_CPU_arch: v6S-M\n'
+                      'Tag_CPU_arch_profile: Microcontroller\nTag_THUMB_ISA_use: Thumb-1\n')
+        self.admission.require_attributes(attributes)
+        for changed in (attributes.replace("Thumb-1", "Thumb-2"), attributes + "Tag_FP_arch: VFPv4-D16\n",
+                        attributes + "Tag_ABI_VFP_args: VFP registers\n", attributes + 'Tag_CPU_name: "6S-M"\n'):
+            with self.subTest(attributes=changed), self.assertRaises(RuntimeError):
+                self.admission.require_attributes(changed)
 
 
 class ObjectControls(unittest.TestCase):
@@ -390,7 +615,7 @@ def main():
     if path.exists() or not path.is_relative_to(Path(tempfile.gettempdir()).resolve()):
         raise SystemExit("requires a fresh report inside TEMP")
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(case)
-                              for case in (CommandControls, ScopeControls, ObjectControls))
+                              for case in (CommandControls, ScopeControls, CM0Controls, ObjectControls))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     report = dict(Status="PASS" if result.wasSuccessful() else "FAIL", Tests=result.testsRun,
                   Failures=len(result.failures), Errors=len(result.errors), Skipped=len(result.skipped),

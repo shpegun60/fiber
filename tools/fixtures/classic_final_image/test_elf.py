@@ -5,6 +5,7 @@ already-built witness. This file never launches a subprocess or native tool.
 """
 
 import argparse
+from enum import Enum
 import hashlib
 import importlib.util
 from io import BytesIO
@@ -615,7 +616,8 @@ def _mutate_witness(name, files, baseline, proofs, edits):
                     for item in baseline.final.symbols if item["kind"] == "STT_FUNC"
                     and type(item["section"]) is int and item["section"] > 0]
         candidates = [(sec, address) for (sec, address), record in baseline.instructions.items()
-                      if record is not None and record[0] == "nop" and record[2] == b"\x00\xbf"
+                      if record is not None and record[0] == "nop"
+                      and record[2] in (b"\x00\xbf", b"\xc0\x46")
                       and not any(a < address + 2 and address < b for a, b in occupied)
                       and baseline.final.mapping(sec, address)[0] == "t"
                       and any(load["Flags"] & 1 and load["Vaddr"] <= address
@@ -675,10 +677,10 @@ def _mutate_witness(name, files, baseline, proofs, edits):
         raise ValueError("unknown retained-witness mutation")
 
 
-def _actual_witness(witness, provider_paths, link_map, directory):
+def _actual_witness(witness, provider_paths, link_map, directory, *, float_abi="hard"):
     report = dict(Status="FAIL", Scope="PRELINK_BOUND_ROOT_PRESERVATION_AND_SYMBOL_ORIGIN_ONLY",
                   PositiveRoots=[], Mutants=[], InputDrift=[], RequiredCellSatisfied=False,
-                  FinalParity=False, CPUProof=False, GlobalProof=False)
+                  FinalParity=False, CPUProof=False, GlobalProof=False, FloatABI=float_abi)
     inputs = dict(zip(("Prelink", "Final", "Disassembly", "Plain"), witness))
     inputs["LinkMap"] = link_map
     originals = list(dict.fromkeys(Path(path).resolve() for path in (*inputs.values(), *provider_paths)))
@@ -697,7 +699,7 @@ def _actual_witness(witness, provider_paths, link_map, directory):
     providers = {str(Path(path).resolve()): copies[Path(path).resolve()] for path in provider_paths}
     try:
         image = reader.FinalImage(files["Prelink"], files["Final"], files["Disassembly"],
-                                  provider_objects=providers, link_map=files["LinkMap"])
+                                  provider_objects=providers, link_map=files["LinkMap"], float_abi=float_abi)
         report["Twins"] = reader.compare_load_images(files["Plain"], files["Final"])
         proofs = {name: image.function(name) for name in sorted(reader.ROOTS)}
         report["PositiveRoots"] = list(proofs.values())
@@ -739,7 +741,8 @@ def _actual_witness(witness, provider_paths, link_map, directory):
                     record["TwinComparisonPass"] = True
                     stage = "FinalImage"
                     mutated = reader.FinalImage(case["Prelink"], case["Final"], case["Disassembly"],
-                                                provider_objects=case_providers, link_map=case["LinkMap"])
+                                                provider_objects=case_providers, link_map=case["LinkMap"],
+                                                float_abi=float_abi)
                     stage = "Root"
                     mutated.function(root)
                 except reader.Rejected as error:
@@ -886,6 +889,75 @@ class OriginTests(unittest.TestCase):
             reader.compare_load_images(f.plain, f.final)
 
 
+class PaddingMutantTests(unittest.TestCase):
+    def padding_fixture(self, raw, *, abi="hard", mnemonic="nop", owned=False, data=False):
+        temp = tempfile.TemporaryDirectory(prefix="classic-final-padding-")
+        self.addCleanup(temp.cleanup)
+        f = Fixture(temp.name)
+        if abi == "soft":
+            f.final_options["flags"] = 0x05000200
+        address = BASE + 26
+        f.source_options["maps"].extend(((26, "t"), (28, "d")))
+        f.final_options["maps"].extend(((26, "d" if data else "t"), (28, "d")))
+        f.extra_dis.append("%08x: %04x %s" % (address, struct.unpack("<H", raw)[0], mnemonic))
+        if owned:
+            f.final_options["extra_symbols"] = [_alias("owned_padding", address | 1)]
+        f.write()
+        # Keep the selected padding outside all functions and give the
+        # synthetic callee a nontrivial size for the real size-to-two mutant.
+        for path in (f.prelink, f.final, f.plain):
+            _patch_symbol(path, PANIC, "size", 4, [])
+        for path in (f.final, f.plain):
+            _patch_vma(path, address, raw, [])
+        image = reader.FinalImage(f.prelink, f.final, f.dis,
+                                  provider_objects={str(f.prelink.resolve()): f.prelink},
+                                  link_map=f.link_map, float_abi=abi)
+        proof = image.function(ROOT)
+        # This small synthetic root carries both reference kinds needed by
+        # the mutation helper; no additional production root is fabricated.
+        proofs = {ROOT: proof, "SVC_Handler": dict(proof, References=[
+            item for item in proof["References"] if item["Kind"] == 2])}
+        files = dict(Final=f.final, Plain=f.plain, Disassembly=f.dis)
+        return f, image, proofs, files
+
+    def require_origin_rejection(self, raw, abi):
+        f, image, proofs, files = self.padding_fixture(raw, abi=abi)
+        edits = []
+        _mutate_witness("callee-symbol-and-BL-padding-retarget", files, image, proofs, edits)
+        self.assertTrue(edits)
+        self.assertTrue(reader.compare_load_images(f.plain, f.final)["Identical"])
+        mutated = reader.FinalImage(f.prelink, f.final, f.dis,
+                                    provider_objects={str(f.prelink.resolve()): f.prelink},
+                                    link_map=f.link_map, float_abi=abi)
+        with self.assertRaisesRegex(reader.Rejected, "ORIGIN:original section/offset/size.*fiber_panic"):
+            mutated.function(ROOT)
+
+    def test_exact_bf00_padding_mutant(self):
+        self.require_origin_rejection(bytes.fromhex("00bf"), "hard")
+
+    def test_exact_46c0_padding_mutant(self):
+        self.require_origin_rejection(bytes.fromhex("c046"), "soft")
+
+    def require_no_padding(self, raw, **kwargs):
+        _, image, proofs, files = self.padding_fixture(raw, **kwargs)
+        edits = []
+        with self.assertRaisesRegex(ValueError, "no real unowned Thumb NOP padding"):
+            _mutate_witness("callee-symbol-and-BL-padding-retarget", files, image, proofs, edits)
+        self.assertEqual(edits, [])
+
+    def test_nearby_46c1_not_padding(self):
+        self.require_no_padding(bytes.fromhex("c146"))
+
+    def test_46c0_requires_nop_record(self):
+        self.require_no_padding(bytes.fromhex("c046"), mnemonic="mov r8, r8")
+
+    def test_46c0_function_owned_not_padding(self):
+        self.require_no_padding(bytes.fromhex("c046"), owned=True)
+
+    def test_46c0_data_mapped_not_padding(self):
+        self.require_no_padding(bytes.fromhex("c046"), data=True)
+
+
 class WideConditionalTests(unittest.TestCase):
     @staticmethod
     def encode(displacement, condition=1):
@@ -1004,6 +1076,130 @@ class WideConditionalTests(unittest.TestCase):
                 self.assertIsNone(reader._address_form(bytes.fromhex(raw), BASE))
 
 
+class FloatABITests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="classic-final-float-")
+        self.addCleanup(self.temp.cleanup)
+        self.f = Fixture(self.temp.name)
+
+    def image(self, abi):
+        f = self.f.write()
+        return reader.FinalImage(f.prelink, f.final, f.dis,
+                                 provider_objects={str(f.prelink.resolve()): f.prelink},
+                                 link_map=f.link_map, float_abi=abi)
+
+    def test_default_remains_hard(self):
+        image = self.f.write().image()
+        self.assertEqual(image.float_abi, "hard")
+        self.assertTrue(image.function(ROOT)["PrelinkBoundRootPreservation"])
+
+    def test_soft_does_not_admit_arbitrary_mnemonic(self):
+        self.f.final_options["flags"] = 0x05000200
+        self.f.dis_overrides[0] = "%08x: 2000 it eq" % BASE
+        with self.assertRaisesRegex(reader.Rejected, "DECODE:unsupported instruction"):
+            self.image("soft").function(ROOT)
+
+    def test_soft_bx_still_requires_lr(self):
+        self.f.final_options["flags"] = 0x05000200
+        self.f.source[14:16] = self.f.body[14:16] = bytes.fromhex("1047")
+        self.f.dis_overrides[14] = "%08x: 4710 bx r2" % (BASE + 14)
+        with self.assertRaisesRegex(reader.Rejected, "BX.*LR|BX.*lr"):
+            self.image("soft").function(ROOT)
+
+    def test_soft_does_not_admit_wide_unconditional_branch(self):
+        with self.assertRaisesRegex(reader.Rejected, "unsupported"):
+            reader._address_form(bytes.fromhex("00f000b8"), BASE)
+
+
+def _float_flags_case(name, abi, before, after, accepted=False):
+    def control(self):
+        self.f.source_options["flags"] = 0x05000000 | before
+        self.f.final_options["flags"] = 0x05000000 | after
+        if accepted:
+            image = self.image(abi)
+            self.assertEqual(image.float_abi, abi)
+            self.assertTrue(image.function(ROOT)["PrelinkBoundRootPreservation"])
+            self.assertTrue(reader.compare_load_images(self.f.plain, self.f.final)["Identical"])
+        else:
+            with self.assertRaisesRegex(reader.Rejected, "ELF:prelink/final ABI flags differ"):
+                self.image(abi)
+    control.__name__ = "test_" + abi + "_" + name
+    setattr(FloatABITests, control.__name__, control)
+
+
+for _abi, _bit, _foreign in (("soft", 0x200, 0x400), ("hard", 0x400, 0x200)):
+    _float_flags_case("prelink_unset", _abi, 0, _bit, True)
+    _float_flags_case("prelink_declared", _abi, _bit, _bit, True)
+    _float_flags_case("prelink_foreign", _abi, _foreign, _bit)
+    _float_flags_case("prelink_both", _abi, 0x600, _bit)
+    _float_flags_case("final_neither", _abi, 0, 0)
+    _float_flags_case("final_foreign", _abi, 0, _foreign)
+    _float_flags_case("final_both", _abi, 0, 0x600)
+    _float_flags_case("final_clears_declared", _abi, _bit, 0)
+    _float_flags_case("final_adds_other_flag", _abi, 0, _bit | 1)
+    _float_flags_case("final_drops_other_flag", _abi, 1, _bit)
+
+
+class _ABIEnum(Enum):
+    HARD = "hard"
+
+
+class _ABIStringEnum(str, Enum):
+    SOFT = "soft"
+
+
+def _invalid_float_abi(name, value):
+    def control(self):
+        # Invalid declarations must fail before any input path is read.
+        with self.assertRaisesRegex(reader.Rejected, "SCOPE:float_abi"):
+            reader.FinalImage(None, None, None, float_abi=value)
+    control.__name__ = "test_invalid_abi_" + name
+    setattr(FloatABITests, control.__name__, control)
+
+
+for _name, _value in (("true", True), ("false", False), ("none", None),
+                      ("integer", 0), ("float", 0.0), ("bytes", b"soft"),
+                      ("list", ["hard"]), ("mapping", {"abi": "soft"}),
+                      ("enum", _ABIEnum.HARD), ("string_enum", _ABIStringEnum.SOFT),
+                      ("softfp", "softfp"), ("empty", ""), ("case", "Soft")):
+    _invalid_float_abi(_name, _value)
+
+
+def _soft_form_case(name, raw, op, operands, variation):
+    def control(self):
+        abi = "hard" if variation == "hard" else "soft"
+        self.f.final_options["flags"] = 0x05000400 if abi == "hard" else 0x05000200
+        body = bytes.fromhex(raw)
+        if variation == "wrong_bits":
+            body = bytes((body[0] ^ 1, body[1]))
+        if variation == "wrong_operands":
+            operands_used = operands.replace("r0", "r1") if "r0" in operands else "r2, r3"
+        else:
+            operands_used = operands
+        self.f.source[0:2] = self.f.body[0:2] = body
+        self.f.dis_overrides[0] = "%08x: %04x %s %s" % (
+            BASE, struct.unpack("<H", body)[0], op, operands_used)
+        if variation == "soft":
+            proof = self.image(abi).function(ROOT)
+            self.assertEqual(proof["Instructions"][0]["Mnemonic"], op)
+            self.assertEqual(proof["Instructions"][0]["Bytes"], raw)
+            self.assertEqual(proof["InstructionCount"], 8)
+        else:
+            with self.assertRaisesRegex(reader.Rejected, "DECODE:unsupported instruction"):
+                self.image(abi).function(ROOT)
+    control.__name__ = "test_cm0_" + name + "_" + variation
+    setattr(FloatABITests, control.__name__, control)
+
+
+for _name, _raw, _op, _operands in (
+        ("adds", "1430", "adds", "r0, #20"),
+        ("mvns", "d243", "mvns", "r2, r2"),
+        ("stmia_low", "f8c0", "stmia", "r0!, {r3, r4, r5, r6, r7}"),
+        ("stmia_high", "f0c0", "stmia", "r0!, {r4, r5, r6, r7}")):
+    for _variation in ("soft", "hard", "wrong_bits", "wrong_operands"):
+        _soft_form_case(_name, _raw, _op, _operands, _variation)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
@@ -1013,6 +1209,7 @@ def main():
     parser.add_argument("--plain-elf", type=Path)
     parser.add_argument("--provider-object", type=Path, action="append", default=[])
     parser.add_argument("--link-map", type=Path)
+    parser.add_argument("--float-abi", choices=("soft", "hard"), default="hard")
     args = parser.parse_args()
     witness = (args.prelink_object, args.final_elf, args.disassembly, args.plain_elf)
     if any(witness) and (not all(witness) or not args.provider_object or not args.link_map or not args.output_dir):
@@ -1032,7 +1229,8 @@ def main():
                   RequiredCellSatisfied=False, FinalParity=False, CPUProof=False, GlobalProof=False)
     if any(witness):
         try:
-            report["Witness"] = _actual_witness(witness, args.provider_object, args.link_map, args.output_dir)
+            report["Witness"] = _actual_witness(witness, args.provider_object, args.link_map, args.output_dir,
+                                                float_abi=args.float_abi)
             if report["Witness"]["Status"] != "PASS":
                 report["Status"] = "FAIL"
         except Exception as error:

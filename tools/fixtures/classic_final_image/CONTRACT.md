@@ -2,9 +2,11 @@
 
 ## Scope
 
-The pilot admits exactly the native CM4 and CM7/r0p1 hard-FP, eager-stacking,
-no-MPU, VTOR-present, four-priority-bit, raw BASEPRI 16, ordinary-AAPCS
-cohorts at `-O0`, `-Og`, `-O2`, `-Os`, and `-O3`, with direct object linkage
+The pilot admits five exact native, non-MPU, ordinary-AAPCS cohorts:
+CM0 with no VTOR, CM0+ without VTOR, CM0+ with VTOR (all soft/no-FPU,
+two-priority-bit, raw BASEPRI zero), plus CM4 and CM7/r0p1 (hard-FP,
+eager-stacking, VTOR-present, four-priority-bit, raw BASEPRI 16).
+Each admits `-O0`, `-Og`, `-O2`, `-Os`, and `-O3`, with direct object linkage
 and without LTO. CM7 retains its PRIMASK-preserving 837070 policy. Each
 invocation selects one exact profile/mode pair. It uses actual
 Context providers, selected-port providers, a build-owned cohort expectation,
@@ -15,7 +17,9 @@ The three complete roots are `fiber_port_start_first_context`,
 existing independently transcribed native protocol for that exact profile.
 The single post-island tail NOP at O0 must remain present; other modes have
 no such tail. Startup assembly takes its CPU/FPU target from the recorded
-compiler flags, not from a contradictory fixed `.cpu` directive.
+compiler flags, not from a contradictory fixed `.cpu` directive. Its copy
+loops must be Thumb-1-compatible, and its build-owned VTOR predicate comes
+from the admitted target fact. A VTOR0 image must not write VTOR.
 A decoded body or a
 hash observed in this pilot is not a new expected protocol.
 
@@ -23,6 +27,9 @@ This is not a pinned-reference final-image comparison, a whole-provider
 proof, a constructor/callee proof, or a CPU/board test. It satisfies no
 required global parity cell. Policy equivalence, all-profile qualification,
 archive extraction, LTO, and hosted CI remain separate obligations.
+These are processor-code-path cohorts, not complete STM32 device manifests.
+In particular a G0 part with an MPU does not become a no-MPU silicon claim
+merely because its M0+ instructions are checked by the non-MPU fixture.
 
 ## Twin Links
 

@@ -1,8 +1,9 @@
-# Native Classic-FP Final-Image Build Pilot
+# Native Classic Cortex-M Final-Image Build Pilot
 
-Exactly the CM4 and CM7/r0p1 hard/eager, p4/b16, VTOR1, no-MPU cohorts at
-O0/Og/O2/Os/O3 with direct linkage are admitted. One invocation selects one
-pair (default CM4/O2). Nine fresh actual translation units produce an ordinary ET_EXEC
+Exactly five no-MPU cohorts are admitted: CM0/VTOR0, CM0+/VTOR0 and
+CM0+/VTOR1 (soft/no-FPU, p2/b0), plus CM4 and CM7/r0p1 (hard/eager,
+p4/b16, VTOR1). O0/Og/O2/Os/O3 use direct linkage. One invocation selects
+one pair (default CM4/O2). Nine fresh actual translation units produce an ordinary ET_EXEC
 and an `--emit-relocs` ET_EXEC from identical objects and linker script.
 Both links use `--build-id=none`. Nothing executes either image.
 
@@ -19,6 +20,9 @@ project/CMSIS tree. No old compiled object is reused. The existing reviewed
 profile-specific native protocols check the fresh ET_REL first-start/SVC/PendSV
 bodies, including the exact O0-only tail NOP. No input protocol is generated
 from the observed output. Startup uses the compiler's selected CPU/FPU flags.
+Its copy loops are Thumb-1-safe. A build-owned predicate derived from the
+target controls the VTOR write; VTOR0 images omit it completely. Final float
+ABI is checked against the admitted cohort, not inferred from a function name.
 Two explicitly retained unowned Thumb NOPs provide a deterministic invalid
 callee destination for the coherent-symbol/BL negative control, independent
 of incidental linker padding. They are fixture code, not a production change.
@@ -32,9 +36,12 @@ the independent final reader; these are not C-callee semantic proofs.
 
 The typed application initializes static storage, registers its dispatcher,
 then starts. Only its entry calls current/yield. It is not a board fixture.
+Processor coverage is not an exact device-manifest claim: these images use
+synthetic memory geometry, and M0+/VTOR1 does not qualify a G0 part's MPU.
 
-`--profile` admits only CM4/CM7; `--mode` admits only O0/Og/O2/Os/O3. Unsupported
-selection fails before output creation. For a ten-pair sweep, invoke the
+`--profile` admits only CM0/CM0PLUS/CM0PLUSVTOR/CM4/CM7; `--mode` admits only
+O0/Og/O2/Os/O3. Unsupported selection fails before output creation.
+For a twenty-five-pair sweep, invoke the
 builder and reader once for every Cartesian pair with fresh output directories;
 do not promote a subset or a failed attempt to a complete sweep.
 
@@ -70,6 +77,7 @@ foreach ($row in $receipt.Sources) {
     $providerArgs += $row.Object
 }
 python -B tools/fixtures/classic_final_image/test_elf.py `
+    --float-abi $receipt.CohortArtifact.target.float_abi `
     --prelink-object "$build/objects/03-fiber_port.o" `
     --final-elf "$build/emit-relocs.elf" `
     --disassembly "$build/emit-relocs.dis" `

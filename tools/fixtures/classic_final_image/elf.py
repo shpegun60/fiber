@@ -1,4 +1,4 @@
-"""Strict native classic CM4/CM7 final-image reader, not a parity proof.
+"""Strict native classic CM0/M0+/CM4/CM7 final-image reader, not a parity proof.
 
 The caller separately checks the prelink object's source-transcribed protocol.
 Ordinary instructions are bound byte-for-byte, not independently decompiled.
@@ -50,6 +50,12 @@ ORDINARY = frozenset(("cpsid", "cpsie", "dsb", "isb", "movs", "mov", "msr",
                       "mrs", "tst", "cmp", "lsrs", "lsls", "str", "svc", "mvn",
                       "ldr", "ldrb", "subs", "ubfx", "push", "pop", "ldmia",
                       "vldmia", "bic", "vstmdb", "stmdb", "nop"))
+# Additional forms in the fixed native CM0 transfer protocols only. The
+# caller still checks the complete source-transcribed prelink protocol.
+SOFT_ORDINARY = frozenset((("adds", "r0,#20", bytes.fromhex("1430")),
+                           ("mvns", "r2,r2", bytes.fromhex("d243")),
+                           ("stmia", "r0!,{r3,r4,r5,r6,r7}", bytes.fromhex("f8c0")),
+                           ("stmia", "r0!,{r4,r5,r6,r7}", bytes.fromhex("f0c0"))))
 
 
 def sha256(data):
@@ -333,15 +339,20 @@ def _object_identity(path):
 
 
 class FinalImage:
-    def __init__(self, prelink_object, final_elf, disassembly, *, provider_objects=None, link_map=None):
+    def __init__(self, prelink_object, final_elf, disassembly, *, provider_objects=None, link_map=None,
+                 float_abi="hard"):
+        require(type(float_abi) is str and float_abi in ("soft", "hard"),
+                "SCOPE", "float_abi must be 'soft' or 'hard'")
+        self.float_abi = float_abi
+        float_bit = {"soft": 0x200, "hard": 0x400}[float_abi]
         self.prelink = _ELF(prelink_object, "ET_REL")
         self.final = _ELF(final_elf, "ET_EXEC")
         # ET_REL normally leaves the float-ABI e_flags bits unset; GCC's final
-        # hard-float link sets EF_ARM_ABI_FLOAT_HARD. Attributes remain the
+        # link must set exactly the declared float-ABI bit. Attributes remain the
         # outer cohort gate's responsibility, not a CPU claim by this reader.
         before_flags, after_flags = self.prelink.elf.header.e_flags, self.final.elf.header.e_flags
-        require(before_flags & 0x600 in (0, 0x400)
-                and after_flags == (before_flags | 0x400),
+        require((before_flags & 0x600) in (0, float_bit)
+                and after_flags == (before_flags | float_bit),
                 "ELF", "prelink/final ABI flags differ")
         dis_bytes = Path(disassembly).read_bytes()
         self.hashes = dict(PrelinkSha256=sha256(self.prelink.data), FinalSha256=sha256(self.final.data),
@@ -499,7 +510,7 @@ class FinalImage:
         return body, result, data
 
     def function(self, name):
-        require(name in ROOTS, "SCOPE", "only three native classic CM4/CM7 transfer roots admitted")
+        require(name in ROOTS, "SCOPE", "only three native classic CM0/M0+/CM4/CM7 transfer roots admitted")
         original = self.prelink.symbol(name, "STT_FUNC", root=True)
         final = self.final.symbol(name, "STT_FUNC", root=True)
         require(original["size"] == final["size"], "PRESERVATION", "root extent changed")
@@ -606,7 +617,9 @@ class FinalImage:
                             "DECODE", "branch disassembly target disagrees with bits")
             else:
                 require(op not in CONDITIONS, "DECODE", "unsupported/reserved conditional branch encoding")
-                require(op in ORDINARY and re.search(r"\b(pc|r15)\b", operands, re.I) is None,
+                ordinary = op in ORDINARY or (self.float_abi == "soft" and
+                    (op, re.sub(r"\s+", "", operands), raw) in SOFT_ORDINARY)
+                require(ordinary and re.search(r"\b(pc|r15)\b", operands, re.I) is None,
                         "DECODE", "unsupported instruction or PC use")
             output.append(dict(Offset=offset, Bytes=raw.hex(), Mnemonic=op,
                                Operands=operands, Target=target_address))

@@ -6013,3 +6013,89 @@ and LTO remain separate obligations. All required global parity keys remain
 unsatisfied. No CPU/board ran; no default matrix, ABI, feature admission,
 hardware or hosted exact-commit CI claim changes. The earlier CM4/O2 pilot
 record remains historical rather than being rewritten as this larger run.
+
+## Native Classic Final Images Including CM0
+
+This proof-only extension admits precisely three additional no-MPU,
+soft/no-FPU, p2/b0, ordinary-AAPCS cohorts:
+`cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default`,
+`cm0-cortex-m0plus-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default` and
+`cm0-cortex-m0plus-soft-nofpu-none-v1-mpu0-p2-b0-aapcs-default`.
+They share the ARM_CM0 source/storage identity but retain distinct target
+facts and exact inventory admission. CM4/CM7 hard/eager cohorts remain
+unchanged. No processor family is inferred from an output path alone.
+
+The fixture startup replaces Thumb-2 post-increment loops with explicit
+Thumb-1 loads/stores and adds. Its build-owned `PILOT_HAS_VTOR` is derived
+only from the admitted artifact's boolean target fact. VTOR0 omits the
+VTOR write. A separate guard reads actual prelink Reset_Handler bytes and
+checks the aligned `0xE000ED08` literal count against that predicate, with
+`FullMMIOProof=False`. This is not a successful write/readback proof or a
+general instruction-dataflow analysis. Only this synthetic startup changes;
+production startup, linker scripts and port assembly do not.
+
+The strict reader accepts declared soft or hard ELF float ABI, rejecting
+neither/both/foreign forms. Four additional ordinary Thumb-1 operand forms
+are bound to exact raw bytes. They do not broaden root, callee, relocation,
+branch or symbol allowlists. The actual-padding mutant now accepts only
+the two existing exact Thumb NOP encodings, including `46c0`; destination
+ownership, mapping, executable-load and complete-root checks remain intact.
+All previous hard-FP cases are rerun with the changed reader, not inherited.
+
+The fresh parent sweep `C:/fzfinal-classic-grid-20261104-e1` passes:
+
+| Profile | Modes | Complete Roots | Root Bytes | Instructions | Applied References | Mutants |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| CM0 / VTOR0 | O0/Og/O2/Os/O3 | 15 | 2,586 | 1,018 | 65 | 65 |
+| CM0+ / VTOR0 | O0/Og/O2/Os/O3 | 15 | 2,586 | 1,018 | 65 | 65 |
+| CM0+ / VTOR1 | O0/Og/O2/Os/O3 | 15 | 2,586 | 1,018 | 65 | 65 |
+| CM4 | O0/Og/O2/Os/O3 | 15 | 2,846 | 983 | 70 | 65 |
+| CM7/r0p1 | O0/Og/O2/Os/O3 | 15 | 3,126 | 1,058 | 70 | 65 |
+| Total | 25 pairs | 75 | 13,730 | 5,095 | 335 | 325 |
+
+The sweep retains 1,825 native-tool commands, 225 TUs, 50 final links,
+175 object checkpoints, 20,480 artifact entries and 13,480 original/captured
+input bindings (per-case counts, not globally unique files). Prelaunch,
+actual compile dependencies, object checkpoints and closing artifact/input
+memberships/hashes pass without drift. All 162 pure reader controls run
+in each case. The separate pure build-envelope suite passes 48 controls
+without launching a native tool. Thirteen actual mutation classes are
+applied to all 25 builds; this is not 325 independent classes.
+
+The complementary parent post-run audit binds each receipt to exactly nine
+provider objects and four final artifacts (13 unique inputs), recomputes
+list-derived counts, replays the startup literal predicate and reproduces
+all 75 positive roots/twin comparisons exactly. It rejects a receipt from
+another build, empty root records with counters and empty mutant records
+with counters. Its 755 watched files close without drift. It launches no
+native tool and does not independently rerun the entire mutation suite;
+complete captured-input/mutant-file closure remains supplied by the sweep.
+Read-only architect review found no new admission or receipt-delta blocker.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-classic-grid-20261104-e1/results.json` | `2816C4EB4C6C90EC0087C5728E6652710746098F3039CA654812A2A167E34369` |
+| `C:/fzfinal-classic-grid-driver-20261104-e1/driver.py` | `5F3DB2BB1F58CB5227D30C1711C0EDE8C2C39A38049740E08FA147DD20ED4AE8` |
+| `C:/fzfinal-classic-parent-review-20261104-e1/results.json` | `33E59CBC4E9BC13ED03E74CF303442D4F756F14B27525C922130825DF04B970F` |
+| `C:/fzfinal-classic-parent-review-20261104-e1/audit.py` | `A84CE528B1B6A43A1CCA6A8574C68F4EF038089A4F2D966951E13B922B16F021` |
+| `%TEMP%/classic-final-cm0-parent-envelope-20261104-e1.json` | `6A1239D7D52E87630151F8E9C93C3986B314F69409D35E1A85BB8BF35CCD33D5` |
+| `tools/fixtures/classic_final_image/run.py` | `18CE8F44888B8E32F0B358201F95D4D9BB6A1426B24306AB5FCC388594E2EBEF` |
+| `tools/fixtures/classic_final_image/elf.py` | `3A8F4E42B42189CDDAE44DE6AFA4468F24781B6EDFD13F02491C96C1E0729809` |
+| `tools/fixtures/classic_final_image/startup.S` | `3448DA14A4D86033C9F8DA0C2FD82C4DA0D6DC5D9CA299C189B53E815B7A4D98` |
+| `tools/fixtures/classic_final_image/test_run.py` | `6F7772F6D8D63553767DBD4E797F039892383198DCB40460BFADC0144798EFCA` |
+| `tools/fixtures/classic_final_image/test_elf.py` | `3CBEEFE0DF4D5D0D13CF89C7458FF3E2B9959E8C89BD0AC4198D86BD1B120561` |
+
+Processor coverage is not an exact device configuration claim. In particular,
+the official STM32G071 CMSIS header declares MPU present; a synthetic
+non-MPU M0+/VTOR1 image does not qualify its MPU profile. F0-style CM0
+processor mechanics and separate CM0_MPU obligations must not be conflated.
+No new hardware qualification is inferred from source/header inspection.
+
+Only native direct-link prelink-bound root preservation and applied root
+relocations/origins are closed. Pinned-reference final images, C-callee and
+constructor semantics, whole-object ownership, successful MMIO/exception
+execution, FP policy equivalence, archive extraction and LTO remain separate.
+All required global parity keys remain unsatisfied by this bounded gate.
+No CPU or board ran. Production C/assembly, public/port ABI, default matrix,
+feature admission and hardware/hosted exact-commit CI claims are unchanged.
+Earlier ten-pair and single-pair records remain historical.

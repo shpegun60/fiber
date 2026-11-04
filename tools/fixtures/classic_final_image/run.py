@@ -1,4 +1,4 @@
-"""Native classic-FP direct-link witnesses; no target execution or parity promotion."""
+"""Native classic direct-link witnesses; no target execution or parity promotion."""
 import argparse
 import hashlib
 import importlib.util
@@ -13,7 +13,11 @@ import sys
 PROFILES = {
     "CM4": ("cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM4", "arm_cm4"),
     "CM7": ("cm7-cortex-m7-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default", "ARM_CM7/r0p1", "arm_cm7_r0p1"),
+    "CM0": ("cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+    "CM0PLUS": ("cm0-cortex-m0plus-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
+    "CM0PLUSVTOR": ("cm0-cortex-m0plus-soft-nofpu-none-v1-mpu0-p2-b0-aapcs-default", "ARM_CM0", "arm_cm0"),
 }
+CM0_PROFILES = frozenset(("CM0", "CM0PLUS", "CM0PLUSVTOR"))
 MODES = ("O0", "Og", "O2", "Os", "O3")
 COMMON_SOURCES = ("context/context_core.c", "context/context_runtime_state.c", "context/context_panic.c")
 FIXTURE_FILES = ("run.py", "application.c", "startup.S", "link.ld", "README.md", "CONTRACT.md", "elf.py", "test_run.py")
@@ -22,6 +26,7 @@ HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms
            "tools/fixtures/freeze_cohorts/build_recipe.py",
            "tools/fixtures/freeze_cohorts/process_runner.py",
            "tools/fixtures/cm55_tfm_parity/elf.py", "tools/fixtures/cm4_cm7_freeze_parity/check.py")
+CM0_HELPERS = ("tools/freeze_cm0_mechanisms.py", "tools/fixtures/cm0_freeze_parity/closed_roots.py")
 
 
 def selection(profile, mode):
@@ -35,7 +40,8 @@ def selection(profile, mode):
 
 def scope_report(profile="CM4", mode="O2"):
     cohort, _, _, _ = selection(profile, mode)
-    return dict(Verdict="FAIL", Error=None, ProofScope="NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY",
+    scope = "NATIVE_CM0_DIRECT_TWIN_BUILD_ONLY" if profile in CM0_PROFILES else "NATIVE_CLASSIC_FP_DIRECT_TWIN_BUILD_ONLY"
+    return dict(Verdict="FAIL", Error=None, ProofScope=scope,
                 Profile=profile, Cohort=cohort, Mode=mode, Linkage="direct", LTO=False, ReferenceBuilt=False,
                 RequiredCellSatisfied=False, RequiredCellsSatisfied=0, FinalElfProof=False,
                 FinalRootRelocationProof=False, CompleteObjectProof=False,
@@ -46,6 +52,62 @@ def scope_report(profile="CM4", mode="O2"):
 def need(ok, message):
     if not ok:
         raise RuntimeError("classic-final-build: " + message)
+
+
+def require_manifest_selection(manifest, profile, mode, admission):
+    identity, _, _, sources = selection(profile, mode)
+    group = "CM0" if profile in CM0_PROFILES else profile
+    cohorts = [row for row in manifest["cohorts"] if row["id"] == identity]
+    need(len(cohorts) == 1 and len(cohorts[0]["artifacts"]) == 1, "unique cohort")
+    artifact = cohorts[0]["artifacts"][0]
+    admission.require_cohort(artifact, identity if profile in CM0_PROFILES else profile)
+    defines = (dict(FIBER_PORT_ARMV6M="1", FIBER_PORT_BUILD_SELECTED="1") if profile in CM0_PROFILES else
+               dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1",
+                    FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"))
+    need(artifact["defines"] == defines, "exact defines")
+    groups = [row for row in manifest["source_groups"] if row["id"] == group]
+    need(len(groups) == 1 and tuple(groups[0]["sources"]) == sources, "exact source group")
+    return artifact
+
+
+def startup_flags(artifact, mode):
+    need(type(mode) is str and mode in MODES, "unsupported native mode")
+    vtor = artifact["target"]["vtor"]
+    need(type(vtor) is bool, "literal startup VTOR trait")
+    return [*artifact["compile_flags"], "-" + mode, "-g0", "-DPILOT_HAS_VTOR=" + str(int(vtor))]
+
+
+def require_final_float_flags(flags, profile):
+    selection(profile, "O2")
+    expected = 0x200 if profile in CM0_PROFILES else 0x400
+    need(type(flags) is int and flags & 0x600 == expected, "exact final float-ABI flags")
+
+
+def startup_literal_guard(image, vtor):
+    need(type(vtor) is bool, "literal startup VTOR trait")
+    symbol = image.symbol("Reset_Handler", "STT_FUNC", root=True)
+    start = symbol["value"] & ~1
+    body = image.section_read(symbol["section"], start, symbol["size"])
+    need(type(body) is bytes and len(body) == symbol["size"], "complete startup body bytes")
+    offsets = [offset for offset in range((-start) % 4, len(body) - 3, 4)
+               if struct.unpack_from("<I", body, offset)[0] == 0xE000ED08]
+    need(len(offsets) == int(vtor), "startup VTOR aligned-literal count")
+    return dict(Name="Reset_Handler", Size=len(body), BodySha256=sha(body),
+                Scope="STARTUP_VTOR_ALIGNED_LITERAL_SOURCE_BACKED_ONLY", LiteralValue=0xE000ED08,
+                LiteralOffsets=offsets, ExpectedLiteralCount=int(vtor), ObservedLiteralCount=len(offsets),
+                LiteralPredicateSatisfied=True, FullMMIOProof=False)
+
+
+def match_native_protocols(image, profile, mode, checker):
+    selection(profile, mode)
+    protocols = checker._protocols(mode)["Native"] if profile in CM0_PROFILES else checker._NATIVE[profile]
+    need(tuple(protocols) == ("fiber_port_start_first_context", "SVC_Handler", "PendSV_Handler"),
+         "exact native protocol roots")
+    evidence = [checker._match(image, "Native", name, expected) for name, expected in protocols.items()]
+    need(len(evidence) == 3 and all(type(row["TailNops"]) is int and
+         row["TailNops"] == (1 if mode == "O0" else 0) for row in evidence),
+         "native complete protocols/tail layout")
+    return evidence
 
 
 def sha(data):
@@ -201,13 +263,15 @@ class Pilot:
             save(self.output / "commands.json", self.commands)
 
     def prepare(self):
-        for relative in HELPERS:
+        for relative in (*HELPERS, *(CM0_HELPERS if self.profile in CM0_PROFILES else ())):
             self.capture(self.repo / relative, self.root / relative)
         for name in FIXTURE_FILES:
             self.capture(self.fixture / name, self.root / "tools/fixtures/classic_final_image" / name)
         self.process = load("classic_final_process", self.root / HELPERS[6])
         self.recipe = load("classic_final_recipe", self.root / HELPERS[5])
         self.classic = load("classic_final_admission", self.root / HELPERS[0])
+        self.admission = (load("classic_final_cm0_admission", self.root / CM0_HELPERS[0])
+                          if self.profile in CM0_PROFILES else self.classic)
         inventory_root = Path(self.args.inventory).resolve(strict=True)
         manifest_path = regular(inventory_root / "artifacts.json")
         inventory_files = json.loads(manifest_path.read_bytes())["Artifacts"]
@@ -217,14 +281,7 @@ class Pilot:
             self.capture(inventory_root / relative, expected=digest)
         self.bundle = self.classic.shared.Bundle(inventory_root)
         manifest = self.classic.shared.captured_inventory(self.bundle)
-        cohort = [row for row in manifest["cohorts"] if row["id"] == self.cohort]
-        need(len(cohort) == 1 and len(cohort[0]["artifacts"]) == 1, "unique cohort")
-        self.artifact = cohort[0]["artifacts"][0]
-        self.classic.require_cohort(self.artifact, self.profile)
-        need(self.artifact["defines"] == dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1",
-             FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"), "exact defines")
-        groups = [g for g in manifest["source_groups"] if g["id"] == self.profile]
-        need(len(groups) == 1 and tuple(groups[0]["sources"]) == self.port_sources, "exact source group")
+        self.artifact = require_manifest_selection(manifest, self.profile, self.mode, self.admission)
         self.report.update(SourceInventorySha256=self.bundle.result["SourceInventorySha256"],
                            CohortArtifact=self.artifact, SourceInventoryReceipt=str(inventory_root))
         directories = (self.repo, self.repo / "context", self.repo / "fiber", self.repo / "fiber/port",
@@ -252,7 +309,8 @@ class Pilot:
         main = self.generated_file(self.fixture_copy / "main.h", self.recipe.cmsis_main(self.artifact["target"]).encode("ascii"))
         self.flags = self.recipe.native_flags(self.artifact, self.mode, self.fixture_copy,
                         self.root / "fiber/port" / self.port_directory, self.root, self.output / "cmsis")
-        need(self.flags[:5] == [*self.artifact["compile_flags"], "-" + self.mode] and str(main) == self.flags[-1], "exact recipe flags")
+        prefix = [*self.artifact["compile_flags"], "-" + self.mode]
+        need(self.flags[:len(prefix)] == prefix and str(main) == self.flags[-1], "exact recipe flags")
         self.report["CompileFlags"] = self.flags
         self.report["Interpreter"] = dict(ReportedExecutable=sys.executable, ModulePath=str(interpreter_path()))
         self.capture(interpreter_path())
@@ -359,7 +417,7 @@ class Pilot:
             dep = obj.with_suffix(".discovery.d")
             actual_dep = obj.with_suffix(".compile.d")
             target = "pilot-source-" + str(index)
-            flags = ([*self.artifact["compile_flags"], "-" + self.mode, "-g0"] if source.suffix == ".S"
+            flags = (startup_flags(self.artifact, self.mode) if source.suffix == ".S"
                      else [*self.flags, "-I" + str(source.parent)])
             self.command([self.tools["gcc"], *flags, "-M", "-MF", dep, "-MT", target, source],
                          "discover dependencies " + source.name)
@@ -394,7 +452,7 @@ class Pilot:
             link_map = self.output / (name + ".map")
             self.link_twin(name, [self.tools["gcc"], *base, *extra, "-Wl,-Map=" + str(link_map), "-o", elf])
             self.inspect(elf)
-            self.classic.require_attributes(elf.with_suffix(".attributes").read_text(), self.profile)
+            self.require_attributes(elf)
             self.audit_final(elf)
             finals.append(elf)
             self.report["Links"].append(dict(Kind=name, Path=str(elf), Sha256=sha(elf.read_bytes()),
@@ -417,15 +475,28 @@ class Pilot:
             result = self.command([self.tools[tool], *options, path], "inspect " + path.name + suffix)
             path.with_suffix(suffix).write_bytes(result.stdout)
 
+    def require_attributes(self, path):
+        attributes = path.with_suffix(".attributes").read_text()
+        if self.profile in CM0_PROFILES:
+            self.admission.require_attributes(attributes)
+        else:
+            self.admission.require_attributes(attributes, self.profile)
+
     def prelink(self):
+        startup = self.objects[8]
+        need(self.sources[8] == self.fixture_copy / "startup.S", "startup source binding")
+        startup_evidence = startup_literal_guard(self.final_reader._ELF(startup, "ET_REL"),
+                                                self.artifact["target"]["vtor"])
+        startup_evidence.update(Source=str(self.sources[8]), SourceSha256=self.report["Sources"][8]["SourceSha256"],
+                                Object=str(startup), ObjectSha256=dict(self.object_hashes)[str(startup)])
+        self.report["PrelinkStartupLiteralGuard"] = startup_evidence
         decoder = load("classic_final_prelink_decoder", self.root / HELPERS[7])
-        checker = load("classic_final_prelink_protocol", self.root / HELPERS[8])
+        checker_path = CM0_HELPERS[1] if self.profile in CM0_PROFILES else HELPERS[8]
+        checker = load("classic_final_prelink_protocol", self.root / checker_path)
         port = self.objects[3]
+        self.require_attributes(port)
         image = decoder.Object(port, port.with_suffix(".dis"))
-        evidence = [checker._match(image, "Native", name, expected)
-                    for name, expected in checker._NATIVE[self.profile].items()]
-        need(len(evidence) == 3 and all(row["TailNops"] == (1 if self.mode == "O0" else 0) for row in evidence),
-             "native complete protocols/tail layout")
+        evidence = match_native_protocols(image, self.profile, self.mode, checker)
         self.report["PrelinkNativeRoots"] = evidence
         self.report["PrelinkNativeProtocolScope"] = "THREE_NATIVE_ROOTS_ONLY_NOT_FINAL_RELOCATION_PROOF"
         definitions = {}
@@ -489,7 +560,7 @@ class Pilot:
 
     def audit_final(self, path):
         image = self.final_reader._ELF(path, "ET_EXEC")
-        need(image.elf.header.e_flags & 0x400 and not image.elf.header.e_flags & 0x200, "hard-float ELF flags")
+        require_final_float_flags(image.elf.header.e_flags, self.profile)
         need(not any(s["name"] and s["section"] == "SHN_UNDEF" for s in image.symbols), "undefined final symbol")
         functions = ("Reset_Handler", "SVC_Handler", "PendSV_Handler", "ctxrt_v1_init", "ctxrt_v1_current",
                      "ctxrt_v1_set_dispatcher", "ctxrt_v1_start", "ctxrt_v1_yield")
@@ -561,6 +632,7 @@ class Pilot:
                     and getattr(self, "_prelink_verified", False) and getattr(self, "_twins_verified", False)
                     and len(self.report["Sources"]) == 9 and len(self.report.get("Links", [])) == 2
                     and len(self.report.get("PrelinkNativeRoots", [])) == 3 and self.commands
+                    and self.report.get("PrelinkStartupLiteralGuard", {}).get("LiteralPredicateSatisfied") is True
                     and all(row.get("CompileDependenciesVerified") is True for row in self.report["Sources"])
                     and [check["Stage"] for check in self.report.get("ObjectChecks", [])] ==
                         ["before-prelink", "after-prelink", "before-link-ordinary", "after-link-ordinary",

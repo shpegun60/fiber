@@ -1,5 +1,8 @@
 .syntax unified
 .thumb
+#if !defined(PILOT_HAS_VTOR) || (PILOT_HAS_VTOR != 0 && PILOT_HAS_VTOR != 1)
+#error "PILOT_HAS_VTOR must be the literal manifest fixture trait"
+#endif
 .section .isr_vector,"a",%progbits
 .balign 1024
 .global pilot_vectors
@@ -35,8 +38,10 @@ Reset_Handler:
 1:
     cmp r1, r2
     bhs 2f
-    ldr r3, [r0], #4
-    str r3, [r1], #4
+    ldr r3, [r0]
+    str r3, [r1]
+    adds r0, #4
+    adds r1, #4
     b 1b
 2:
     ldr r1, =__bss_start__
@@ -45,14 +50,17 @@ Reset_Handler:
 3:
     cmp r1, r2
     bhs 4f
-    str r3, [r1], #4
+    str r3, [r1]
+    adds r1, #4
     b 3b
 4:
+#if PILOT_HAS_VTOR
     ldr r0, =pilot_vectors
     ldr r1, =0xE000ED08
     str r0, [r1]
     dsb
     isb
+#endif
     bl pilot_main
     udf #90
     b .
