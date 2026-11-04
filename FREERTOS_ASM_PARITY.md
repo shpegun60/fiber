@@ -1,5 +1,35 @@
 # Generated Assembly Parity With FreeRTOS
 
+## CM0-Family Final Mechanism Join
+
+`tools/fixtures/cm0_final_join` now composes the native and pinned-reference
+final images for the exact CM0/M0+/M0+-VTOR p2/b0, soft/no-FPU/no-MPU
+cohorts at O0/Og/O2/Os/O3. Three native bodies map to five real reference
+bodies; the reference C dispatcher and assembly owners remain separate.
+Source/pin/cohort/mode, complete input/tool/parser coverage and exact
+compile/link commands bind the same actual owning objects to both the
+eight-body checker and each relocation-aware final reader.
+
+A fresh native fifteen-pair build passes 135 TUs, 30 links, 45 roots and
+195 actual ELF mutation applications. Fifteen actual joins then pass
+120 complete roots, 45 mechanisms, 10,344 bytes, 4,182 instructions and
+270 applied references. Four actual CLI admission negatives reject for
+the intended reasons. Seventy-one pure controls pass; thirty actual
+producer receipts also pass admission and ninety metadata mutations reject.
+These metadata controls are not extra ELF mutations.
+
+Independent fresh-interpreter replay authenticates the grid-bound receipts
+and manifests before parser import, reproduces every positive root/twin
+and own-prelink protocol, and closes generated expectations and 26,409
+watched files without detected drift. Failed preliminary smoke/control
+attempts remain recorded. This is documented final mechanism composition,
+not instruction/algorithm equivalence, C/kernel semantics, dynamic CPU/MMIO
+effects, archive/final LTO, hardware or global freeze. Required global keys
+remain unsatisfied by this bounded gate. Production runtime/assembly, ABI
+and default matrix are unchanged. Reproduction and exact difference
+assignments are in the fixture contract; receipts are in
+`PORT_ARCHITECTURE_AUDIT.md#cm0-family-final-mechanism-join`.
+
 ## Pinned CM0 Reference Final Roots At Five Optimizations
 
 `tools/fixtures/cm0_final_roots` closes the independent five-root reader

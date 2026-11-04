@@ -6664,3 +6664,126 @@ are not proved. All required global counters remain integer zero. Runtime
 sources, assembly, ABI, feature admission and default matrix are unchanged.
 No board is flashed/reset/run; local receipts are not hosted exact-commit
 CI. The four protected unrelated WIP entries remain untouched.
+
+## CM0-Family Final Mechanism Join
+
+Reviewed locally on 2026-11-04. The opt-in `cm0_final_join` gate consumes
+independently qualified producer hashes for the exact three CM0-family
+p2/b0, ordinary-AAPCS, soft/no-FPU/no-MPU cohorts at all five ordinary
+optimizations. Four caller-bound receipt/manifest hashes precede captured
+parser import. Complete source/dependency, generated configuration,
+inventory, six resolved worker, interpreter/tool/DLL and parser coverage
+is mandatory. Exact ordered compile and twin-link commands bind target,
+mode, source, provider objects, dependency output, script, map and emit flag.
+The executed shared-helper buffer is bound to its later captured hash.
+
+There are three native and five reference roots, not a falsely symmetric
+three-root comparison. Native owns all three in its index-3 runtime object.
+Reference C owns `vPortSVCHandler_C`; its separate assembly object owns
+first-start, SVC dispatch, first-restore and PendSV. The fixed ownership
+adapter routes only these five roots. The same actual owning objects feed
+the eight-body source-derived protocol checker and relocation-aware final
+readers; final map/provider origins, complete sections, pools, padding and
+applied references remain independent evidence. Token-body and raw-byte
+hashes are not conflated. Only twins within one implementation must match.
+
+The three mechanism assignments and their captured immutable ledger IDs
+are exact. In particular, reference first restore loads EXC_RETURN into r2,
+writes CONTROL=2 and skips initial r4-r11 slots, while native restores the
+complete nine-word staged software frame. `FAP-CM0-STAGED-FRAME` preserves
+that difference; initial register-value equivalence is not claimed. The
+reference C dispatcher and its assertion loop are real, not stubbed away.
+BASEPRI is inapplicable; PRIMASK, scheduler-policy, validation and provenance
+differences remain explicit. CPU/VTOR/mode identity is not inferred from
+potentially identical instruction bytes.
+
+The fresh native fifteen-case sweep passes 135 TUs, 30 direct final links,
+105 object checkpoints and 1,095 builder commands. Its reader passes 45
+roots, 7,758 bytes, 3,054 instructions, 195 references and 195 actual ELF
+mutant applications, with 176 pure reader controls per case. All 12,300
+artifact entries and 8,100 original/captured input bindings close. A
+separate fresh native build-envelope run passes 53 controls.
+
+The first contract run retained FAIL: five subtests exposed acceptance of
+an extra actual compiler override after the recorded flag prefix. Actual
+command matching now requires the full exact dependency/source/object tail.
+The second contract run passes all 27 controls. The first actual O0 smoke
+retains FAIL because the new check expected emit-relocs after the map flag,
+where both real producers place it before the map. The expected full recipe
+was corrected, not the ELFs. Smoke E2 retains FAIL because the metadata
+validator counted Git `-c` configuration options as compiler calls. Compiler
+identity now comes from the bound source commands; separate Git/mixed-tool
+and extra-compile controls cover it. E3 passes the complete actual O0 join.
+These are proof-code corrections, not runtime defects or relaxed root checks.
+
+The complete join sweep passes all fifteen cases: 120 roots/bodies,
+45 mechanisms, 10,344 bytes, 4,182 instructions and 270 applied references.
+Four actual CLI negatives reject cross-profile, cross-mode, wrong receipt
+hash and wrong artifact-manifest hash for the intended reasons; wrong
+hashes reject before parser import. Seventy-one pure controls pass across
+22 admission, 27 contract and 22 helper methods. The actual-admission mode
+adds two methods: thirty authenticated producer receipt buffers pass and
+ninety in-memory metadata mutations reject. These are not additional real
+ELF mutations. The sweep executes twenty Python children and zero Arm tools.
+
+Review distinguished the child joins' authentication-before-import proof
+from the preliminary aggregate parent, which selected its first parser
+before explicitly applying the grid-bound manifest hash. That aggregate
+does not establish the stronger parent ordering. A separate fresh parent
+audit applies all four first-case receipt/manifest hashes before parser
+import, then independently replays all thirty producer groups and fifteen
+eight-body joins. It closes the generated expected-case JSON and all pure
+control source hashes, reproduces all four intended negative reasons and
+the same root/twin/protocol totals, and seals 26,409 watched files without
+detected drift. Its own auditor source is captured and watched too. Read-only
+cross-reviews find no remaining confirmed blocker in this bounded gate.
+
+Before commit, whitespace checking found two extra LF bytes at the end of
+`join.py`. They were removed without changing any preceding byte; the E1
+captured source remains retained. Rather than substituting a new hash into
+the old execution record, the complete fifteen-case sweep and independent
+parent replay are repeated as E2. Contract E4 and helper E3 pass against
+the final source; unchanged admission controls still pass. E2 reproduces
+the same 120 roots, 45 mechanisms and byte/instruction/reference totals,
+four CLI negatives and thirty-receipt/ninety-mutation admission controls.
+Its aggregate now also authenticates the four initial hashes before parser
+import and watches the control source hashes directly. The independent E2
+parent again closes 26,409 files without drift. Final staged whitespace
+and ASCII checks pass; this is the source used by the commit.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-native-cm0-join-grid-20261104-e1/results.json` | `EC120B4B47DC1FC328316DFB62182DCB033B8691621E5C47BC48EB5F19554F94` |
+| `C:/fzfinal-native-cm0-join-grid-driver-20261104-e1/driver.py` | `7AC00BC148CF2211D16E4833F9C1C8C43E5968EEA0938D191CACE42C588FC389` |
+| `%TEMP%/cm0-native-join-envelope-20261104-e1.json` | `7CD753F814DC106A51C9E1FD9EEB257223C9BDA6BEDCE3AB2D2EE3E44B814D10` |
+| `%TEMP%/cm0-final-join-contract-20261104-e1.json` | `DE55A4D66C72C0C2E04EE771856C48F9010B315C932A1B722A3B577DB2EB0F96` |
+| `%TEMP%/cm0-final-join-contract-20261104-e2.json` | `C9E7045E7C10884FED79552FE5D1DDC758A66B49E968333A6FEABE901CCD299D` |
+| `%TEMP%/cm0-final-join-admission-20261104-e2.json` | `950D2DB8C4597ED6102C3E6FAF2D4A4119BF7FC595A4DE08E565B1A88D576216` |
+| `%TEMP%/cm0-final-join-helper-20261104-e1.json` | `A2E0012D4EE5BAAFA1B438C8F62344AD3B49038D97EDBC191D5AAEF313908E34` |
+| `C:/fzfinal-cm0-join-smoke-20261104-e1/results.json` | `2B7FBC70B93A65F3217C694E639D0BA0C4991CCF03B32C92730FC14956D9D783` |
+| `C:/fzfinal-cm0-join-smoke-20261104-e2/results.json` | `8E6BB869313A44D8CA1976EFF2B88D39E75991926DF78D55797EE764FF001212` |
+| `C:/fzfinal-cm0-join-smoke-20261104-e3/results.json` | `78C0B00BA5B5790815484039C64513A5B1C58ED69D15C67F7A9CD111EB047129` |
+| `C:/fzfinal-cm0-join-grid-20261104-e1/results.json` | `1C5AA6EE7DCF9B45D252F8C9102ACCAFDC61140BC5CDAE0EF8C2FF7FDB26D60C` |
+| `C:/fzfinal-cm0-join-grid-driver-20261104-e1/driver.py` | `B685935D96DB10E55F002064E21A87494B88EF2546BAAF921169084270DF8705` |
+| `C:/fzfinal-cm0-join-parent-review-20261104-e1/results.json` | `D6A7AC783613BE831EB5A6A2EA27677C50187832F4B28653C8DA3C9ED021035C` |
+| `C:/fzfinal-cm0-join-parent-review-20261104-e1-driver/audit.py` | `22345C8FD8EB3CE239D4E8B4E8776D3AECCFE40E6C6F9DE326149FA941DB07EE` |
+| `C:/fzfinal-cm0-join-grid-20261104-e1/CM0-O0/inputs/0057-join.py` | `5CB688A377E7539CC09BB5583151E74EA814D20107FF95A85907E5979E525FFB` |
+| `%TEMP%/cm0-final-join-contract-20261104-e4.json` | `B27873B8F0966FEB814F8CD3D0183A51F14D22560583E685A465990118A0F416` |
+| `%TEMP%/cm0-final-join-helper-20261104-e3.json` | `E0050AE5A4BCBD13C3A47D972627E1C609F515DCD3BF3659E7032B16E7025AD9` |
+| `C:/fzfinal-cm0-join-grid-20261104-e2/results.json` | `9E9B8245E2354CF699743C90F478D9264789D733F8A6586633389FEFD9AD6C35` |
+| `C:/fzfinal-cm0-join-grid-driver-20261104-e2/driver.py` | `820BEEA4A062B988590AC8A429E0BE2AEA5720A67FD83535D4F5300B5BA58EA0` |
+| `C:/fzfinal-cm0-join-parent-review-20261104-e2/results.json` | `755E0C705A3D71B1C68E67BE6E6A7EB997E2A33DA0239112444524646B1A25D5` |
+| `C:/fzfinal-cm0-join-parent-review-20261104-e2-driver/audit.py` | `2CC1E89028FA9D59BCEEAB8C63D478F0CBC7C53BE57C8CBA02B3FEDD3A5B01CD` |
+| `tools/fixtures/cm0_final_join/join.py` | `88EBCDB9F8E12670F2FEC199011FA764DCAA4BEDC8F71516D4CD1BD57CF57ACD` |
+| `tools/fixtures/cm0_final_join/admission.py` | `3F0A400183195102B98543A519CAC2D6D86414A1B5411760EB75F19F94CDE81E` |
+| `tools/fixtures/cm0_final_join/test_admission.py` | `63077878C18D322106FF838E468C8C66027847657C8C7D8FD20D409054EC9425` |
+| `tools/fixtures/cm0_final_join/test_contract.py` | `D6666705C71C57E297C77FB63E15E80120C767D8431D446525F5DB190D01811D` |
+| `tools/fixtures/cm0_final_join/test_join.py` | `FF7DEA5DDE773BDD89EF4A0210F2B8F24B202C94647A22F1CC830CCFD15EAC1A` |
+
+This qualifies bounded final mechanism composition, not semantic equivalence,
+constructor/C-callee/kernel closure, successful MMIO or handler routing,
+dynamic exception targets, complete objects, other cohorts, archives/final
+LTO, CPU/board or global freeze. Required global parity keys stay unsatisfied.
+Production runtime/assembly, public/port ABI, feature admission and default
+matrix are unchanged. No board is flashed/reset/run. Local receipts are not
+hosted exact-commit CI. The protected unrelated WIP remains untouched.
