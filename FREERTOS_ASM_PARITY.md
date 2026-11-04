@@ -1,5 +1,37 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native CM4 Final-Image Pilot
+
+`tools/fixtures/classic_final_image` adds one native CM4 hard/eager,
+no-MPU, VTOR1, p4/b16, ordinary-AAPCS `-O2` direct-link witness. Nine
+actual Context/port/expectation/consumer/startup units produce ordinary
+and `--emit-relocs` final ELFs from identical frozen objects and script.
+Their complete load geometry, allocated sections, entry and loader-visible
+bytes must agree. Actual compile dependencies and object hashes are checked
+at the prelink, twin-link and closing boundaries.
+
+A separate ET_EXEC reader binds complete first-start/SVC/PendSV root bytes
+to the reviewed prelink protocols and original REL addends. It independently
+decodes the admitted branch/literal address forms without rewriting final
+bytes as ET_REL. Callee and current-slot origins come from actual provider
+objects plus independently retained linker input-section placements, not
+from the mutable final symbol table alone. Allocated-section overlap,
+NOBITS/file-backed overlap and writable-section/load permission mismatches
+reject. The fixture contract and README define admitted forms and replay.
+
+The retained parent run closes three roots, 568 bytes, 196 instructions and
+14 applied references; 81 reader controls, 30 build-envelope controls and
+13 actual-witness mutants pass. Eleven mutants retain identical twin load
+images but reject at root validation; two fail structural ELF validation.
+Receipt hashes and independent closure review are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#native-cm4-final-image-pilot`.
+
+This is not pinned-reference final parity, a C-callee/constructor proof,
+whole-object semantics, archive/LTO coverage, CPU/board execution or global
+qualification. It satisfies zero required global parity cells. Existing
+five-optimization object-root gates, their explicit native/reference
+differences, and production runtime code remain unchanged.
+
 ## Captured CM0/M0+ Roots At Five Optimizations
 
 `tools/freeze_cm0_mechanisms.py` consumes three explicit non-MPU p2/no-FP

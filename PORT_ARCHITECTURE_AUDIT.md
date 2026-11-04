@@ -5837,3 +5837,91 @@ delegates and Fiber owns lifecycle metadata only. Temporary compiler-policy
 and selected-storage header paths under `fiber/` remain explicit physical
 migration debt. Optional MPU/TZ feature and board qualification are not
 established by that review.
+
+## Native CM4 Final-Image Pilot
+
+The next proof-only slice adds `tools/fixtures/classic_final_image` for
+exactly `cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default`, O2,
+direct linkage, without LTO. The captured e8 inventory authorizes this tuple;
+the build compiles fresh copied current source/header bytes rather than
+reusing old object groups. Three actual Context providers, three CM4
+providers, the build-owned expectation, a typed consumer and startup make
+nine translation units. No legacy shim, Fiber lifecycle or optional
+configuration module is linked. Strong handlers, vector slots 11/14,
+common state ownership and private/storage expectations are audited.
+
+The same objects and script link twice, with `--build-id=none` on both.
+Only `--emit-relocs` and output names differ. Complete PT_LOAD geometry and
+file-backed bytes, zero-fill extents, allocated sections and entry agree.
+Actual `-MD` compilation dependencies must match discovery membership and
+hashes. Original `.d` files remain retained; repeated GCC header spellings
+and aliases resolve to one physical file without discarding distinct files.
+Object hashes are checked before/after prelink and both links, and at close.
+Commands have prelaunch and terminal records and use the managed process
+runner. An explicit environment allowlist avoids recording unrelated secrets.
+
+The separate pyelftools-based ET_EXEC reader leaves the existing ET_REL
+reader unchanged. Every root byte is unchanged or belongs to an explicitly
+verified applied relocation field. Original addends come from real prelink
+objects. Admitted Thumb-16 local branches/literal loads and Thumb-32 BL
+destinations are decoded from instruction bits and cross-checked with text
+and target identity. No address rebasing, literal zeroing, instruction
+filtering or learned body oracle is introduced. Fixed existing native O2
+protocols independently check the three fresh prelink functions.
+
+Independent review reproduced and closed three false-accept classes before
+qualification: coherent callee-symbol/BL retargeting to mapped padding;
+coherent SLOT redirection into another cell or file-backed code; and writable
+BSS with a non-writable owning load. Root/callee/SLOT placement now binds
+actual defining input object, section and symbol extent to a unique retained
+linker input-section placement. Final symbols are not their own authority.
+Allocated sections cannot overlap; NOBITS must lie in zero-fill and writable
+sections require PF_W. This proves entry provenance, not callee semantics.
+
+The parent fresh build at `C:/fzfinal-cm4-20261104-e10` passes 73 commands,
+nine TUs, two final links, three matched prelink roots and seven object
+checkpoints with zero closing drift. Its manifest contains 818 artifacts,
+538 original/captured input bindings and one generated device header.
+Independent audit rehashes the complete artifact membership and all
+input mirrors/originals, not only selected result files. The installed,
+captured pyelftools version is 0.33; Python is 3.13.14 and GCC is 14.3.1.
+
+Parent reader replay passes 81 pure controls and three complete actual roots:
+first start 104 bytes/34 instructions, SVC 212/73 and PendSV 252/89, totaling
+568 bytes, 196 instructions and 14 references (12 BL and two SLOT ABS32).
+All 13 retained actual-ELF byte/metadata mutants reject at their required
+validator stage. Eleven first pass twin equality; the NOBITS and writable-load
+mutants reject during structural validation. Original, captured and mutant
+closing hashes have zero drift. Separate build-envelope controls pass 30
+tests, and the managed process runner passes 18 tests including actual
+Python-only timeout/descendant cleanup. Independent read-only review finds
+no remaining confirmed blocker in this bounded contract: 12 reader and six
+dependency controls pass with no false accepts or source drift.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-cm4-20261104-e10/results.json` | `70C856C99AA5280716734C29F9670B55622347807BC564979413774E30233159` |
+| `C:/fzfinal-cm4-20261104-e10/artifacts.json` | `3A8B360EE33009536C47F7274B34A62211AFC57E7264A14589DE9430970661A0` |
+| `C:/fzfinal-cm4-20261104-e10/inputs.json` | `1063AD001D58E03113F5DDA0E466315EA40A1F5E006F13D242BC8512C566F56C` |
+| `%TEMP%/classic-final-witness-parent-e10-20261104-e1/results.json` | `5B286A4F0B9C26DB9C17B21D60432878EC2DACF8FA2D38C3955271E527E6F14C` |
+| `%TEMP%/final-pilot-command-controls-20261104-e7.json` | `BD2967E713247D5FBB3FBDE2255F1A1F1496EBA654FE682F1A9E9EA25D3E07E8` |
+| `%TEMP%/freeze-final-runner-parent-20261104-e1/results.json` | `8DE1A9593FCD8B5DF4C0C881CA1133CA7AF047C464BD16779178F77CBCD7A2C0` |
+| `C:/fzfinal-review-20261104-e1/results.json` | `2BB820E116D100F68C22547000AC61FCC930A13868249B664C444538ED1BF95C` |
+| `C:/fzfinal-review-20261104-e1/audit.py` | `30E39952E93A36F7156E874EA8291FBE23329BF53BD764C5BB144CFE1E34D54E` |
+
+Failed exploratory attempts remain distinct records, notably e1 interpreter
+alias rejection, e2 C-only forced header on assembly, e3 read-only anchor
+misclassified by a slot validator, e6 canonical dependency aliases, and e8/e9
+over-strict duplicate-spelling rejection. e4/e5/e7 were earlier build-only
+successes, not the final reader qualification. None is relabelled as e10.
+
+This closes only prelink-bound preservation and symbol-origin proof for the
+three native final-image roots. C-callee bodies/internal relocations,
+constructor semantics, successful MMIO, exception routing/nonreturn, FP-policy
+equivalence, pinned-reference final images, archive/LTO and the other modes
+remain separate obligations. All required global parity keys remain
+unsatisfied by this pilot. No target CPU or board ran; production C/assembly,
+public/port ABI, default matrix, feature admission and hardware claims are
+unchanged. Declared inputs are captured, not the whole host OS/stdlib. This
+local source-capture evidence predates the receipt prose and is not hosted
+exact-commit CI.
