@@ -1,5 +1,34 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Pinned CM4 Reference Final-Image Pilot
+
+The opt-in reference companion builds the actual pinned GCC/ARM_CM4F port
+at O2, hard FP, VTOR1, no MPU, p4/b16 and ordinary AAPCS. Four fresh TUs
+produce ordinary/emit-relocs final twins from identical objects and script.
+Typed fail-stop providers expose the real current-TCB/scheduler/tick types
+without fabricating a functioning kernel. Clean pin, 23 upstream file/blob
+bindings, actual compile dependencies and seven object checkpoints close.
+
+A separate fixed reference reader admits only local first-start plus
+global SVC/PendSV. It checks complete raw instruction protocols, exact
+IT-EQ FP pairs, all original REL addends, applied destinations and provider
+section origins. Adjacent first-start padding/pool mappings remain separate.
+The actual replay passes three roots, 164 bytes, 48 instructions, three
+references and thirteen retained mutants. Independent pure suites pass
+75 reader, 28 envelope and eleven input-identity controls. A parent audit
+replays the roots/twins and closes 1,300 watched files without drift.
+
+The first reader attempt rejected the real split data mapping; its FAIL
+record remains historical. The corrected reader replays unchanged objects
+and final images, not a source or assembly change. Upstream lazy FPCCR
+setup versus native eager policy remains an explicit difference. This is
+reference final-root preservation only, not whole native/reference final
+parity, C-callee/kernel semantics, archive/LTO, CPU/board or global freeze.
+Required global parity coverage remains zero for this bounded pilot.
+Reproduction and limits are in
+`tools/fixtures/classic_final_image/REFERENCE_CONTRACT.md`; receipts are in
+`PORT_ARCHITECTURE_AUDIT.md#pinned-cm4-reference-final-image-pilot`.
+
 ## Native Artifact Seal Failure Handling
 
 Native build finalization now compares complete fresh artifact path/hash

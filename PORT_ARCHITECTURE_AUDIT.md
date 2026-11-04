@@ -6179,3 +6179,98 @@ This is a focused standalone sealing repair and one fresh native CM7/O2
 replay, not a new all-profile/optimization sweep or pinned-reference final
 parity. C-callee, constructor, MMIO, archive/LTO, CPU/board, hosted CI and
 global freeze obligations are unchanged. No target image runs.
+
+## Pinned CM4 Reference Final-Image Pilot
+
+The new opt-in companion builds unchanged
+`portable/GCC/ARM_CM4F/port.c` from the clean local FreeRTOS pin
+`a50edad08b29052631aa469d4df6e6ec7ff68878`. It initially admits only
+CM4/O2 direct linkage, hard FP, VTOR1, no MPU, p4/b16 and ordinary AAPCS.
+The native inventory cohort's eager name does not assert reference eager
+policy: upstream ASPEN+LSPEN lazy setup remains unchanged and distinct.
+
+Exactly four fresh TUs are used: pinned port, typed boundary providers,
+typed consumer and fixture startup. `pxCurrentTCB` is NULL BSS; scheduler,
+tick and assertion providers are explicit non-success fail-stop boundaries.
+There is no actual TCB/task-stack/ready-list model and reset cannot start
+the scheduler. Strong SVC/PendSV/SysTick vector placement is link evidence,
+not active VTOR or exception execution. Two kept unowned Thumb NOPs are
+solely deterministic invalid callee destinations for a negative control.
+
+The builder captures actual clean-pin/blob comparisons for 23 upstream
+headers/port files, exact config/portmacro dependency providers and current
+tool/fixture bytes. Both thresholds are 16. Independently transcribed
+prelink protocols close all three original roots before the twins link.
+The same four frozen objects/script produce ordinary and emit-relocs images
+with build-id disabled. Both final allocated/load geometries and complete
+loader-visible bytes agree. No archive or LTO link is built, and no target
+image executes.
+
+The parent actual build `C:/fzfinal-reference-cm4-20261104-e1` passes with
+71 host-tool commands (including Git pin/blob checks), four TUs, two final
+links, seven object checkpoints, 741 artifact entries and 480 original/
+captured bindings. Its output sealing uses full path/hash dictionaries;
+late additions, modifications, deletions and manifest-write errors persist
+FAIL and refresh failure evidence when writable. All 28 pure envelope
+controls pass, including a fault after the tentative PASS publication.
+
+`ReferenceCM4FinalImage` is a distinct fixed reader, not a caller-supplied
+symbol allowlist. It requires local `prvPortStartFirstTask` (40 bytes),
+global `vPortSVCHandler` (32) and global `xPortPendSVHandler` (92).
+Complete source-transcribed instruction encodings and operands, exact
+IT-EQ/high-FP pairs, original REL addends and final applied destinations
+are retained. Actual provider symbols and separately captured input-section
+map placements bind roots, `vTaskSwitchContext` and `pxCurrentTCB` origins.
+No C-callee/internal-relocation or kernel semantic proof is claimed.
+
+The initial reference reader and parent orchestration attempt remain FAIL
+at `C:/fzfinal-reference-cm4-reader-20261104-e1` and
+`C:/fzfinal-reference-cm4-parent-20261104-e1`. The real first root has two
+adjacent data mappings, `[34,36)` padding and `[36,40)` literal pool; the
+initial synthetic fixture incorrectly conflated them. Both real prelink and
+final instructions/bytes agreed with the fixed protocol. The corrected
+reader requires the exact two boundaries, records `DataMappings`, and
+rejects missing/shifted boundaries. It does not merge or discard them.
+Seven focused controls extend the pure reader suite from 68 to 75.
+
+The corrected parent witness `C:/fzfinal-reference-cm4-reader-20261104-e2`
+replays the unchanged actual build images: three complete roots, 164 bytes,
+48 instructions and three references (one BL-4, two current-TCB ABS32+0).
+All thirteen retained actual mutants reject at the intended stages/reasons.
+Eleven preserve equal twin load images; the two malformed storage owners
+reject at twin validation. Independent input admission requires eight
+distinct physical files (four providers plus four final artifacts), with
+only intentional prelink/provider overlap. Eleven pure identity controls
+cover same-path/hard-link/cross-role aliases. Sources and original/captured/
+mutant bytes close without drift.
+
+The read-only post-audit
+`C:/fzfinal-reference-cm4-parent-review-20261104-e2` binds the exact producer
+receipt to the corrected reader, recomputes record counts, verifies every
+artifact/input/mutant file and reproduces all three roots and twins exactly.
+Its 1,300 watched files close without drift. It runs no native tool and is
+not a second compiler run or thirteen additional mutation classes. The
+failed initial combined orchestration is not relabelled as PASS.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-reference-cm4-20261104-e1/results.json` | `B3BB267B5D8E0A89F6A17D96B82DBF95DB2C440EAF76F1598D54CDE54FC5395F` |
+| `C:/fzfinal-reference-cm4-reader-20261104-e2/results.json` | `332EEDAC3516F65F94A9E8100E9E34E9665FB42E4EFED0E935C1D80DFE4D2103` |
+| `C:/fzfinal-reference-cm4-parent-review-20261104-e2/results.json` | `E58119D973EF7E668D23748438531ACD797BB677ABA46B2356CAFF473B31E32D` |
+| `C:/fzfinal-reference-cm4-parent-review-20261104-e2/audit.py` | `083B12A4B1B40A49BF0E7463A9252287C8717AF6F9F2569C5A91C2F65995A245` |
+| `C:/fzfinal-reference-reader-parent-pure-20261104-e2/results.json` | `F4929E3DD1B8726C417B0815C838E1610518617AC3039D0C47F4E30088B0DBB8` |
+| `%TEMP%/reference-final-parent-envelope-20261104-e1.json` | `A56B149B480ED321CBAE0193E1ACDF694EC90B97DE8D327E99E8632DCBC8A07D` |
+| `C:/fzfinal-reference-identity-20261104-e2/results.json` | `5CF46DED1130258BAC3ECE88DAF20146EEADEC68D9B1059D5886EE06A76ED058` |
+| `tools/fixtures/classic_final_image/reference_run.py` | `62D48A93A47C50BA8D9BFD4C179B792C1FB2BED4F8461485D5BC1CB1E36595FE` |
+| `tools/fixtures/classic_final_image/reference_elf.py` | `D37718B48BF8AFBE155E6F7F4F7B480AE49B2141C39F6B61CA5128CF6AD5FE04` |
+| `tools/fixtures/classic_final_image/reference_witness.py` | `36B039B6BCEE3FDFB81C11D8E9783B9F994435115CE62F04E1B7A55EBF810AA9` |
+
+This closes only one pinned-reference final-root preservation witness.
+Native eager versus reference lazy FP policy remains in the difference
+ledger, not silently equated. Constructor/C-callee/kernel semantics,
+successful MMIO, handler execution, whole-object/final native-reference
+parity, other modes/profiles, archives/LTO, CPU/board and global freeze
+remain separate obligations. All required global parity keys remain
+unsatisfied by this pilot. No production C/assembly, public/port ABI,
+default matrix, feature admission or hardware qualification changes.
+Local captured-source evidence is not hosted exact-commit CI evidence.
