@@ -1400,6 +1400,18 @@ compile-dependency closure and drift-checked source/tool hashes. This narrow
 generated-code replay is not closed whole-provider equivalence, CPU execution,
 native-LTO qualification, or an additional runtime-profile claim.
 
+The later `tools/freeze_cm3_mechanisms.py` gate compares six complete naked
+root protocols from closed native/reference preflights at O0/Og/O2/Os/O3.
+It is deliberately limited to the p4/BASEPRI16 ordinary-AAPCS CM3 cohort.
+All instructions, branch/call targets, explicit literal-island descriptors
+and mode-specific tail NOPs are consumed, not only ordered subsequences.
+The opt-in reader format makes no claim that SVC is intrinsically non-returning;
+the reference first-restore root is matched separately. Vector routing and
+actual execution remain later obligations. This gate does not replace the old
+driver or promote complete-object/final-LTO/global parity. Exact receipts and
+default-reader regression scope are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#captured-cm3-closed-root-mechanisms`.
+
 ### FAP-FP-VALIDATION
 
 CM4/CM7 Fiber retains the FreeRTOS EXC_RETURN-bit-4 conditional transfer of

@@ -5512,3 +5512,78 @@ keys, including 2,030 final direct/archive/LTO keys, remain unqualified by these
 preflights. Complete-body mechanism comparisons and their negative controls
 are the next independent layer; runtime, staged admission, CI and hardware
 claims remain unchanged.
+
+Independent paired review at `C:/fzpair-review-20261104-e1` verifies every
+artifact/input binding, the identical 725-key sets, command/dependency recipes,
+all native ARM ET_REL objects and all 66 pinned upstream file bindings. It
+finds no mismatches or current-original drift at its own audit snapshot and no
+confirmed Windows process-containment blocker. That drift statement is not a
+promise about subsequent edits. Retained `paired-audit.json` SHA-256 is
+`E909FB44DAA84EB697816F234B493FFB03C1BE4DFD2CD94231E0C5E155030F14`;
+`PAIR_REVIEW.md` is
+`99E0480F00FD37ABACA95F20B09BE2610F5E3928325DCD8F728868F6827F6AAA`.
+This independent audit adds no instruction/mechanism or CPU-execution claim.
+
+## Captured CM3 Closed-Root Mechanisms
+
+`tools/freeze_cm3_mechanisms.py` consumes the closed e8/e4/e5 inventory/native/
+reference receipts above. It compiles nothing and invokes neither objdump nor
+a CPU. The bounded cohort is CM3 soft/no-FP, VTOR1, priority width four and
+BASEPRI16, ordinary AAPCS. All five modes O0/Og/O2/Os/O3 must be present.
+The driver checks complete artifact membership/hashes, captured compiler/source
+bindings, exact cohort identity and result scope before reading native groups.
+It executes the captured checker/decoder bytes, rejects reader/input/output
+drift, and cannot accept a partial or proof-promoting checker result.
+
+`C:/fzcm3-20261104-e3` returns `CM3-MECHANISMS-PASS`: five paired cells,
+three complete roots per side, 30 closed bodies. The independently described
+protocols match every returned instruction, local branch target, external call,
+literal-island descriptor and padding NOP. The driver requires one post-island
+NOP per root at O0 and zero at the other four modes, not either layout at any
+optimization. Six existing rationale IDs cover startup, provenance, mask
+restoration, scheduler ownership, EXC_RETURN and local pool adaptations.
+Constructor/C-helper semantics, whole-object ABI/ownership, final executable
+vectors, direct/archive/LTO links and CPU behavior are not established here.
+Every required global coverage cell remains unsatisfied by this bounded proof.
+
+The canonical reader's literal-island representation is explicitly opt-in.
+Its default behavior is independently compared on three roots per runtime
+group across all 725 native and 725 reference groups: 4,230 equal outcomes,
+3,668 complete token lists and 562 identical rejections. Forty companion
+groups are typed skips, not unperformed scheduler-root tests. This default
+regression binds all 2,900 consumed ELF/disassembly files and finds zero
+differences. It is not a new mechanism or opt-in decoder qualification.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzcm3-20261104-e3/results.json` | `7F9CF0FAA844B972179E3B67EA1FB48C57A6BCCE283E420782A46CDC006FF54D` |
+| `C:/fzcm3-20261104-e3/artifacts.json` | `E3FBA26DFE7933A6F218BA59D8F39B6915063BE713B35D05CE11082E1F095D49` |
+| `C:/fzcm3-20261104-e3/readers.json` | `12805BEE1E8C46D4F74D30D635CA3929C3D6F148F97B342EEDE0C7174DCFBEA3` |
+| Default-reader regression results | `F5D30344F23C2015F4F10736D1C67912739424344AA79F6F3BED4A1577A95322` |
+| Default-reader full outcomes | `0EE26E8DEC2B3F82D244F9FC0A236F48FA04CFC4A08BA79624D4328D6DAE2E0F` |
+
+The regression directory is `C:/fzreader-review-20261104-e1/receipt`.
+The earlier e1/e2 mechanism receipts remain separate; e2 adds the driver's
+exact code-generation attribute guard and e3 captures the later ledger prose.
+Receipt/join/scope pure
+controls pass 86 cases at `%TEMP%/cm3-receipt-controls-20261104-e6.json`, without
+compilation or CPU execution. These results remain captured-source evidence,
+not exact-commit CI. Production C/assembly, public ABI, default matrix,
+staged-profile admission and hardware claims are unchanged.
+
+The new matcher additionally passes 13 unit/retained-ELF tests: 221 pure token
+mutations, eight private byte/disassembly mutations and the five actual pairs
+again. Mutations reject changed referenced data, branch-to-tail, an altered
+operation, non-NOP tail, wrong literal relocation, unconsumed relocation,
+disassembly/ELF disagreement and changed call addend with their expected
+diagnostics. Original receipts remain unchanged. The test invokes no compiler
+or CPU; mutated ELFs are parsed, never executed. The separate exhaustive
+token-delete/change and synthetic function-decoder controls pass 905 cases.
+Those synthetic decoder states do not exercise the ELF constructor and are
+not represented as additional real-object tests.
+
+| Control Record Under `%TEMP%` | SHA-256 |
+| --- | --- |
+| `cm3-receipt-controls-20261104-e6.json` | `D075D67E09CC5D9F8FC3F8B5FB3C857B46088A5282D8FD6A28E97F26D8315AB8` |
+| `cm3-actual-mutation-parent-20261104-e1/results.json` | `5789E2453692F119528084BCF0B7CEA3ADCE60E271F3C4C01EB2CF57DE77D1B3` |
+| `cm3-protocol-controls-20261104-e1.json` | `977F4A42DA6CB119E4E12B47D69BB62F18C9B0D78CD3FB1A53DE7C5C2A649449` |

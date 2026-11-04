@@ -111,7 +111,16 @@ class Object:
         require(0 <= address <= s[5] and address+count <= s[5], "ELF", "section bounds")
         return self.data[s[4]+address:s[4]+address+count]
 
-    def function(self, name):
+    def function(self, name, *, literal_islands=False):
+        """Decode a complete body; optionally retain one structural literal island.
+
+        The opt-in form returns an @literal-island descriptor in address order
+        and retains all NOPs. It does not establish island/tail unreachability.
+        Local branch indices count descriptor tokens as well as instructions.
+        Consumers must match the complete returned sequence, including data
+        descriptors and the exact bounded (zero, one or two) tail NOP count.
+        """
+        require(type(literal_islands) is bool, "DECODE", "literal-islands option must be boolean")
         symbols = [s for s in self.symbols if s["name"] == name and s["section"] != 0]
         require(len(symbols) == 1 and symbols[0]["info"] & 15 == 2 and symbols[0]["info"] >> 4 in (0, 1) and symbols[0]["size"],
                 "SYMBOL", "missing/ambiguous function " + name)
@@ -137,8 +146,27 @@ class Object:
             decoded.append((address, op, arg, raw))
             address += len(raw)
         require(decoded, "DECODE", "empty function")
-        indices = {row[0]: i for i, row in enumerate(decoded)}
+        if literal_islands:
+            contiguous = []
+            for a, b in data_ranges:
+                if contiguous and contiguous[-1][1] == a:
+                    contiguous[-1] = (contiguous[-1][0], b)
+                else:
+                    contiguous.append((a, b))
+            data_ranges = contiguous
+            require(len(data_ranges) <= 1, "DECODE", "multiple literal islands unsupported")
+            if data_ranges:
+                a, b = data_ranges[0]
+                tail = [row for row in decoded if row[0] >= b]
+                require(len(tail) <= 2 and all(
+                    row[0] == b+2*i and row[1:3] == ("nop", "") and row[3] == b"\x00\xbf"
+                    for i, row in enumerate(tail)), "DECODE", "unsupported literal-island executable tail")
+                require((tail[-1][0]+2 if tail else b) == end,
+                        "DECODE", "literal-island tail extent")
+        indices = {row[0]: i + (sum(b <= row[0] for a, b in data_ranges) if literal_islands else 0)
+                   for i, row in enumerate(decoded)}
         result, literals, used_relocs = [], set(), set()
+        literal_references = []
         for address, op, original, raw in decoded:
             arg = canonical(original)
             reloc = self.relocations.get((section, address))
@@ -180,6 +208,7 @@ class Object:
                 else:
                     arg = match[1]+",="+str(value)
                 literals.update(range(pool, pool+4))
+                literal_references.append((address, pool))
             else:
                 require(reloc is None, "RELOC", "unexpected instruction relocation")
             # GNU calls increment-after transfers ldm/stm in narrow encodings.
@@ -189,7 +218,8 @@ class Object:
             if op in ("dsb", "dmb", "isb") and arg == "sy":
                 arg = "#15"
             result.append((op, arg))
-        require(all(a > decoded[-1][0] for a, _ in data_ranges), "DECODE", "non-trailing naked data")
+        if not literal_islands:
+            require(all(a > decoded[-1][0] for a, _ in data_ranges), "DECODE", "non-trailing naked data")
         for a, b in data_ranges:
             for address in range(a, b):
                 padding = address < ((a+3) & ~3) and self.read(section, address, 1) == b"\0"
@@ -197,7 +227,17 @@ class Object:
         for (sec, address), _ in self.relocations.items():
             if sec == section and start <= address < end:
                 require(address in used_relocs, "RELOC", "unconsumed function relocation")
+        if literal_islands and data_ranges:
+            a, b = data_ranges[0]
+            descriptor = dict(Offset=a-start, Bytes=self.read(section, a, b-a).hex(),
+                References=[dict(Instruction=address-start, Offset=pool-a)
+                            for address, pool in literal_references if a <= pool < b],
+                Relocations=[dict(Offset=address-a, Kind=kind, Target=target["name"])
+                             for (sec, address), (kind, target) in sorted(self.relocations.items())
+                             if sec == section and a <= address < b])
+            index = sum(row[0] < a for row in decoded)
+            result.insert(index, ("@literal-island", json.dumps(descriptor, sort_keys=True, separators=(",", ":"))))
         # A sole final NOP may align a trailing pool after a terminal branch.
-        if result[-1] == ("nop", "") and len(result) > 1 and (result[-2][0] in ("b", "bx", "bl") or result[-2][0] == "ldmia" and "pc}" in result[-2][1]):
+        if not literal_islands and result[-1] == ("nop", "") and len(result) > 1 and (result[-2][0] in ("b", "bx", "bl") or result[-2][0] == "ldmia" and "pc}" in result[-2][1]):
             result.pop()
         return result
