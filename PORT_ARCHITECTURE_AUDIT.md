@@ -6099,3 +6099,44 @@ All required global parity keys remain unsatisfied by this bounded gate.
 No CPU or board ran. Production C/assembly, public/port ABI, default matrix,
 feature admission and hardware/hosted exact-commit CI claims are unchanged.
 Earlier ten-pair and single-pair records remain historical.
+
+## Native Witness Input Identity
+
+Read-only architect review of the new reference companion found that the
+shared twin comparator can self-compare if a standalone caller supplies
+the same ELF as ordinary and emit-relocs. Native actual-witness admission
+had the same boundary gap. This does not invalidate the historical 25-case
+sweep, whose separate driver binds each receipt to distinct build-owned
+artifact paths and actual link commands. It does invalidate treating an
+arbitrary unguarded standalone invocation as independent-twin evidence.
+
+Only `test_elf.py` changes: a pre-snapshot guard requires the exact five
+roles, nine distinct providers, the intentional prelink/provider path
+overlap and thirteen distinct physical files. Same-path, hard-link,
+cross-role and provider aliases reject. Fourteen pure tests include the
+valid same-bytes/different-files case, exact counts, prelink alias spelling
+and a mocked proof that rejection precedes snapshots/capture/reader use.
+All 176 pure controls pass. Shared `elf.py`, production code and protocols
+are unchanged; patch utility APIs used by reference tests remain stable.
+
+The parent read-only replay `C:/fzfinal-native-admission-replay-20261104-e1`
+consumes the exact previously retained CM0, CM4 and CM7 O2 build receipts.
+Each current runner invocation passes 176 pure controls and thirteen actual
+mutants. The aggregate is nine roots, 1,708 root bytes, 610 instructions,
+41 applied references and 39 mutant applications. The parent binds all
+thirteen reader inputs to the corresponding original build, checks source
+and captured-input hashes, rejects empty proof records and closes 90
+watched files without drift. Three Python commands run; zero compiler,
+linker, CPU or board executions occur.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-native-admission-replay-20261104-e1/results.json` | `C857CC97B5F68D34A392E818BEF0B92B285D05DDCB1E0D9C1F7AED282585646C` |
+| `C:/fzfinal-native-admission-parent-20261104-e1/driver.py` | `6E3D546B6CAF8DFA2CCF50B9370972E6FD74AC2A89ADCB02421AEA703EDDA78E` |
+| `tools/fixtures/classic_final_image/test_elf.py` | `5C8F8C17F86DBF9A95A455A817A172F1BAFB4E8113797A0D14499B308A803BDE` |
+
+This closes standalone input admission only. It does not rerun or upgrade
+the historical 25-case sweep, qualify other modes or satisfy global parity
+keys. The scope remains prelink-bound native root preservation, not
+callee/constructor semantics, pinned-reference final parity, archive/LTO,
+CPU/board or hosted exact-commit CI qualification.

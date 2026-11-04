@@ -93,6 +93,13 @@ decodes admitted branch/literal address forms, and retains complete root
 bytes. Unsupported forms fail closed. C-callee bodies and their internal
 relocation semantics remain outside this three-root proof.
 
+Standalone actual-witness admission requires exactly nine provider objects
+and thirteen distinct physical input files. Only the intentional prelink
+object/provider overlap is permitted. Same-path twins, hard links and
+cross-role/provider aliases reject before snapshots or reader construction;
+comparing an emit-relocs ELF with itself is not an ordinary/emit twin proof.
+Fourteen focused identity controls extend the pure suite to 176 tests.
+
 Both the build and reader need installed `pyelftools` 0.33; the builder's
 `--python-modules` directory must contain its `elftools` package. The builder
 copies and hashes that package instead of installing or downloading it.

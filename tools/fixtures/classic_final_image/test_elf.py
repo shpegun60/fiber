@@ -16,6 +16,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 sys.dont_write_bytecode = True
@@ -677,13 +678,31 @@ def _mutate_witness(name, files, baseline, proofs, edits):
         raise ValueError("unknown retained-witness mutation")
 
 
+def _require_witness_input_identity(inputs, provider_paths):
+    if set(inputs) != {"Prelink", "Final", "Disassembly", "Plain", "LinkMap"}:
+        raise ValueError("native witness needs exactly five input roles")
+    roles = {role: Path(path).resolve(strict=True) for role, path in inputs.items()}
+    providers = [Path(path).resolve(strict=True) for path in provider_paths]
+    if len(providers) != 9 or len(set(providers)) != 9 or roles["Prelink"] not in providers:
+        raise ValueError("native witness needs nine unique providers including the prelink path")
+    if len(set(roles.values())) != 5:
+        raise ValueError("native witness roles must have distinct paths")
+    originals = list(dict.fromkeys((*roles.values(), *providers)))
+    if len(originals) != 13:
+        raise ValueError("native witness permits only the prelink/provider path overlap")
+    for index, path in enumerate(originals):
+        if not path.is_file() or any(path.samefile(other) for other in originals[:index]):
+            raise ValueError("native witness needs distinct physical files; hard-link aliases are unsupported")
+    return originals
+
+
 def _actual_witness(witness, provider_paths, link_map, directory, *, float_abi="hard"):
     report = dict(Status="FAIL", Scope="PRELINK_BOUND_ROOT_PRESERVATION_AND_SYMBOL_ORIGIN_ONLY",
                   PositiveRoots=[], Mutants=[], InputDrift=[], RequiredCellSatisfied=False,
                   FinalParity=False, CPUProof=False, GlobalProof=False, FloatABI=float_abi)
-    inputs = dict(zip(("Prelink", "Final", "Disassembly", "Plain"), witness))
+    inputs = dict(zip(("Prelink", "Final", "Disassembly", "Plain"), witness, strict=True))
     inputs["LinkMap"] = link_map
-    originals = list(dict.fromkeys(Path(path).resolve() for path in (*inputs.values(), *provider_paths)))
+    originals = _require_witness_input_identity(inputs, provider_paths)
     snapshots = {path: path.read_bytes() for path in originals}
     captured = directory / "witness-inputs"
     captured.mkdir()
@@ -779,6 +798,102 @@ def _actual_witness(witness, provider_paths, link_map, directory, *, float_abi="
         if report["InputDrift"] or report["CapturedInputDrift"] or report["MutantFileDrift"]:
             report["Status"] = "FAIL"
     return report
+
+
+class WitnessIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="classic-final-witness-identity-")
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        paths = [self.directory / (str(index) + ".bin") for index in range(14)]
+        for path in paths:
+            path.write_bytes(b"same bytes, distinct physical files")
+        self.inputs = dict(zip(("Prelink", "Final", "Disassembly", "Plain", "LinkMap"), paths[:5]))
+        self.providers = [paths[0], *paths[5:13]]
+        self.spare = paths[13]
+
+    def rejected(self):
+        with self.assertRaisesRegex(ValueError, "native witness"):
+            _require_witness_input_identity(self.inputs, self.providers)
+
+    def alias(self, source):
+        alias = self.directory / "alias.bin"
+        alias.hardlink_to(source)
+        return alias
+
+    def test_valid_nine_providers_only_prelink_overlap(self):
+        originals = _require_witness_input_identity(self.inputs, self.providers)
+        self.assertEqual(len(originals), 13)
+        self.assertEqual(set(originals), set(self.inputs.values()) | set(self.providers))
+
+    def test_same_path_twins_reject(self):
+        self.inputs["Plain"] = self.inputs["Final"]
+        self.rejected()
+
+    def test_hard_link_twins_reject(self):
+        self.inputs["Plain"] = self.alias(self.inputs["Final"])
+        self.rejected()
+
+    def test_cross_role_same_path_reject(self):
+        self.inputs["LinkMap"] = self.inputs["Disassembly"]
+        self.rejected()
+
+    def test_cross_role_hard_link_reject(self):
+        self.inputs["LinkMap"] = self.alias(self.inputs["Disassembly"])
+        self.rejected()
+
+    def test_provider_cross_role_same_path_reject(self):
+        self.providers[-1] = self.inputs["Final"]
+        self.rejected()
+
+    def test_provider_cross_role_hard_link_reject(self):
+        self.providers[-1] = self.alias(self.inputs["Final"])
+        self.rejected()
+
+    def test_duplicate_provider_path_reject(self):
+        self.providers[-1] = self.providers[-2]
+        self.rejected()
+
+    def test_provider_hard_link_reject(self):
+        self.providers[-1] = self.alias(self.providers[-2])
+        self.rejected()
+
+    def test_prelink_provider_hard_link_different_spelling_reject(self):
+        self.providers[0] = self.alias(self.inputs["Prelink"])
+        self.rejected()
+
+    def test_missing_prelink_provider_reject(self):
+        self.providers[0] = self.spare
+        self.rejected()
+
+    def test_exact_nine_provider_count(self):
+        original = list(self.providers)
+        for providers in (original[:-1], [*original, self.spare]):
+            with self.subTest(count=len(providers)):
+                self.providers = providers
+                self.rejected()
+
+    def test_exact_five_role_set(self):
+        original = dict(self.inputs)
+        for inputs in ({key: value for key, value in original.items() if key != "LinkMap"},
+                       dict(original, Extra=self.spare)):
+            with self.subTest(roles=tuple(inputs)):
+                self.inputs = inputs
+                self.rejected()
+
+    def test_alias_rejected_before_snapshots_or_reader(self):
+        self.inputs["Plain"] = self.inputs["Final"]
+        witness = tuple(self.inputs[key] for key in ("Prelink", "Final", "Disassembly", "Plain"))
+        output = self.directory / "uncreated"
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("snapshot before admission")) as read_bytes, \
+                patch.object(Path, "mkdir", side_effect=AssertionError("capture before admission")) as mkdir, \
+                patch.object(reader, "FinalImage") as construct:
+            with self.assertRaisesRegex(ValueError, "native witness"):
+                _actual_witness(witness, self.providers, self.inputs["LinkMap"], output)
+        read_bytes.assert_not_called()
+        mkdir.assert_not_called()
+        construct.assert_not_called()
+        self.assertFalse(output.exists())
 
 
 class OriginTests(unittest.TestCase):

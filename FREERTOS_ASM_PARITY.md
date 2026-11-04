@@ -1,5 +1,22 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Native Witness Input Identity
+
+Standalone native actual-witness admission now requires five distinct roles,
+nine provider objects and thirteen distinct physical files, permitting only
+the intentional prelink/provider overlap. Same-path twins, hard links and
+cross-role/provider aliases reject before snapshots or reader construction.
+This closes a confirmed self-comparison gap; the shared ELF reader and
+production code are unchanged.
+
+All 176 pure controls pass, including fourteen new identity controls. A
+separate parent replay of the existing CM0/CM4/CM7 O2 builds passes nine
+complete roots and all 39 actual mutants with zero closing drift. No
+compiler or target image runs in this replay. The earlier 25-case/162-control
+record remains historical against its captured sources, not relabelled as
+a new 25-case sweep. Exact receipts are in
+`PORT_ARCHITECTURE_AUDIT.md#native-witness-input-identity`.
+
 ## Native Classic Final Images Including CM0
 
 The direct-link pilot now also admits three exact soft/no-FPU, no-MPU,
