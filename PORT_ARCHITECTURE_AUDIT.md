@@ -6882,3 +6882,124 @@ global freeze remain unproved. Required global counters stay integer zero.
 Runtime/assembly, public/port ABI, feature admission and default matrix are
 unchanged. No board is flashed/reset/run; local evidence is not hosted
 exact-commit CI. The four protected unrelated WIP entries remain untouched.
+
+## Pinned CM3 Reference Final Images At Five Optimizations
+
+Reviewed locally on 2026-11-04. The separate CM3 reference producer admits
+only the exact p4/b16, ordinary-AAPCS, VTOR1, soft/no-FPU/no-MPU cohort
+already qualified by the native producer. It captures unchanged pinned
+`portable/GCC/ARM_CM3/port.c` and `portmacro.h` at
+`a50edad08b29052631aa469d4df6e6ec7ff68878`; there is no `portasm.c` and
+no separate CM0-style C SVC dispatcher. The actual port object owns the
+local `prvPortStartFirstTask` and strong global SVC/PendSV roots. Typed
+fail-stop kernel providers, consumer and startup complete exactly four TUs.
+No synthetic root replaces an upstream function and no image is executed.
+
+The generated/base config retains enabled inline assertions, shifted
+threshold16 for both interrupt APIs, priority bits4 and handler installation
+check1. Ten retained header facts are exactly
+`(1,4,4,4,8,0,0,16,16,4)`. There are no CMSIS/FP fixture dependencies or
+FPCCR policy claims. All original/captured pinned/header/config/system
+dependencies, compiler/resolved workers/DLLs, parser and interpreter inputs,
+actual compile commands, seven object checkpoints and both final maps are
+retained. Full owning-section hashes/mappings/REL records remain distinct
+from root symbol extents and token-body hashes.
+
+The parent runs 29 pure producer controls using the authenticated actual
+inventory, then a successful real O2 producer smoke. The new independent
+fixed reader passes 108 synthetic controls. Its instruction encodings are
+source-transcribed, not learned hashes. SVC restores exactly r4-r11 and
+uses ORR LR,#13; PendSV saves/restores eight core slots, preserves r3/LR
+around its scheduler call and raises BASEPRI16 before clearing it to zero.
+The native nine-word EXC_RETURN frame is not silently substituted.
+
+Reader ownership binds exactly four physical provider files and their
+actual final map placements. All three roots have the same real port
+provider; the callee/current slot have one other shared provider. Exact
+input sections are `.text.<root>`, with zero root offset, separate padding
+and literal mappings, and unchanged permitted O0 alignment NOPs outside
+`st_size`. Original addends are -4 for the PendSV THM_CALL at28 and zero
+for SVC ABS32 at32 and PendSV ABS32 at64. Final destinations and symbol
+bindings must match independent provider/map origins. Root/section bytes
+outside these validated relocation fields are preserved.
+
+Initial witness admission controls pass nineteen methods. Read-only review
+then finds two pre-qualification gaps: physical identity was admitted after
+output creation, and helper loaders reread files after initial hashing.
+Before any actual ELF replay, admission moves before writes and a closed
+source-buffer loader is added, also serving nested legacy file-spec imports.
+It executes the exact hashed immutable bytes, rejects unknown local source
+loads and bypasses local bytecode caches without modifying reader/model
+globals. The expanded 24-control suite passes CLI alias/no-write, hard-link,
+A-to-B-to-A replacement, nested-buffer, unknown-load and mutable-buffer
+negatives. The first nineteen-control receipt remains historical, not
+evidence for the final strengthened source. Executed helper-buffer identities
+are recorded in every actual witness receipt.
+
+The actual O2 witness passes three roots, 136 bytes, 39 instructions,
+three references and thirteen real ELF mutants. A fresh five-mode sweep
+then passes twenty TUs, ten direct final links, 35 checkpoints and 355
+builder commands. It preserves fifteen roots, 686 bytes, 198 instructions
+and fifteen applied references. O0 contributes 142 bytes/42 instructions;
+each other mode contributes 136/39. All 65 actual mutation applications
+reject at the expected stage/reason: 55 retain equal mutant twins before
+root rejection, ten reject twin geometry/permissions. All 325 actual
+mutant files are retained. Producer seals contain 3,715 artifact entries
+and 2,410 original/captured input bindings; these are aggregate record
+counts, not globally unique files. The ten Python builder/witness children
+are separate from the 355 recorded builder commands.
+
+Before sealing documentation, the reader contract's implementation-only
+history wording is replaced by evergreen evidence boundaries and the actual
+witness/loader contract. The reader implementation is unchanged. The 108
+synthetic controls are repeated as E2 to bind the final document hash;
+the actual producer/witness inputs do not consume that document, so their
+unchanged real ELF receipts are not relabelled as rerun builds.
+
+The fresh independent parent replay authenticates the caller-bound expected
+table and all twenty case receipt/manifest buffers before parser import.
+Exact ordered compile/link recipes, inventory/pin/blob/newline bindings,
+generated configuration, full consumed/tool/worker/DLL/parser inputs and
+producer imported-module origins are checked. All five parser artifact
+dictionaries are identical before the first captured parser is imported.
+The same actual port objects feed independent prelink-protocol/owning-section
+and final structural replays, then all fifteen fixed final roots and twins.
+The local helper closure executes bound source buffers, not substituted
+models or patched protocol globals.
+
+Each actual reader has exactly 74 files: results, eight witness captures
+and 65 mutant files. The audit closes all 370 reader files, including all
+325 mutant-file hashes, and authenticates the separate 29/108/24 pure
+receipts and their exact source memberships. Pure tests and mutant rejection
+outcomes are retained evidence, explicitly not reexecuted by this auditor.
+It captures its own source and seals 4,589 watched files without drift;
+the first executed reference parent audit passes. Read-only cross-reviews
+find no confirmed reader/witness blocker.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `%TEMP%/cm3-reference-envelope-20261104-e1.json` | `D2D55022E281D377F369D030B249AEB0EDCD4EEACFF2AF23D9D285C30AE7A8E7` |
+| `C:/fzfinal-cm3-reference-smoke-20261104-e1/results.json` | `22C89793885F4A92399927DB5B1E893455C09B3F8A14DF7269715E7B2AA2DC17` |
+| `C:/fzfinal-cm3-reference-reader-pure-20261104-e1/results.json` | `592C20F6B2782CE70E57ABD0FF0EFB1BCFAC31CC51879C827B651DF0CB9B7702` |
+| `C:/fzfinal-cm3-reference-reader-pure-20261104-e2/results.json` | `C9EF2F48614965F36AB336E986AF7ECE4E8FFC4B9404094929F6FB5AC6A45871` |
+| `%TEMP%/cm3-final-witness-pure-20261104-e1.json` | `131EA6FB5C3773B05CAD6FA31ACAF81DF1F6406B37C6704B97B9F90478D5FC59` |
+| `%TEMP%/cm3-final-witness-pure-20261104-e2.json` | `DE435318D89F00B0F74311DC820943B9223308F94A0270DFD76901E164D26D46` |
+| `C:/fzfinal-cm3-reference-root-smoke-20261104-e1/results.json` | `B0367F77A3AFD5275E8E975D26DFF2AF07F0C432057327A930FB0D6FACEF8AE6` |
+| `C:/fzfinal-cm3-reference-grid-20261104-e1/expected-e2.json` | `DE9B79BAEFEBCA07490E839F1FDE46C47901B49427316FB0BC741997864C3B58` |
+| `C:/fzfinal-cm3-reference-parent-review-20261104-e1/results.json` | `87D81D804F6C1EFEEDF0D9ECF86AE965CE8E580E90C70744813A23983832B9C3` |
+| `C:/fzfinal-cm3-reference-parent-review-20261104-e1-driver/audit.py` | `AC670F2EEA9A37D168AFAD27B13979EE738DA6C2D6284A54C417EB194085FF68` |
+| `tools/fixtures/cm3_final_image/reference_run.py` | `0091CA8ECCEE8B34C25B290BEE46C0BE3A3BF0656B2689EC664EF15F35776CBA` |
+| `tools/fixtures/cm3_final_image/test_reference_run.py` | `5652F906CAFF27FE249C8B86BB14FB4E14D358A16CC4121027E8579C1C588813` |
+| `tools/fixtures/cm3_final_roots/reference_elf.py` | `1F62F514EE90F1A0051F4C6028FE8AA74134A66573C64CFD88FB7BCA9DE80F28` |
+| `tools/fixtures/cm3_final_roots/test_reference_elf.py` | `12D014EC6975A4874DDC1348D1B56B720A657BD4D925ECCA6D11C28BAE2E1922` |
+| `tools/fixtures/cm3_final_roots/reference_witness.py` | `AED0DBAC11EB8644EED71F9FAF36C67B2854DE19262A78CC7EA601FA7A3DD99C` |
+| `tools/fixtures/cm3_final_roots/test_reference_witness.py` | `ADB04836FA5BF8963447396F238B07C87F0D453DFCB4D8FFCE9B562F83334E98` |
+
+This qualifies bounded reference producer/root preservation, not the separate
+native/reference CM3 final mechanism join. General C/callee/kernel semantics,
+successful MMIO/vector/handler execution, dynamic EXC_RETURN values, complete
+objects, other cohorts, archives/final LTO, CPU/board and global freeze remain
+unproved. Required global counters stay integer zero. No production runtime,
+assembly, public/port ABI, feature admission or default matrix changes. No
+board is flashed/reset/run. Local evidence is not hosted exact-commit CI.
+The four protected unrelated WIP entries remain untouched.

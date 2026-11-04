@@ -1,5 +1,48 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Pinned CM3 Reference Final Images At Five Optimizations
+
+The separate CM3 reference producer builds the unchanged pinned
+`portable/GCC/ARM_CM3/port.c` with its actual `portmacro.h`, not a CM4/CM7
+FP substitution. Exactly four TUs retain the local first-start and global
+SVC/PendSV owners. The typed kernel boundaries fail-stop; no kernel or
+target is executed. The exact p4/b16, soft/no-FPU/no-MPU cohort admits
+O0/Og/O2/Os/O3, with config assertions and vector-installation checks enabled.
+
+Five actual builds pass 20 TUs, ten direct final links, 35 object checkpoints
+and 355 builder commands. Three source-derived prelink protocols per case
+retain original owning sections, symbol extents, mappings and REL records.
+The separate fixed final reader then passes fifteen complete roots,
+686 root bytes, 198 instructions and fifteen applied references. All
+65 actual ELF mutation applications reject at their exact stage/reason;
+55 preserve equal mutant twins before root rejection, ten reject twin
+load/storage geometry. Producer seals contain 3,715 artifact entries and
+2,410 original/captured bindings, aggregate records rather than unique files.
+
+Separate pure suites pass 29 producer, 108 synthetic reader and 24 witness
+controls. Witness admission precedes writes; its closed local helper graph
+executes immutable authenticated source buffers, including nested legacy
+imports. These controls and source-loader regressions are not extra build
+cells or actual ELF mutations. The reference restores eight core slots and
+synthesizes EXC_RETURN through ORR LR; the native nine-slot frame remains an
+explicit future join difference, not normalized evidence of equivalence.
+
+Independent replay authenticates the twenty case receipt/manifest buffers
+before parser import, reproduces all own-prelink protocols, positive roots
+and twins, and checks exact reader membership. Identical parser packages
+and imported-module origins are bound across all five cases. It rehashes
+all 325 mutant files and closes 4,589 watched files without detected drift;
+pure controls and mutant rejections remain authenticated retained evidence,
+not additional executions by this auditor.
+
+This closes bounded reference producer/root preservation only. The native/
+reference CM3 final mechanism join remains separate. It is not general
+C/callee/kernel semantics, executed CPU/MMIO/vector routing, archive/final
+LTO, board or global freeze. Required global keys stay unsatisfied. Runtime,
+assembly, ABI and default matrix are unchanged. Scope/reproduction are in
+the CM3 producer/reader contracts; retained evidence is in
+`PORT_ARCHITECTURE_AUDIT.md#pinned-cm3-reference-final-images-at-five-optimizations`.
+
 ## Native CM3 Final Images At Five Optimizations
 
 The explicit native producer now admits the exact CM3 p4/b16,
