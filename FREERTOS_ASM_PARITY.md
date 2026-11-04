@@ -35,6 +35,14 @@ unresolved policy obligation, not an erased difference or equivalence claim.
 The shared CM3 receipt join now permits explicit profile/cohort arguments;
 its default CM3 behavior is replayed separately and is not broadened.
 
+The same exact-cohort driver has a separate `--kind setup` mode. It closes
+native `fiber_port_runtime_prepare` and pinned `vPortEnableVFP` plus
+`xPortStartScheduler` at all five modes, including surrounding C operations.
+This checks both distinct emitted CPACR/FPCCR setup contracts, not policy
+equivalence or successful MMIO execution. `FAP-FP-SETUP-POLICY` and
+`FAP-FP-SETUP-READBACK` below define the differences. The default `transfer`
+mode retains its original three-roots-per-side scope and exclusions.
+
 ## C33S Dual-Origin And C3SO Closed Bodies
 
 The maintained `cm33_secure_parity` fixture is dispatched by the parity driver
@@ -1452,6 +1460,31 @@ default-reader regression scope are recorded in
 CM4/CM7 Fiber retains the FreeRTOS EXC_RETURN-bit-4 conditional transfer of
 `s16-s31`. It adds FP frame-extent, FPCA, CPACR, FPCCR, alignment, and context
 validation. No extra FP register is treated as caller-saved scheduler state.
+
+### FAP-FP-SETUP-POLICY
+
+The setup checker preserves `fpccr-eager-vs-lazy`, the reference recipe's
+explicit policy difference. In the exact selected hard-FP/eager CM4/CM7 cohorts,
+native CPACR at `0xE000ED88` enables CP10/CP11 with mask `0x00F00000`;
+FPCCR at `0xE000EF34` sets ASPEN and clears LSPEN, masked value `0x80000000`.
+The pin's VFP helper enables the same CPACR fields, but its scheduler then
+sets both ASPEN and LSPEN, masked value `0xC0000000`. Those are deliberately
+different emitted setup contracts. Matching their complete bodies does not
+make lazy/eager behavior equivalent, execute hardware readback or establish
+pending-lazy-state/LSPACT handling. Other startup/exception checks remain
+independent obligations.
+
+### FAP-FP-SETUP-READBACK
+
+The setup checker's `native-conditional-stores-barriers-readbacks` difference
+retains native conditional CPACR/FPCCR stores, DSB/ISB after writes and masked
+readback failure edges to panic `e`/`E`. The reference performs unconditional
+read/OR/store and has no corresponding helper readback/barrier sequence.
+All surrounding fault-enable, CCR, priority probe/configuration, assertions,
+calls, literal descriptors and terminal paths remain in their respective
+complete function protocols. No subsequence or operation-stripping transform
+is used. Called helpers, hardware effects, whole startup and final execution
+are not qualified by these three bodies.
 
 ### FAP-CM7-ERRATA-PRIMASK
 

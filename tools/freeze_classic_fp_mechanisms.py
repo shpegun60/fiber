@@ -111,11 +111,44 @@ def require_proof(proof, profile, mode):
         found.add(identity)
 
 
+def require_setup_proof(proof, profile, mode):
+    need(type(proof) is dict and proof["Verdict"] == "FP-SETUP-CLOSED-ROOTS-PASS" and
+         proof["Profile"] == profile and proof["Mode"] == mode and proof["Cohort"] == PROFILES[profile][0] and
+         proof["ProofScope"] == "CM4_CM7_HARD_EAGER_P4_B16_THREE_COMPLETE_SETUP_PROTOCOLS_ONLY" and
+         type(proof["ClosedBodies"]) is int and proof["ClosedBodies"] == 3 and
+         proof["DistinctContractsChecked"] is True and proof["ReferencePin"] == shared.inventory.PIN,
+         "classic-fp-setup-completeness")
+    need(all(proof[key] is False for key in ("RequiredCellSatisfied", "CompleteObjectProof",
+             "InstructionEquivalence", "CpuExecution", "BoardExecution", "FinalElfProof", "GlobalFreezeQualified",
+             "StartupRoutingProven", "CalleeBodiesProven", "UnreachabilityProven")), "classic-fp-setup-promotion")
+    need(type(proof["RequiredCellsSatisfied"]) is int and proof["RequiredCellsSatisfied"] == 0,
+         "classic-fp-setup-zero-counter")
+    need(proof["DifferenceIds"] == ["fpccr-eager-vs-lazy", "native-conditional-stores-barriers-readbacks"],
+         "classic-fp-setup-differences")
+    need(shared.inventory.encoded(proof["CPACR"]) == shared.inventory.encoded(
+         dict(Address=0xE000ED88, AccessMask=0x00F00000)), "classic-fp-setup-cpacr")
+    need(shared.inventory.encoded(proof["FPCCR"]) == shared.inventory.encoded(dict(
+         Address=0xE000EF34, PolicyMask=0xC0000000, NativeBits=0x80000000, ReferenceBits=0xC0000000,
+         NativePolicy="eager", ReferencePolicy="lazy", PolicyEquivalenceProven=False,
+         HardwareReadbackProven=False, LspactHandlingProven=False)), "classic-fp-setup-policy")
+    evidence, found = proof["RootEvidence"], set()
+    expected = {("Native", "fiber_port_runtime_prepare"), ("Reference", "vPortEnableVFP"),
+                ("Reference", "xPortStartScheduler")}
+    need(type(evidence) is list and len(evidence) == 3, "classic-fp-setup-root-evidence")
+    for root in evidence:
+        identity = (root["Side"], root["Name"])
+        need(identity in expected and identity not in found and type(root["Tokens"]) is int and root["Tokens"] > 0 and
+             type(root["LiteralIslands"]) is int and root["LiteralIslands"] == 1, "classic-fp-setup-root-layout")
+        shared.digest(root["BodySha256"])
+        found.add(identity)
+
+
 def main():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     for option in ("inventory", "native", "reference", "output-dir"):
         parser.add_argument("--" + option, required=True)
     parser.add_argument("--profile", choices=tuple(PROFILES), required=True)
+    parser.add_argument("--kind", choices=("transfer", "setup"), default="transfer")
     args = parser.parse_args()
     roots = [Path(getattr(args, name)).resolve(strict=True) for name in ("inventory", "native", "reference")]
     out = Path(args.output_dir).resolve()
@@ -123,12 +156,14 @@ def main():
     need(not out.exists() and not any(out.is_relative_to(r) or r.is_relative_to(out) for r in roots + [repo]),
          "classic-fp-fresh-external-output")
     out.mkdir(parents=True)
-    report = dict(Verdict="FAIL", Error=None, ProofScope="CLASSIC_FP_CLOSED_ROOT_MECHANISMS_ONLY",
+    report = dict(Verdict="FAIL", Error=None,
+                  ProofScope=("CLASSIC_FP_CLOSED_ROOT_MECHANISMS_ONLY" if args.kind == "transfer" else
+                              "CLASSIC_FP_DISTINCT_SETUP_PROTOCOLS_ONLY"), ProofKind=args.kind,
                   Profile=args.profile, GlobalFreezeQualified=False, RequiredCellsSatisfied=0, FinalElfProof=False,
                   CpuExecution=False, BoardExecution=False, CompilerInvocations=0, PolicyEquivalence=False, Cells=[])
     save(out / "results.json", report)
     readers, reader_bytes, bundles = {}, {}, []
-    checker_path = HERE / "fixtures/cm4_cm7_freeze_parity/check.py"
+    checker_path = HERE / "fixtures/cm4_cm7_freeze_parity" / ("check.py" if args.kind == "transfer" else "check_setup.py")
     decoder_path = HERE / "fixtures/cm55_tfm_parity/elf.py"
     try:
         for path in (Path(__file__), HERE / "freeze_cm3_mechanisms.py", HERE / "freeze_cohorts.py",
@@ -158,7 +193,8 @@ def main():
         native_cells, reference_cells = [shared.cells_for(bundle.result, manifest, source_sha, is_reference,
              cohort=identity, source_group=args.profile) for bundle, is_reference in ((native, False), (reference, True))]
         need(set(native_cells) == set(reference_cells) == set(shared.inventory.OBJECT_MODES), "classic-fp-mode-join")
-        differences = BASE_DIFFERENCES | ({"FAP-CM7-ERRATA-PRIMASK"} if args.profile == "CM7" else set())
+        differences = (BASE_DIFFERENCES | ({"FAP-CM7-ERRATA-PRIMASK"} if args.profile == "CM7" else set())
+                       if args.kind == "transfer" else {"FAP-FP-SETUP-POLICY", "FAP-FP-SETUP-READBACK"})
         ledger = reader_bytes[repo / "FREERTOS_ASM_PARITY.md"].decode("utf-8-sig")
         need(all(re.search(r"^### " + re.escape(name) + r"\s*$", ledger, re.MULTILINE) for name in differences),
              "classic-fp-missing-difference-rationale")
@@ -166,9 +202,14 @@ def main():
              Receipts=[dict(Path=str(b.root), ArtifactManifestSha256=sha(b.manifest_bytes),
                             ResultSha256=sha(b.read("results.json"))) for b in bundles])
         for mode in shared.inventory.OBJECT_MODES:
-            proof = checker.check_pair(object_for(native, native_cells[mode], decoder, args.profile),
-                                       object_for(reference, reference_cells[mode], decoder, args.profile), args.profile)
-            require_proof(proof, args.profile, mode)
+            pair = (object_for(native, native_cells[mode], decoder, args.profile),
+                    object_for(reference, reference_cells[mode], decoder, args.profile))
+            if args.kind == "transfer":
+                proof = checker.check_pair(*pair, args.profile)
+                require_proof(proof, args.profile, mode)
+            else:
+                proof = checker.check_pair(*pair, args.profile, mode)
+                require_setup_proof(proof, args.profile, mode)
             report["Cells"].append(dict(Cohort=identity, Mode=mode, SourceGroup=args.profile, ArtifactRole="runtime",
                  CohortSha256=native_cells[mode]["CohortSha256"], Proof=proof,
                  ReferenceRecipe=reference_cells[mode]["Recipe"], RequiredCellSatisfied=False, FinalElfProof=False))

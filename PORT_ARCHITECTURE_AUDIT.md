@@ -5772,3 +5772,68 @@ All required global parity cells remain unsatisfied by this bounded gate.
 Production C/assembly, public ABI, default matrix, runtime admission, CI and
 hardware claims are unchanged. Receipt prose is later than the captured code
 and is not exact-commit hosted CI; no earlier failed/partial run is relabelled.
+
+## CM4/CM7 Distinct FPU Setup Contracts
+
+The next proof-only slice adds `--kind setup` to the existing classic-FP
+driver. Its default `transfer` selection and validators remain unchanged;
+`ProofKind` is additive report metadata. Both kinds share exact cohort facts,
+attributes, closed source/compiler/receipt bindings, captured checker execution
+and closing input/output verification. The setup checker is a separate file,
+not an instruction normalizer or a replacement for the transfer checker.
+
+Each exact hard/eager p4/b16 CM4/CM7 cohort passes all five ordinary modes.
+Ten pairs close 30 complete bodies: native `fiber_port_runtime_prepare` and
+reference `vPortEnableVFP`/`xPortStartScheduler`. Fixed protocols consume all
+surrounding SHCSR/CCR setup, NVIC priority probing, assertions, calls/inlining,
+literal data/relocations, branches and NOPs, not only the FPU subsequences.
+The native and reference CPACR mask is `0x00F00000` at `0xE000ED88`. Native
+eager FPCCR sets ASPEN and clears LSPEN (`0x80000000`); the reference sets
+both (`0xC0000000`) at `0xE000EF34`. Native conditional stores, DSB/ISB and
+masked panic-on-failed-readback edges remain distinct from unconditional
+upstream read/OR/stores. The ledger maps both differences explicitly.
+
+Parent-run controls pass 4,386 cases: ten positives and 4,376 negatives,
+including 2,012 token mutations, 2,012 deletions, 30 extra-tail cases, 226
+branch-target, 20 branch-order and 14 call-order mutations. All 38 private
+retained-ELF byte mutants reject; the ten original pairs/30 bodies pass and
+closing drift is zero. Expanded outer-driver controls pass 200 cases, including
+24 positives and 176 negative admission/result/attribute cases. Independent
+source comparison/replay finds no confirmed checker or driver-logic blocker.
+The initial review's missing setup-ledger headings were added before the
+successful parent receipt comparisons; the driver fails closed without them.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzcm4-setup-20261104-e1/results.json` | `90DADD04F2C90CA915DEBA22BC492BC3A44AA9707AAE3DFB02D383B5A61E6509` |
+| `C:/fzcm4-setup-20261104-e1/artifacts.json` | `23005CEF22C6F3A20B236A80EEB1A56E975C25A915E69679A0008064E5552A26` |
+| `C:/fzcm7-setup-20261104-e1/results.json` | `501A80244C359650C79F5C002B7C061233950B8CBBFFA8D46CAA2E479CB1D0CA` |
+| `C:/fzcm7-setup-20261104-e1/artifacts.json` | `80841FCD2DCE81A03AFDD209998EF2AFE2DE2DCB44560635678B23E3A718F46D` |
+| Both setup `readers.json` files | `BC92CFEC8686E152A5F5990A8A049E9CFC5A1C8660720D0547385856127BB763` |
+| `%TEMP%/freeze-fp-setup-controls-parent-20261104-e1/results.json` | `9EE8E96FC249AD94E0232484B10C9752CC396701F51530EFED2A761F55A48F79` |
+| `%TEMP%/classic-fp-driver-controls-20261104-e3.json` | `564E78504F8FA62368F2ABBE023065DCD1922498E99AEFE805722262F3D2C60B` |
+
+The new default-transfer replays at `C:/fzcm4-20261104-e3` and
+`C:/fzcm7-20261104-e3` again pass ten pairs/60 bodies. Their complete per-cell
+proof objects are identical to the earlier e2 proofs, not just their verdicts.
+The result hashes are respectively
+`94A296BC0987E332494096F8A36572A65F78BBAF3461C3B277F83CD771EA7D1B`
+and `B6D1DD79008C388F5E5307AE607D0158E498C4B59D77BDD32DBD4076D239D852`.
+
+This checks two different emitted setup contracts conditional on entering the
+matched functions. It does not prove successful MMIO/readback, LSPACT handling,
+callee bodies, exception routing/nonreturn, whole startup or instruction/policy
+equivalence. The transfer gate's policy-equivalence flag remains false and its
+unresolved-by-three-roots status is unchanged. All required global cells remain unsatisfied.
+No compiler, CPU or board is invoked; runtime C/assembly, feature admission,
+default matrix, CI and hardware claims remain unchanged. The captured snapshot
+precedes this receipt prose and is not exact-commit hosted CI.
+
+A separate read-only Context/Fiber architecture review finds no confirmed
+ownership, CPU-detail leakage, init/start/configuration or supported-use
+interoperability defect in the reviewed priority-port boundaries. One common
+current slot, dispatcher and configuration gate remain; the compatibility shim
+delegates and Fiber owns lifecycle metadata only. Temporary compiler-policy
+and selected-storage header paths under `fiber/` remain explicit physical
+migration debt. Optional MPU/TZ feature and board qualification are not
+established by that review.

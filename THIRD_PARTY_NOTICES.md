@@ -49,6 +49,8 @@ of the corresponding pinned `ARM_CM3`, `ARM_CM4F`, `ARM_CM7/r0p1` and `ARM_CM0`
 sources. The notices and MIT permission text below cover those upstream
 portions too; they are not a license assignment for independently authored
 checker/driver logic. Test protocols are not additional production ports.
+The companion `tools/fixtures/cm4_cm7_freeze_parity/check_setup.py` transcribes
+the same CM4F/CM7 setup sources under those same notices.
 
 ### Retained File-Level Notices
 

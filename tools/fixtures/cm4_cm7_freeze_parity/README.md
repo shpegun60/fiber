@@ -84,3 +84,39 @@ input at every position, and retained-byte controls include FP bit-4,
 high-register set, software/hardware extent, BASEPRI snapshot, CM7 PRIMASK,
 branch, relocation/addend, literal bytes, tail and disassembly disagreement.
 These are rejection controls, not additional successful runtime scenarios.
+
+## Distinct FPU Setup Contracts
+
+`--kind setup` is a separate gate for the same two exact hard/eager cohorts.
+The default `--kind transfer` keeps the six-body contract above. Setup mode
+instead consumes three complete bodies per profile/mode:
+
+| Side | Complete Roots |
+| --- | --- |
+| Native | `fiber_port_runtime_prepare` |
+| Reference | `vPortEnableVFP`, `xPortStartScheduler` |
+
+```text
+python -B tools/freeze_classic_fp_mechanisms.py --profile CM7 --kind setup \
+  --inventory <inventory> --native <native> --reference <reference> \
+  --output-dir <fresh-external-directory>
+python -B tools/fixtures/cm4_cm7_freeze_parity/test_setup.py \
+  --native <native> --reference <reference> --output-dir <fresh-external>
+```
+
+Repeat the driver for CM4. `check_setup.py` has source-transcribed fixed
+compiler forms, never a baseline learned from its input. It consumes all
+surrounding fault/CCR setup, priority probing/configuration, assertions,
+inlining, call/literal relocations, pools, branches and NOPs too. Body hashes
+are output records only. Tests cover every token mutation/deletion and private
+ELF-byte changes to addresses, policy bits, readbacks, barriers and ordering.
+
+Both sides enable CPACR's CP10/CP11 fields. Native eager FPCCR selects
+`0x80000000`; the reference selects `0xC0000000` (ASPEN/LSPEN). Native also
+uses conditional stores, synchronization and panic-on-mismatch readbacks.
+The driver records the distinct contracts and their two ledger mappings,
+never substitutes one policy for the other. No MMIO, LSPACT handling, callee
+behavior, actual exception/CPU execution, whole-object/final-ELF or global
+qualification is inferred. Required coverage remains zero and policy
+equivalence remains false. Setup evidence does not rewrite the transfer
+gate's `UNRESOLVED-BY-THREE-ROOTS` result into a policy-equivalence claim.

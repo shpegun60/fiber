@@ -20,6 +20,7 @@ def load(name, path):
 
 driver = load("classic_fp_driver_controls", HERE.parents[1] / "freeze_classic_fp_mechanisms.py")
 check = load("classic_fp_checker_controls", HERE / "check.py")
+setup = load("classic_fp_setup_controls", HERE / "check_setup.py")
 
 
 def provider(protocols, tail):
@@ -105,6 +106,51 @@ def main():
             ("mve", attributes + 'Tag_MVE_arch: MVE Integer and FP\n'),
         ):
             test(prefix + name, lambda t=text: driver.require_attributes(t, profile), False)
+        for mode in driver.shared.inventory.OBJECT_MODES:
+            native, reference = setup.protocols(profile, mode)
+            proof = setup.check_pair(provider(native, 0), provider(reference, 0), profile, mode)
+            test(prefix + "setup-" + mode, lambda p=proof, m=mode: driver.require_setup_proof(p, profile, m), True)
+        native, reference = setup.protocols(profile, "O0")
+        proof = setup.check_pair(provider(native, 0), provider(reference, 0), profile, "O0")
+        mutations = [
+            ("profile", lambda p: p.update(Profile="foreign")),
+            ("mode", lambda p: p.update(Mode="Os")),
+            ("cohort", lambda p: p.update(Cohort="foreign")),
+            ("scope", lambda p: p.update(ProofScope="POLICY_EQUIVALENCE")),
+            ("count", lambda p: p.update(ClosedBodies=2)),
+            ("bool-count", lambda p: p.update(ClosedBodies=True)),
+            ("pin", lambda p: p.update(ReferencePin="0" * 40)),
+            ("unmatched-contract", lambda p: p.update(DistinctContractsChecked=False)),
+            ("bool-counter", lambda p: p.update(RequiredCellsSatisfied=False)),
+            ("nonzero-counter", lambda p: p.update(RequiredCellsSatisfied=1)),
+            ("missing-counter", lambda p: p.pop("RequiredCellsSatisfied")),
+            ("difference", lambda p: p["DifferenceIds"].pop()),
+            ("cpacr-address", lambda p: p["CPACR"].update(Address=0)),
+            ("cpacr-mask", lambda p: p["CPACR"].update(AccessMask=0)),
+            ("fpccr-address", lambda p: p["FPCCR"].update(Address=0)),
+            ("fpccr-mask", lambda p: p["FPCCR"].update(PolicyMask=0)),
+            ("native-policy", lambda p: p["FPCCR"].update(NativeBits=0xC0000000)),
+            ("reference-policy", lambda p: p["FPCCR"].update(ReferenceBits=0x80000000)),
+            ("policy-equivalence", lambda p: p["FPCCR"].update(PolicyEquivalenceProven=True)),
+            ("hardware-readback", lambda p: p["FPCCR"].update(HardwareReadbackProven=True)),
+            ("lazy-active", lambda p: p["FPCCR"].update(LspactHandlingProven=True)),
+            ("partial-evidence", lambda p: p["RootEvidence"].pop()),
+            ("duplicate-root", lambda p: p["RootEvidence"].__setitem__(0, deepcopy(p["RootEvidence"][1]))),
+            ("empty-body", lambda p: p["RootEvidence"][0].update(Tokens=0)),
+            ("bool-layout", lambda p: p["RootEvidence"][0].update(LiteralIslands=True)),
+            ("body-hash", lambda p: p["RootEvidence"][0].update(BodySha256="bad")),
+        ]
+        for key in ("RequiredCellSatisfied", "CompleteObjectProof", "InstructionEquivalence", "CpuExecution",
+                    "BoardExecution", "FinalElfProof", "GlobalFreezeQualified", "StartupRoutingProven",
+                    "CalleeBodiesProven", "UnreachabilityProven"):
+            altered = deepcopy(proof)
+            altered[key] = True
+            test(prefix + "setup-promotion-" + key, lambda p=altered:
+                 driver.require_setup_proof(p, profile, "O0"), False)
+        for name, mutate in mutations:
+            altered = deepcopy(proof)
+            mutate(altered)
+            test(prefix + "setup-" + name, lambda p=altered: driver.require_setup_proof(p, profile, "O0"), False)
     print(json.dumps(dict(Verdict="PASS", Controls=len(controls), CompilerInvocations=0,
                           CpuExecution=False, Records=controls), indent=2))
 
