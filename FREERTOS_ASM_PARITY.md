@@ -1,5 +1,37 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Pinned CM0 Reference Final-Twin Producers
+
+`tools/fixtures/cm0_final_image` adds a separate producer for exact p2/b0,
+soft/no-FPU/no-MPU CM0, M0+ without VTOR and M0+ with VTOR cohorts. All
+fifteen profile/mode combinations pass at O0/Og/O2/Os/O3: 75 actual TUs,
+30 direct final links and 105 object checkpoints. The unchanged pinned
+`port.c` and `portasm.c` retain their five complete owning-object protocols;
+the SVC C dispatcher and separate first-restore function are not stubbed.
+
+The producer and parent replay preserve complete owning input sections,
+75 root-owner records and 45 pool words outside function `st_size`. Both
+link maps bind the sections to the correct source objects. Ordinary and
+emit-relocs twins preserve load/allocated-section bytes. Actual compile
+dependencies, 11,655 artifact entries and 7,245 original/captured input
+bindings close without detected drift. VTOR0 fixtures explicitly disable
+the dormant upstream VTOR installation check; VTOR1 retains it. The inline
+assertion-loop configuration remains unchanged.
+
+Twenty-five pure envelope controls pass. A stronger independent replay
+also passes 195 in-memory malformed-receipt controls and five whole-file
+newline controls. It authenticates each JSON buffer before parsing,
+requires complete consumed/tool/worker/DLL/parser/inventory bindings and
+rejects twin aliases. These controls are not retained-byte ELF mutants.
+
+This closes the pinned producer/twin and owning-object evidence only.
+Final five-root relocation-aware validation, actual ELF mutations and the
+native/reference final mechanism join remain a separate next slice. No
+final-root, whole-runtime, archive/LTO, CPU/board or global-freeze claim is
+added; required global counters stay zero. Runtime/ABI/default matrix are
+unchanged. Reproduction is in the fixture contract; retained receipts are
+in `PORT_ARCHITECTURE_AUDIT.md#pinned-cm0-reference-final-twin-producers`.
+
 ## Classic-FP Final Mechanism Join
 
 `tools/fixtures/classic_final_join` now composes the independently preserved

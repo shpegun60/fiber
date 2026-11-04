@@ -6489,3 +6489,97 @@ native/reference final equivalence, other profiles/cohorts, archive/final
 LTO, CPU/board or global freeze. It satisfies zero required global parity
 keys. Production C/assembly, public/port ABI, feature admission and default
 matrix are unchanged. Local proof receipts are not hosted exact-commit CI.
+
+## Pinned CM0 Reference Final-Twin Producers
+
+Reviewed locally on 2026-11-04. This standalone proof-only slice introduces
+`tools/fixtures/cm0_final_image` without changing the qualified classic-FP
+readers, production context/Fiber code, port assembly, ABI or default matrix.
+It admits exactly the three CM0-family p2/b0, ordinary-AAPCS, soft/no-FPU,
+no-MPU cohorts already defined by the captured CM0 closed-root contract.
+CPU and VTOR differences remain explicit receipt facts, not inferred from
+potentially identical function bytes or claimed as STM32 device readback.
+
+Every profile uses unchanged pinned
+`a50edad08b29052631aa469d4df6e6ec7ff68878`
+`portable/GCC/ARM_CM0/port.c` and `portasm.c`, real `portmacro.h` and
+`portasm.h`, typed fail-stop providers, a seven-entry typed consumer and
+Thumb-1 startup. There are exactly five TUs, not a reconstructed/combined
+port object. All discovered dependencies must equal actual compilation
+dependencies. MPU/FPU/TrustZone are zero; raw priority thresholds zero mean
+BASEPRI is inapplicable. The baseline inline infinite-loop assertion is
+preserved. The synthetic no-VTOR fixtures explicitly override the otherwise
+VTOR-dereferencing scheduler installation check to zero; VTOR1 uses one.
+This is fixture policy, not proof of runtime MMIO or routing.
+
+The prelink checker matches five complete source-transcribed protocols:
+four owned by `portasm.c` and the C SVC dispatcher owned by `port.c`.
+Both upstream SVC dispatch stages and the separate first restore remain
+real functions. Linker KEEP retains complete owning sections, including
+literal pools beyond function extents. Metadata records full section
+hashes, sizes, mappings and REL records without enlarging `st_size`.
+The current-TCB provider has its real opaque pointer type and null BSS;
+no fabricated kernel/TCB, scheduler or tick execution is supplied.
+
+`C:/fzfinal-cm0-reference-grid-20261104-e1` passes all fifteen cells at
+O0/Og/O2/Os/O3: 75 TUs, 30 direct final links, 105 object checkpoints and
+1,185 host/native-tool commands. There is no intermediate relocatable
+link. Every ordinary/emit-relocs pair uses the same exact five objects.
+The producer checks strong vector definitions and slots 11/14/15, typed
+consumer pointers, numeric header facts and absence of native code.
+Load segments and allocated bytes match within each pair, not across
+native/reference implementations. All 11,655 artifact entries and 7,245
+original/captured input bindings close without detected drift.
+
+The parent replay reproduces 75 owning-object body records, binds all five
+whole sections to both map placements per case, and independently records
+45 out-of-function pool words. It does not prove their applied relocation
+semantics or full final instructions. The original sweep auditor lacked
+explicit malformed-receipt defenses for twin aliases, empty input lists
+and mixed-newline normalization. These were addressed in the separate
+stronger replay before relying on its admission evidence, without changing
+the already-built producer sources or ELFs.
+
+Post-audit `...parent-review-20261104-e1` remains FAIL: its first uniqueness
+guard incorrectly rejected legitimate content-addressed capture deduplication.
+E2 passes the positive replay, 135 bounded in-memory receipt mutations and
+five newline controls; it predates complete worker-binding and same-buffer
+JSON admission. E3 closes both gaps and repeats the same actual grid. It
+authenticates each case receipt/manifest/input JSON buffer before parsing,
+requires consumed inputs, complete captured inventory, six resolved
+toolchain workers, tool DLLs and parser bindings, and binds canonical
+physically distinct twins to recorded hashes and link outputs. Only exact
+same-hash/basename content-addressed capture sharing is accepted.
+
+E3 passes thirteen deliberate in-memory metadata variants per case, 195
+applications total: twin record/path aliases, wrong ELF/map hashes, empty
+file/generated inventories, missing consumed source/config/tool/cc1 worker,
+inventory manifest, parser and DLL binding. Each must reject for its intended
+reason. Five additional controls distinguish exact LF or whole-file CRLF
+from mixed/duplicated CR. These are auditor controls, not actual ELF byte
+mutations or compiler invocations. All fifteen cases are replayed again
+at closing. The separate producer suite passes 25 pure controls, including
+scope/config/profile/protocol checks and artifact failure rollback. No
+source or input drift is detected; historical attempts are not relabeled.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-cm0-reference-grid-20261104-e1/results.json` | `8D015F218F52FE2E71237E7AA75E93132A9E4D09A13A02D1182CC8A375FFAD91` |
+| `C:/fzfinal-cm0-reference-grid-driver-20261104-e1/driver.py` | `FD62979FFFC6010CB8441C39ADB4070327D7147BF70091D1FC4AFD146F6C7D53` |
+| `C:/fzfinal-cm0-reference-parent-review-20261104-e1/results.json` | `F6EE7C0C8DB1A3543C505B759F829E8661E3727601903E921FC5913656E32EBD` |
+| `C:/fzfinal-cm0-reference-parent-review-20261104-e2/results.json` | `281775733DE809B853C32F12E106E8D8BAC427CB585C91284666C83F3EAE4E1A` |
+| `C:/fzfinal-cm0-reference-parent-review-20261104-e3/results.json` | `1CB7C0CBDFE9D2F13788241B95998BF6BCB5FD14F32ECC7152F0DF7ADAA84C0B` |
+| `C:/fzfinal-cm0-reference-parent-review-20261104-e3-driver/audit.py` | `56A9AEC5CE6AE16D4F1C0F0B14D01DE37DAFF0A9BE934B16718F16067C681F96` |
+| `%TEMP%/cm0-final-parent-envelope-20261104-e1.json` | `C37CBAE2037008BFDAF18F4C18CD0DAF397A8170F37E3042B30D30A4F7EFE127` |
+| `tools/fixtures/cm0_final_image/reference_run.py` | `6F1171044756C0F285E2B58B9DBC0D03B44B883B759241E6037A4CFAB53D0404` |
+| `tools/fixtures/cm0_final_image/test_reference_run.py` | `FFB266D9B6993BC37AF1EB8345CF3B5D386011B53A37A1372BBB416B15C286F6` |
+
+The next independent gate must close final five-root instruction/relocation
+semantics, out-of-extent pool provenance and Thumb tags, actual retained-byte
+negatives and the native/reference final mechanism join. Current evidence
+is producer/twin preservation and owning-object protocols only, not that
+final-root proof, constructor/C-callee/kernel semantics, successful CPU/MMIO
+execution, other cohorts, archive/final LTO or global freeze. All required
+global parity counters remain zero. No board was flashed/reset/run; local
+receipts are not hosted exact-commit CI. The protected unrelated WIP remains
+untouched.
