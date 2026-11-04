@@ -6274,3 +6274,98 @@ remain separate obligations. All required global parity keys remain
 unsatisfied by this pilot. No production C/assembly, public/port ABI,
 default matrix, feature admission or hardware qualification changes.
 Local captured-source evidence is not hosted exact-commit CI evidence.
+
+## Pinned Classic-FP Reference Final Images At Five Optimizations
+
+The opt-in companion extends the historical CM4/O2 pilot to exactly
+CM4 and CM7/r0p1 hard-FP, VTOR1, no-MPU, p4/b16 ordinary-AAPCS cohorts
+at O0/Og/O2/Os/O3. Default invocation remains CM4/O2. The clean upstream
+pin is still `a50edad08b29052631aa469d4df6e6ec7ff68878`; actual port C
+and portmacro headers are captured unchanged and checked against Git blobs.
+Both profiles use four actual TUs and identical-object ordinary/emit-relocs
+twins. There is no native-runtime source, synthetic scheduler success,
+archive, LTO, instruction execution or board access in these builds.
+
+CM4 header facts require SP `__ARM_FP=4`; CM7 requires SP+DP `14`.
+The exact per-profile CPU/FPU flags, attribute facts, config/portmacro
+providers and ten-word consumer record remain separately checked. CM7's
+manifest has the additional exact definition
+`configENABLE_ERRATA_837070_WORKAROUND=1`. The pinned r0p1 source already
+contains the erratum sequence unconditionally; preserving this metadata
+define does not claim it controls the source sequence. Missing, changed,
+non-string and extra definitions reject, including the alternate
+`WORKAROUND_PMU_CM001=1` instruction path.
+
+The initial sweep `C:/fzfinal-reference-grid-20261104-e1` remains FAIL.
+Five CM4 pairs passed, but CM7/O0 admission rejected the real manifest
+before any tool launch because the initial builder incorrectly required
+CM4's three-definition dictionary for both profiles. The fix adds exact
+profile-specific dictionaries and positive/negative regressions against
+the actual inventory. No upstream source or protocol was changed to pass.
+The failed sweep is not promoted or combined into the fresh result.
+
+The fresh complete sweep `C:/fzfinal-reference-grid-20261104-e2` passes
+all ten pairs: 710 host/native-tool commands including Git identity/blob
+checks, 40 fresh TUs, 20 direct links and 70 object checkpoints. Complete
+artifact sealing closes 7,410 entries and 4,800 original/captured input
+bindings plus generated inputs with no closing drift. Each pair checks
+three complete original prelink protocols before final-image replay.
+
+`ReferenceCM4FinalImage` and `ReferenceCM7FinalImage` remain fixed classes,
+not caller-supplied protocol/symbol allowlists. CM4's three roots total
+164 bytes/48 instructions; CM7's total 168/50. O0 alone retains one exact
+post-island `00bf` NOP and its Thumb mapping per root, adding six bytes and
+three instructions per profile. CM7's exact PendSV is 96 bytes with BL
+at 50 and ABS32 at 92, rather than CM4's 92/46/88. Its literal LDR uses
+80, not 76. Neither the CPSID/CPSIE instructions nor O0 tails are dropped.
+All ten pairs total 30 roots, 1,672 bytes, 496 instructions and thirty
+applied references. Each pair retains one BL-4 to `vTaskSwitchContext`
+and two ABS32+0 entries for `pxCurrentTCB` with actual provider/map origins.
+
+All 191 pure reader controls run for every pair. The separate envelope
+suite passes 37 controls, including actual-manifest selection across all
+ten cases and exact define-mutation rejects. Seventeen standalone admission
+controls include the existing physical-input alias checks, profile/mode
+totals and four output controls. Resolved in-repository/ancestor/existing
+outputs reject before mkdir, hashing, input capture or reader loading.
+Every actual pair passes thirteen retained mutation classes: 130 mutant
+applications, not 130 distinct classes. Eleven per pair preserve identical
+twin loads but fail the intended root check; two fail structural twin
+validation. No source, input, captured-input or mutant file drifts.
+
+The separate read-only parent post-audit binds the exact sweep and per-case
+receipts, replays all thirty complete root records and twin comparisons,
+and checks the full artifact/input/generated/mutant memberships and bytes.
+Exact four-file validator-source memberships and five-file mutant lists
+reject empty closure records. Parsed receipts use the same watched byte
+buffer that was hashed. Typed false/zero non-promotion fields are required.
+One hundred malformed receipt controls reject: profile, mode, provider
+binding, promoted scope and empty source/mutant closure variants. Its 8,668
+watched files and build memberships close without drift. This audit
+rehashes retained mutants; it does not re-execute them or compile again.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-reference-grid-20261104-e1/results.json` (FAIL) | `2DE4B8144844B54B04219883C79A70743C2093F06A4027489E8A96ACADEF0ABE` |
+| `C:/fzfinal-reference-grid-20261104-e2/results.json` | `739F371EC9188187DE7B1DE72B7A9A36434B77C64F49A521E6D5A40C4B7E8AE5` |
+| `C:/fzfinal-reference-grid-driver-20261104-e2/driver.py` | `8FB5967B9B91302F5CAB2A482678B0922C947DC4BBB4E63F4F07845F04C910B0` |
+| `C:/fzfinal-reference-grid-parent-review-20261104-e1/results.json` | `C87D5F0963377B60B98E3BFF67E337B9EC82D4C02F212372375DAC00630629B5` |
+| `C:/fzfinal-reference-grid-parent-review-20261104-e1/audit.py` | `5C74BDAE3561B7601293F7862F4BC4669B3460FED9529B3B72EEE9B9CD79FE4B` |
+| `C:/fzfinal-reference-reader-parent-pure-20261104-e3/results.json` | `BE183E3D4A616BB9DACBF225E1CF067033FF9B21591E029D6D272D0A2C73F333` |
+| `%TEMP%/reference-final-parent-envelope-20261104-e2.json` | `BD08D47BF00A301397BB62514BDFDEB482942DA1821580F67B02FA73E15B9DBE` |
+| `C:/fzfinal-reference-identity-expanded-20261104-e3/results.json` | `9BADB52F1C5B23DD6B58B03F57000027FC98D918A42CA60FC06B1A61C317C135` |
+| `tools/fixtures/classic_final_image/reference_run.py` | `FB5E1FA3CEE51E8069A15CDC6E3F31F47CA046EF0320960F9CA9C8809C2F1838` |
+| `tools/fixtures/classic_final_image/reference_elf.py` | `CDE457FEB11A1DCC1D0F41D394C7E62C4B3AA0E109A3D70979CE320914215A4D` |
+| `tools/fixtures/classic_final_image/reference_witness.py` | `FD53CFE4E135BAC269D810BFD66A56319B80DA90569EBA23EBE6D06DC4C2D750` |
+
+This closes only the ten pinned-reference direct final-root witnesses.
+`FAP-FP-SETUP-POLICY` (native eager versus reference lazy FP) and
+`FAP-CM7-ERRATA-PRIMASK` (native preservation versus upstream unconditional
+IRQ re-enable) remain explicit. Reader mode selection alone is not proof
+of compiler mode or CPU profile; enclosing source/recipe receipts provide
+that binding. No C-callee/kernel/constructor semantics, successful MMIO,
+full native/reference final parity, other profiles/cohorts, archive/final
+LTO, CPU/board or global freeze is qualified. All required global parity
+keys remain unsatisfied by this bounded gate. Production C/assembly,
+public/port ABI, default matrix and feature admission are unchanged.
+These local receipts are not hosted exact-commit CI evidence.

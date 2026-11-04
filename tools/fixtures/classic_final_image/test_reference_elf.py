@@ -6,6 +6,7 @@ independent explicit instruction rows, not the reader's protocol tables.
 
 import argparse
 import ast
+from enum import Enum
 import hashlib
 import importlib.util
 import json
@@ -86,13 +87,52 @@ _ROWS = {
 """,
 }
 
+# Independently written CM7 r0p1 assembly: BASEPRI entry is enclosed by
+# CPSID/CPSIE, moving the call and the pool rather than hiding instructions.
+_CM7_ROWS = """
+0 f3ef8009 mrs r0, PSP
+4 f3bf8f6f isb sy
+8 4b14 ldr r3, [pc, #80]
+10 681a ldr r2, [r3, #0]
+12 f01e0f10 tst.w lr, #16
+16 bf08 it eq
+18 ed208a10 vstmdbeq r0!, {s16-s31}
+22 e9204ff0 stmdb r0!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
+26 6010 str r0, [r2, #0]
+28 b409 push {r0, r3}
+30 f04f0010 mov.w r0, #16
+34 b672 cpsid i
+36 f3808811 msr BASEPRI, r0
+40 f3bf8f4f dsb sy
+44 f3bf8f6f isb sy
+48 b662 cpsie i
+50 f7fffffe bl vTaskSwitchContext
+54 f04f0000 mov.w r0, #0
+58 f3808811 msr BASEPRI, r0
+62 bc09 pop {r0, r3}
+64 6819 ldr r1, [r3, #0]
+66 6808 ldr r0, [r1, #0]
+68 e8b04ff0 ldmia.w r0!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
+72 f01e0f10 tst.w lr, #16
+76 bf08 it eq
+78 ecb08a10 vldmiaeq r0!, {s16-s31}
+82 f3808809 msr PSP, r0
+86 f3bf8f6f isb sy
+90 4770 bx lr
+"""
+_BASE_SIZES = {"CM4": {FIRST: 40, SVC: 32, PENDSV: 92},
+               "CM7": {FIRST: 40, SVC: 32, PENDSV: 96}}
 
-def rows(name):
+
+def rows(name, profile="CM4", mode="O2"):
     result = []
-    for line in _ROWS[name].strip().splitlines():
+    text = _CM7_ROWS if profile == "CM7" and name == PENDSV else _ROWS[name]
+    for line in text.strip().splitlines():
         offset, words, op, *operand = line.split(maxsplit=3)
         raw = b"".join(struct.pack("<H", int(words[i:i + 4], 16)) for i in range(0, len(words), 4))
         result.append((int(offset), raw, op, operand[0] if operand else ""))
+    if mode == "O0":
+        result.append((_BASE_SIZES[profile][name], bytes.fromhex("00bf"), "nop", ""))
     return result
 
 
@@ -177,26 +217,33 @@ def elf_bytes(final, input_sections, input_symbols, relocations, flags):
 
 
 class Fixture:
-    def __init__(self, directory):
+    def __init__(self, directory, *, profile="CM4", mode="O2"):
         self.directory = Path(directory)
+        self.profile, self.mode = profile, mode
+        self.base_sizes = dict(_BASE_SIZES[profile])
+        self.sizes = {name: size + (2 if mode == "O0" else 0) for name, size in self.base_sizes.items()}
+        self.final_sizes = dict(self.sizes)
+        self.call_offset, self.slot_offset = (46, 88) if profile == "CM4" else (50, 92)
         self.before = {}
         for name in ADDRESSES:
-            body = bytearray(SIZES[name])
-            for offset, raw, _, _ in rows(name):
+            body = bytearray(self.sizes[name])
+            for offset, raw, _, _ in rows(name, profile, mode):
                 body[offset:offset + len(raw)] = raw
             self.before[name] = body
         self.before[FIRST][36:40] = struct.pack("<I", 0xE000ED08)
         self.after = {name: bytearray(body) for name, body in self.before.items()}
         self.after[SVC][28:32] = struct.pack("<I", RAM)
-        self.after[PENDSV][88:92] = struct.pack("<I", RAM)
-        self.after[PENDSV][46:50] = bl(ADDRESSES[PENDSV] + 46, BASE + 256)
+        self.after[PENDSV][self.slot_offset:self.slot_offset + 4] = struct.pack("<I", RAM)
+        self.after[PENDSV][self.call_offset:self.call_offset + 4] = bl(ADDRESSES[PENDSV] + self.call_offset, BASE + 256)
         self.bindings = {FIRST: 0, SVC: 1, PENDSV: 1}
         self.final_bindings = dict(self.bindings)
-        self.sizes, self.final_sizes = dict(SIZES), dict(SIZES)
-        self.maps = {FIRST: 34, SVC: 28, PENDSV: 88}
+        self.maps = {FIRST: 34, SVC: 28, PENDSV: self.slot_offset}
         self.final_maps = dict(self.maps)
         self.first_pool_boundary = self.final_first_pool_boundary = 36
-        self.relocs = {FIRST: [], SVC: [(28, 2, SLOT)], PENDSV: [(46, 10, CALLEE), (88, 2, SLOT)]}
+        self.tail_maps = {name: size if mode == "O0" else None for name, size in self.base_sizes.items()}
+        self.final_tail_maps = dict(self.tail_maps)
+        self.relocs = {FIRST: [], SVC: [(28, 2, SLOT)],
+                       PENDSV: [(self.call_offset, 10, CALLEE), (self.slot_offset, 2, SLOT)]}
         self.final_relocs = {name: list(values) for name, values in self.relocs.items()}
         self.text = {}
         self.omitted = set()
@@ -218,6 +265,8 @@ class Fixture:
                             symbol(name, sec, 1, self.sizes[name], self.bindings[name], 2)))
             if name == FIRST and self.first_pool_boundary is not None:
                 symbols.append(symbol("$d.first_pool", sec, self.first_pool_boundary))
+            if self.tail_maps[name] is not None:
+                symbols.append(symbol("$t.tail." + name, sec, self.tail_maps[name]))
         symbols.extend((symbol(CALLEE, "", binding=1), symbol(SLOT, "", binding=1),
                         symbol("xTaskIncrementTick", "", binding=1)))
         self.prelink.write_bytes(elf_bytes(False, sections, symbols,
@@ -238,6 +287,8 @@ class Fixture:
                             symbol(name, ".text", address | 1, self.final_sizes[name], self.final_bindings[name], 2)))
             if name == FIRST and self.final_first_pool_boundary is not None:
                 symbols.append(symbol("$d.first_pool", ".text", address + self.final_first_pool_boundary))
+            if self.final_tail_maps[name] is not None:
+                symbols.append(symbol("$t.tail." + name, ".text", address + self.final_tail_maps[name]))
             relocs.extend((address + off, kind, target) for off, kind, target in self.final_relocs[name])
         body[256:260] = bytes.fromhex("704700bf")
         symbols.extend((symbol("$t.callee", ".text", BASE + 256),
@@ -250,7 +301,7 @@ class Fixture:
         self.plain.write_bytes(elf_bytes(True, sections, symbols, {}, self.final_flags))
         lines = ["Disassembly of section .text:"]
         for name in ADDRESSES:
-            for offset, raw, op, operand in rows(name):
+            for offset, raw, op, operand in rows(name, self.profile, self.mode):
                 if (name, offset) in self.omitted:
                     continue
                 op, operand = self.text.get((name, offset), (op, operand))
@@ -259,24 +310,25 @@ class Fixture:
                 if op == "bl" and operand == CALLEE:
                     operand = "%x <%s>" % (self.callee_address, CALLEE)
                 lines.append("%x: %s %s %s" % (ADDRESSES[name] + offset, words, op, operand))
-            begin = {FIRST: 34, SVC: 28, PENDSV: 88}[name]
-            for offset in range(begin, SIZES[name], 2):
+            begin = {FIRST: 34, SVC: 28, PENDSV: self.slot_offset}[name]
+            for offset in range(begin, self.base_sizes[name], 2):
                 raw = self.after[name][offset:offset + 2]
                 lines.append("%x: %04x .short 0" % (ADDRESSES[name] + offset, struct.unpack("<H", raw)[0]))
         self.dis.write_text("\n".join(lines + self.extra_dis) + "\n", encoding="utf-8", newline="\n")
         placements = ["Linker script and memory map"]
-        placements.extend(" .text.%s 0x%x 0x%x %s" % (name, ADDRESSES[name], SIZES[name], self.prelink.resolve().as_posix())
+        placements.extend(" .text.%s 0x%x 0x%x %s" % (name, ADDRESSES[name], len(self.before[name]), self.prelink.resolve().as_posix())
                           for name in ADDRESSES)
         placements.extend((" .text.%s 0x%x 0x4 %s" % (CALLEE, BASE + 256, self.provider.resolve().as_posix()),
                            " .bss.%s 0x%x 0x4 %s" % (SLOT, RAM, self.provider.resolve().as_posix())))
         self.link_map.write_text("\n".join(placements) + "\n", encoding="utf-8", newline="\n")
         return self
 
-    def image(self, **kwargs):
+    def image(self, *, reader_class=None, **kwargs):
         options = dict(provider_objects={str(self.prelink.resolve()): self.prelink,
-                                         str(self.provider.resolve()): self.provider}, link_map=self.link_map)
+                                         str(self.provider.resolve()): self.provider}, link_map=self.link_map, mode=self.mode)
         options.update(kwargs)
-        return reader.ReferenceCM4FinalImage(self.prelink, self.final, self.dis, **options)
+        reader_class = reader_class or {"CM4": reader.ReferenceCM4FinalImage, "CM7": reader.ReferenceCM7FinalImage}[self.profile]
+        return reader_class(self.prelink, self.final, self.dis, **options)
 
 
 class ReferenceTests(unittest.TestCase):
@@ -435,6 +487,185 @@ for _name, _flags in (("soft", 0x05000200), ("neither", 0x05000000), ("both", 0x
     negative("final_ABI_" + _name, lambda f, v=_flags: setattr(f, "final_flags", v), FIRST, "ELF:prelink/final ABI")
 
 
+class ProfileModeTests(unittest.TestCase):
+    def fixture(self, profile="CM4", mode="O2"):
+        temp = tempfile.TemporaryDirectory(prefix="reference-profile-mode-")
+        self.addCleanup(temp.cleanup)
+        return Fixture(temp.name, profile=profile, mode=mode)
+
+    def test_default_CM4_still_O2(self):
+        f = self.fixture().write()
+        image = reader.ReferenceCM4FinalImage(f.prelink, f.final, f.dis,
+            provider_objects={str(f.prelink.resolve()): f.prelink, str(f.provider.resolve()): f.provider},
+            link_map=f.link_map)
+        self.assertEqual((image.profile, image.mode), ("CM4", "O2"))
+        self.assertEqual(image.function(PENDSV)["InstructionCount"], 27)
+
+    def test_default_CM7_is_O2(self):
+        f = self.fixture("CM7").write()
+        image = reader.ReferenceCM7FinalImage(f.prelink, f.final, f.dis,
+            provider_objects={str(f.prelink.resolve()): f.prelink, str(f.provider.resolve()): f.provider},
+            link_map=f.link_map)
+        self.assertEqual((image.profile, image.mode), ("CM7", "O2"))
+        self.assertEqual(image.function(PENDSV)["InstructionCount"], 29)
+
+    def test_ordinary_mode_identity_not_inferred_from_bytes(self):
+        for profile in ("CM4", "CM7"):
+            with self.subTest(profile=profile):
+                f = self.fixture(profile).write()
+                proof = f.image(mode="Og").function(PENDSV)
+                self.assertEqual(proof["Mode"], "Og")
+                self.assertIs(proof["ModeBindingVerified"], False)
+
+    def test_no_caller_contract_or_profile_options(self):
+        for cls in (reader.ReferenceCM4FinalImage, reader.ReferenceCM7FinalImage):
+            for option in ("profile", "protocol", "roots", "callees", "float_abi"):
+                with self.subTest(cls=cls.__name__, option=option), self.assertRaises(TypeError):
+                    cls(None, None, None, **{option: "CM4"})
+
+
+def positive_profile_mode(profile, mode):
+    def control(self):
+        f = self.fixture(profile, mode).write()
+        image = f.image()
+        proofs = [image.function(name) for name in ADDRESSES]
+        tail = int(mode == "O0")
+        base_bytes, base_instructions = (164, 48) if profile == "CM4" else (168, 50)
+        self.assertEqual(sum(p["Size"] for p in proofs), base_bytes + 6 * tail)
+        self.assertEqual(sum(p["InstructionCount"] for p in proofs), base_instructions + 3 * tail)
+        self.assertEqual(sum(len(p["References"]) for p in proofs), 3)
+        self.assertEqual(image.ROOTS, frozenset(ADDRESSES))
+        self.assertTrue(reader.compare_load_images(f.plain, f.final)["Identical"])
+        for proof in proofs:
+            self.assertEqual((proof["Profile"], proof["Mode"], proof["TailNops"]), (profile, mode, tail))
+            self.assertIs(proof["ModeBindingVerified"], False)
+            self.assertEqual(proof["Size"], f.sizes[proof["Name"]])
+            self.assertEqual(image.read(proof["Address"], proof["Size"]), bytes(f.after[proof["Name"]]))
+            if tail:
+                last = proof["Instructions"][-1]
+                self.assertEqual((last["Offset"], last["Bytes"], last["Mnemonic"], last["Operands"]),
+                                 (f.base_sizes[proof["Name"]], "00bf", "nop", ""))
+        self.assertEqual([(r["Offset"], r["Kind"]) for r in proofs[2]["References"]],
+                         [(46, 10), (88, 2)] if profile == "CM4" else [(50, 10), (92, 2)])
+        self.assertEqual(proofs[0]["DataMappings"], [dict(Offset=34, Size=2, Bytes="0000"),
+                                                    dict(Offset=36, Size=4, Bytes="08ed00e0")])
+        self.assertEqual([(m["Offset"], m["Size"]) for m in proofs[2]["DataMappings"]], [(f.slot_offset, 4)])
+    control.__name__ = "test_positive_" + profile + "_" + mode
+    setattr(ProfileModeTests, control.__name__, control)
+
+
+def profile_negative(name, profile, fixture_mode, mutate, root, expected, **selection):
+    def control(self):
+        f = self.fixture(profile, fixture_mode)
+        mutate(f)
+        f.write()
+        self.assertTrue(reader.compare_load_images(f.plain, f.final)["Identical"])
+        with self.assertRaisesRegex(reader.Rejected, expected):
+            f.image(**selection).function(root)
+    control.__name__ = "test_reject_" + profile + "_" + fixture_mode + "_" + name
+    setattr(ProfileModeTests, control.__name__, control)
+
+
+for _profile in ("CM4", "CM7"):
+    for _mode in ("O0", "Og", "O2", "Os", "O3"):
+        positive_profile_mode(_profile, _mode)
+        profile_negative("wrong_profile", _profile, _mode, lambda f: None, PENDSV, "PRESERVATION:root extent",
+            reader_class=reader.ReferenceCM7FinalImage if _profile == "CM4" else reader.ReferenceCM4FinalImage)
+    for _mode in ("Og", "O2", "Os", "O3"):
+        profile_negative("declared_as_O0", _profile, _mode, lambda f: None, FIRST, "PRESERVATION:root extent", mode="O0")
+        profile_negative("O0_declared_as_" + _mode, _profile, "O0", lambda f: None, FIRST, "PRESERVATION:root extent", mode=_mode)
+
+
+class _ModeEnum(Enum):
+    O2 = "O2"
+
+
+class _StringModeEnum(str, Enum):
+    O0 = "O0"
+
+
+def invalid_mode(profile, name, value):
+    def control(self):
+        cls = reader.ReferenceCM4FinalImage if profile == "CM4" else reader.ReferenceCM7FinalImage
+        with self.assertRaisesRegex(reader.Rejected, "SCOPE:mode must be"):
+            cls(None, None, None, mode=value)
+    control.__name__ = "test_invalid_mode_" + profile + "_" + name
+    setattr(ProfileModeTests, control.__name__, control)
+
+
+for _profile in ("CM4", "CM7"):
+    for _name, _value in (("true", True), ("false", False), ("none", None), ("integer", 0),
+                          ("float", 0.0), ("bytes", b"O2"), ("list", ["O2"]), ("dict", {"mode": "O2"}),
+                          ("enum", _ModeEnum.O2), ("string_enum", _StringModeEnum.O0),
+                          ("O1", "O1"), ("case", "o2"), ("flag", "-O2"), ("empty", "")):
+        invalid_mode(_profile, _name, _value)
+
+
+def tail_mutation(f, root, variant):
+    offset = f.base_sizes[root]
+    if variant == "wrong_bits":
+        both(f, root, offset, bytes.fromhex("c046"))
+    elif variant == "wrong_text":
+        f.text[(root, offset)] = ("mov", "r8, r8")
+    elif variant == "missing_mapping":
+        f.tail_maps[root] = f.final_tail_maps[root] = None
+    elif variant == "extra_NOP":
+        f.before[root].extend(bytes.fromhex("00bf"))
+        f.after[root].extend(bytes.fromhex("00bf"))
+        f.sizes[root] += 2
+        f.final_sizes[root] += 2
+    else:
+        raise ValueError("unknown synthetic tail mutation")
+
+
+for _profile in ("CM4", "CM7"):
+    for _root in ADDRESSES:
+        for _variant in ("wrong_bits", "wrong_text", "missing_mapping", "extra_NOP"):
+            profile_negative("tail_" + _root + "_" + _variant, _profile, "O0",
+                lambda f, root=_root, variant=_variant: tail_mutation(f, root, variant), _root,
+                "PROTOCOL:" if _variant.startswith("wrong_") else "PRESERVATION:")
+    for _stage, _attribute in (("prelink", "tail_maps"), ("final", "final_tail_maps")):
+        profile_negative("tail_mapping_" + _stage, _profile, "O0",
+            lambda f, attr=_attribute: getattr(f, attr).__setitem__(PENDSV, None), PENDSV, "PRESERVATION:mapping/layout")
+
+
+for _name, _offset, _raw in (("CPSID_missing", 34, "00bf"), ("CPSIE_missing", 48, "00bf"),
+                             ("CPSID_wrong", 34, "62b6"), ("CPSIE_wrong", 48, "72b6"),
+                             ("threshold_not16", 30, "4ff02000"), ("BASEPRI_register", 36, "81f31188"),
+                             ("entry_barrier", 40, "bff36f8f"),
+                             ("save_IT_ne", 16, "18bf"), ("restore_IT_ne", 76, "18bf"),
+                             ("save_IT_mask", 16, "0cbf"), ("restore_IT_mask", 76, "0cbf"),
+                             ("save_FP_registers", 18, "20ed100a"), ("restore_FP_registers", 78, "b0ec100a")):
+    profile_negative(_name, "CM7", "O2", lambda f, o=_offset, raw=_raw: both(f, PENDSV, o, bytes.fromhex(raw)),
+                     PENDSV, "PROTOCOL:original instruction")
+
+profile_negative("BL_addend", "CM7", "O2", lambda f: f.before[PENDSV].__setitem__(slice(50, 54), bl(50, 52)),
+                 PENDSV, "RELOC:only original BL addend")
+profile_negative("BL_destination", "CM7", "O2", lambda f: f.after[PENDSV].__setitem__(slice(50, 54), bl(ADDRESSES[PENDSV] + 50, BASE + 258)),
+                 PENDSV, "RELOC:applied BL destination")
+profile_negative("CM4_call_offset", "CM7", "O2", lambda f: f.relocs[PENDSV].__setitem__(0, (46, 10, CALLEE)),
+                 PENDSV, "RELOC:relocation membership")
+profile_negative("CM4_pool_offset", "CM7", "O2", lambda f: f.final_relocs[PENDSV].__setitem__(1, (88, 2, SLOT)),
+                 PENDSV, "RELOC:relocation membership")
+profile_negative("slot_addend", "CM7", "O2", lambda f: f.before[PENDSV].__setitem__(slice(92, 96), struct.pack("<I", 4)),
+                 PENDSV, "RELOC:only current-slot ABS32")
+profile_negative("slot_applied", "CM7", "O2", lambda f: f.after[PENDSV].__setitem__(slice(92, 96), struct.pack("<I", RAM + 4)),
+                 PENDSV, "RELOC:applied ABS32")
+
+
+def alternate_PMU(f):
+    for body in (f.before[PENDSV], f.after[PENDSV]):
+        body[90:90] = bytes.fromhex("00b500bd")
+    f.sizes[PENDSV] += 4
+    f.final_sizes[PENDSV] += 4
+    f.maps[PENDSV] = f.final_maps[PENDSV] = 96
+    f.relocs[PENDSV][1] = (96, 2, SLOT)
+    f.final_relocs[PENDSV][1] = (96, 2, SLOT)
+
+
+profile_negative("WORKAROUND_PMU_CM001", "CM7", "O2", alternate_PMU, PENDSV, "PRESERVATION:root extent")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
@@ -450,7 +681,7 @@ def main():
     report = dict(Status="PASS" if result.wasSuccessful() else "FAIL", PureControls=result.testsRun,
                   Failures=len(result.failures), Errors=len(result.errors), SourceHashes=hashes,
                   SourceDrift=[str(path) for path in paths if hashlib.sha256(path.read_bytes()).hexdigest().upper() != hashes[str(path)]],
-                  Scope="SYNTHETIC_PINNED_REFERENCE_CM4_READER_CONTROLS_ONLY", ExpectedFreeRTOSPin=reader.PIN,
+                  Scope="SYNTHETIC_PINNED_REFERENCE_CM4_CM7_READER_CONTROLS_ONLY", ExpectedFreeRTOSPin=reader.PIN,
                   RequiredCellSatisfied=False, FinalParity=False, KernelRuntimeProof=False, CPUProof=False, GlobalProof=False)
     if report["SourceDrift"]:
         report["Status"] = "FAIL"

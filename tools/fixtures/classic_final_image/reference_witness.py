@@ -1,4 +1,4 @@
-"""Replay a captured CM4 reference final image and retain actual ELF mutants.
+"""Replay a captured classic-FP reference image and retain actual ELF mutants.
 
 No native tool or target image is executed. Source-transcribed prelink
 protocols, pinned source identity and build receipts are separate obligations.
@@ -19,6 +19,8 @@ SVC = "vPortSVCHandler"
 PENDSV = "xPortPendSVHandler"
 CALLEE = "vTaskSwitchContext"
 SLOT = "pxCurrentTCB"
+PROFILES = ("CM4", "CM7")
+MODES = ("O0", "Og", "O2", "Os", "O3")
 
 
 def load(name, path):
@@ -35,6 +37,15 @@ def need(ok, message):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest().upper()
+
+
+def selection(profile, mode):
+    need(type(profile) is str and profile in PROFILES and type(mode) is str and mode in MODES,
+         "only CM4/CM7 and five ordinary modes are admitted")
+    size, instructions = {"CM4": (164, 48), "CM7": (168, 50)}[profile]
+    if mode == "O0":
+        size, instructions = size + 6, instructions + 3
+    return size, instructions
 
 
 def require_input_identity(inputs, providers):
@@ -165,7 +176,10 @@ CASES = (
 
 
 def witness(args, directory, reader, core, patch):
-    report = dict(Status="FAIL", Scope="REFERENCE_CM4_PRELINK_BOUND_FINAL_ROOT_PRESERVATION_ONLY",
+    expected_size, expected_instructions = selection(args.profile, args.mode)
+    reader_class = {"CM4": reader.ReferenceCM4FinalImage, "CM7": reader.ReferenceCM7FinalImage}[args.profile]
+    report = dict(Status="FAIL", Scope="REFERENCE_CLASSIC_FP_PRELINK_BOUND_FINAL_ROOT_PRESERVATION_ONLY",
+                  Profile=args.profile, Mode=args.mode,
                   RequiredCellsSatisfied=0, FinalParity=False, GlobalProof=False, CPUProof=False,
                   BoardExecution=False, NativeCommandsExecuted=0, PositiveRoots=[], Mutants=[])
     inputs = dict(Prelink=Path(args.prelink_object).resolve(strict=True), Final=Path(args.final_elf).resolve(strict=True),
@@ -187,14 +201,14 @@ def witness(args, directory, reader, core, patch):
     bindings = {str(path): copies[path] for path in providers}
     try:
         def construct(selected, provider_bindings):
-            return reader.ReferenceCM4FinalImage(selected["Prelink"], selected["Final"], selected["Disassembly"],
-                        provider_objects=provider_bindings, link_map=selected["LinkMap"])
+            return reader_class(selected["Prelink"], selected["Final"], selected["Disassembly"],
+                        provider_objects=provider_bindings, link_map=selected["LinkMap"], mode=args.mode)
         image = construct(files, bindings)
         report["Twins"] = core.compare_load_images(files["Plain"], files["Final"])
         proofs = {name: image.function(name) for name in (FIRST, SVC, PENDSV)}
         report["PositiveRoots"] = list(proofs.values())
-        need(sum(row["Size"] for row in proofs.values()) == 164 and
-             sum(row["InstructionCount"] for row in proofs.values()) == 48 and
+        need(sum(row["Size"] for row in proofs.values()) == expected_size and
+             sum(row["InstructionCount"] for row in proofs.values()) == expected_instructions and
              sum(len(row["References"]) for row in proofs.values()) == 3, "fixed complete reference roots")
         for name, root, expected_stage, expected in CASES:
             case_directory = directory / "mutants" / name
@@ -243,15 +257,25 @@ def witness(args, directory, reader, core, patch):
     return report
 
 
-def main():
+def require_output_directory(path):
+    directory = Path(path).resolve()
+    repo = HERE.parents[2]
+    need(not directory.is_relative_to(repo) and not repo.is_relative_to(directory),
+         "output must be external to repository")
+    need(not directory.exists(), "fresh output directory required")
+    return directory
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for flag in ("prelink-object", "final-elf", "disassembly", "plain-elf", "link-map", "output-dir"):
         parser.add_argument("--" + flag, required=True)
     parser.add_argument("--provider-object", action="append", required=True)
-    args = parser.parse_args()
+    parser.add_argument("--profile", choices=PROFILES, default="CM4")
+    parser.add_argument("--mode", choices=MODES, default="O2")
+    args = parser.parse_args(argv)
     need(not sys.flags.optimize, "unoptimized Python required")
-    directory = Path(args.output_dir).resolve()
-    need(not directory.exists(), "fresh output directory required")
+    directory = require_output_directory(args.output_dir)
     directory.mkdir(parents=True)
     sources = (Path(__file__).resolve(), HERE / "reference_elf.py", HERE / "elf.py", HERE / "test_elf.py")
     hashes = {str(path): digest(path) for path in sources}

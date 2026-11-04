@@ -1,10 +1,11 @@
-"""Pure envelopes for the fixed pinned-CM4 reference builder; no native tools."""
+"""Pure envelopes for pinned CM4/CM7 reference twins; no native tools."""
 import argparse
 import ast
 import copy
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -24,11 +25,61 @@ SPEC.loader.exec_module(r)
 class ScopeControls(unittest.TestCase):
     def test_fixed_selection_only(self):
         self.assertEqual(r.selection("CM4", "O2"), r.COHORT)
-        for profile, mode in (("CM7", "O2"), ("CM4", "O0"), ("CM4", "Og"), ("CM4", "Os"),
-                              ("CM4", "O3"), ("CM4", "O2-LTO"), ("CM0", "O2"), (None, "O2"), ("CM4", True)):
+        self.assertEqual(set(r.PROFILES), {"CM4", "CM7"})
+        self.assertEqual(r.MODES, ("O0", "Og", "O2", "Os", "O3"))
+        for profile in r.PROFILES:
+            for mode in r.MODES:
+                self.assertEqual(r.selection(profile, mode), r.native.PROFILES[profile][0])
+        for profile, mode in (("CM4", "O1"), ("CM7", "Ofast"), ("CM7/r0p1", "O2"),
+                              ("CM4", "O2-LTO"), ("CM7", "Os-LTO"), ("CM0", "O2"),
+                              (None, "O2"), ("CM4", True), (True, "O2")):
             with self.subTest(profile=profile, mode=mode), patch.object(Path, "mkdir", side_effect=AssertionError("mkdir")):
-                with self.assertRaisesRegex(RuntimeError, "only CM4 O2"):
+                with self.assertRaisesRegex(RuntimeError, "reference selection"):
                     r.Reference(SimpleNamespace(profile=profile, mode=mode))
+
+    def test_exact_profile_paths_configs_and_fp_facts(self):
+        self.assertEqual(r.PROFILES, {
+            "CM4": (r.native.PROFILES["CM4"][0], "portable/GCC/ARM_CM4F",
+                "tools/fixtures/classic_fp_context_runtime/reference/FreeRTOSConfig.h", 4),
+            "CM7": (r.native.PROFILES["CM7"][0], "portable/GCC/ARM_CM7/r0p1",
+                "tools/fixtures/classic_cm7_fp_context_runtime/reference/FreeRTOSConfig.h", 14)})
+        for profile, (_, directory, config, fp) in r.PROFILES.items():
+            self.assertEqual(r.port_paths(profile), (directory + "/port.c", directory + "/portmacro.h"))
+            text = (HERE.parents[2] / config).read_text()
+            self.assertIn('__ARM_PCS_VFP', text)
+            self.assertIn('(__ARM_FP & 12) != 12' if profile == "CM7" else '(__ARM_FP & 4) == 0', text)
+            self.assertNotIn('WORKAROUND_PMU_CM001', text)
+            r.require_header_facts(struct.pack("<10I", 1, 4, 4, 4, 8, fp, 1, 16, 16, 4), profile)
+
+    def test_ten_scope_reports_are_explicit_without_promotion(self):
+        self.assertEqual(r.PASS, "REFERENCE-CLASSIC-FP-FINAL-TWIN-BUILD-PASS")
+        for profile in r.PROFILES:
+            for mode in r.MODES:
+                report = r.scope_report(profile, mode)
+                self.assertEqual((report["Profile"], report["Mode"], report["Cohort"]),
+                                 (profile, mode, r.native.PROFILES[profile][0]))
+                self.assertEqual(report["ProofScope"], "PINNED_REFERENCE_" + profile + "_" + mode + "_DIRECT_TWIN_BUILD_ONLY")
+                self.assertEqual(report["RecipeVersion"], 2)
+                self.assertEqual(report["RequiredCellsSatisfied"], 0)
+                self.assertIs(type(report["RequiredCellsSatisfied"]), int)
+                for key in ("FinalElfProof", "FinalRootRelocationProof", "FinalReferenceParity", "CompleteObjectProof",
+                            "PolicyEquivalence", "CpuExecution", "BoardExecution", "GlobalFreezeQualified", "SchedulerSemanticsProven"):
+                    self.assertIs(report[key], False)
+                self.assertEqual(report["FPCCRPolicy"]["ReferencePolicy"], "upstream-lazy")
+                self.assertEqual(report["DifferenceIds"], ["FAP-FP-SETUP-POLICY"] +
+                                 (["FAP-CM7-ERRATA-PRIMASK"] if profile == "CM7" else []))
+
+    def test_cli_defaults_and_all_ten_explicit_selections(self):
+        base = ["--gcc", "not-run", "--git", "not-run", "--freertos", "not-read",
+                "--inventory", "not-read", "--output-dir", "not-created"]
+        for extra, expected in [([], ("CM4", "O2"))] + [
+                (["--profile", profile, "--mode", mode], (profile, mode)) for profile in r.PROFILES for mode in r.MODES]:
+            pilot = SimpleNamespace(prepare=Mock(), build=Mock(), finish=Mock(return_value=True),
+                                    report=dict(Verdict=r.PASS), output="not-created")
+            with patch.object(r, "Reference", return_value=pilot) as constructor, patch("builtins.print"):
+                self.assertEqual(r.main(base + extra), 0)
+            args = constructor.call_args.args[0]
+            self.assertEqual((args.profile, args.mode), expected)
 
     def test_fixed_pin_and_no_policy_cpu_or_parity_promotion(self):
         report = r.scope_report()
@@ -82,13 +133,18 @@ class ScopeControls(unittest.TestCase):
                        and any(isinstance(t, ast.Attribute) and t.attr == "sources" for t in node.targets)]
         self.assertEqual(len(assignments), 1)
         text = ast.get_source_segment(source, assignments[0])
-        self.assertIn('self.kernel / PORT', text)
+        self.assertIn('self.kernel / self.port', text)
         self.assertIn('("providers.c", "consumer.c", "startup.S")', text)
         self.assertIn('self.report["Links"].append', source)
         self.assertIn('(("ordinary", []), ("emit-relocs", ["-Wl,--emit-relocs"]))', source)
         self.assertIn('"-T", self.fixture_copy / "link.ld", *self.objects', source)
         self.assertIn('"ET_EXEC"', source)
         self.assertIn('expected=sha(NATIVE_BYTES)', source)
+        strings = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+        self.assertNotIn('-O2', strings)
+        self.assertIn('self.recipe.reference_recipe(self.artifact, self.mode,', source)
+        self.assertIn('self.admission.require_attributes(port.with_suffix(".attributes").read_text(), self.profile)', source)
+        self.assertIn('self.admission.require_attributes(path.with_suffix(".attributes").read_text(), self.profile)', source)
 
 
 class ManifestControls(unittest.TestCase):
@@ -99,32 +155,100 @@ class ManifestControls(unittest.TestCase):
         cls.recipe = r.load("reference_final_test_recipe", repo / r.HELPERS[3])
         cls.checker = r.load("reference_final_test_protocols", repo / r.HELPERS[6])
 
-    def manifest(self):
-        target = dict(cpu="cortex-m4", architecture="ARMV7EM", float_abi="hard", fpu_present=True,
-            fpu_used=True, fpu_unit="fpv4-sp-d16", fp_stacking="eager", vtor=True, mpu_regions=0,
+    def manifest(self, profile="CM4"):
+        cpu, fpu, errata = ("cortex-m4", "fpv4-sp-d16", "none") if profile == "CM4" else (
+            "cortex-m7", "fpv5-d16", "837070-primask-preserving")
+        target = dict(cpu=cpu, architecture="ARMV7EM", float_abi="hard", fpu_present=True,
+            fpu_used=True, fpu_unit=fpu, fp_stacking="eager", vtor=True, mpu_regions=0,
             security_role="classic", psplim_slot=False, psplim_register=False, mve="none", pac=False,
-            bti=False, errata_policy="none", r9_abi="aapcs", nvic_priority_bits=4, scheduler_basepri=16)
-        artifact = dict(role="runtime", source_group_id="CM4", abi_contract="forward8", target=target,
-            compile_flags=["-mcpu=cortex-m4", "-mthumb", "-mfloat-abi=hard", "-mfpu=fpv4-sp-d16"],
+            bti=False, errata_policy=errata, r9_abi="aapcs", nvic_priority_bits=4, scheduler_basepri=16)
+        artifact = dict(role="runtime", source_group_id=profile, abi_contract="forward8", target=target,
+            compile_flags=["-mcpu=" + cpu, "-mthumb", "-mfloat-abi=hard", "-mfpu=" + fpu],
             defines=dict(FIBER_FPU_LAZY="0", FIBER_PORT_ARMV7EM="1", FIBER_PORT_BUILD_SELECTED="1", FIBER_SCHEDULER_BASEPRI="16"),
-            upstream_sources=[r.PORT], upstream_defines=dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0",
+            upstream_sources=[r.port_paths(profile)[0]], upstream_defines=dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0",
                 FIBER_FREERTOS_PARITY_ENABLE_FPU="1", FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0"))
-        return dict(cohorts=[dict(id=r.COHORT, artifacts=[artifact])], source_groups=[dict(id="CM4",
-            sources=list(r.native.selection("CM4", "O2")[3]))])
+        if profile == "CM7":
+            artifact["upstream_defines"]["configENABLE_ERRATA_837070_WORKAROUND"] = "1"
+        return dict(cohorts=[dict(id=r.PROFILES[profile][0], artifacts=[artifact])], source_groups=[dict(id=profile,
+            sources=list(r.native.selection(profile, "O2")[3]))])
+
+    def test_actual_manifest_all_ten_profile_modes(self):
+        # The e1 failure used captured e8 inventory, not the formerly incomplete synthetic CM7 row.
+        manifest = json.loads((HERE.parents[2] / "tools/freeze_cohorts.json").read_bytes())
+        self.assertEqual(self.admission.shared.inventory.PIN, "a50edad08b29052631aa469d4df6e6ec7ff68878")
+        for profile in ("CM4", "CM7"):
+            expected = dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0", FIBER_FREERTOS_PARITY_ENABLE_FPU="1",
+                            FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0")
+            if profile == "CM7":
+                expected["configENABLE_ERRATA_837070_WORKAROUND"] = "1"
+            for mode in ("O0", "Og", "O2", "Os", "O3"):
+                with self.subTest(profile=profile, mode=mode):
+                    before = copy.deepcopy(manifest)
+                    artifact = r.require_artifact(manifest, self.admission, profile, mode)
+                    self.assertEqual(artifact["upstream_defines"], expected)
+                    self.assertEqual(artifact, self.manifest(profile)["cohorts"][0]["artifacts"][0])
+                    binding = self.recipe.reference_recipe(artifact, mode, "fixture", "kernel")
+                    defines = [flag for flag in binding["Flags"] if flag.startswith("-D")]
+                    self.assertEqual(defines, ["-D%s=%s" % item for item in sorted(expected.items())])
+                    self.assertEqual(binding["PortmacroProvider"], r.port_paths(profile)[1])
+                    self.assertEqual(manifest, before)
+
+    def test_actual_manifest_exact_define_mutations_reject(self):
+        manifest = json.loads((HERE.parents[2] / "tools/freeze_cohorts.json").read_bytes())
+        for profile in ("CM4", "CM7"):
+            cohort = next(row for row in manifest["cohorts"] if row["id"] == r.PROFILES[profile][0])
+            actual = cohort["artifacts"][0]["upstream_defines"]
+            mutations = []
+            for key in actual:
+                missing = dict(actual)
+                del missing[key]
+                mutations.append(("missing-" + key, missing))
+                for value in ("0" if actual[key] == "1" else "1", 1, True, "01"):
+                    mutations.append(("changed-" + key + "-" + repr(value), dict(actual, **{key: value})))
+            for key in ("UNDECLARED_REFERENCE_DEFINE", "WORKAROUND_PMU_CM001"):
+                mutations.append(("extra-" + key, dict(actual, **{key: "1"})))
+            if profile == "CM4":
+                mutations.append(("foreign-CM7-metadata", dict(actual, configENABLE_ERRATA_837070_WORKAROUND="1")))
+            for label, definitions in mutations:
+                changed = copy.deepcopy(manifest)
+                selected = next(row for row in changed["cohorts"] if row["id"] == cohort["id"])
+                selected["artifacts"][0]["upstream_defines"] = definitions
+                with self.subTest(profile=profile, mutation=label), self.assertRaisesRegex(RuntimeError, "exact reference source/defines"):
+                    r.require_artifact(changed, self.admission, profile, "O2")
 
     def test_exact_artifact_and_raw_threshold_config(self):
-        artifact = r.require_artifact(self.manifest(), self.admission)
-        binding = self.recipe.reference_recipe(artifact, "O2", "fixture", "kernel")
-        self.assertEqual(binding["PortmacroProvider"], r.PORTMACRO)
-        self.assertEqual(binding["ExtraIncludes"], [])
-        self.assertIs(binding["ExactTargetRecipe"], True)
-        self.assertEqual(binding["WitnessKind"], "none")
-        for macro in ("configMAX_SYSCALL_INTERRUPT_PRIORITY", "configMAX_API_CALL_INTERRUPT_PRIORITY"):
-            self.assertIn("#undef " + macro + "\n#define " + macro + " 16U", binding["ConfigText"])
-        self.assertIn('#include "freeze_base_FreeRTOSConfig.h"', binding["ConfigText"])
-        self.assertEqual(binding["Flags"][:5], [*artifact["compile_flags"], "-O2"])
-        self.assertNotIn("-include", binding["Flags"])
-        self.assertTrue(any(row["Kind"] == "fpccr-eager-vs-lazy" for row in binding["Differences"]))
+        for profile in r.PROFILES:
+            for mode in r.MODES:
+                with self.subTest(profile=profile, mode=mode):
+                    artifact = r.require_artifact(self.manifest(profile), self.admission, profile, mode)
+                    binding = self.recipe.reference_recipe(artifact, mode, "fixture", "kernel")
+                    self.assertEqual(binding["PortmacroProvider"], r.port_paths(profile)[1])
+                    self.assertEqual(binding["ExtraIncludes"], [])
+                    self.assertIs(binding["ExactTargetRecipe"], True)
+                    self.assertEqual(binding["WitnessKind"], "none")
+                    for macro in ("configMAX_SYSCALL_INTERRUPT_PRIORITY", "configMAX_API_CALL_INTERRUPT_PRIORITY"):
+                        self.assertIn("#undef " + macro + "\n#define " + macro + " 16U", binding["ConfigText"])
+                    self.assertIn('#include "freeze_base_FreeRTOSConfig.h"', binding["ConfigText"])
+                    self.assertEqual(binding["Flags"][:5], [*artifact["compile_flags"], "-" + mode])
+                    self.assertNotIn("-include", binding["Flags"])
+                    self.assertFalse(any("WORKAROUND_PMU_CM001" in flag for flag in binding["Flags"]))
+                    self.assertTrue(any(row["Kind"] == "fpccr-eager-vs-lazy" for row in binding["Differences"]))
+
+    def test_cross_profile_source_flags_and_abi_cannot_be_aliased(self):
+        for profile, other in (("CM4", "CM7"), ("CM7", "CM4")):
+            original = self.manifest(profile)
+            foreign = self.manifest(other)["cohorts"][0]["artifacts"][0]
+            for field in ("source_group_id", "compile_flags", "upstream_sources", "target"):
+                manifest = copy.deepcopy(original)
+                manifest["cohorts"][0]["artifacts"][0][field] = copy.deepcopy(foreign[field])
+                with self.subTest(profile=profile, field=field), self.assertRaises(RuntimeError):
+                    r.require_artifact(manifest, self.admission, profile, "O2")
+            for field, value in (("defines", dict(original["cohorts"][0]["artifacts"][0]["defines"], WORKAROUND_PMU_CM001="1")),
+                                 ("upstream_defines", dict(foreign["upstream_defines"], WORKAROUND_PMU_CM001="1"))):
+                manifest = copy.deepcopy(original)
+                manifest["cohorts"][0]["artifacts"][0][field] = value
+                with self.subTest(profile=profile, field=field), self.assertRaises(RuntimeError):
+                    r.require_artifact(manifest, self.admission, profile, "O2")
 
     def test_foreign_targets_flags_sources_and_defines_reject(self):
         for field, value in (("scheduler_basepri", 128), ("nvic_priority_bits", 8), ("vtor", False),
@@ -143,15 +267,51 @@ class ManifestControls(unittest.TestCase):
                 r.require_artifact(manifest, self.admission)
 
     def test_canonical_complete_reference_protocols(self):
-        bodies = self.checker._REFERENCE["CM4"]
-        calls = []
-        def function(name, **kwargs):
-            calls.append((name, kwargs))
-            return copy.deepcopy(bodies[name])
-        result = r.match_reference_protocols(SimpleNamespace(function=function), self.checker)
-        self.assertEqual([row["Name"] for row in result], list(r.ROOTS))
-        self.assertEqual([row["TailNops"] for row in result], [0, 0, 0])
-        self.assertEqual(calls, [(name, dict(literal_islands=True)) for name in r.ROOTS])
+        for profile in r.PROFILES:
+            for mode in r.MODES:
+                bodies = self.checker._REFERENCE[profile]
+                calls = []
+                def function(name, **kwargs):
+                    calls.append((name, kwargs))
+                    return copy.deepcopy(bodies[name]) + [("nop", "")] * int(mode == "O0")
+                result = r.match_reference_protocols(SimpleNamespace(function=function), self.checker, profile, mode)
+                self.assertEqual([row["Name"] for row in result], list(r.ROOTS))
+                self.assertEqual([row["TailNops"] for row in result], [int(mode == "O0")] * 3)
+                self.assertEqual(calls, [(name, dict(literal_islands=True)) for name in r.ROOTS])
+
+    def test_other_profile_mask_protocol_and_wrong_mode_tails_reject(self):
+        for profile, other in (("CM4", "CM7"), ("CM7", "CM4")):
+            for mode in r.MODES:
+                for kind in ("other-profile", "wrong-tail", "mixed-tail"):
+                    bodies = copy.deepcopy(self.checker._REFERENCE[other if kind == "other-profile" else profile])
+                    for name in bodies:
+                        count = int(mode == "O0")
+                        if kind == "wrong-tail" or (kind == "mixed-tail" and name == r.ROOTS[0]):
+                            count = 1 - count
+                        bodies[name] += [("nop", "")] * count
+                    image = SimpleNamespace(function=lambda name, **kwargs: bodies[name])
+                    with self.subTest(profile=profile, mode=mode, mutation=kind), self.assertRaises(RuntimeError):
+                        r.match_reference_protocols(image, self.checker, profile, mode)
+
+    def test_profile_header_facts_are_exact_not_just_hard_abi(self):
+        for profile in r.PROFILES:
+            expected = [1, 4, 4, 4, 8, 4 if profile == "CM4" else 14, 1, 16, 16, 4]
+            r.require_header_facts(struct.pack("<10I", *expected), profile)
+            for index, value in ((5, 14 if profile == "CM4" else 4), (1, 8), (6, 0), (7, 128), (8, 128), (9, 8)):
+                changed = list(expected)
+                changed[index] = value
+                with self.subTest(profile=profile, field=index), self.assertRaisesRegex(RuntimeError, "header facts"):
+                    r.require_header_facts(struct.pack("<10I", *changed), profile)
+            with self.assertRaisesRegex(RuntimeError, "header facts"):
+                r.require_header_facts(bytes(36), profile)
+
+    def test_attribute_gate_remains_profile_specific(self):
+        for profile, fp in (("CM4", "VFPv4-D16"), ("CM7", "FPv5/FP-D16 for ARMv8")):
+            attributes = ('Tag_CPU_name: "7E-M"\nTag_CPU_arch: v7E-M\nTag_CPU_arch_profile: Microcontroller\n'
+                          'Tag_THUMB_ISA_use: Thumb-2\nTag_ABI_VFP_args: VFP registers\nTag_FP_arch: ' + fp + '\n')
+            self.admission.require_attributes(attributes, profile)
+            with self.assertRaises(RuntimeError):
+                self.admission.require_attributes(attributes, "CM7" if profile == "CM4" else "CM4")
 
     def test_complete_reference_protocols_reject_every_partial_root(self):
         for root in r.ROOTS:
@@ -188,15 +348,18 @@ class ManifestControls(unittest.TestCase):
 
     def test_config_portmacro_and_source_dependency_roles(self):
         fixture, kernel = Path("fixture"), Path("kernel")
-        source = kernel / r.PORT
-        paths = [source, kernel / r.PORTMACRO, fixture / "FreeRTOSConfig.h", fixture / "freeze_base_FreeRTOSConfig.h"]
-        r.require_dependency_roles(paths, source, fixture, kernel)
-        for missing in paths:
-            with self.subTest(missing=missing), self.assertRaises(RuntimeError):
-                r.require_dependency_roles([p for p in paths if p != missing], source, fixture, kernel)
-        with self.assertRaisesRegex(RuntimeError, "providers"):
-            r.require_dependency_roles([*paths, Path("foreign/portmacro.h")], source, fixture, kernel)
-        r.require_dependency_roles([Path("fixture/startup.S")], Path("fixture/startup.S"), fixture, kernel)
+        for profile in r.PROFILES:
+            port, portmacro = r.port_paths(profile)
+            source = kernel / port
+            paths = [source, kernel / portmacro, fixture / "FreeRTOSConfig.h", fixture / "freeze_base_FreeRTOSConfig.h"]
+            r.require_dependency_roles(paths, source, fixture, kernel, profile)
+            for missing in paths:
+                with self.subTest(profile=profile, missing=missing), self.assertRaises(RuntimeError):
+                    r.require_dependency_roles([p for p in paths if p != missing], source, fixture, kernel, profile)
+            for foreign in (Path("foreign/portmacro.h"), kernel / r.port_paths("CM7" if profile == "CM4" else "CM4")[1]):
+                with self.subTest(profile=profile, foreign=foreign), self.assertRaisesRegex(RuntimeError, "providers"):
+                    r.require_dependency_roles([*paths, foreign], source, fixture, kernel, profile)
+            r.require_dependency_roles([Path("fixture/startup.S")], Path("fixture/startup.S"), fixture, kernel, profile)
 
 
 class FixtureControls(unittest.TestCase):
@@ -257,6 +420,7 @@ class EnvelopeControls(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.pilot = r.Reference.__new__(r.Reference)
+        self.pilot.profile, self.pilot.mode = "CM4", "O2"
         self.pilot.output, self.pilot.repo = self.root, HERE.parents[2]
         self.pilot.inputs, self.pilot.generated, self.pilot.commands = {}, {}, []
         self.pilot.memberships = []
@@ -436,6 +600,7 @@ def main():
         raise SystemExit("requires a fresh report inside TEMP")
     sources = [HERE / name for name in ("reference_run.py", "test_reference_run.py")]
     sources += [HERE / "reference" / name for name in r.FIXTURE_FILES]
+    sources.append(HERE.parents[2] / "tools/freeze_cohorts.json")
     source_hashes = {str(path): r.sha(path.read_bytes()) for path in sources}
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(case)
                               for case in (ScopeControls, ManifestControls, FixtureControls, EnvelopeControls))

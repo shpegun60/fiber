@@ -1,4 +1,4 @@
-"""Opt-in pinned CM4 O2 reference twins; link-only, never scheduler execution."""
+"""Pinned CM4/CM7 ordinary-mode reference twins; never scheduler execution."""
 import argparse
 import importlib.util
 import json
@@ -19,9 +19,23 @@ exec(compile(NATIVE_BYTES, str(HERE / "run.py"), "exec"), native.__dict__)
 need, sha, save, regular, load = native.need, native.sha, native.save, native.regular, native.load
 
 PIN = "a50edad08b29052631aa469d4df6e6ec7ff68878"
-COHORT = "cm4-cortex-m4-hard-fpu-eager-v1-mpu0-p4-b16-aapcs-default"
-PORT = "portable/GCC/ARM_CM4F/port.c"
-PORTMACRO = "portable/GCC/ARM_CM4F/portmacro.h"
+PROFILES = {
+    "CM4": (native.PROFILES["CM4"][0], "portable/GCC/ARM_CM4F",
+            "tools/fixtures/classic_fp_context_runtime/reference/FreeRTOSConfig.h", 4),
+    "CM7": (native.PROFILES["CM7"][0], "portable/GCC/ARM_CM7/r0p1",
+            "tools/fixtures/classic_cm7_fp_context_runtime/reference/FreeRTOSConfig.h", 14),
+}
+MODES = ("O0", "Og", "O2", "Os", "O3")
+# The CM7 metadata define is retained faithfully; r0p1's CPSID/CPSIE is unconditional.
+UPSTREAM_DEFINES = {
+    "CM4": dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0", FIBER_FREERTOS_PARITY_ENABLE_FPU="1",
+                FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0"),
+    "CM7": dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0", FIBER_FREERTOS_PARITY_ENABLE_FPU="1",
+                FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0", configENABLE_ERRATA_837070_WORKAROUND="1"),
+}
+COHORT = PROFILES["CM4"][0]
+PORT = PROFILES["CM4"][1] + "/port.c"
+PORTMACRO = PROFILES["CM4"][1] + "/portmacro.h"
 ROOTS = ("prvPortStartFirstTask", "vPortSVCHandler", "xPortPendSVHandler")
 FIXTURE_FILES = ("reference.h", "providers.c", "consumer.c", "startup.S", "link.ld")
 HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms.py",
@@ -30,18 +44,32 @@ HELPERS = ("tools/freeze_classic_fp_mechanisms.py", "tools/freeze_cm3_mechanisms
            "tools/fixtures/cm4_cm7_freeze_parity/check.py")
 CHECKPOINTS = ("before-prelink", "after-prelink", "before-link-ordinary", "after-link-ordinary",
                "before-link-emit-relocs", "after-link-emit-relocs", "closing")
-PASS = "REFERENCE-CM4-FINAL-TWIN-BUILD-PASS"
+PASS = "REFERENCE-CLASSIC-FP-FINAL-TWIN-BUILD-PASS"
 
 
 def selection(profile, mode):
-    need(type(profile) is str and profile == "CM4" and type(mode) is str and mode == "O2",
-         "reference pilot admits only CM4 O2")
-    return COHORT
+    need(type(profile) is str and profile in PROFILES and type(mode) is str and mode in MODES,
+         "reference selection requires CM4/CM7 and O0/Og/O2/Os/O3")
+    return PROFILES[profile][0]
 
 
-def scope_report():
-    return dict(Verdict="FAIL", Error=None, ProofScope="PINNED_REFERENCE_CM4_O2_DIRECT_TWIN_BUILD_ONLY",
-        Profile="CM4", Mode="O2", Cohort=COHORT, ReferenceCommit=PIN, Linkage="direct", LTO=False,
+def port_paths(profile):
+    selection(profile, "O2")
+    return tuple(PROFILES[profile][1] + "/" + name for name in ("port.c", "portmacro.h"))
+
+
+def require_header_facts(data, profile):
+    selection(profile, "O2")
+    expected = (1, 4, 4, 4, 8, PROFILES[profile][3], 1, 16, 16, 4)
+    need(type(data) is bytes and len(data) == 40 and struct.unpack("<10I", data) == expected,
+         "reference header facts")
+
+
+def scope_report(profile="CM4", mode="O2"):
+    cohort = selection(profile, mode)
+    return dict(Verdict="FAIL", Error=None, RecipeVersion=2,
+        ProofScope="PINNED_REFERENCE_" + profile + "_" + mode + "_DIRECT_TWIN_BUILD_ONLY",
+        Profile=profile, Mode=mode, Cohort=cohort, ReferenceCommit=PIN, Linkage="direct", LTO=False,
         ReferenceBuilt=False, NativeBuilt=False, RequiredCellSatisfied=False, RequiredCellsSatisfied=0,
         FinalElfProof=False, FinalRootRelocationProof=False, FinalReferenceParity=False,
         CompleteObjectProof=False, PolicyEquivalence=False, CpuExecution=False, BoardExecution=False,
@@ -49,31 +77,34 @@ def scope_report():
         FPCCRPolicy=dict(DeclaredNativePolicy="eager", ReferencePolicy="upstream-lazy",
             ReferenceASPEN=1, ReferenceLSPEN=1, ReferenceBits=0xC0000000,
             DifferenceId="FAP-FP-SETUP-POLICY", PolicyEquivalenceProven=False, HardwareEffectsProven=False),
+        DifferenceIds=["FAP-FP-SETUP-POLICY"] + (["FAP-CM7-ERRATA-PRIMASK"] if profile == "CM7" else []),
         InputDrift=[], Sources=[], Commands=[])
 
 
-def require_artifact(manifest, admission):
-    artifact = native.require_manifest_selection(manifest, "CM4", "O2", admission)
-    need(artifact["upstream_sources"] == [PORT] and artifact["upstream_defines"] ==
-         dict(FIBER_FREERTOS_PARITY_ENABLE_MPU="0", FIBER_FREERTOS_PARITY_ENABLE_FPU="1",
-              FIBER_FREERTOS_PARITY_ENABLE_TRUSTZONE="0"), "exact reference source/defines")
+def require_artifact(manifest, admission, profile="CM4", mode="O2"):
+    selection(profile, mode)
+    artifact = native.require_manifest_selection(manifest, profile, mode, admission)
+    need(artifact["upstream_sources"] == [port_paths(profile)[0]] and
+         artifact["upstream_defines"] == UPSTREAM_DEFINES[profile], "exact reference source/defines")
     return artifact
 
 
-def match_reference_protocols(image, checker):
-    protocols = checker._REFERENCE["CM4"]
+def match_reference_protocols(image, checker, profile="CM4", mode="O2"):
+    selection(profile, mode)
+    protocols = checker._REFERENCE[profile]
     need(tuple(protocols) == ROOTS, "exact reference protocol roots")
     evidence = [checker._match(image, "Reference", name, protocols[name]) for name in ROOTS]
-    need(len(evidence) == 3 and all(type(row["TailNops"]) is int and row["TailNops"] == 0 for row in evidence),
-         "reference O2 complete protocols/tail layout")
+    need(len(evidence) == 3 and all(type(row["TailNops"]) is int and row["TailNops"] == int(mode == "O0") for row in evidence),
+         "reference complete protocols/tail layout")
     return evidence
 
 
-def require_dependency_roles(paths, source, fixture, kernel):
+def require_dependency_roles(paths, source, fixture, kernel, profile="CM4"):
+    _, portmacro = port_paths(profile)
     paths = set(paths)
     need(source in paths, "source missing from dependencies")
     if source.suffix == ".c":
-        expected = {kernel / PORTMACRO, fixture / "FreeRTOSConfig.h", fixture / "freeze_base_FreeRTOSConfig.h"}
+        expected = {kernel / portmacro, fixture / "FreeRTOSConfig.h", fixture / "freeze_base_FreeRTOSConfig.h"}
         actual = {p for p in paths if p.name in ("portmacro.h", "FreeRTOSConfig.h", "freeze_base_FreeRTOSConfig.h")}
         need(actual == expected, "exact reference config/portmacro providers")
 
@@ -99,7 +130,9 @@ class Reference(native.Pilot):
         need(reference.is_dir() and not output.is_relative_to(reference) and not reference.is_relative_to(output),
              "reference/output overlap")
         super().__init__(args)
-        self.reference, self.report = reference, scope_report()
+        self.reference, self.report = reference, scope_report(self.profile, self.mode)
+        self.port, self.portmacro = port_paths(self.profile)
+        _, self.reference_directory, self.base_config, _ = PROFILES[self.profile]
         self.fixture = HERE / "reference"
         self.fixture_copy = self.root / "tools/fixtures/classic_final_image/reference"
         self.kernel = self.output / "freertos"
@@ -116,8 +149,8 @@ class Reference(native.Pilot):
              "reference worktree drift")
 
     def capture_reference(self, relative):
-        need(relative in (PORT, PORTMACRO) or re.fullmatch(r"include/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+[.]h", relative),
-             "reference input outside CM4 provider/include set")
+        need(relative in (self.port, self.portmacro) or re.fullmatch(r"include/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+[.]h", relative),
+             "reference input outside selected provider/include set")
         source = regular(self.reference / relative)
         data = source.read_bytes()
         blob = self.git_bytes("show", PIN + ":" + relative)
@@ -148,7 +181,8 @@ class Reference(native.Pilot):
             need(not Path(relative).is_absolute() and ".." not in Path(relative).parts, "inventory path")
             self.capture(inventory / relative, expected=digest)
         self.bundle = self.admission.shared.Bundle(inventory)
-        self.artifact = require_artifact(self.admission.shared.captured_inventory(self.bundle), self.admission)
+        self.artifact = require_artifact(self.admission.shared.captured_inventory(self.bundle), self.admission,
+                                         self.profile, self.mode)
         self.report.update(SourceInventorySha256=self.bundle.result["SourceInventorySha256"],
                            SourceInventoryReceipt=str(inventory), CohortArtifact=self.artifact)
         self.git = regular(self.args.git)
@@ -157,24 +191,25 @@ class Reference(native.Pilot):
         self.command([self.git, "--version"], "git version")
         self.reference_identity()
         self._reference_opened = True
-        for directory, recursive in ((self.reference / "include", True), (self.reference / "portable/GCC/ARM_CM4F", False),
+        for directory, recursive in ((self.reference / "include", True), (self.reference / self.reference_directory, False),
                                       (self.fixture, False)):
             self.memberships.append((directory, recursive, native.membership(directory, recursive)))
         names = [p.relative_to(self.reference).as_posix() for p in sorted((self.reference / "include").rglob("*.h"))]
         need(names, "empty reference headers")
-        for relative in (*names, PORT, PORTMACRO):
+        for relative in (*names, self.port, self.portmacro):
             self.capture_reference(relative)
-        self.capture(self.repo / "tools/fixtures/classic_fp_context_runtime/reference/FreeRTOSConfig.h",
+        self.capture(self.repo / self.base_config,
                      self.fixture_copy / "freeze_base_FreeRTOSConfig.h")
-        binding = self.recipe.reference_recipe(self.artifact, "O2", self.fixture_copy, self.kernel)
-        need(binding["PortmacroProvider"] == PORTMACRO and binding["ExtraIncludes"] == []
+        binding = self.recipe.reference_recipe(self.artifact, self.mode, self.fixture_copy, self.kernel)
+        need(binding["PortmacroProvider"] == self.portmacro and binding["ExtraIncludes"] == []
              and binding["ExactTargetRecipe"] is True and binding["WitnessKind"] == "none", "exact reference recipe")
         self.generated_file(self.fixture_copy / "FreeRTOSConfig.h", binding["ConfigText"].encode("ascii"))
         self.flags = binding["Flags"]
-        need(self.flags[:5] == [*self.artifact["compile_flags"], "-O2"] and
+        need(self.flags[:5] == [*self.artifact["compile_flags"], "-" + self.mode] and
              not any(flag in ("-include", "-flto", "-flto=auto") for flag in self.flags), "reference flag envelope")
         self.report.update(CompileFlags=self.flags, RecipeDifferences=binding["Differences"],
-                           PortmacroProvider=PORTMACRO, ReferenceFileBindings=list(self.reference_bindings.values()))
+                           PortmacroProvider=self.portmacro, BaseConfig=self.base_config,
+                           ReferenceFileBindings=list(self.reference_bindings.values()))
         self.report["Interpreter"] = dict(ReportedExecutable=sys.executable, ModulePath=str(native.interpreter_path()))
         self.capture(native.interpreter_path())
         gcc = regular(self.args.gcc)
@@ -203,7 +238,7 @@ class Reference(native.Pilot):
         sys.path.insert(0, str(self.output / "python"))
         self.final_reader = load("reference_final_structural_reader", self.root / "tools/fixtures/classic_final_image/elf.py")
         need(sys.modules["elftools"].__version__ == "0.33", "pyelftools version")
-        self.sources = [self.kernel / PORT, *(self.fixture_copy / name for name in ("providers.c", "consumer.c", "startup.S"))]
+        self.sources = [self.kernel / self.port, *(self.fixture_copy / name for name in ("providers.c", "consumer.c", "startup.S"))]
         self.copy_memberships = [(directory, native.membership(directory, True)) for directory in
                                   (self.root, self.kernel, self.output / "python")]
         self._prepared = True
@@ -242,8 +277,8 @@ class Reference(native.Pilot):
         decoder = load("reference_final_prelink_decoder", self.root / HELPERS[5])
         checker = load("reference_final_prelink_protocol", self.root / HELPERS[6])
         port = self.objects[0]
-        self.admission.require_attributes(port.with_suffix(".attributes").read_text(), "CM4")
-        evidence = match_reference_protocols(decoder.Object(port, port.with_suffix(".dis")), checker)
+        self.admission.require_attributes(port.with_suffix(".attributes").read_text(), self.profile)
+        evidence = match_reference_protocols(decoder.Object(port, port.with_suffix(".dis")), checker, self.profile, self.mode)
         owners = {}
         expected = {name: (0, "STT_FUNC", "STB_GLOBAL") for name in
                     ("vPortSVCHandler", "xPortPendSVHandler", "xPortSysTickHandler", "pxPortInitialiseStack", "xPortStartScheduler")}
@@ -281,11 +316,11 @@ class Reference(native.Pilot):
             obj = self.output / "objects" / ("%02d-" % index + source.stem + ".o")
             obj.parent.mkdir(parents=True, exist_ok=True)
             discovery, actual = obj.with_suffix(".discovery.d"), obj.with_suffix(".compile.d")
-            flags = [*self.artifact["compile_flags"], "-O2", "-g0"] if source.suffix == ".S" else self.flags
+            flags = [*self.artifact["compile_flags"], "-" + self.mode, "-g0"] if source.suffix == ".S" else self.flags
             target = "pilot-source-" + str(index)
             self.command([self.tools["gcc"], *flags, "-M", "-MF", discovery, "-MT", target, source], "discover " + source.name)
             dependencies = self.dependencies(discovery, capture_system=True)
-            require_dependency_roles([Path(row["Path"]) for row in dependencies], source, self.fixture_copy, self.kernel)
+            require_dependency_roles([Path(row["Path"]) for row in dependencies], source, self.fixture_copy, self.kernel, self.profile)
             row = dict(Source=str(source), SourceSha256=sha(source.read_bytes()), Object=str(obj), ObjectSha256=None,
                 Dependencies=dependencies, DiscoveryDependencyFile=str(discovery), CompileDependencyFile=str(actual),
                 CompileFlags=list(flags), CompileDependenciesVerified=False)
@@ -295,7 +330,7 @@ class Reference(native.Pilot):
             row["ObjectSha256"] = sha(regular(obj).read_bytes())
             compiled = self.dependencies(actual)
             native.require_compile_dependencies(dependencies, compiled)
-            require_dependency_roles([Path(item["Path"]) for item in compiled], source, self.fixture_copy, self.kernel)
+            require_dependency_roles([Path(item["Path"]) for item in compiled], source, self.fixture_copy, self.kernel, self.profile)
             row.update(ActualCompileDependencies=compiled, CompileDependenciesVerified=True)
             self.objects.append(obj)
             self.inspect(obj)
@@ -305,7 +340,7 @@ class Reference(native.Pilot):
             self.prelink()
         finally:
             self.verify_objects("after-prelink")
-        base = [*self.artifact["compile_flags"], "-O2", "-nostdlib",
+        base = [*self.artifact["compile_flags"], "-" + self.mode, "-nostdlib",
                 "-Wl,--gc-sections,--no-undefined,--fatal-warnings,--build-id=none,-z,noexecstack",
                 "-T", self.fixture_copy / "link.ld", *self.objects]
         self.report["Links"] = []
@@ -314,7 +349,7 @@ class Reference(native.Pilot):
             path, link_map = self.output / (name + ".elf"), self.output / (name + ".map")
             self.link_twin(name, [self.tools["gcc"], *base, *extra, "-Wl,-Map=" + str(link_map), "-o", path])
             self.inspect(path)
-            self.admission.require_attributes(path.with_suffix(".attributes").read_text(), "CM4")
+            self.admission.require_attributes(path.with_suffix(".attributes").read_text(), self.profile)
             self.audit_final(path)
             self.report["Links"].append(dict(Kind=name, Path=str(path), Sha256=sha(path.read_bytes()),
                 Map=str(link_map), MapSha256=sha(regular(link_map).read_bytes())))
@@ -329,7 +364,7 @@ class Reference(native.Pilot):
 
     def audit_final(self, path):
         image = self.final_reader._ELF(path, "ET_EXEC")
-        native.require_final_float_flags(image.elf.header.e_flags, "CM4")
+        native.require_final_float_flags(image.elf.header.e_flags, self.profile)
         need(not any(row["name"] and row["section"] == "SHN_UNDEF" for row in image.symbols), "undefined reference symbol")
         names = ("reference_reset_handler", "vPortSVCHandler", "xPortPendSVHandler", "xPortSysTickHandler",
                  "pxPortInitialiseStack", "xPortStartScheduler", "vTaskSwitchContext", "xTaskIncrementTick")
@@ -350,8 +385,8 @@ class Reference(native.Pilot):
         need(roots is not None and roots.header.sh_flags & 7 == 2 and roots.header.sh_size == 8 and
              struct.unpack("<2I", roots.data()) == tuple(symbols[name]["value"] for name in
                ("pxPortInitialiseStack", "xPortStartScheduler")), "typed reference constructor/scheduler roots")
-        need(facts is not None and facts.header.sh_flags & 7 == 2 and facts.header.sh_size == 40 and
-             struct.unpack("<10I", facts.data()) == (1, 4, 4, 4, 8, 4, 1, 16, 16, 4), "reference header facts")
+        need(facts is not None and facts.header.sh_flags & 7 == 2 and facts.header.sh_size == 40, "reference header facts section")
+        require_header_facts(facts.data(), self.profile)
         need(not any(row["name"].startswith(("fiber_", "ctxrt_")) for row in image.symbols), "native code in reference image")
 
     def finish(self, error):
@@ -435,8 +470,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     for name in ("gcc", "git", "freertos", "inventory", "output-dir"):
         parser.add_argument("--" + name, required=True)
-    parser.add_argument("--profile", choices=("CM4",), default="CM4")
-    parser.add_argument("--mode", choices=("O2",), default="O2")
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="CM4")
+    parser.add_argument("--mode", choices=MODES, default="O2")
     parser.add_argument("--python-modules", default=str(Path(os.environ.get("TEMP", ".")) / "fiber-classic-audit-python"))
     args = parser.parse_args(argv)
     pilot, error = Reference(args), None

@@ -1,11 +1,15 @@
-# Pinned CM4 Reference Final-Image Pilot
+# Pinned Classic-FP Reference Final-Image Pilot
 
 This is an opt-in link-only companion to the native pilot. It builds the
-actual `portable/GCC/ARM_CM4F/port.c` from the locally pinned FreeRTOS
+actual `portable/GCC/ARM_CM4F/port.c` or
+`portable/GCC/ARM_CM7/r0p1/port.c` from the locally pinned FreeRTOS
 `a50edad08b29052631aa469d4df6e6ec7ff68878`. It compiles an unchanged,
 hash-checked captured copy, without reimplementing or modifying the upstream
-port. Exactly the CM4 hard-FP, VTOR1, no-MPU, p4/b16,
-ordinary-AAPCS target and O2 direct linkage are admitted initially.
+port. Exactly the CM4 and CM7/r0p1 hard-FP, VTOR1, no-MPU, p4/b16,
+ordinary-AAPCS cohorts and O0/Og/O2/Os/O3 direct linkage are admitted.
+Default selection remains CM4/O2. Profile-bound attributes and header facts
+distinguish CM4 SP from CM7 `fpv5-d16` SP+DP; ELF hard-float flags alone
+are not a profile admission proof.
 
 The native inventory's eager cohort identifies the target/ABI, not an
 upstream FP policy claim. The reference retains its upstream ASPEN+LSPEN
@@ -20,8 +24,16 @@ providers, typed consumer and fixture startup. Both ordinary and
 and script, with `--build-id=none`. Direct input-section placements are
 retained in the emitted map. Source/tool/dependency hashes, original REL
 addends, commands, terminal outcomes and object checkpoints are retained.
-Actual compiler dependencies must match precompile discovery. No archive,
-LTO or additional optimization is implicitly admitted.
+Actual compiler dependencies must match precompile discovery. Port source,
+portmacro, config provider, CPU/FPU flags and protocols must select the
+same profile. No archive, LTO or additional optimization is admitted.
+
+CM7's captured inventory also requires the exact
+`configENABLE_ERRATA_837070_WORKAROUND=1` definition; CM4 does not. The
+builder must preserve this profile-specific define set without admitting
+extra definitions. The pinned CM7/r0p1 source already contains its erratum
+sequence unconditionally: preserving the manifest define is not a claim
+that this macro switches that source sequence on or off.
 
 The providers define `pxCurrentTCB`, `vTaskSwitchContext` and
 `xTaskIncrementTick` with their real upstream C types. The current TCB is
@@ -38,15 +50,28 @@ are test artifacts, not production integration changes.
 
 ## Fixed Reader Surface
 
-`ReferenceCM4FinalImage` is separate from the native reader. No caller can
-provide a different root/callee/slot allowlist. Exactly these complete
-prelink roots are admitted:
+`ReferenceCM4FinalImage` and `ReferenceCM7FinalImage` are fixed profile
+readers, separate from the native reader. Their only mode parameter admits
+the five ordinary modes above. No caller can provide a different protocol,
+root/callee/slot allowlist or arbitrary target recipe. These are the base
+complete prelink roots, shared by Og/O2/Os/O3:
 
-| Root | Binding | Bytes | Original References |
-| --- | --- | ---: | --- |
-| `prvPortStartFirstTask` | local | 40 | none |
-| `vPortSVCHandler` | global | 32 | `pxCurrentTCB` ABS32+0 |
-| `xPortPendSVHandler` | global | 92 | `vTaskSwitchContext` BL-4 and `pxCurrentTCB` ABS32+0 |
+| Profile | Root | Binding | Bytes | Original References |
+| --- | --- | --- | ---: | --- |
+| Both | `prvPortStartFirstTask` | local | 40 | none |
+| Both | `vPortSVCHandler` | global | 32 | `pxCurrentTCB` ABS32+0 |
+| CM4 | `xPortPendSVHandler` | global | 92 | BL at 46, ABS32 at 88 |
+| CM7/r0p1 | `xPortPendSVHandler` | global | 96 | BL at 50, ABS32 at 92 |
+
+O0 alone appends exactly one `00bf` NOP per root, after the literal island
+with its own Thumb mapping. Neither the instruction nor its mapping is
+discarded. CM4 totals are 164 bytes/48 instructions, or 170/51 at O0;
+CM7 totals are 168/50, or 174/53 at O0. Each profile/mode retains exactly
+one BL-4 to `vTaskSwitchContext` and two ABS32+0 words for `pxCurrentTCB`.
+CM7's literal LDR displacement is 80, not CM4's 76. Its upstream
+CPSID/BASEPRI/barrier/CPSIE sequence remains distinct from the native
+PRIMASK-preserving policy. Alternate `WORKAROUND_PMU_CM001=1` code is not
+admitted by these fixed protocols.
 
 The independent reviewed prelink protocol is checked before final-image
 replay. The final reader retains all code, literal islands, alignment
@@ -108,12 +133,15 @@ pilot admission and tests are not replaced by the reference companion.
 
 The build uses the installed/captured pyelftools 0.33 package, like the
 native pilot. Output directories must be fresh and external to the repo.
+The standalone witness rejects repository descendants/ancestors and existing
+outputs before directory creation, input capture or ELF-reader loading.
 
 ```text
 python -B tools/fixtures/classic_final_image/reference_run.py \
   --gcc <existing-arm-gcc-14.3.1> --git <existing-git> \
   --freertos <clean-pinned-local-FreeRTOS> \
-  --inventory <retained-source-inventory> --output-dir <fresh-build>
+  --inventory <retained-source-inventory> --profile CM7 --mode Og \
+  --output-dir <fresh-build>
 ```
 
 With an existing successful build, in PowerShell:
@@ -128,6 +156,7 @@ foreach ($row in $receipt.Sources) {
 }
 $env:PYTHONPATH = "$b/python"
 python -B tools/fixtures/classic_final_image/reference_witness.py `
+    --profile $receipt.Profile --mode $receipt.Mode `
     --prelink-object "$b/objects/00-port.o" `
     --final-elf "$b/emit-relocs.elf" --plain-elf "$b/ordinary.elf" `
     --disassembly "$b/emit-relocs.dis" --link-map "$b/emit-relocs.map" `
@@ -135,6 +164,8 @@ python -B tools/fixtures/classic_final_image/reference_witness.py `
 ```
 
 Separate pure suites are `test_reference_run.py --report <fresh-TEMP-json>`
-(28 controls), `test_reference_elf.py --output-dir <fresh-directory>`
-(75 controls), and `test_reference_witness.py --report <fresh-json>`
-(11 input-identity controls). They execute no native tool or target image.
+and `test_reference_elf.py --output-dir <fresh-directory>`, plus
+`test_reference_witness.py --report <fresh-json>` (input identity and exact
+profile/mode totals). They execute no native tool or target image. Invoke
+builder/reader once per Cartesian pair for a ten-pair sweep, using fresh
+directories; partial attempts do not qualify a complete sweep.

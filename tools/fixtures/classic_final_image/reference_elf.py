@@ -1,12 +1,13 @@
-"""Fixed pinned CM4 hard-float reference transfer roots, not kernel/CPU proof.
+"""Fixed pinned CM4/CM7 hard-float reference roots, not kernel/CPU proof.
 
-The enclosing receipt must bind the pin, CM4 hard/eager p4/b16 cohort,
+The enclosing receipt must bind the pin, CM4/CM7 hard/eager p4/b16 cohort,
 ordinary link inputs and map to their captured bytes. This reader does not
 establish those source/cohort identities, routing, FPCCR policy or runtime
 kernel functionality. Fail-stop link-only providers remain link-only.
 
 The instruction contracts are transcribed from FreeRTOS ARM_CM4F/port.c
-at PIN, functions at lines 260, 278 and 504. Encodings are instruction-level
+at PIN (260/278/504) and ARM_CM7/r0p1/port.c (254/272/492).
+Modes select fixed layouts, not proof of compiler flags. Encodings are instruction-level
 contracts, not learned body hashes. Shared ELF/load/origin machinery is
 loaded unchanged from the adjacent native reader; it is never patched.
 """
@@ -33,6 +34,7 @@ PENDSV = "xPortPendSVHandler"
 ROOTS = frozenset((FIRST, SVC, PENDSV))
 CALLEE = "vTaskSwitchContext"
 SLOT = "pxCurrentTCB"
+MODES = ("O0", "Og", "O2", "Os", "O3")
 _CORE = "{r4,r5,r6,r7,r8,r9,r10,r11,lr}"
 _FP = "{s16-s31}"
 
@@ -101,6 +103,47 @@ _LITERALS = {FIRST: (0, 36), SVC: (0, 28), PENDSV: (8, 88)}
 _RELOCATIONS = {FIRST: {}, SVC: {28: (2, SLOT)},
                 PENDSV: {46: (10, CALLEE), 88: (2, SLOT)}}
 
+# CM7 r0p1 has a source-owned PRIMASK envelope around the entry BASEPRI
+# write and barriers (erratum 837070), not the CM4 sequence plus ignored ops.
+_CM7_PENDSV = (
+    (0, "eff30980", "mrs", "r0,psp"),
+    (4, "bff36f8f", "isb", "#15"),
+    (8, "144b", "ldr", "r3,[pc,#80]"),
+    (10, "1a68", "ldr", "r2,[r3,#0]"),
+    (12, "1ef0100f", "tst", "lr,#16"),
+    (16, "08bf", "it", "eq"),
+    (18, "20ed108a", "vstmdbeq", "r0!," + _FP),
+    (22, "20e9f04f", "stmdb", "r0!," + _CORE),
+    (26, "1060", "str", "r0,[r2,#0]"),
+    (28, "09b4", "push", "{r0,r3}"),
+    (30, "4ff01000", "mov", "r0,#16"),
+    (34, "72b6", "cpsid", "i"),
+    (36, "80f31188", "msr", "basepri,r0"),
+    (40, "bff34f8f", "dsb", "#15"),
+    (44, "bff36f8f", "isb", "#15"),
+    (48, "62b6", "cpsie", "i"),
+    (50, "fff7feff", "bl", CALLEE),
+    (54, "4ff00000", "mov", "r0,#0"),
+    (58, "80f31188", "msr", "basepri,r0"),
+    (62, "09bc", "pop", "{r0,r3}"),
+    (64, "1968", "ldr", "r1,[r3,#0]"),
+    (66, "0868", "ldr", "r0,[r1,#0]"),
+    (68, "b0e8f04f", "ldmia", "r0!," + _CORE),
+    (72, "1ef0100f", "tst", "lr,#16"),
+    (76, "08bf", "it", "eq"),
+    (78, "b0ec108a", "vldmiaeq", "r0!," + _FP),
+    (82, "80f30988", "msr", "psp,r0"),
+    (86, "bff36f8f", "isb", "#15"),
+    (90, "7047", "bx", "lr"))
+_CM4 = dict(Protocol=_PROTOCOL, Sizes=_SIZES, Data=_DATA, IslandSpan=_ISLAND_SPAN,
+            Literals=_LITERALS, Relocations=_RELOCATIONS)
+_CM7 = dict(Protocol={FIRST: _PROTOCOL[FIRST], SVC: _PROTOCOL[SVC], PENDSV: _CM7_PENDSV},
+            Sizes={FIRST: 40, SVC: 32, PENDSV: 96},
+            Data={FIRST: ((34, 36), (36, 40)), SVC: ((28, 32),), PENDSV: ((92, 96),)},
+            IslandSpan={FIRST: (34, 40), SVC: (28, 32), PENDSV: (92, 96)},
+            Literals={FIRST: (0, 36), SVC: (0, 28), PENDSV: (8, 92)},
+            Relocations={FIRST: {}, SVC: {28: (2, SLOT)}, PENDSV: {50: (10, CALLEE), 92: (2, SLOT)}})
+
 
 def _operand(op, text):
     text = re.sub(r"\s+", "", text.lower())
@@ -151,10 +194,15 @@ class _FixedSymbols:
         return item
 
 
-class ReferenceCM4FinalImage(native.FinalImage):
+class _ReferenceFinalImage(native.FinalImage):
     ROOTS = ROOTS
 
-    def __init__(self, prelink, final, disassembly, *, provider_objects=None, link_map=None):
+    def __init__(self, prelink, final, disassembly, *, provider_objects=None, link_map=None, mode="O2"):
+        require(type(mode) is str and mode in MODES, "SCOPE", "mode must be O0, Og, O2, Os or O3")
+        profiles = {ReferenceCM4FinalImage: ("CM4", _CM4), ReferenceCM7FinalImage: ("CM7", _CM7)}
+        require(type(self) in profiles, "SCOPE", "only fixed reference CM4/CM7 reader classes admitted")
+        self.profile, self._contract = profiles[type(self)]
+        self.mode = mode
         super().__init__(prelink, final, disassembly, provider_objects=provider_objects,
                          link_map=link_map, float_abi="hard")
         self.prelink = _FixedSymbols(self.prelink)
@@ -172,16 +220,21 @@ class ReferenceCM4FinalImage(native.FinalImage):
         return super()._origin(name, definition)
 
     def function(self, name):
-        require(type(name) is str and name in ROOTS, "SCOPE", "only three pinned reference CM4 transfer roots admitted")
+        require(type(name) is str and name in ROOTS, "SCOPE", "only three pinned reference " + self.profile + " transfer roots admitted")
         original = self.prelink.symbol(name, "STT_FUNC", root=True)
         final = self.final.symbol(name, "STT_FUNC", root=True)
-        require(original["size"] == final["size"] == _SIZES[name], "PRESERVATION", "root extent changed")
+        base_size = self._contract["Sizes"][name]
+        tail_nops = int(self.mode == "O0")
+        require(original["size"] == final["size"] == base_size + 2 * tail_nops,
+                "PRESERVATION", "root extent changed")
         root_origin = self._origin(name, final)
         before, source_instructions, source_data = self._body(self.prelink, original)
         after, instructions, data = self._body(self.final, final)
-        rows = _PROTOCOL[name]
+        rows = self._contract["Protocol"][name]
+        if tail_nops:
+            rows += ((base_size, "00bf", "nop", ""),)
         expected_layout = [(offset, len(bytes.fromhex(raw))) for offset, raw, _, _ in rows]
-        require(source_data == data == list(_DATA[name]) and expected_layout
+        require(source_data == data == list(self._contract["Data"][name]) and expected_layout
                 == [(off, len(raw)) for off, raw, _ in source_instructions]
                 == [(off, len(raw)) for off, raw, _ in instructions],
                 "PRESERVATION", "mapping/layout changed")
@@ -192,7 +245,7 @@ class ReferenceCM4FinalImage(native.FinalImage):
             return {off + origin - base: item for (sec, off), item in elf.relocations.items()
                     if sec == symbol["section"] and base <= off + origin < base + symbol["size"]}
         source_relocs, final_relocs = relocs(self.prelink, original), relocs(self.final, final)
-        expected_relocs = _RELOCATIONS[name]
+        expected_relocs = self._contract["Relocations"][name]
         require(set(source_relocs) == set(final_relocs) == set(expected_relocs),
                 "RELOC", "relocation membership changed")
         source_forms = {off: form for off, _, form in source_instructions}
@@ -236,12 +289,12 @@ class ReferenceCM4FinalImage(native.FinalImage):
         for offset, raw, _, _ in rows:
             if offset not in expected_relocs:
                 require(before[offset:offset + len(bytes.fromhex(raw))] == bytes.fromhex(raw),
-                        "PROTOCOL", "original instruction differs from fixed CM4 source contract")
-        a, b = _ISLAND_SPAN[name]
+                        "PROTOCOL", "original instruction differs from fixed " + self.profile + " source contract")
+        a, b = self._contract["IslandSpan"][name]
         expected_data = bytes.fromhex("000008ed00e0") if name == FIRST else bytes(4)
         require(before[a:b] == expected_data, "PROTOCOL", "original literal island differs from source contract")
         output = []
-        literal_instruction, pool = _LITERALS[name]
+        literal_instruction, pool = self._contract["Literals"][name]
         for offset, raw, expected_op, expected_operand in rows:
             size = len(bytes.fromhex(raw))
             raw_final = after[offset:offset + size]
@@ -249,7 +302,7 @@ class ReferenceCM4FinalImage(native.FinalImage):
             require(record is not None and record[2] == raw_final,
                     "DECODE", "missing/mismatched disassembly instruction")
             op, operands, _ = record
-            require(op == expected_op, "PROTOCOL", "instruction mnemonic differs from fixed CM4 source contract")
+            require(op == expected_op, "PROTOCOL", "instruction mnemonic differs from fixed " + self.profile + " source contract")
             form, target_address = final_forms[offset], None
             if op == "bl":
                 require(form is not None and form[0] == "bl", "DECODE", "BL mnemonic disagrees with bits")
@@ -259,7 +312,7 @@ class ReferenceCM4FinalImage(native.FinalImage):
                         "DECODE", "branch disassembly target disagrees with bits")
             else:
                 require(_operand(op, operands) == expected_operand,
-                        "PROTOCOL", "instruction operands differ from fixed CM4 source contract")
+                        "PROTOCOL", "instruction operands differ from fixed " + self.profile + " source contract")
                 if offset == literal_instruction:
                     require(form is not None and form[0] == "ldr" and form[1] == start + pool
                             and source_forms[offset] is not None
@@ -290,7 +343,16 @@ class ReferenceCM4FinalImage(native.FinalImage):
                     References=references, Complete=True, PrelinkBoundRootPreservation=True,
                     RootOrigin=root_origin, DefinitionOrigins=[self.origin_evidence[target] for target in sorted(
                         {reference["Symbol"] for reference in references})],
-                    ProofScope="PINNED_REFERENCE_CM4_THREE_TRANSFER_ROOTS_ONLY", ExpectedFreeRTOSPin=PIN,
-                    SourcePinBindingVerified=False, CohortBindingVerified=False,
+                    ProofScope="PINNED_REFERENCE_" + self.profile + "_THREE_TRANSFER_ROOTS_ONLY", ExpectedFreeRTOSPin=PIN,
+                    Profile=self.profile, Mode=self.mode, TailNops=tail_nops,
+                    SourcePinBindingVerified=False, CohortBindingVerified=False, ModeBindingVerified=False,
                     RequiredCellSatisfied=False, FinalParity=False, KernelRuntimeProof=False,
                     CPUProof=False, GlobalProof=False)
+
+
+class ReferenceCM4FinalImage(_ReferenceFinalImage):
+    """Only the fixed pinned ARM_CM4F transfer-root contract."""
+
+
+class ReferenceCM7FinalImage(_ReferenceFinalImage):
+    """Only the fixed pinned ARM_CM7/r0p1 transfer-root contract."""

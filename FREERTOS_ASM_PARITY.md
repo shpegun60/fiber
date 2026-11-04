@@ -1,5 +1,35 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Pinned Classic-FP Reference Final Images At Five Optimizations
+
+The reference companion now admits exactly CM4 and CM7/r0p1 hard-FP,
+VTOR1, no-MPU, p4/b16, ordinary-AAPCS cohorts at O0/Og/O2/Os/O3.
+A fresh complete ten-pair sweep compiles unchanged captured pinned ports:
+40 actual TUs, 20 direct final links and 70 object checkpoints. Fixed
+profile-specific prelink and final protocols retain every instruction,
+literal, mapping boundary, original REL addend and applied destination.
+CM7 SP+DP facts and its upstream CPSID/BASEPRI/CPSIE sequence are exact;
+native PRIMASK preservation and eager versus upstream lazy FP remain
+explicit differences, not normalizations or equivalence claims.
+
+The sweep passes 30 complete roots, 1,672 bytes, 496 instructions, 30
+references and 130 actual mutant applications (thirteen classes per pair).
+All 191 reader controls run for each pair; 37 separate build-envelope and
+17 admission controls pass. The first partial attempt remains FAIL due to
+an overly restrictive CM7 manifest-define check, fixed with actual-manifest
+regressions before the complete fresh sweep. Standalone witness outputs
+also reject in-repository/ancestor/existing locations before any write.
+
+A read-only parent audit replays all 30 roots and twins, checks exact
+producer/reader/source/mutant memberships, rejects 100 malformed receipt
+variants and closes 8,668 watched files without drift. The sweep closes
+7,410 artifact entries and 4,800 original/captured input bindings. This is
+reference final-root preservation only: not complete native/reference
+final parity, callee/kernel semantics, archives/LTO, CPU/board or global
+freeze. It satisfies zero required global parity keys. Production runtime
+and ABI are unchanged. Exact receipts and historical attempts are in
+`PORT_ARCHITECTURE_AUDIT.md#pinned-classic-fp-reference-final-images-at-five-optimizations`.
+
 ## Pinned CM4 Reference Final-Image Pilot
 
 The opt-in reference companion builds the actual pinned GCC/ARM_CM4F port
