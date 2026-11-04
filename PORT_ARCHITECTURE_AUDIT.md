@@ -6369,3 +6369,123 @@ LTO, CPU/board or global freeze is qualified. All required global parity
 keys remain unsatisfied by this bounded gate. Production C/assembly,
 public/port ABI, default matrix and feature admission are unchanged.
 These local receipts are not hosted exact-commit CI evidence.
+
+## Classic-FP Final Mechanism Join
+
+The new opt-in `tools/fixtures/classic_final_join` joins the exact CM4 and
+CM7/r0p1 hard-FP, VTOR1, no-MPU, p4/b16 ordinary-AAPCS cohorts at
+O0/Og/O2/Os/O3. It executes no compiler, linker or target instructions.
+It consumes completed native and pinned-reference builds, not substitute
+objects from older mechanism-only captures. Expected producer receipt and
+artifact-manifest hashes are separate mandatory inputs. All four are
+authenticated before any captured pyelftools code can be imported.
+
+A fresh native build sweep at `C:/fzfinal-native-join-grid-20261104-e1`
+passes ten pairs, 730 native-tool commands, 90 fresh TUs, 20 final links
+and 70 object checkpoints. Its complete closure verifies 8,180 artifact
+entries, 5,380 original/captured bindings and generated inputs without drift.
+All 176 native reader controls run per pair, and all 130 actual mutant
+applications pass. The 53 native build-envelope controls also pass. This
+is a fresh build on current harness sources, not an upgrade of old records.
+A read-only positive audit replays thirty native roots/twins, rejects three
+receipt-shape substitutions and closes 305 watched files. Full build/input/
+mutant closure belongs to the native sweep; that positive audit is not a
+second compilation or a new mutant run. The reference input is the complete
+ten-pair sweep recorded in the preceding section.
+
+The join admits exact full cohort/target/ABI facts, source selections,
+source/object hashes, actual compile dependencies, target/optimization
+flags and their actual compiler command records. Native has nine TUs,
+reference four; both require two ordered links and seven ordered successful
+object checkpoints. Provider identities, final ELFs/maps and prelink
+sidecars bind their sealed producer bytes. Same-path/hard-link/cross-role
+aliases reject. The reference pin and all 23 source/blob bindings remain
+closed, including exact CRLF-versus-Git comparison rules. Native's seal is
+verified through its complete artifact closure, not a nonexistent
+reference-only `ArtifactSealVerified` receipt field.
+
+The parser is the authenticated native build's captured pyelftools 0.33
+package. All package files are checked before import; cached ambient or
+out-of-root module origins reject. A self-resealed manifest without the
+expected external hash is not authority. Reused interpreters containing
+arbitrary preexisting Python state are outside the fresh-command contract.
+JSON hashes and parsing use the same read buffer. Complete original,
+captured and generated-input memberships/hashes are checked at close.
+Output copies, report and artifact manifest also form an exact path/hash
+seal; late additions, deletions, report mutations and write failures cannot
+leave a successful exit or retained PASS where recovery writes succeed.
+
+The existing six-body checker runs on the final builds' own native index-3
+and reference index-0 prelinks, with exact profile attributes and O0 tail
+rules. Both strict final readers then bind those same captured objects to
+three complete final roots each. Their own ordinary/emit-relocs twins must
+agree; native and reference loader bytes are not compared for equality.
+Three exact pairings retain the reviewed start/provenance, scheduler,
+mask-restoration and FP-validation difference IDs. CM7 additionally retains
+PRIMASK preservation versus upstream unconditional IRQ re-enable. Canonical
+token-body hashes and raw final-byte hashes are recorded separately.
+
+The retained inventory ledger predates `FAP-FP-SETUP-POLICY`; it still
+supplies all transfer-mechanism rationales. The separately captured and
+hashed `POLICY_DIFFERENCES.md` preserves the later eager-versus-lazy setup
+rationale. This is an explicit supplement, not a silent missing-rationale
+bypass or a claim that the two FP policies are equivalent.
+
+Initial smoke attempts remain FAIL at
+`C:/fzfinal-join-smoke-20261104-e1` (incorrect assumed inventory `Status`
+field) and `...-e2` (later setup ID absent from the old inventory ledger).
+Both defects were fixed before the complete sweep. `...-e3` was an initial
+CM4/O2 success; it is not counted as an additional qualified cell.
+
+All 24 metadata tests pass, including twenty actual producer receipt
+positives and 200 metadata mutation applications. Seventeen Watch/seal
+tests cover same-buffer snapshots, input/capture/membership drift, late
+report mutation/deletion/addition and write-failure rollback. Eleven
+contract tests cover all four hash gates before parser loading, exact
+codegen-command binding, physical aliases, output/path containment,
+duplicate JSON keys, exact mechanism/difference assignments and non-claims.
+These total 52 test methods, not 52 real ELF builds or instruction proofs.
+
+The complete actual sweep `C:/fzfinal-join-grid-20261104-e1` passes all ten
+joins: sixty root/body witnesses, thirty mechanisms, 7,644 bytes, 2,537
+instructions and 170 applied references. Four additional real invocations
+reject cross-profile, cross-mode (including identical-layout Og/O2), wrong
+receipt hash and wrong artifact-manifest hash. Exact expected error reasons
+are required. The two hash failures stop before parser import, with zero
+or one watched input respectively. Fourteen host Python invocations run;
+no Arm tool or target runs during the join. Closing all ten cases verifies
+21,360 input bindings in aggregate, not that many unique physical files.
+All positive and negative output seals, source memberships and both pinned
+producer-grid identities close without drift.
+
+A separate read-only post-audit binds the exact aggregate/per-cell receipts,
+replays all sixty final-root records and both sets of own-image twins, and
+recomputes every six-body own-prelink proof and mechanism list. It rehashes
+all retained input copies and outputs and confirms the four intended actual
+admission failures. Its 17,432 unique watched files and output memberships
+close without drift. No compiler, new mutation class or target instruction
+is executed by this replay.
+
+| Retained Record | SHA-256 |
+| --- | --- |
+| `C:/fzfinal-native-join-grid-20261104-e1/results.json` | `18B55DC227A9AAD1DFA6F980CA15F7539608A23BD9FD505A039E47932E2B03C2` |
+| `C:/fzfinal-native-join-grid-driver-20261104-e1/driver.py` | `BB245A53BFA18F89E5A9A59CE78752D9526082D67B1945268E0B43E2ECA19B64` |
+| `C:/fzfinal-native-join-grid-parent-review-20261104-e1/results.json` | `D61E073C35627C468FE704219C5E75FBCAF05737594EA278C832331136FC360B` |
+| `C:/fzfinal-join-grid-20261104-e1/results.json` | `FDCC4F7B18A68F1F671D9B6C918166B844258F392ABD80CE7A88527FF3BEBAED` |
+| `C:/fzfinal-join-grid-driver-20261104-e1/driver.py` | `A55BC6DF6A9CC50B963D7EE1D2F53A4315676C9F4D9DB7E034A247BCAD4F02CD` |
+| `C:/fzfinal-join-parent-review-20261104-e1/results.json` | `6920218984F3EDD27ABECA7B0197BC88B5604267A601859079C90322DA9D65A6` |
+| `C:/fzfinal-join-parent-review-20261104-e1/audit.py` | `36FC060B4B53BB2F688200B377740BA215F4D526A347187B4BB22414A001D9BF` |
+| `C:/fzfinal-join-admission-parent-20261104-e1/results.json` | `76CBB2B0B69CE636BB9C3E37A1FB0CC455D81B911C8E20A1E8F3E2878A276F30` |
+| `C:/fzfinal-join-watch-parent-20261104-e1/results.json` | `46B31876AA064EE820560A18FF3EC0722BE930293903F4C836F990558D6AE3E7` |
+| `C:/fzfinal-join-contract-parent-20261104-e2/results.json` | `E5843D73E611BE2C08D475314A80F80AE31D8AC6948C6CB7F50EE5CEFB2EA936` |
+| `tools/fixtures/classic_final_join/join.py` | `2785F72E5F86257A403141EB856BB8D49F0A9A6CF4D005CC858D8D2B60EBF013` |
+| `tools/fixtures/classic_final_join/admission.py` | `D860F31BAD2A8E2A9FD976FE90CD30D44C59B8FD915F7FF89F86BA004F4E80A4` |
+| `tools/fixtures/classic_final_join/POLICY_DIFFERENCES.md` | `D5744662AF124C41709AF73E3DA3819B0C9797EEE0F597B27D572FFACDB509EB` |
+
+This gate closes final mechanism composition only for those ten exact
+ordinary-mode cells. It is not complete-object, constructor/C-callee/kernel
+semantics, FP policy equivalence, successful MMIO/handler execution, whole
+native/reference final equivalence, other profiles/cohorts, archive/final
+LTO, CPU/board or global freeze. It satisfies zero required global parity
+keys. Production C/assembly, public/port ABI, feature admission and default
+matrix are unchanged. Local proof receipts are not hosted exact-commit CI.

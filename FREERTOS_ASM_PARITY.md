@@ -1,5 +1,32 @@
 # Generated Assembly Parity With FreeRTOS
 
+## Classic-FP Final Mechanism Join
+
+`tools/fixtures/classic_final_join` now composes the independently preserved
+native and pinned-reference final roots for the exact CM4/CM7 hard-FP,
+no-MPU p4/b16 cohorts at all five ordinary optimizations. Both producer
+receipts and artifact manifests are authenticated before parser import.
+Full target/recipe/input ownership and the same actual prelink objects bind
+the six-body protocol checker to both final readers. Token-body hashes and
+raw final-byte hashes remain separate; native/reference load images are
+not forced equal. The existing per-mechanism difference IDs are exact.
+
+A fresh native ten-pair build and the qualified reference ten-pair build
+feed ten actual joins: 60 roots/bodies, 30 mechanisms, 7,644 bytes, 2,537
+instructions and 170 applied references. Four actual admission negatives
+reject for the intended profile/mode/receipt-hash/manifest-hash reasons.
+Fifty-two pure controls pass across metadata, Watch/seal and contract suites.
+An independent parent replay reproduces all roots, twins and own-prelink
+protocol records and closes 17,432 watched files without drift.
+
+This is final mechanism composition with documented differences, not full
+semantic/final equivalence, C-callee/kernel closure, archive/LTO, CPU/board
+or global freeze. All required global parity keys remain unsatisfied by
+this bounded gate. Runtime/ABI/default matrix are unchanged; local evidence
+is not hosted exact-commit CI. Reproduction is in the fixture contract;
+exact receipts are in
+`PORT_ARCHITECTURE_AUDIT.md#classic-fp-final-mechanism-join`.
+
 ## Pinned Classic-FP Reference Final Images At Five Optimizations
 
 The reference companion now admits exactly CM4 and CM7/r0p1 hard-FP,
