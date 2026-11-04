@@ -481,7 +481,7 @@ def main():
             for directory in {str(PurePosixPath(p).parent) for p in group["sources"]}:
                 for path in sorted((repo / directory).glob("*.h")):
                     capture(path)
-        for directory in (repo / "context", repo / "fiber", repo / "fiber/port"):
+        for directory in (repo, repo / "context", repo / "fiber", repo / "fiber/port"):
             for path in sorted(directory.glob("*.h")):
                 capture(path)
         for cohort in manifest["cohorts"]:

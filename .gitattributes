@@ -1,0 +1,3 @@
+# Preserve the original bytes of the pinned compile-only TF-M source fixture.
+tools/fixtures/freeze_cohorts/tfm_v2/interface/include/os_wrapper/*.h text eol=lf
+tools/fixtures/freeze_cohorts/tfm_v2/license.rst text eol=lf

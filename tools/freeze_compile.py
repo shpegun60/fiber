@@ -7,7 +7,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import time
 
@@ -28,6 +27,7 @@ def load(name, path):
 HERE = Path(__file__).resolve().parent
 inventory = load("freeze_compile_inventory", HERE / "freeze_cohorts.py")
 recipe = load("freeze_compile_recipe", HERE / "fixtures/freeze_cohorts/build_recipe.py")
+process_runner = load("freeze_compile_process", HERE / "fixtures/freeze_cohorts/process_runner.py")
 closure = load("freeze_compile_native_objects", HERE / "fixtures/sensitive_port_closure/run.py")
 need, regular, sha, save = inventory.need, inventory.regular, inventory.sha, inventory.save
 
@@ -78,6 +78,16 @@ def verify_inventory(root, repo, freertos):
                              "tools/runtime_sources.py", "tools/runtime_sources.ps1",
                              "tools/fixtures/sensitive_port_closure/run.py"))
     need(required_sources <= set(names), "inventory-declared-source-coverage")
+    input_inventory = load("freeze_compile_inventory_inputs", HERE / "fixtures/freeze_cohorts/inventory_inputs.py")
+    reader_path = regular(repo / "tools/runtime_sources.py")
+    reader = load("freeze_compile_runtime_inputs", reader_path)
+    need(LOADED[str(reader_path)] == names["tools/runtime_sources.py"], "inventory-runtime-reader-drift")
+    expected_inputs = input_inventory.required_inputs(repo, manifest, groups, reader, inventory)
+    need(expected_inputs == {name for name in names if not name.startswith("host-git/")},
+         "inventory-complete-source-coverage")
+    copied_inputs = {path.relative_to(root / "inputs").as_posix()
+                     for path in (root / "inputs").rglob("*") if path.is_file()}
+    need(copied_inputs == set(names), "inventory-capture-file-set")
     required = inventory.read_json((root / "required-cells.json").read_bytes())
     need(required == inventory.plan(manifest), "inventory-required-plan-binding")
     return result, manifest, groups
@@ -117,20 +127,31 @@ class Compile(closure.Audit):
         need(argv[0] in self.allowed, "unapproved-compiler-command")
         self.track(argv[0])
         start = time.monotonic()
-        process = subprocess.run(argv, cwd=self.build, env=self.environment, capture_output=True,
-                                 text=True, errors="replace", timeout=timeout)
-        row = dict(label=label, command=argv, exit=process.returncode, stdout=process.stdout,
-                   stderr=process.stderr, seconds=round(time.monotonic() - start, 3))
-        save(self.build / ("command-%05d.json" % len(self.commands)), row)
+        row = dict(label=label, command=argv, exit=None, stdout="", stderr="", timed_out=False,
+                   seconds=None, Error=None)
+        record = self.build / ("command-%05d.json" % len(self.commands))
         self.commands.append(row)
-        need(process.returncode == 0, "native-command-failed: " + label + ": " + process.stderr[-2000:])
-        return process.stdout
+        save(record, row)
+        try:
+            process = process_runner.run(argv, cwd=self.build, env=self.environment, timeout=timeout)
+            row.update(exit=process.returncode, stdout=process.stdout.decode("utf-8", "replace"),
+                       stderr=process.stderr.decode("utf-8", "replace"), timed_out=process.timed_out)
+        except BaseException as failure:
+            row["Error"] = type(failure).__name__ + ": " + str(failure)
+            raise
+        finally:
+            row["seconds"] = round(time.monotonic() - start, 3)
+            save(record, row)
+        need(not row["timed_out"] and row["exit"] == 0,
+             "native-command-failed: " + label + ": " + row["stderr"][-2000:])
+        return row["stdout"]
 
     def preflight(self):
         for path in (Path(__file__), HERE / "freeze_cohorts.py", Path(recipe.__file__), Path(closure.__file__),
                      self.gcc, *self.tools.values()):
             self.track(path)
         for path, expected in LOADED.items():
+            self.track(path)
             need(self.inputs[path]["Sha256"] == expected, "loaded-helper-source-drift")
         need(self.run([self.gcc, "-dumpfullversion"], "compiler version").strip() == "14.3.1",
              "compiler-version")
@@ -185,6 +206,7 @@ def main():
     parser.add_argument("--mode", choices=inventory.OBJECT_MODES, action="append")
     args = parser.parse_args()
     args.repo = str(Path(args.repo).resolve(strict=True))
+    args.cmsis_core = str(Path(args.cmsis_core).resolve(strict=True))
     out = Path(args.output_dir).resolve()
     receipt = Path(args.inventory).resolve(strict=True)
     readonly_roots = (Path(args.repo), receipt, Path(args.freertos).resolve(strict=True),

@@ -5410,3 +5410,53 @@ value, rather than retaining the old fixture's unconditional 128 or shifting
 again. Baseline PRIMASK profiles and companion-only artifacts must retain an
 explicit not-applicable threshold policy. Reference includes must select one
 portmacro provider; a union of every port include directory is not acceptable.
+
+## Exact-Cohort Reference Compile Preflight
+
+The separate `tools/freeze_reference_compile.py` adapter builds the manifest's
+pinned FreeRTOS translation units, without modifying upstream or production
+Fiber/Context code. Each recipe selects one actual `portmacro.h` provider;
+compiler dependencies must confirm that provider and the generated config.
+The pinned companion `secure_init.c` intentionally has no config dependency.
+Both reference priority macros receive the already shifted manifest BASEPRI,
+and all four companion artifacts explicitly bind the context count to three.
+
+The TF-M adapter uses unchanged official headers from `TF-Mv2.0.0`, peeled
+commit `9ca8a5eb3c85eecee1303dffa262800ea0385584`, with the original BSD-3-Clause
+license under `tools/fixtures/freeze_cohorts/tfm_v2`. Hardcoded content hashes
+and actual dependency paths reject synthetic or shadow providers. This is a
+compile-only interface fixture, not a TF-M Secure image or integration proof.
+Every discovered FreeRTOS source/header is also compared with the pinned Git
+blob, permitting only explicit whole-file LF-to-CRLF checkout expansion.
+
+The retained e3/e4 runs each pass 725 reference cells at O0/Og/O2/Os/O3:
+1,320 source objects and 725 native ARM relocatable groups, 4,895 commands,
+1,555 input bindings, 11,319 artifact entries and zero closing drift. There
+are 690 unchanged-target-flag recipes and 35 explicitly limited softfp
+witnesses. Seventy eager-FP artifacts retain an explicit FPCCR difference;
+neither unchanged compiler flags nor compilation proves equivalent policy.
+No final executable, LTO or CPU run occurs and required parity cells remain
+zero. The e1 harness failure (config expected for config-free secure_init.c)
+and successful ten-cell e2 pilot remain separate, unchanged records.
+
+| Retained E4 Record | SHA-256 |
+| --- | --- |
+| `C:/fzrc-20261104-e4/results.json` | `8924C96B528748D4CFDC4C13DA5AFEF5A1D578A695A1A045B4141A8D067D4D7A` |
+| `C:/fzrc-20261104-e4/artifacts.json` | `5ECE0ACEACC0F1B3CA0FA5F64DD420590084CD4431A9E3C8EADD62AEB7749752` |
+| `C:/fzrc-20261104-e4/inputs.json` | `2457E440A30FC119407B9FDF3D8AA3620DF29B58A47F9A1AD4290D5D8DC2B868` |
+
+Independent e3 review checks all artifact hashes, exact cell keys, native
+objects, command grammar, dependencies and 66 pinned FreeRTOS files. It binds
+the captured e3 runner, not the later e4 escape guard or subsequent tooling
+repairs. Pure controls separately exercise 248 recipe cases and 39 reference
+adapter cases, without compiler, Git or CPU execution.
+
+Subsequent review found three native-preflight tooling defects: a resealed
+receipt could omit a header capture row, a relative CMSIS path was not
+canonicalized before changing compiler cwd, and timeout attempts were not
+logged or guaranteed to clean up descendants. Their repair must receive fresh
+controls and compiler receipts; the older e2 native/e3-e4 reference snapshots
+are not relabelled as evidence for changed runners. Root-level public headers
+are additionally enrolled in new inventory captures. Runtime C/assembly and
+hardware claims remain unchanged. Global mechanism/final-LTO parity, hosted
+CI, staged-profile activation and board qualification are still pending.

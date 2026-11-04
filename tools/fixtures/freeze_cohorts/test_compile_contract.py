@@ -1,8 +1,9 @@
 """Synthetic verify_inventory tamper controls; not 27-port or CPU qualification."""
 from copy import deepcopy
-from contextlib import ExitStack
+from contextlib import ExitStack, chdir, redirect_stdout
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -21,6 +22,14 @@ CORE_INPUTS = (
     "tools/runtime_sources.py", "tools/runtime_sources.ps1", "tools/runtime_sources.json",
     REGISTRY_NAME,
 )
+RUNTIME_MANIFEST = dict(schema_version=1,
+    providers=dict(engine="context/engine.c", state="context/state.c", panic="fiber/panic.c",
+                   optional_configuration="context/config.c"),
+    compatibility=dict(legacy_compat=["fiber/legacy.c"], facade_bridge=["context/facade.c"]))
+HEADERS = ("basic_types.h", "mcu_core.h", "context/shared_api.h", "fiber/shared_fiber.h",
+           "fiber/port/shared_port.h", "fiber/port/ARM_CM4/fiber_port_private.h",
+           "fiber/port/ARM_CM4/fiber_portmacro.h")
+INPUT_HELPER = TOOLS / "fixtures/freeze_cohorts/inventory_inputs.py"
 
 
 def need(ok, message):
@@ -74,6 +83,8 @@ class Fixture:
         self.root = self.base / "receipt"
         self.subject = subject
         self.manifest, self.registry = sample()
+        self.manifest["scope_backlog"] = [dict(id="synthetic-backlog", status="Pending",
+            description="Synthetic fixture only", refs=["docs/synthetic_backlog.md"])]
         self.rows = []
         self.registry_calls = 0
         providers = {
@@ -81,7 +92,19 @@ class Fixture:
             for name in CORE_INPUTS if name != "tools/freeze_cohorts.json"
         }
         providers[REGISTRY_NAME] = REGISTRY_BYTES
-        providers["tools/runtime_sources.json"] = b'{"synthetic": true}\n'
+        providers["tools/runtime_sources.py"] = (TOOLS / "runtime_sources.py").read_bytes()
+        providers["tools/runtime_sources.json"] = encoded(RUNTIME_MANIFEST) + b"\n"
+        for name in (*RUNTIME_MANIFEST["providers"].values(),
+                     *(name for paths in RUNTIME_MANIFEST["compatibility"].values() for name in paths),
+                     *HEADERS):
+            providers[name] = b"/* Synthetic declared input; never compiled. */\n"
+        providers["fiber/port/ARM_CM4/fiber_portmacro.h"] = b"#define FIBER_PORT_RUNTIME_SELECTABLE 1\n"
+        for cohort in self.manifest["cohorts"]:
+            for reference in cohort["claim_refs"]:
+                providers[reference["path"]] = b"Synthetic claim fixture, not proof.\n"
+        for row in self.manifest["scope_backlog"]:
+            for name in row["refs"]:
+                providers[name] = b"Synthetic backlog fixture, not proof.\n"
         providers["tools/freeze_cohorts.json"] = encoded(self.manifest) + b"\n"
         for group in self.manifest["source_groups"]:
             for name in group["sources"]:
@@ -147,7 +170,8 @@ class Fixture:
         original_read = Path.read_bytes
 
         def generated_only(path):
-            need(path.resolve().is_relative_to(self.base), "verify_inventory read outside generated fixture: " + str(path))
+            need(path == INPUT_HELPER or path.resolve().is_relative_to(self.base),
+                 "verify_inventory read outside generated fixture/helper: " + str(path))
             return original_read(path)
 
         def synthetic_registry(data):
@@ -189,6 +213,11 @@ def main():
                         need(result == fixture.result and fixture.registry_calls == 1, name + " lost result/registry binding")
                         need(result["GlobalFreezeQualified"] is False and fixture.required["RequiredCellCount"] == 19,
                              name + " expanded synthetic scope")
+                        need(subject.LOADED[str(INPUT_HELPER.resolve())] == sha(INPUT_HELPER.read_bytes()),
+                             name + " did not register executed input helper for preflight capture")
+                        reader = fixture.repo / "tools/runtime_sources.py"
+                        need(subject.LOADED[str(reader)] == sha(reader.read_bytes()),
+                             name + " did not register the bound canonical runtime reader")
                     accepted = True
                 matched = (accepted if reason is None else not accepted and error == "freeze-inventory: " + reason)
                 if not matched:
@@ -316,6 +345,113 @@ def main():
         for name in (*CORE_INPUTS, port_name, "pinned-reference/" + upstream_name):
             control("missing-declared-capture:" + name, lambda f, n=name: omitted_capture(f, n),
                     "inventory-declared-source-coverage")
+
+        for name in (*HEADERS, "context/engine.c", "fiber/legacy.c", "context/facade.c",
+                     "tools/compile_matrix.ps1", "docs/synthetic_backlog.md"):
+            control("missing-complete-capture:" + name, lambda f, n=name: omitted_capture(f, n),
+                    "inventory-complete-source-coverage")
+
+        def omitted_header_drift(fixture, remove_copy):
+            name = "fiber/port/ARM_CM4/fiber_port_private.h"
+            row = fixture.capture_row(name)
+            fixture.rows.remove(row)
+            Path(row["Original"]).write_bytes(b"Unrecorded header drift\n")
+            if remove_copy:
+                Path(row["Captured"]).unlink()
+            fixture.result["ExpectedInputs"] = [Path(row["Captured"]).relative_to(fixture.root / "inputs").as_posix()
+                                                for row in fixture.rows]
+            fixture.refresh_capture()
+            fixture.seal()
+
+        control("omitted-header-drift-resealed-with-copy", lambda f: omitted_header_drift(f, False),
+                "inventory-complete-source-coverage")
+        control("omitted-header-drift-resealed-without-copy", lambda f: omitted_header_drift(f, True),
+                "inventory-complete-source-coverage")
+
+        def current_header(fixture, name):
+            path = fixture.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"New current header, not in the old receipt.\n")
+
+        for name in ("new_root.h", "context/new_shared.h", "fiber/new_shared.h", "fiber/port/new_shared.h",
+                     "fiber/port/ARM_CM4/new_private.h"):
+            control("new-current-header-invalidates-old-receipt:" + name,
+                    lambda f, n=name: current_header(f, n), "inventory-complete-source-coverage")
+        control("unselected-port-header-not-in-declared-closure",
+                lambda f: current_header(f, "fiber/port/UNSELECTED/not_selected.h"))
+
+        def replaced_runtime_provider(fixture):
+            runtime = deepcopy(RUNTIME_MANIFEST)
+            runtime["providers"]["engine"] = "context/replaced_engine.c"
+            (fixture.repo / "context/replaced_engine.c").write_bytes(b"New current provider, not captured.\n")
+            row = fixture.capture_row("tools/runtime_sources.json")
+            data = encoded(runtime)
+            for key in ("Original", "Captured"):
+                Path(row[key]).write_bytes(data)
+            row["Sha256"] = sha(data)
+            fixture.refresh_capture()
+            fixture.seal()
+
+        control("resealed-provider-membership-cannot-omit-current-provider", replaced_runtime_provider,
+                "inventory-complete-source-coverage")
+
+        def foreign_capture(fixture):
+            fixture.add_input("foreign.txt", b"Not a declared input\n", fixture.repo / "foreign.txt")
+            fixture.result["ExpectedInputs"] = ["foreign.txt"]
+            fixture.refresh_capture()
+            fixture.seal()
+
+        control("claimed-expected-inputs-cannot-add-foreign-capture", foreign_capture,
+                "inventory-complete-source-coverage")
+
+        def unlisted_copy(fixture):
+            (fixture.root / "inputs/unlisted.bin").write_bytes(b"Not covered by a capture row\n")
+            fixture.seal()
+
+        control("every-input-copy-needs-a-capture-row", unlisted_copy, "inventory-capture-file-set")
+
+        def cmsis_cli(fixture, relative):
+            cmsis = fixture.base / relative
+            cmsis.mkdir()
+            compiler = fixture.base / "host/arm-none-eabi-gcc.exe"
+            compiler.parent.mkdir(exist_ok=True)
+            compiler.write_bytes(b"Inert compiler marker; never executed.\n")
+            out = fixture.base / "cli-output"
+            received = []
+
+            class NoCompiler:
+                def __init__(self, args, report):
+                    received.append(args.cmsis_core)
+                    self.inputs, self.commands, self.gcc = {}, [], compiler
+                    self.report = report
+
+                def preflight(self):
+                    pass
+
+                def build_cell(self, cohort, artifact, group, mode):
+                    self.report["Cells"].append(dict(Status="COMPILE-PREFLIGHT-PASS"))
+
+            argv = [str(TOOLS / "freeze_compile.py"), "--repo", str(fixture.repo),
+                    "--inventory", str(fixture.root), "--freertos", str(fixture.freertos),
+                    "--arm-gcc", str(compiler), "--cmsis-core", relative,
+                    "--output-dir", str(out), "--all-cohorts", "--mode", "O0"]
+            with patch.object(subject, "Compile", NoCompiler), \
+                    patch.object(subject, "verify_inventory", return_value=(fixture.result, fixture.manifest,
+                        {"CM4": fixture.manifest["source_groups"][0]})), \
+                    patch.object(sys, "argv", argv), chdir(fixture.base), redirect_stdout(io.StringIO()):
+                need(subject.main() == 0, "CMSIS-only CLI stub failed")
+            need(received == [str(cmsis.resolve())] and Path(received[0]).is_absolute(),
+                 "Compile did not receive the canonical absolute CMSIS argument")
+            report = json.loads((out / "results.json").read_bytes())
+            need(report["GlobalFreezeQualified"] is False and report["RequiredCellsSatisfied"] == 0,
+                 "CMSIS argument regression promoted proof scope")
+
+        for name, relative in (("relative-cmsis-normalized-before-compile", "cmsis-relative"),
+                               ("relative-cmsis-weird-whitespace-is-literal", "CMSIS  [literal] headers")):
+            with TemporaryDirectory(prefix="freeze-compile-cmsis-contract-") as temporary:
+                fixture = Fixture(Path(temporary), subject, sample)
+                cmsis_cli(fixture, relative)
+            records.append(dict(Name=name, Accepted=True, ExpectedRejection=None, Matched=True))
         need(popen.call_count == 0, "Unexpected attempt to execute a process")
     positive = sum(row["ExpectedRejection"] is None for row in records)
     print(json.dumps(dict(Verdict="SYNTHETIC-COMPILE-CONTRACT-FAIL" if failures else "SYNTHETIC-COMPILE-CONTRACT-PASS",
