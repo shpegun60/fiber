@@ -2546,3 +2546,29 @@ join remain next. Full ABI, source/IR semantics, other modes/cohorts, archives,
 CPU/board qualification, hosted exact-SHA CI and global freeze are not inferred.
 Required-cell counters remain integer zero; production mechanics and frozen
 decoders/readers/checker are unchanged.
+
+## Pinned CM3 Reference Slim-LTO Capture
+
+`tools/fixtures/cm3_reference_lto_transport/` now independently rebuilds the
+qualified pinned reference CM3 O2 source/configuration as three genuine slim-IR
+C inputs plus native startup. Two fresh direct O2-lto links retain their actual
+single-partition LTRANS machine objects, full worker/argument/temporary records
+and final load-identical twins. Upstream FreeRTOS and fail-stop fixture code are
+unchanged; no native seed, fat fallback or reconstructed assembly substitutes.
+
+The actual E3 run passes 37 contained commands. Independent closure rehashes
+1349 artifacts, 1268 watched inputs and 1231 retained copies; four real CLI
+negatives reject before mkdir. Twenty-two pure probe controls pass separately.
+Fifteen additional pure admission methods cover mocked source/blob/config,
+command/dependency and output-denial boundaries without tool/parser execution.
+Raw machine facts preserve local first-start, global SVC/PendSV and a named
+global `pxCurrentTCB` slot, not the native section-symbol representation.
+Exact source/evidence hashes, seed-admission rules and retained wrapper-failure
+attempts are recorded in `PORT_ARCHITECTURE_AUDIT.md`, "Pinned CM3 Reference
+Slim-LTO Capture" and the fixture's `CONTRACT.md`.
+
+This is capture/build feasibility, not reference root/protocol or paired LTO
+mechanism qualification. The separate reference machine-to-final adapter and
+canonical checker composition are next, before the native/reference join.
+ABI, source/IR semantics, CPU/board, other modes/cohorts, archives, hosted
+exact-SHA CI and global claims remain unproved; required-cell counters stay zero.

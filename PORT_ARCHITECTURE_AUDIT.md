@@ -7396,3 +7396,90 @@ integer zero. Next is independently captured reference LTO, not a fabricated
 reference view or promotion of the ordinary five-mode reference record.
 No production mechanics, frozen readers/checker, default matrix or protected
 unrelated WIP were changed.
+
+## Pinned CM3 Reference Slim-LTO Capture
+
+The opt-in `tools/fixtures/cm3_reference_lto_transport/` is a separate fixed
+reference producer, not a broader native admission mode. It authenticates the
+qualified ordinary reference CM3 O2 seed, pinned FreeRTOS commit
+`a50edad08b29052631aa469d4df6e6ec7ff68878`, 23 worktree/captured/Git-blob file
+bindings, generated threshold/assertion configuration, complete source inventory,
+71 seed command records, dependencies and tool/interpreter closure before mkdir.
+Helpers execute captured immutable buffers. Upstream/fixture source, fail-stop
+providers, NULL current TCB and enabled handler-installation checks are unchanged.
+
+The actual E3 capture/build passed locally on 2026-11-05:
+
+- Four ordered TUs: upstream ARM_CM3 `port.c`, typed providers, typed consumer
+  and unchanged startup assembly. The first three are freshly compiled slim IR
+  with no executable fat fallback; the fourth remains native.
+- Two independent direct O2-lto links, one explicit LTO partition each, with
+  driver and explicit plugin save-temps. Complete actual workers, resolutions,
+  arguments/responses, generated assembly, maps, inspections and genuine
+  `image.elf.ltrans0.ltrans.o` files remain captured. WPA IR is not substituted.
+- Both saved machine objects hash to
+  `2B9AD20DE46929F15662FF8EE278A8FFB8CD2CC4C2587DF9FDAE8C0312CC630F`.
+  The unchanged twin reader verifies complete loader-visible geometry/bytes,
+  entry, allocated sections and vectors; its saved path/hash/value is closed
+  before and after sealing.
+- Thirty-seven contained actual tool commands; an independent parent driver
+  rehashes all 1349 artifacts, 1268 watched inputs and 1231 retained input copies,
+  actual object/dependency/link roles and the saved twin record.
+- Seven actual machine symbol observations preserve raw bindings. First-start
+  remains LOCAL (32 bytes), SVC/PendSV GLOBAL (36/68 bytes), and `pxCurrentTCB`
+  is a GLOBAL four-byte object at machine BSS offset 8. Complete readelf/map
+  records show named slot ABS32 references, unlike the native section-symbol
+  form. These are observations, not origin/addend/applied-reference proofs.
+- Four real CLI negatives reject before output creation: wrong seed receipt,
+  wrong manifest, repository overlap and seed overlap. Complete positive input
+  and output closure is independently rechecked after those refusals.
+- Twenty-two pure probe controls pass, including missing/changed input objects,
+  exact source/link/IR counters, command/twin prerequisites and late seal faults.
+- Fifteen separate pure admission methods pass over mocked helper/filesystem
+  boundaries, including source/blob/config/command/dependency mutations,
+  lexical immutable helper reads and the ordinary sidecar naming regression.
+  They do not execute the captured parser, compiler or target.
+
+The first pure run exposed a missing independent TranslationUnits counter
+check; it is now required alongside four source rows, three IR inputs and two
+links. The first actual runner failed before mkdir because seed-sidecar lookup
+incorrectly appended `.dis` after `.o`/`.elf`; ordinary seed sidecars replace the
+suffix. The second runner admitted the seed, then stopped after its first C
+compile because the reused dependency parser requires `pilot-source-N` rather
+than the new wrapper's `reference-lto-source-N` target marker. The two fixes
+only correct wrapper/receipt conventions; source, flags and parsers are unchanged.
+All failed receipts/logs remain historical and are not relabeled as E3.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_reference_lto_transport/probe.py` | `1D1FDC0D644123FEF1E182107A8062A0BA9BCCB385DA0C2D13BDFD741290F2C3` |
+| `tools/fixtures/cm3_reference_lto_transport/admission.py` | `27C192C12E30BD4F1A872D6A8586B85C303AF6D6873A85A26238BE7DD4962ECC` |
+| `tools/fixtures/cm3_reference_lto_transport/test_probe.py` | `C0C653286B670262B8809B97D27B3F82C5A361B1D24BAAAF27F860030955E83C` |
+| `tools/fixtures/cm3_reference_lto_transport/test_admission.py` | `D645E0314CD799B473E012F719AAF8AE7615C0C5BB143297C6F5DAE81857B597` |
+| `tools/fixtures/cm3_reference_lto_transport/CONTRACT.md` | `4368A1C64DFBC7649E23CCBB7840F9AC716BE41F837527E5193C0AAAE89C24F4` |
+| `%TEMP%/cm3-reference-lto-probe-pure-20261105-e1/results.json` | `1A180BC9BF38D0C42773D7A7B028ADD1956A45FB8BED9E73E48A0A4627ABC29D` |
+| `%TEMP%/cm3-reference-lto-probe-pure-20261105-e2/results.json` | `57B67569D2EF13A2B02A32B70E6A2DA7D068E797CCF8C6AE9E945B98B68C496C` |
+| `%TEMP%/cm3-reference-lto-probe-pure-20261105-e3/results.json` | `173EB2EBC4CA049A6668158E7C5CC46D5BD3A61D269BCE75D876FA6EA1C07118` |
+| `%TEMP%/cm3-reference-lto-admission-pure-20261105-e1/results.json` | `B9344303AF5D84A9AE51B1FEC3D2B3BD6284AA21FCE3A208145354D8A34AB6A7` |
+| `C:/fz-cm3-reference-lto-runner-driver-20261105-e1/driver.py` | `F5D50B4C626992C6C08165F18D942677A6E16E393EEFEBB0DB6A44E9B0672434` |
+| `C:/fz-cm3-reference-lto-runner-driver-20261105-e2/driver.py` | `6E0898D120477E983A5156A7F8ACD74D6211B73697CDE1993CACB025AA09ECD9` |
+| `C:/fz-cm3-reference-lto-runner-driver-20261105-e3/driver.py` | `A37CB8E28E39DFAD797F0C7931118FC7B5E68369A04A1B857A46C136AD651814` |
+| `C:/fz-cm3-reference-lto-runner-20261105-e1/results.json` | `5EA1369BFC8042867AA99F64EE157102D0844D0C0C3AFAFB64898DD96D033E20` |
+| `C:/fz-cm3-reference-lto-runner-20261105-e2/results.json` | `BAB5C8766E7363B127CA3139F54655358C80FE0CB5FD69FDDD4963F3F2D5AA28` |
+| `C:/fz-cm3-reference-lto-runner-20261105-e3/results.json` | `DE922996E32541A91E518AB91689DFC0EDD43126F414B12DCA8767D6A080B4A3` |
+| `C:/fz-cm3-reference-lto-transport-20261105-e2/results.json` | `01699941C00893315F74F24C7EFD06CA24F707BC2C755B0BF3E5EF4C46643B51` |
+| `C:/fz-cm3-reference-lto-transport-20261105-e3/results.json` | `F4576A894CE06EB275A956C93441DF8F1B9D7850D9F3A7B9BEA905845A47B455` |
+| `C:/fz-cm3-reference-lto-transport-20261105-e3/artifacts.json` | `54F7C7E773BF4CDAC9B4A645F3DC472FF9EFD48F079E30A4C695405DE181D470` |
+| `C:/fz-cm3-reference-lto-transport-20261105-e3/load-image.json` | `514F8CC40D604F14696361829014B8B0E64170D1BC34901D451D9119582433E2` |
+| `C:/fz-cm3-reference-lto-controls-driver-20261105-e1/driver.py` | `30414022650E18FBB687887BB3B6C6F5D4A5A11376F129F31644C22590C4D1C8` |
+| `C:/fz-cm3-reference-lto-controls-20261105-e1/results.json` | `0EE8998ECFFE5F3F7FB73AFF893C9F533C89D50E53F50F8F6F76AB1B2BC3447C` |
+
+This closes capture feasibility only. The next reference root adapter must
+independently bind the local first-start and named `pxCurrentTCB` through whole
+machine-section map placements, prove original/applied REL semantics and consume
+complete mapping/pool/tail bytes. Canonical reference LTO protocols and the
+native/reference mechanism join remain separate subsequent gates. Full ABI,
+source/IR semantics, policy/kernel execution, archives/other modes/cohorts,
+CPU/board validation, hosted exact-SHA CI and global software freeze remain
+unproved. Required-cell counters stay typed integer zero. No production runtime,
+ordinary reader, public/port ABI, default matrix or protected WIP was changed.
