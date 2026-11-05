@@ -7324,3 +7324,75 @@ CI and global freeze remain pending. Every required-cell counter stays typed
 integer zero. Next is the canonical native protocol composition, followed by
 independent reference LTO capture/roots and a bounded mechanism join. Production
 runtime/assembly/ABI, default matrix and protected unrelated WIP are unchanged.
+
+## CM3 Native LTO Canonical Protocol Composition
+
+The separate `tools/fixtures/cm3_lto_protocol/` composition now connects the
+unchanged canonical machine decoder and CM3 checker to the machine-to-final
+root evidence above. It admits only the same native O2-lto, direct,
+single-partition CM3 p4/BASEPRI16 soft/no-FPU cohort. It does not supply a
+reference object to the six-body checker or claim paired mechanisms.
+
+The actual saved machine and its separately authenticated machine disassembly
+feed `decoder.Object`; final disassembly is not substituted for ET_REL input.
+The complete machine bytes and each decoded root's section/offset/extent/hash
+must bind the independently recomputed preservation record. The three complete
+native protocol matches use the unchanged `checker._match` and `_NATIVE` tables,
+with an additional literal zero-tail-NOP requirement for O2-lto.
+
+Only the two origin-proven section-symbol slot references may project to the
+logical current-slot name, once in the appropriate LDR operand and once in its
+literal descriptor. Raw tokens, projected tokens, raw empty ELF symbol names,
+full transport records and projection evidence are all retained. Machine and
+final byte hashes remain distinct from token-JSON hashes. The old transport
+records still say `CanonicalProtocolValidated=False`; only the separately
+computed composition reports its new native canonical result.
+
+Final E2 passed locally on 2026-11-05:
+
+- Three full native canonical roots and exactly two slot-role projections,
+  bound by name to all 492 bytes, 170 instructions and 13 preserved references.
+- All inherited 16 actual transport-mutant controls still reject.
+- One additional actual private coherent SVC70-to-SVC71 mutation changes both
+  machine/final instruction fields and both corresponding disassemblies.
+  All three root-preservation checks accept that changed constant, but the
+  frozen canonical checker rejects first-start token 27. This control proves
+  the canonical guard is independent; it makes no mutated-source authority or
+  mutant twin-image claim. Its six immutable files are closed after parsing.
+- Twenty-eight pure protocol methods pass. The first attempt reproduced two
+  boolean-zero alias failures (`Addend=False`, raw symbol `size=False`);
+  literal integer guards now cover consumed symbol/origin/reference/descriptor
+  fields. E1 remains historical; E2 reruns the complete actual witness.
+- An independent parent driver verifies all 260 artifacts, all 3092 watched
+  hashes, raw/projected token hashes, unchanged transport records, zero tail
+  layout, exact projections and the actual constant-control bytes.
+- Four real CLI refusal controls pass before output creation; full watched
+  closure is rechecked afterwards. Neither witness nor controls execute a
+  compiler, firmware, emulator, target or board.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_protocol/protocol.py` | `BA3B630BB1FEA67C81D2EE18C84F6D2A47DE9802E8763F52EE55DB34CD65F419` |
+| `tools/fixtures/cm3_lto_protocol/witness.py` | `39E1994A74DB225CD3BB2010AE07C49FD1DB2EE2006BCAD2FC59BD3092E6CF51` |
+| `tools/fixtures/cm3_lto_protocol/test_protocol.py` | `45E6FB30124502769A8D6A60E2FC9E5590C0E18C325C971B0EFB6F8A8E628106` |
+| `tools/fixtures/cm3_lto_protocol/CONTRACT.md` | `5FF302721B4D078E167A9DB0EF1B4AB8D192FA837B45D85D9612607BBDC41F82` |
+| `%TEMP%/cm3-lto-protocol-pure-20261105-e1/results.json` | `40174885E4DE3BEE0CA35616C1B39FF16C5DC2AC3F3DECE88D6C2530F940358B` |
+| `%TEMP%/cm3-lto-protocol-pure-20261105-e2/results.json` | `A6B4ED5500208D7853C51EFAE1E63B39B304EBC8B1CF3CBCA78FF8EE098319FD` |
+| `C:/fz-cm3-lto-protocol-witness-20261105-e1/results.json` | `689DF137102C202A5C6E9B4A18368709B3F163C39D2CED29D6737BE94CC0F779` |
+| `C:/fz-cm3-lto-protocol-witness-20261105-e2/results.json` | `7E86F186531959E09D08F175EB5AF054FBFFFEFAD5296C4D30E726C1C86DD3D3` |
+| `C:/fz-cm3-lto-protocol-witness-20261105-e2/artifacts.json` | `1482340A085A57454B1FFCE8D6D72BCAA7920E23401027D5D3B76419117E57EB` |
+| `C:/fz-cm3-lto-protocol-controls-driver-20261105-e1/driver.py` | `3D9A8A84B900AAF7B1D980F560584528CA9A3060D4A7554D782C32415FAFEDD6` |
+| `C:/fz-cm3-lto-protocol-controls-driver-20261105-e2/driver.py` | `CB41C61DB628563385F7162CD689EB863A4954F9187411E264DAAF4D6F4971B9` |
+| `C:/fz-cm3-lto-protocol-controls-20261105-e1/results.json` | `5E64491692191ABE6CE34A46A683EA4E58FD62E6B6835F8EBE3A5FF1AF29192B` |
+| `C:/fz-cm3-lto-protocol-controls-20261105-e2/results.json` | `6FAFDF4AF8BF5C667A3D44F3ABCA77B5E27F9F79ED8D6883327309068ED226A9` |
+
+The new protocol status is `NATIVE-CANONICAL-PASS-NOT-REFERENCE-QUALIFIED`;
+the containing root witness retains its deliberately non-qualified status.
+Source/IR-to-machine semantics, full post-LTO ABI/override/cohort proof,
+independent FreeRTOS LTO capture/roots and its paired mechanism/difference join,
+other modes/cohorts/archives, CPU/board validation, hosted exact-SHA CI and
+global software freeze remain pending. Required-cell counters stay typed
+integer zero. Next is independently captured reference LTO, not a fabricated
+reference view or promotion of the ordinary five-mode reference record.
+No production mechanics, frozen readers/checker, default matrix or protected
+unrelated WIP were changed.

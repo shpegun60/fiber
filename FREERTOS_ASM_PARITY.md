@@ -2521,3 +2521,28 @@ protocol composition and the independent FreeRTOS final-LTO side/join remain
 next. No source/IR semantics, complete ABI/object, generalized LTO, CPU/board,
 hosted exact-SHA CI or global freeze claim is added. Required-cell counters
 remain integer zero; production mechanics and the default matrix are unchanged.
+
+## CM3 Native LTO Canonical Protocol Composition
+
+`tools/fixtures/cm3_lto_protocol/` now uses the unchanged machine decoder and
+CM3 protocol checker on the same authenticated native O2-lto saved machine.
+All three complete native protocols pass with zero tail NOPs. Exactly two
+origin-backed section-symbol references project to the logical current-slot
+role in LDR operands/literal descriptors; raw ELF metadata and both token
+forms remain retained. Full machine/root byte hashes bind the canonical view
+to the independently preserved final roots, not a caller-authored token list.
+
+Final E2 passes 28 pure protocol controls, all 16 inherited actual transport
+controls, and one actual coherent SVC70-to-SVC71 control that preservation
+accepts but canonical matching rejects. Independent closure checks 260 output
+artifacts, 3092 watched hashes, token-hash domains and four real CLI refusals.
+Exact source/evidence hashes, the boolean-zero test failure and corrected
+reruns are in `PORT_ARCHITECTURE_AUDIT.md`, "CM3 Native LTO Canonical Protocol
+Composition". No tools or target code are executed by this witness.
+
+This establishes only `NATIVE-CANONICAL-PASS-NOT-REFERENCE-QUALIFIED`.
+Independent pinned FreeRTOS final-LTO capture/roots and the paired mechanism
+join remain next. Full ABI, source/IR semantics, other modes/cohorts, archives,
+CPU/board qualification, hosted exact-SHA CI and global freeze are not inferred.
+Required-cell counters remain integer zero; production mechanics and frozen
+decoders/readers/checker are unchanged.
