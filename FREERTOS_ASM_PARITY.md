@@ -2736,3 +2736,27 @@ not full callable ABI, panic-body/IR semantics, original-TU machine ownership,
 new native/reference parity, archive extraction, other modes/cohorts, hardware,
 hosted exact-SHA CI or global freeze. Required-cell credit remains integer zero.
 No production, frozen helper, public/port ABI or default-matrix change is made.
+
+## CM3 LTO Private-Policy Cohort Controls
+
+`tools/fixtures/cm3_lto_cohort_controls/` captures actual O2-lto links for two
+valid CM3 policies: raw BASEPRI16 and BASEPRI32 at P4. Only runtime, boot,
+exception and build-expectation are recompiled for 32; actual dependencies and
+all other compile flags remain unchanged. Neutral common/application IR and
+public storage identity are reused without relabeling their original recipe.
+
+Local E1 on 2026-11-05 passes four fresh matching ordinary/emit-relocs links
+and eight isolated mixed links. Runtime, boot, exception and expectation are
+swapped one at a time in both directions. Every mixed link fails on exactly
+its expected complete private cohort symbol, with exit 1 and no final image.
+Command FAIL and expected-control PASS remain separate. Positive verbose traces
+remain; negative recipes remove only `-v` for strict whole-diagnostic parsing.
+
+Fourteen pure identity/recorder/control methods pass. Independent local checks
+close 512 artifacts, 3227 watched hashes, all 52 command rows and inspection
+stdout bindings. Exact source/evidence hashes are in `PORT_ARCHITECTURE_AUDIT.md`,
+"CM3 LTO Private-Policy Cohort Controls". This is capture/intended-link evidence,
+not a new inventory cell or complete qualification: positive resolution/maps/
+ELF are retained, not promoted to a b32 final-root/ABI/parity proof. Storage-
+revision and reverse-ABI-version mismatch remain separate axes. Hardware,
+hosted exact-SHA CI and global credits stay unproved; production is unchanged.

@@ -7945,3 +7945,68 @@ other modes/cohorts, fresh reference parity, CPU/board, hosted exact-SHA CI and
 global freeze remain independent gates. Required-cell counters stay typed zero.
 No production source, frozen helper, public/port ABI, default matrix or protected
 unrelated WIP was changed.
+
+## CM3 LTO Private-Policy Cohort Controls
+
+The opt-in `tools/fixtures/cm3_lto_cohort_controls/` starts a separate exact
+private-policy mismatch cohort, not another architecture or storage revision.
+CM3 P4 permits both raw BASEPRI16 and BASEPRI32. Four selected providers are
+recompiled from the admitted C/header bytes: runtime, boot, exception and build
+expectation. The single legacy compile definition changes 16 to 32 in place;
+duplicate or separate canonical counterdefinitions are rejected. Every other
+compile flag and actual dependency/path/hash set is preserved.
+
+Actual dependencies of the three common TUs and public application contain no
+private port macro/header/cohort dependency. They are reused unchanged with
+their original recorded recipe, as is the explicit native startup. Each link
+still represents nine TUs/eight slim IR/one native startup. No panic override,
+duplicate-handler fixture, invented anchor or production source edit is added.
+Private key bits change `_u00010000_` to `_u00100000_`; all other key fields and
+`fiber_port_storage_cohort_arm_cm3_v1_r0` remain unchanged. The grammar binds
+all 15 actual runtime IR definitions in each policy, not a substring alone.
+
+Local E1 on 2026-11-05 passes the bounded capture:
+
+- Fifty-two host-tool commands comprise four compiles, 36 inspections and
+  twelve links. Four matching positives cover both policies and both ordinary/
+  emit-relocs variants. All use actual slim IR and captured native startup.
+- Eight isolated negatives replace runtime/boot/exception/expectation one at a
+  time in both directions. Every failure has exactly the expected full missing
+  private key, exit 1, no timeout and no final ELF. The strict complete diagnostic
+  grammar rejects extra undefined names, compiler/tool errors and unrelated
+  linker text. Recorded commands remain FAIL while intended controls pass.
+- Positives retain verbose worker traces. Negative link argv differs only by
+  removal of `-v`; semantic target/O2/LTO/GC flags and provider order are kept.
+  This is explicit diagnostic isolation, not a claim of per-negative verbose
+  worker tracing or of equal final bytes between different scheduler policies.
+- Raw dependencies, sources, slim objects, generated maps/machines/finals/.res,
+  environment, JSON/stdout/stderr and catalog are pinned through closing checks.
+  Independent operator checks verify all 512 artifacts plus manifest, 3227
+  watched hashes, all 52 command rows and inspection-sidecar/stdout equality.
+- Fourteen pure synthetic methods pass: eight identity/diagnostic grammar and
+  six recorder/control methods. Coverage includes exact row/order/key/storage
+  facts, all eight swap directions, missing/extra diagnostics, counterdefinitions,
+  source/record/stream failures, closing-failure propagation and compile-failure
+  nonpromotion. The first pure run exposed Path argv serialization in the fake
+  tool; the fixture now matches the real runner's string argv behavior. E2 passes
+  without weakening the error assertion or changing the actual capture source.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_cohort_controls/CONTRACT.md` | `3F2A78F4F3CEA062B8A6898C65560F75AF9DFAEC7CAA2D385C074CF3453206EF` |
+| `tools/fixtures/cm3_lto_cohort_controls/identity.py` | `360485D634AC85AF37B78AAB45E622E568063CDE32F45250037F4C718F13732B` |
+| `tools/fixtures/cm3_lto_cohort_controls/probe.py` | `E3FD2717BF7524EE433578E18903748932B8F602A79B7C6FD9B7E34105F9CC8F` |
+| `tools/fixtures/cm3_lto_cohort_controls/test_probe.py` | `0140142D97CFAB8D6F44C72C6B02F9634EA37963D6AD544CDFE58D4A563686FF` |
+| `%TEMP%/cm3-lto-cohort-controls-pure-20261105-e2/results.json` | `6C9CDB897F515001E9CC8462EC12B414ADEFF40D2EE05432E38EEA87697221CD` |
+| `C:/fz-cm3-lto-cohort-controls-capture-20261105-e1/results.json` | `60B6C34BCDF4FB19D0A4F33ACC203722D92FBBF6837A7819EE5BA48B88E82F56` |
+| `C:/fz-cm3-lto-cohort-controls-capture-20261105-e1/artifacts.json` | `2D40396C0B809FDB1B4BD24C9F22B795855D393C3F6CF79C3803133BC8D1346C` |
+
+Status is `CM3-LTO-COHORT-CONTROL-CAPTURE-PASS-NOT-QUALIFIED`. It captures valid
+matching links and intended private-policy mismatch refusals. Positive complete
+resolution, final-map/ELF/root/callable ABI and parity qualification are not
+inferred from this capture; the old fixed-b16 readers/checkers are not widened
+to accept b32. Storage-revision and reverse-version mismatch, archives, other
+modes/cohorts, priority/kernel behavior, CPU/board, hosted exact-SHA CI and global
+freeze remain independent. Required-cell credit stays typed integer zero.
+Production, frozen helpers, default matrix and protected unrelated WIP remain
+unchanged.
