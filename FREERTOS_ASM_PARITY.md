@@ -2950,3 +2950,39 @@ the corresponding FreeRTOS archive pair, full ABI, source/IR or whole-kernel
 equivalence, general archive/weak-alias behavior, other modes/cohorts, CPU/board,
 CI or global freeze. Required-cell credit remains integer zero. Production,
 frozen helpers and default matrix are unchanged.
+
+## CM3 O2-LTO Paired Archive Replay
+
+`tools/fixtures/cm3_lto_archive_join/` independently admits the actual native
+E2 and pinned-reference E1 archive captures, their original O2 seeds and both
+complete source/tool/command closures. It does not substitute direct-link
+machines, an old native root result or archived PASS labels for a new replay.
+
+Local E1 on 2026-11-05 passes all six emitted transfer bodies: native 492 bytes /
+170 instructions / thirteen REL references; reference 136 / 39 / three. The
+unchanged transport adapters and canonical checker retain full roots, original
+addends, provider/map origins, pools and applied destinations. The three fixed
+mechanism assignments and all six rationales are checked against both the
+identical captured master ledger and the fixed specialized policy ledger.
+The nine-word native frame and eight-word reference frame remain distinct.
+
+All 32 actual transport mutations and two coherent SVC-immediate controls run
+anew. Each coherent edit first preserves all three changed transport roots,
+then fails the intended complete canonical protocol. Both own-side load-image
+twins are independently recomputed as identical; ordinary images receive no
+independent root proof. Native's two origin-proved slot projections remain
+separate from raw transport/token records. All six canonical tails have zero
+NOPs.
+
+An independent operator audit closes 636 artifacts plus manifest, 5,676 watched
+hashes, 447 immutable source copies, fourteen distinct positive roles and all
+private controls. It also binds raw final body and generated-machine body
+hashes, independently parses both own-side PT_LOAD images and rechecks both
+producer artifact trees. Ten pure methods pass separately. Exact hashes are in
+`PORT_ARCHITECTURE_AUDIT.md#cm3-o2-lto-paired-archive-replay`.
+
+This is bounded six-root/three-mechanism archive-LTO evidence with explicit
+differences, not full API/ABI, whole-object/kernel or source/IR equivalence,
+general archive/weak-alias behavior, other modes/cohorts, CPU/board execution,
+hosted CI or global freeze. Required-cell credit stays typed integer zero;
+production, frozen helpers and default matrix are unchanged.

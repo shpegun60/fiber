@@ -8425,3 +8425,72 @@ weak-alias behavior, other modes/cohorts, CPU/board execution, hosted exact-SHA
 CI and global freeze remain separate. Required-cell credit is typed integer
 zero. Production, frozen helpers, default matrix and protected unrelated WIP
 are unchanged.
+
+## CM3 O2-LTO Paired Archive Replay
+
+The read-only `tools/fixtures/cm3_lto_archive_join/witness.py` independently
+authenticates the native archive E2 and pinned-reference archive E1 captures
+above, both original O2 seeds and the same captured E8 source inventory. Native
+retains six members with explicit startup/application/expectation before the
+archive; reference retains one pinned port member with explicit startup,
+consumer and typed providers. Complete raw archive/index/member/extracted
+bytes, dependencies, tools, plugin/worker identities and all 66 native plus
+41 reference command/stream bindings are reconstructed before interpretation.
+
+Local E1 on 2026-11-05 passes:
+
+- Six complete emitted roots: native SVC 184 bytes / 64 instructions / five
+  REL references, PendSV 204 / 72 / six, first-start 104 / 34 / two; reference
+  first-start 32 / 10 / zero, SVC 36 / 10 / one, PendSV 68 / 19 / two.
+  The unchanged adapters retain owning-section placement, original REL
+  addends, provider/map origins, full symbols, mapping/pool boundaries,
+  applied targets and non-relocated bytes.
+- Full canonical decoding of the same actual generated machines closes all
+  six bodies with zero tail NOPs. Three exact mechanism assignments and six
+  difference rationales close against the identical captured master ledger
+  and fixed `cm3_final_join/POLICY_DIFFERENCES.md`. Native's two origin-proved
+  current-slot projections remain distinct from raw transport/token domains.
+  Raw root records retain their original false canonical flags; the enclosing
+  recomputed protocol proof is separate. Neither frame nor mask-policy
+  differences are normalized into an instruction-equivalence claim.
+- All 32 private transport mutations and two coherent SVC-immediate controls
+  execute anew. Each coherent control first passes preservation of all three
+  changed transport roots, then rejects the intended full canonical constant.
+  Returned private file hashes, exact memberships and available identities
+  close. No earlier native control receipt substitutes for this run.
+- Each ordinary/emitted own-side load image is recomputed as identical.
+  This does not compare native and reference images for byte equality or
+  transfer emitted root metadata/proofs to the ordinary image.
+- Closing covers 636 artifacts plus manifest, 5,676 watched hashes, 447
+  immutable source copies, fourteen physically distinct positive roles and
+  sixty immutable helper execution records. A separate operator audit rehashes
+  both complete producer trees and all witness input/output/copy/control
+  records; independently binds each raw final and generated-machine root body
+  hash; checks full root/count/nonpromotion fields; and parses both own-side
+  final PT_LOAD structures, bytes and entries.
+- Ten separate pure methods pass: exact side-specific scopes/counts/commands,
+  literal flags and typed zero credit, direct-receipt relabel refusal, six/one
+  member bindings, optional GNU name-table grammar, provider order, hash/raw/
+  projection/tail substitution and unique substantive difference rationales.
+
+The only permitted multiple-hardlink input is the exact authenticated installed
+Git executable used as nonexecuted reference provenance. Its hash and physical
+identity close; no input-role or parser/tool alias exemption is implied.
+No compiler, linker, emulator, target or board executes in this replay.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_archive_join/CONTRACT.md` | `F50A5B0525F4FA93EA3BDFFA9D26C995E13111303B9D51DDB700CA02706A2DED` |
+| `tools/fixtures/cm3_lto_archive_join/witness.py` | `FFD12847C2362F4145F5F1693A7AAFD9FEAC0D30FAA2CC1AF8FF35F179753C4E` |
+| `tools/fixtures/cm3_lto_archive_join/test_witness.py` | `B6E50038C8F73FFB47301D041D10424C66D81ED3E50A81938CD4BC2971965A59` |
+| `%TEMP%/cm3-lto-archive-join-pure-parent-20261105-e1/results.json` | `3C1A4C0B8A793FF5F3DC03CE767C39430540F0D092FC0FFE776159D257B71A16` |
+| `C:/fz-cm3-lto-archive-join-witness-20261105-e1/results.json` | `DEA7678030FC5986DDC4D4886FDCD91E6D4C15082BCA71D4351F960F28C1C7E9` |
+| `C:/fz-cm3-lto-archive-join-witness-20261105-e1/artifacts.json` | `92CE9BCD2FCCE88AFB70C82E7AE3EE6C2C795423C34DA2EC60A38DB8763458EB` |
+
+This closes the fixed CM3 p4/BASEPRI16 soft O2-LTO archive pair's six emitted
+root/canonical and three-mechanism evidence with explicit differences. It does
+not close full callable API/ABI, whole-object/kernel or source/IR semantics,
+original per-TU post-LTO ownership, general archive/weak-alias or override/cohort
+negative behavior, other modes/cohorts, CPU/board, hosted exact-SHA CI or global
+freeze. Required-cell credit remains typed integer zero. Production sources,
+frozen predicates, default matrix and protected unrelated WIP are unchanged.
