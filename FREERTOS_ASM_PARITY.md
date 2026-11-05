@@ -2599,3 +2599,29 @@ protocols and the actual native/reference six-body join are next. Complete ABI,
 source/IR semantics, complete-object, other modes/cohorts/archives, CPU/board,
 hosted exact-SHA CI and global freeze are not established; counters stay zero.
 Production mechanics, frozen helpers and the default matrix are unchanged.
+
+## CM3 Reference LTO Canonical Protocol Composition
+
+`tools/fixtures/cm3_reference_lto_protocol/` now composes the unchanged machine
+decoder and frozen reference protocol table with the independently preserved
+reference O2-lto roots. Exact complete machine bytes, local/global symbol roles,
+root bytes/hashes and section/offset origins bind the raw canonical tokens.
+No projection or native substitute is used: all three `_REFERENCE` bodies pass
+unchanged with zero post-island tail NOPs. The actual in-body first-start NOP
+and complete literal islands remain part of the matched protocol.
+
+Final E2 passes 18 pure protocol methods, all 16 inherited actual transport
+controls and one actual coherent SVC0-to-SVC1 control. The latter changes both
+machine/final fields and both disassemblies: transport accepts all three roots,
+but the frozen reference checker rejects first-start token 8. The six private
+buffers, original/changed fields, actual addresses and closing hashes remain.
+Independent controls verify all 260 artifacts, 2845 watched files, raw token
+hash domains, unchanged transport records and four real CLI refusals.
+
+Exact hashes and the earlier address-annotation-only E1 are in
+`PORT_ARCHITECTURE_AUDIT.md`, "CM3 Reference LTO Canonical Protocol Composition".
+This is `REFERENCE-CANONICAL-PASS-NOT-PAIRED-QUALIFIED`, not the real six-body
+native/reference LTO mechanism join. Full ABI, source/IR semantics, policy,
+complete-object, other modes/cohorts/archives, CPU/board, hosted exact-SHA CI
+and global freeze remain unproved. Required-cell counters stay zero. No
+production, frozen-helper or default-matrix change is made.
