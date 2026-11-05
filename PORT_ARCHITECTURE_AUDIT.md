@@ -8315,3 +8315,60 @@ precedence, override/cohort negatives through archives, other modes/cohorts,
 runtime, CPU/board, hosted exact-SHA CI and global freeze remain separate.
 Required-cell credit is typed integer zero. Production sources, frozen helpers,
 default matrix and protected unrelated WIP are unchanged.
+
+## CM3 O2-LTO Archive Native Root Replay
+
+The separate read-only `tools/fixtures/cm3_lto_archive_roots/witness.py`
+authenticates the actual E2 indexed-archive capture above, not a direct-link
+receipt with changed labels. It independently reconstructs the exact archive
+scope, original O2 seed, nine source/dependency bindings, private toolchain,
+archive members/index/extracted bytes, explicit 8/7/6-plus-archive providers and
+all 66 command/stream records. Raw extraction maps and resolution/temp files
+remain provenance, not a per-original-TU post-LTO machine-ownership claim.
+
+Local E1 on 2026-11-05 passes:
+
+- Three complete emitted native roots: SVC 184 bytes / 64 instructions /
+  five REL references; PendSV 204 / 72 / six; first-start 104 / 34 / two.
+  The unchanged adapter checks full symbol/bounds, load/mapping, actual
+  machine/startup provider origin, full input-section placement, original
+  addends, applied branch/literal targets and every non-relocated byte.
+- The same actual saved machine and its own disassembly feed the unchanged
+  decoder and native canonical checker. All three bodies close with exact
+  zero tail NOPs. Raw transport records retain their false canonical flags;
+  the new enclosing protocol result is separate. Two origin-proved slot-role
+  projections do not replace the raw token/hash domains.
+- Sixteen actual private transport mutations reject with their fixed catalog
+  identities/families. One coherent SVC-immediate control changes real machine
+  and final bytes plus both disassemblies: all three changed transports still
+  preserve, then the full canonical check rejects the intended constant.
+  Returned control files, hashes, roles and available identities close.
+- The unchanged comparator recomputes identical ordinary/emitted load images.
+  This does not transfer emitted metadata or independent root/canonical proof
+  to the ordinary image.
+- Closing covers 354 artifacts plus manifest, 3,231 watched hashes, 260
+  immutable source buffers and seven distinct positive input roles. An
+  independent operator audit rehashes complete output/input memberships,
+  source/binary copies and all control-file records, and verifies root totals,
+  full-body counts, exact control counts and nonpromotion flags.
+- Ten separate pure methods pass for archive-specific typed admission,
+  member/object/extraction bindings, fixed provider order, direct-receipt
+  relabel refusal and reuse of the frozen complete native protocol helpers.
+  They are synthetic controls, not another actual ELF replay.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_archive_roots/CONTRACT.md` | `FA03C22CCEEC310B1510BEA92CB477C4A27C398F3425DA4DFAFBFEFC058F7510` |
+| `tools/fixtures/cm3_lto_archive_roots/witness.py` | `7D65BACFC6CDCFA4B02324905693675A1CA26AEDF92008415CC77645A94E1A6A` |
+| `tools/fixtures/cm3_lto_archive_roots/test_witness.py` | `A4B657E96C8A8DDC8B4B634D89B8B73ED297FF78853579E49E18CF02A8385F03` |
+| `%TEMP%/cm3-lto-archive-roots-pure-20261105-e1/results.json` | `6FAB9C64DC43AB895793DFD9CCE0BB6B1A457F9B0E79A1C6FA912FA3CC6DF73E` |
+| `C:/fz-cm3-lto-archive-roots-witness-20261105-e1/results.json` | `17A11CF3671FDF94240271ED921D56258B447E1448F594135463F1DF0ADF0092` |
+| `C:/fz-cm3-lto-archive-roots-witness-20261105-e1/artifacts.json` | `C2203D41166B3C41335418988F80FDF55296823CADB7432380E76515FCF8D4F3` |
+
+The result is native emitted archive-LTO root/canonical evidence only. A fresh
+pinned FreeRTOS archive pair, full API/callable ABI, C/IR and original-TU
+semantics, general extraction/weak-alias or override/cohort-negative behavior,
+whole-kernel/policy correctness, other modes/cohorts, CPU/board, hosted CI and
+global freeze remain separate. No compiler, linker, emulator or target runs
+in this replay. Required-cell credit stays typed integer zero. Production,
+frozen helpers, default matrix and protected unrelated WIP are unchanged.

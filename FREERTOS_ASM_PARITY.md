@@ -2889,3 +2889,33 @@ root/protocol/reference replay of these new machines, other modes/cohorts,
 full ABI, CPU/board execution, CI and global freeze remain separate. All
 qualification flags and required-cell credit remain false/zero. Production,
 frozen helpers and default matrix are unchanged.
+
+## CM3 O2-LTO Archive Native Root Replay
+
+`tools/fixtures/cm3_lto_archive_roots/` independently admits the actual archive
+capture above, its original O2 seed, member/index bytes, dependencies, tools
+and all 66 recorded command bindings. It uses the unchanged root adapter,
+decoder and complete native canonical predicates, without relabeling an older
+direct-link receipt or relaxing a frozen reader.
+
+Local E1 on 2026-11-05 passes all three complete emitted roots: 492 bytes,
+170 instructions and thirteen REL references. Full owning-section placement,
+provider origins, original addends, applied targets, mappings, literal pools
+and non-relocated bytes remain bound. The canonical result closes all three
+bodies with zero tail NOPs; two proved native slot-role projections are kept
+separate from raw transport records and token hashes.
+
+All sixteen private transport mutations and the coherent SVC-immediate control
+run anew. The latter first preserves all changed transport roots, then fails
+the intended full canonical check. The independent own-twin comparison passes;
+the ordinary ELF gains no independent root or canonical proof. Closing covers
+354 artifacts plus manifest, 3,231 watched hashes, 260 source buffers and seven
+distinct input roles. Ten pure admission/protocol methods pass separately.
+Exact hashes are in
+`PORT_ARCHITECTURE_AUDIT.md#cm3-o2-lto-archive-native-root-replay`.
+
+This closes native three-root archive-LTO transport/canonical evidence, not
+the corresponding FreeRTOS archive pair, full ABI, source/IR or whole-kernel
+equivalence, general archive/weak-alias behavior, other modes/cohorts, CPU/board,
+CI or global freeze. Required-cell credit remains integer zero. Production,
+frozen helpers and default matrix are unchanged.
