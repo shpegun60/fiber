@@ -2760,3 +2760,31 @@ not a new inventory cell or complete qualification: positive resolution/maps/
 ELF are retained, not promoted to a b32 final-root/ABI/parity proof. Storage-
 revision and reverse-ABI-version mismatch remain separate axes. Hardware,
 hosted exact-SHA CI and global credits stay unproved; production is unchanged.
+
+## CM3 LTO Private-Cohort Independent Replay
+
+`tools/fixtures/cm3_lto_cohort/` independently admits the retained 52-command
+package and recomputes four own-machine static final-link audits. BASEPRI16
+delegates to the unchanged fixed reader; BASEPRI32 explicitly composes the same
+frozen predicates with its one selected private key. No frozen constant, model,
+public interface or old acceptance predicate is patched or broadened.
+
+Local E1 on 2026-11-05 passes all four ELF/map/attribute/vector audits: 26 exact
+definitions and seven original named pointer bindings per image, with matching
+applied REL records only in emit-relocs finals. Each actual `.res` has eight
+bound providers, 106 complete rows, four exact private roles and two storage
+roles. Both within-policy load-image pairs compare identically; cross-policy
+byte equivalence is not asserted. All eight one-object mismatch diagnostics are
+authenticated and reparsed against exact argv/provider/source/dependency facts.
+
+Twenty pure static-audit and twelve pure resolution methods pass. Closing checks
+cover 205 artifacts plus manifest, 3556 watched hashes, 172 immutable source
+buffers and 32 binary input roles. Exact sources and receipts are recorded in
+`PORT_ARCHITECTURE_AUDIT.md`, "CM3 LTO Private-Cohort Independent Replay".
+
+This closes bounded static final-link/private-policy mismatch evidence, not
+full callable ABI, storage/version mismatch, source/IR semantics, b32 canonical
+root/protocol or fresh FreeRTOS parity. Other modes/cohorts, archives, hardware,
+hosted exact-SHA CI and global freeze remain separate. Required-cell credit
+stays integer zero. Production sources, frozen helpers and default matrix are
+unchanged.

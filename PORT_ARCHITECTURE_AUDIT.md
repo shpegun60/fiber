@@ -8010,3 +8010,77 @@ modes/cohorts, priority/kernel behavior, CPU/board, hosted exact-SHA CI and glob
 freeze remain independent. Required-cell credit stays typed integer zero.
 Production, frozen helpers, default matrix and protected unrelated WIP remain
 unchanged.
+
+## CM3 LTO Private-Cohort Independent Replay
+
+The opt-in `tools/fixtures/cm3_lto_cohort/` independently composes the bounded
+policy16/32 capture above. Caller-supplied hashes bind the complete capture,
+artifacts, native/seed/inventory trees, recorded source/tool inputs and physical
+identities before any output creation. The retained commands are authenticated,
+not rerun; no compiler, linker, emulator or target executes in this replay.
+
+Local E1 on 2026-11-05 passes:
+
+- The complete ordered captured-source catalog and recompiled source copies
+  equal admitted immutable bytes. Each of four changed recipes replaces only
+  the single legacy BASEPRI16 definition with 32; actual raw `.d` membership and
+  hashes remain exact. Recompiled ELF section metadata proves slim IR without
+  a native fallback. Both real runtime NM buffers bind the 15 exact definitions,
+  policy-specific private key and unchanged storage key.
+- Four final audits each bind 26 exact definitions, full original machine/startup
+  section placements and extents, soft CM3 attributes/ELF flags, LOCAL reverse-v1
+  anchor/current slot, read-only identities/tables and the complete strong-vector
+  template. Seven original named ABS32/zero-addend pointers target the exact
+  mapped definitions. Emitted finals require seven matching applied RELs; both
+  ordinary finals require their absence and the correct applied pointer words.
+- Policy16 calls the unchanged fixed audit. Policy32 has an explicit local
+  composition of the same immutable predicates with only its private identity
+  selection changed. Neither frozen globals nor core objects are mutated.
+  This does not silently extend the old b16 canonical or instruction checker.
+- Four complete raw `.res` files retain eight ordered source-bound providers and
+  106 rows each. A separate eight-provider grammar enforces unique symbol/unit
+  identities and exact private roles: runtime prevailing, boot/exception/build
+  expectation resolved. Storage remains runtime prevailing/public consumer
+  resolved. Foreign identities, truncation and extra rows fail closed.
+- All 52 raw command records/catalog rows bind exact argv, cwd, status, exit,
+  timeout/error family, streams and environment. Each inspection sidecar equals
+  actual stdout. Eight isolated swaps bind their one changed provider, precise
+  missing full private key, raw diagnostic and absent final ELF. The negative
+  recipe removes only `-v`; command FAIL remains distinct from control PASS.
+- Both within-policy ordinary/emit load-image pairs compare identically. The
+  shared native startup is the only permitted physical alias among binary roles.
+  Closing checks cover 205 artifacts plus manifest, 3556 watched hashes, 172
+  copied immutable source buffers and 32 binary roles. An independent operator
+  audit rehashes the complete receipt/artifact/input closure and result shape.
+- Twenty pure static-audit methods pass for both policies, typed selectors,
+  exact public/port surfaces, aliases/providers/maps/extents, headers/attributes,
+  slot/identity storage, original/applied pointer roles and vectors. Twelve pure
+  resolution methods pass for counts/order/grammar, parameter types, duplicates,
+  distinct units, both private/storage role sets, line endings and foreign keys.
+
+Review confirms no omitted b32 static predicates or admission blocker. Failure
+handling explicitly clears the top-level mismatch/final-link claims on any
+closing failure; partial details may remain only in a FAIL receipt. This replay
+does not manufacture ordinary RELs or transfer b16 canonical evidence to b32.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_cohort/CONTRACT.md` | `0A3C320B1BA300F6F6AD8DFBCDBC37F3BF9E3538CF3F6F46CF85FB38B1556F19` |
+| `tools/fixtures/cm3_lto_cohort/audit.py` | `B661490EB975271FBBCD883CE8C8FE43D974D07A26FDB5E65DF5156CCEEA0AEE` |
+| `tools/fixtures/cm3_lto_cohort/resolution.py` | `A7A0956C61C2E164C9823EECEBF1A22401C4294046975B5FB791C2E17432BB55` |
+| `tools/fixtures/cm3_lto_cohort/witness.py` | `78F0FB9B82DA16DBA13EB2AD50A5616666AA2D731A5151631A919E86442F4BBF` |
+| `tools/fixtures/cm3_lto_cohort/test_audit.py` | `6F6807AE2112CBC6F74ADDED6F3BEAC481339C8E28BCA2E2D7C8CB6D47CA3FD9` |
+| `tools/fixtures/cm3_lto_cohort/test_resolution.py` | `B8B9AA084F248A556E91F7BA0EC2943FAB7A6F9844B7A246C91184A800F2539D` |
+| `%TEMP%/cm3-lto-cohort-link-pure-20261105-e1/results.json` | `7D2476387C9949B62B39C81A2355CFF50B429BE989F95FB40C35F0CE719D3E58` |
+| `%TEMP%/cm3-lto-cohort-resolution-pure-20261105-e1/results.json` | `411C61221B3F96FF9CF9BC3B1E69B9047B25299AFAAE3632B3178D953A930D36` |
+| `C:/fz-cm3-lto-policy-witness-20261105-e1/results.json` | `B4D77319C081000A52228431B2FEAB1FA402AE1A280F366D5095E17C47A06049` |
+| `C:/fz-cm3-lto-policy-witness-20261105-e1/artifacts.json` | `22A2C159406EC7444886D86A7C7C67AE66D8AB6983BFA5E52B7B9282AAD0B783` |
+
+Status is `CM3-LTO-POLICY-COHORT-LINK-PASS-NOT-FULL-ABI-QUALIFIED`. Only the
+bounded static/private-policy link proof is closed. Full callable ABI, source/
+IR semantics, original-TU machine ownership, storage-revision and reverse-version
+mismatch, b32 root/REL/canonical and fresh native/reference parity remain
+unproved. Archives, other modes/cohorts, runtime priority/kernel behavior,
+CPU/board, hosted exact-SHA CI and global freeze remain independent gates.
+Required-cell credit stays typed integer zero. No production, frozen-helper,
+public/port ABI, default-matrix or protected unrelated WIP change is made.
