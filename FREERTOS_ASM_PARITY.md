@@ -2455,3 +2455,39 @@ output creation; original/reference/config/tool/inventory trees are denied as
 output locations. General C/kernel semantics, other cohorts, archives,
 final LTO, actual exception execution, CPU/board evidence, hosted exact-SHA CI
 and global freeze remain unproved. Required global counters stay integer zero.
+
+## CM3 Slim-LTO Capture Transport
+
+The opt-in `tools/fixtures/cm3_lto_transport/probe.py` has a deliberately
+smaller scope than final-LTO parity. It admits only the qualified native CM3
+p4/BASEPRI16, soft/no-FPU ordinary-O2 seed, builds the same eight C translation
+units as slim IR, and keeps the ninth startup assembly unit native. Two direct
+O2-lto links independently consume those exact nine objects, with and without
+`--emit-relocs`, using one explicit LTO partition. No reference image is built.
+
+The retained machine authority is the actual linker-plugin output
+`image.elf.ltrans0.ltrans.o`, not WPA IR `image.elf.ltrans0.o`, a fat-object
+fallback, reconstructed assembly or a replayed LTRANS invocation. Explicit
+`-Wl,-plugin-opt=-save-temps` retains the actual output independently of driver
+`-save-temps=obj`. Raw plugin resolutions, arguments, responses, assembly,
+machine objects, final ELFs, maps and inspection output remain sealed evidence.
+
+Loader-visible twin comparison is distinct from root validation. A matching
+load image does not prove original REL addends, applied references, source-TU
+ownership, scheduler semantics or ABI preservation. Post-LTO binding facts
+also remain separate: the named current slot can be local and its root ABS32
+references can name its containing section. The frozen ordinary reader is not
+relaxed to admit that form. A separate fixed LTO adapter is the next gate.
+
+The implementation contract and qualification limits are in the fixture's
+`CONTRACT.md`; the closing evidence is recorded in
+`PORT_ARCHITECTURE_AUDIT.md`, section "CM3 Slim-LTO Capture Transport".
+The final 2026-11-05 E3 run passes nine-TU slim/native classification, both
+genuine LTO links, two saved machine captures, structural twin comparison,
+79 pure controls and four actual CLI admission negatives. The parent separately
+rechecks 1463 sealed artifacts and 1401 watched-file hashes. The twin-report
+path/raw-hash/value is also checked before the initial seal, not merely hashed
+after a possible mutation. Earlier incomplete attempts remain historical.
+Required-cell counters remain integer zero. This adds no production runtime,
+assembly, public/port ABI, target feature, default-matrix or board change and
+does not qualify final-LTO/reference parity, hardware or hosted exact-SHA CI.

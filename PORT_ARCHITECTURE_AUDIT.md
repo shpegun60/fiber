@@ -7107,3 +7107,123 @@ direct final-LTO machine-owner/provenance transport, initially O2-lto, without
 weakening the frozen ordinary reader. No production runtime/assembly, ABI,
 feature admission, default matrix, firmware or board changes. Protected
 unrelated WIP entries remain untouched.
+
+## CM3 Slim-LTO Capture Transport
+
+This opt-in slice is limited to the fixed native
+`cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default` at O2-lto,
+direct linkage and one explicit LTO partition. It uses the independently
+qualified native ordinary-O2 producer as source/configuration authority, not
+an arbitrary current checkout or an existing native object as a substitute
+for newly generated IR. Caller SHA256 values authenticate the seed receipt and
+complete artifact manifest before output creation or helper execution.
+
+The probe rebuilds the same ordered eight C TUs as slim GIMPLE objects and the
+same startup assembly TU as native code. It denies executable fat fallback.
+The two final links independently invoke actual LTO on those nine inputs in
+separate directories. The second link adds `--emit-relocs`; it does not relink
+the first link's saved machine object. Captured compiler/worker/plugin/DLL
+inputs, the sanitized contained process runner and private temporary files
+remain part of the exact closing evidence.
+
+The GCC driver and linker plugin have distinct temporary-file retention
+policies. A preliminary external layout sketch without explicit plugin
+retention lost the real machine object. Adding
+`-Wl,-plugin-opt=-save-temps` retained it. The probe therefore requires that
+explicit option alongside driver `-save-temps=obj`. The WPA partition
+`image.elf.ltrans0.o` is IR and is never admitted as machine authority.
+Only the actual saved `image.elf.ltrans0.ltrans.o` can serve that role.
+No assembler reconstruction or separate LTRANS replay substitutes for it.
+
+Transport capture retains raw plugin resolution and response records, actual
+worker invocations, generated assembly, complete post-LTO machine objects,
+final ELFs, full link maps and inspection output. Symbol observations preserve
+their real binding/type/section/value/size rather than imposing the ordinary
+non-LTO global/weak predicates. This is not per-original-TU provenance or a
+claim that all machine definitions were individually placed and verified.
+
+The first actual probe attempt, E1, retained two real machine objects and
+closed its output seal, but did not yet compare twin load images. Review also
+found permissive unmatched section-row handling and missing explicit
+ELF32/little-endian admission. E1 is preserved as historical capture evidence,
+not qualification of the corrected contract. The first pure test attempt had
+three synthetic-fixture errors because its admitted seed omitted `Sources`;
+those fixtures were completed without weakening seed admission.
+
+Final E3 capture feasibility qualified locally on 2026-11-05:
+
+- Nine actual TUs: eight slim IR inputs and one native startup input.
+- Two independently executed direct LTO links and two retained ARM ELF32-LE
+  machine objects. Both machine files hash to
+  `D8659F1E94949D4F2411F6334FF24A12CF016304BE03AAE96EF4C3156A3E6516`.
+- Fifty-seven contained tool commands; complete object and dependency closure.
+- The unchanged twin reader compares load geometry/bytes, entry/flags,
+  allocated sections and vector bytes. Its parser executes authenticated
+  captured buffers; physical closing checks run outside buffered-read hooks.
+- 1463 sealed artifacts and 1401 watched-file closing observations, independently
+  rehashed by the parent control driver. Eight machine symbol facts per link
+  preserve actual bindings, including the local four-byte current slot.
+- Seventy-nine pure controls pass, including pre-initial-seal twin-file
+  change/deletion, fixed path/hash/value binding, late seal failures, complete
+  section-row inventory and raw ELF class/endian controls. Mocked envelopes
+  are not compiler, ELF-provenance or execution evidence.
+- Four actual CLI negatives pass: wrong receipt hash, wrong manifest hash,
+  seed-overlapping output and repository-overlapping output. All reject before
+  output creation. Seed receipts and the complete positive capture stay unchanged.
+
+E2 had already passed actual builds, twins and parent controls, but final review
+found that the saved `load-image.json` could be changed or deleted before the
+first seal without a source guard. E3 binds its fixed path, raw SHA256 and
+parsed receipt value in closing checks before PASS and again after sealing.
+The earlier files are not alleged to be corrupted and are not relabeled as
+qualification of that guard. The parent control driver also had one pre-output
+failure while hashing a Windows App Execution Alias from `sys.executable`.
+Its retained wrapper resolves the actual interpreter through
+`GetModuleFileNameW`; it does not change child probe code or target artifacts.
+
+The fixed canonical argv excludes caller-supplied plugin-bypass options.
+Verbose tool-path membership is checked, while complete worker/response
+argument semantics and per-TU IR-to-machine source mapping are not proved.
+This distinction is normative capture scope, not a relaxed final-root rule.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_transport/probe.py` | `F2D4CA9F1FC1F7FAE07F275913F7DFC688BFD8570AEE32DE2144EE1EA187F626` |
+| `tools/fixtures/cm3_lto_transport/test_probe.py` | `2405CCB522F851D73992906ED8B63E69F2ECCAD642D9DC9DCE9922F274AAF3F2` |
+| `tools/fixtures/cm3_lto_transport/CONTRACT.md` | `DCB904F5A73C09187E2AABDCDE8E7459B233270A014A05A6CA60BFDF092F1DF4` |
+| `%TEMP%/cm3-lto-transport-pure-20261105-e1.json` | `32A8EBF143B0CBBE51BBB39E7AD844D59B58A182A7834282BFD19E270D5DA127` |
+| `%TEMP%/cm3-lto-transport-pure-20261105-e2.json` | `AA30C0632D560DAF5B5870DA06101DEEC3B8D1CCEC21D2198F92F5AB8F4DF184` |
+| `%TEMP%/cm3-lto-transport-pure-20261105-e3.json` | `6FDA6CA2EF25ED80AECED2EBBC972226621C5DBA05487E25DDC32E94D34C0970` |
+| `%TEMP%/cm3-lto-transport-pure-20261105-e4.json` | `DAD304A15F02BB760D4629B2A0BC5DA4FB39D682E8CCE965A92C495FAB59E9D5` |
+| `C:/fz-cm3-lto-layout-sketch-20261105-e1/results.json` | `40B4E83CBA5CC3DF66E4EE99C795D477205AFD565F2D6B5232FCE86D9051B47F` |
+| `C:/fz-cm3-lto-layout-sketch-20261105-e2/results.json` | `FB83705A1EBE251DAAE00588B9A6A526644E9086BF5722D26A444C526F005619` |
+| `C:/fz-cm3-lto-transport-20261105-e1/results.json` | `0D6A993A4C2D482C9F4D02BF1E9C19DED4FA6EA402BFCD10426A48549363EF80` |
+| `C:/fz-cm3-lto-transport-20261105-e1/artifacts.json` | `4BFF2D6520ED79078880B06AEEA4DFBD6383B565A1E0B4ECE1EDAF017C62F275` |
+| `C:/fz-cm3-lto-transport-20261105-e2/results.json` | `48A405EF189FF4619BEA85F7B5E2594E14A5B35CF51CC6E5B9A6CAD7AF402B7E` |
+| `C:/fz-cm3-lto-transport-20261105-e2/artifacts.json` | `E529C40217B39BC53AA603597F03F5E57E399A298B3B3F9FCD4EC6BA142D15B4` |
+| `C:/fz-cm3-lto-transport-20261105-e3/results.json` | `88862AC7C665BAB91D52248ECBF0D407B19FE198C75DA9758ED0507D9B6F864C` |
+| `C:/fz-cm3-lto-transport-20261105-e3/artifacts.json` | `4B6A8F6E316188DF788E3A309473592BFC77EC44FDE06247CCA624845F29ED66` |
+| `C:/fz-cm3-lto-transport-20261105-e3/load-image.json` | `7E15E2C4C89B237D38FF444338256677D19DF5BF5241A7E4E9BFB9E9293EB077` |
+| `C:/fz-cm3-lto-transport-controls-driver-20261105-e1/driver.py` | `473B054C0E5723E0263A628C34764E64DA4C9E12963FAF27799253F56CA4ED42` |
+| `C:/fz-cm3-lto-transport-controls-driver-20261105-e1/initial-driver-failure.json` | `C33F0D209F4C9653A9FF52B81184FF69DA56871AA5F6642A59B9F50F028B96DA` |
+| `C:/fz-cm3-lto-transport-controls-driver-20261105-e2/driver.py` | `4D66B2433457F05262A757FA77EE7BD00568F9DB2F7EEE958AE70A8B7BD50739` |
+| `C:/fz-cm3-lto-transport-controls-20261105-e2/results.json` | `C4F10A057F062DBEE3515968FCE5C1F5CF9354A52A74D2CD16BA488E9D177D86` |
+| `C:/fz-cm3-lto-transport-controls-20261105-e3/results.json` | `B754A3407D87080B89516AEF568016F3EF8D993CF0BB316766C786102F59E515` |
+| `C:/fz-cm3-lto-transport-controls-20261105-e3/parent-driver-context.json` | `3E746E2462F1C52A779524866350D7B7F9C5446C07628DD71DDBB5EB86C49848` |
+
+The next final-root adapter must remain separate from the frozen ordinary
+reader. The observed native roots retain eleven named THM_CALL references and
+two current-slot ABS32 references; no generic unrelocated-call exception is
+needed. The named slot is a local object in a dedicated section, and the
+machine ABS32 records address that section. The adapter must prove the exact
+section/offset relationship through the complete machine-section placement,
+then validate original addends and final applied bytes. It must retain every
+root instruction, mapping boundary and literal/padding byte, not normalize
+away the LTO difference or claim original nine-TU machine ownership.
+
+This is capture/build feasibility only. Native/reference mechanism joins,
+full post-LTO ABI/override/cohort proofs, final-root relocation preservation,
+other modes/cohorts, archives, CPU/board validation, hosted exact-SHA CI and
+global software freeze remain outstanding. Required global counters remain
+typed integer zero. No production runtime, assembly, ABI, feature admission,
+default matrix or hardware changes. Protected unrelated WIP remains untouched.
