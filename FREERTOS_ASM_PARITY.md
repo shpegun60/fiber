@@ -2491,3 +2491,33 @@ after a possible mutation. Earlier incomplete attempts remain historical.
 Required-cell counters remain integer zero. This adds no production runtime,
 assembly, public/port ABI, target feature, default-matrix or board change and
 does not qualify final-LTO/reference parity, hardware or hosted exact-SHA CI.
+
+## CM3 LTO Machine-To-Final Root Witness
+
+The separate `tools/fixtures/cm3_lto_roots/` reader now preserves the actual
+saved native CM3 O2-lto machine roots through final linking for exactly the
+p4/BASEPRI16 soft/no-FPU direct cohort and one LTO partition. The frozen ordinary
+reader is unchanged. Three roots cover 492 bytes, 170 instructions and all
+13 applied references: eleven named BLs and two section-symbol ABS32 literals.
+Map origins bind whole input sections, callee entries and the local four-byte
+current slot; raw section-symbol names are preserved as empty strings.
+
+The final E7 witness passes complete raw/mapping/literal preservation, exact
+applied references, ordinary/emit-relocs twin comparison and 16 actual private
+ELF/map rejection controls. Thirty-one pure adapter and 33 pure envelope
+controls pass separately. An independent driver rehashes 251 output artifacts
+and 3081 watched inputs, and four actual CLI negatives reject before mkdir.
+Six positive roles and five inputs per mutant are consumed from immutable
+buffers; coherent callee/slot cases prove origin rejection, not full protocol
+or twin-coherent mutation coverage. The written output manifest is compared
+semantically to its intended dictionary, not merely hashed after writing.
+Stable lexical buffer keys prevent live path retargeting from selecting a disk
+fallback; private parsing admits only its five immutable snapshots.
+
+Exact source/evidence hashes and preserved intermediate/failing attempts are in
+`PORT_ARCHITECTURE_AUDIT.md`, "CM3 LTO Machine-To-Final Root Witness". This status
+is deliberately `MACHINE-ROOT-WITNESS-PASS-NOT-QUALIFIED`: canonical native
+protocol composition and the independent FreeRTOS final-LTO side/join remain
+next. No source/IR semantics, complete ABI/object, generalized LTO, CPU/board,
+hosted exact-SHA CI or global freeze claim is added. Required-cell counters
+remain integer zero; production mechanics and the default matrix are unchanged.

@@ -7227,3 +7227,100 @@ other modes/cohorts, archives, CPU/board validation, hosted exact-SHA CI and
 global software freeze remain outstanding. Required global counters remain
 typed integer zero. No production runtime, assembly, ABI, feature admission,
 default matrix or hardware changes. Protected unrelated WIP remains untouched.
+
+## CM3 LTO Machine-To-Final Root Witness
+
+The opt-in `tools/fixtures/cm3_lto_roots/` adapter consumes the authenticated
+E3 slim-LTO capture above, without rebuilding it or changing the frozen ordinary
+reader. Scope is exactly native CM3 p4/BASEPRI16, soft/no-FPU, O2-lto, direct
+linkage and one LTO partition. It is machine-root preservation, not a canonical
+protocol, source-to-machine, complete-ABI or FreeRTOS LTO equivalence claim.
+
+The final E7 actual witness passed locally on 2026-11-05:
+
+- Three complete roots: SVC 184 bytes/64 instructions, PendSV 204/72 and
+  first-start 104/34; total 492 bytes, 170 instructions and 13 references.
+- All eleven THM_CALL sites retain original addend -4 and resolve to exact
+  callee entries independently bound to full machine-section map placements.
+- Both ABS32 sites retain original addend zero. Raw STT_SECTION names are
+  empty, not readelf's displayed section labels. Their dedicated four-byte
+  local slot maps to output BSS offset `0x480`; the applied words must resolve
+  to that exact object, not merely another plausible BSS address.
+- Complete non-relocation bytes, mapping boundaries, literal/padding bytes,
+  executable load permissions, Thumb entries, positive symbol extents and
+  cross-name function/object overlap controls remain mandatory.
+- Six distinct positive file roles are manifest-bound and consumed from
+  immutable buffers. All 16 actual private ELF/map mutants reject at their
+  declared guards. Their five input hashes are bound before parsing and
+  physically closed afterwards; coherent callee/slot projections are checked
+  from the exact parsed buffers before the origin guard is exercised.
+- Those two coherent cases are origin-guard controls, not fully coherent
+  protocol/twin mutations: their disassembly is deliberately unchanged and
+  origin must reject them first. No stronger mutation claim is made.
+- The unchanged twin reader separately checks ordinary/emit-relocs load
+  geometry/bytes, entry, allocated sections and vectors.
+- The parent independently verifies all 251 predetermined output artifacts,
+  all 3081 watched input hashes, six positive roles, 16 private cases and
+  absence of unexpected/missing output members.
+- Thirty-one pure adapter controls and 33 pure witness-envelope controls pass.
+  Pure controls are not actual ELF or tool execution evidence.
+- Four real CLI negatives reject before output creation: wrong capture
+  receipt, wrong manifest, repository overlap and capture overlap. No compiler,
+  firmware, emulator, target or board was executed by the witness/controls.
+
+Historical attempts remain separate. E1 lacked actual mutants; E2 added them.
+E3 added coherent projections and actual interpreter identity; E4 bound positive
+and private immutable inputs; E5 added predetermined output membership. Review
+and the first pure envelope run then reproduced one manifest-value gap: a
+write-time replacement JSON dictionary could be hashed without comparison to
+the intended artifact dictionary. The final implementation parses the written
+manifest with unique-key enforcement and compares its value before sealing.
+E6 and pure E2 cover that guard; earlier receipts are not relabeled. Final review
+then found a resolve-then-disk-fallback buffer lookup that could consume transient
+unbound bytes during a symlink/junction retarget. E7 uses stable lexical keys:
+immutable source/positive buffers always win, and only the exact 80 declared
+private mutation files may be read live during their construction. Each private
+reader then admits only its five snapshots, without any disk fallback. Unknown
+paths reject. Five new callback controls cover this boundary; physical closure
+runs after unpatching. No retarget is alleged to have occurred in E6. The first
+parent CLI driver expected the wrong diagnostic text, failed its own assertion,
+and is preserved; its second wrapper corrects parent-only expected text without
+changing the witness, inputs or target files.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_roots/native.py` | `D4BA0378FA50E11A570D40180149794B16EB0807E36DC902C19840E32D1AF05D` |
+| `tools/fixtures/cm3_lto_roots/witness.py` | `5BFA66061B9BFAC9B7C6AF872AB831E69613DDDA03C0FA40E439E36273963713` |
+| `tools/fixtures/cm3_lto_roots/mutations.py` | `32BDE6CA67B12EEC9975D24D6628C5576EA29F33121CD60310F1F010CF272353` |
+| `tools/fixtures/cm3_lto_roots/test_native.py` | `F34288304AD12FE6ADCD4FF6D25358425877A2C5750B1E955A27C556D0E838FF` |
+| `tools/fixtures/cm3_lto_roots/test_witness.py` | `4372A4D128A7DCAA31DCF3CB63FBE7DED9805E2A8FCD8E33FE6A86942E794AA2` |
+| `tools/fixtures/cm3_lto_roots/CONTRACT.md` | `8FC7E36658DB212E671E2AFC63C7D897BF43DD8835A9B1CB4BAE3D165A169E49` |
+| `%TEMP%/cm3-lto-native-pure-20261105-e1/results.json` | `B25910BD294CDE3F7E86768F7623D7C42E2ADECF60FC27AECBB5163097D019D3` |
+| `%TEMP%/cm3-lto-native-pure-20261105-e2/results.json` | `B25910BD294CDE3F7E86768F7623D7C42E2ADECF60FC27AECBB5163097D019D3` |
+| `%TEMP%/cm3-lto-witness-pure-20261105-e1/results.json` | `357802A6309D235BBA96D4040EE750D5ADF731266EF67683084A22EB325F6166` |
+| `%TEMP%/cm3-lto-witness-pure-20261105-e2/results.json` | `FBD57025842AF8D8E82FA4EC62E83AF0ADD5BEC843E56C1E3C6EA4D5034DC5CD` |
+| `%TEMP%/cm3-lto-witness-pure-20261105-e3/results.json` | `CA8B78D3E12D9083AA983C4C4F1C90FDA02694FDD2F8CC951374541F85667242` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e1/results.json` | `B485E4B16A6B4C442F27135C6C33103CB735A7FFCA3CD6F630E75B20B5D929FD` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e2/results.json` | `B62099152550011BE5B7C0B7A0E77594C5A4C3F8BE66A0519C5C0B58824736AF` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e3/results.json` | `670043E9587DBA5108231EF301E10257158BF3AD5F8BF806549B4BD46779C6E8` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e4/results.json` | `1EE9DE6943A8A936601D1A523524901851276AE27789498024FF6E7C28FAF9A1` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e5/results.json` | `F63D540266C0BC79F301C950C5AF31C55ACD91BFD5623DAEC0D2EE354FF72F58` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e6/results.json` | `CE6368055FC7B3EDCC05A689AED9AC88ED4201298D280A9E759D9CB6C7A1697F` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e6/artifacts.json` | `5D4B04816B3C3002FA56D7AFF6E2457F2D95E98CCDDB7CBD7E1058E40AED5075` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e7/results.json` | `FF3399F28A115953834BA0E9ACBF13DD5B64CD975E072C7513FD95223A1E6B6C` |
+| `C:/fz-cm3-lto-roots-witness-20261105-e7/artifacts.json` | `2024B20DC1AC52CC687B18B6AE51F0B8E3D2B732737EA9264B137377673FCD12` |
+| `C:/fz-cm3-lto-roots-controls-driver-20261105-e1/driver.py` | `E887C23307017EAC5C163157AF72E71BEC481C122987C1567C1C6BC4EF5CDC95` |
+| `C:/fz-cm3-lto-roots-controls-driver-20261105-e2/driver.py` | `71CAF427BC93D1EDB71C2724539A2B2A8F531D2E45B27070DC0DADC73C154605` |
+| `C:/fz-cm3-lto-roots-controls-driver-20261105-e3/driver.py` | `D30C9A89CC6DD35EFBA94215BEEC33CCEB258279E12A3649DFC5A3BF0B5A73F9` |
+| `C:/fz-cm3-lto-roots-controls-20261105-e1/results.json` | `3F777D436F24B22235D9E9FB3A60E27432AD3F47B9725287C33AAADE1A1C9146` |
+| `C:/fz-cm3-lto-roots-controls-20261105-e2/results.json` | `D54C0FD5C15B08707173CC7B24CC0F9F9D0413AD19D2F36104BB0A1AC6DD4156` |
+| `C:/fz-cm3-lto-roots-controls-20261105-e3/results.json` | `07B4784F372822E40478CE3C4F017F24C308C1F00BBB04385EED42B596185724` |
+
+The report intentionally says `MACHINE-ROOT-WITNESS-PASS-NOT-QUALIFIED`.
+Canonical first-start/SVC/PendSV protocol composition, the separately built
+pinned FreeRTOS LTO side, full post-LTO ABI/override/cohort obligations, other
+optimization/cohort/archive routes, CPU/board qualification, hosted exact-SHA
+CI and global freeze remain pending. Every required-cell counter stays typed
+integer zero. Next is the canonical native protocol composition, followed by
+independent reference LTO capture/roots and a bounded mechanism join. Production
+runtime/assembly/ABI, default matrix and protected unrelated WIP are unchanged.
