@@ -7003,3 +7003,107 @@ unproved. Required global counters stay integer zero. No production runtime,
 assembly, public/port ABI, feature admission or default matrix changes. No
 board is flashed/reset/run. Local evidence is not hosted exact-commit CI.
 The four protected unrelated WIP entries remain untouched.
+
+## CM3 Final Mechanism Composition At Five Optimizations
+
+Qualified locally on 2026-11-05. The opt-in `cm3_final_join` gate admits only
+`cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default` at the five
+ordinary modes O0/Og/O2/Os/O3. It composes the preceding native and pinned
+reference producer/root checkpoints; it neither rebuilds their images nor
+extends the target or proof scope. The native source group has nine TUs;
+the reference group has four, with actual pinned `ARM_CM3/port.c` owning all
+three reference roots. The same two owning prelinks feed the complete
+canonical protocol checker and their respective unchanged final readers.
+
+The fixed six-root/three-mechanism mapping preserves the existing IDs
+`FAP-COMMON-START`, `FAP-COMMON-PROVENANCE`, `FAP-COMMON-SCHEDULER`,
+`FAP-COMMON-MASK-RESTORE`, `FAP-CM3-EXC-RETURN` and
+`FAP-CM3-LOCAL-LITERAL-POOLS`. Every ID must have one nonempty rationale in
+the admitted inventory's captured ledger. Native's nine-word core frame and
+reference's eight-word/ORR-LR-13 frame remain different contracts. Ordinary
+instructions, local pools, original REL addends, full owning-section extents,
+provider identities and applied final bytes are not normalized away.
+
+Both caller-bound results hashes and both artifact-manifest hashes close
+before any parser import. CLI `prepare_output` additionally authenticates
+the four buffers and manifest-bound `inputs.json` before `mkdir`, computes
+denied output roots from those same buffers and closes them before returning.
+It denies original/reference/config/tool/inventory input trees. Invalid
+pre-output hashes or overlapping outputs create no directory; the outer
+driver retains their failure evidence. Later replay/closure failures retain
+sealed FAIL receipts. The three-argument synthetic output helper is only a
+conservative declaration-based deny gate, never CLI admission authority.
+
+Source review closed four confirmed proof-level gaps: heading-only rationale
+admission, missing cross-implementation physical-alias rejection, missing
+base-config original-provider identity, and output overlap with original
+input trees. The final source executes authenticated immutable local helper
+buffers, including nested loaders. It replays complete source/dependency,
+generated config/recipe, pinned Git blob, command, worker/DLL, parser,
+inventory and source-ownership bindings. Closing validation observes real
+files after the buffered helper-read scope ends. No protocol/model globals
+are patched and no target, compiler or child process is executed by the join.
+
+Final results are PASS:
+
+- Five actual native/reference pairs plus separate full replay of each pair.
+- Six roots and three mechanisms per pair: 30 roots/bodies, 15 mechanisms,
+  3152 raw root bytes, 1051 instructions and 80 applied references in total.
+- 10760 closing-file observations in the five joins and 12250 in their five
+  parent replays; these are per-run observations, not distinct global files.
+- Four actual CLI negatives: wrong profile/mode produce sealed FAIL before
+  replay; wrong receipt/manifest hashes reject before output creation.
+- 25 pure admission, 40 pure contract and 16 pure closure/seal controls.
+  The separate 27-control actual admission run reuses the 25 pure controls
+  and adds ten authenticated receipt buffers plus thirty metadata mutations.
+- Fifteen host-interpreter commands in the final sweep: one actual admission
+  suite, five joins, five parent replays and four negatives. No Arm execution.
+
+Parent replay checks protocol/root/twin/owner records, rationale text and hash
+domains, executed source buffers, original/captured inputs, exact output
+membership and all output hashes. Tuple/list values are compared in their
+JSON receipt representation. It re-executes the fixed readers, not a second
+independent ELF model. Prior producer ELF mutation evidence remains separate
+and was not re-executed by this join checkpoint.
+
+Retained failed attempts are not relabeled. The 2026-11-04 seal E1 failure
+was a parent-test mistake: an already-failed receipt can have a valid output
+seal without becoming PASS. Corrected E2 passes. Sweep E1 stopped at parent
+tuple-versus-JSON-list comparison after actual O0 success. Sweep E2 passed
+all five pairs/replays but stopped because the driver's expected cross-profile
+diagnostic differed from the earlier helper-closure rejection. Final source
+now rejects profile/mode explicitly before helper selection and includes the
+authenticated output-isolation fix. The complete 2026-11-05 sweep reruns all
+five pairs/replays and negatives against that final source.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `%TEMP%/cm3-final-join-admission-20261104-e1.json` | `BBE21A5390ABBF3F3DDE55E942A138A688F381364D53A1E75E7187B04E4A8954` |
+| `%TEMP%/cm3-final-join-contract-20261105-e1.json` | `BAA2C41C662335B9114A295B244B17BB18D1287B3129254DC982A926E8B57AF3` |
+| `%TEMP%/cm3-final-join-seal-20261104-e1.json` | `ADE75265678181847ADDF0E9C3C04D21D795FD7A3E3AF6FA6EA92190C9249977` |
+| `%TEMP%/cm3-final-join-seal-20261104-e2.json` | `B1CFF4F8F548FBE9A1DD67E28AA02F2C21A30E2EB82AF5CD4D4C7B78F1446993` |
+| `%TEMP%/cm3-final-join-seal-20261105-e1.json` | `E9F9969B11B8E64D7520BBAD3DCC9FEF918769FE6E198F987FD36527D301A867` |
+| `C:/fzfinal-cm3-join-grid-20261104-e1/results.json` | `FAE36393038AE1B1D727D7357E82BBF7F16B92DF707872C4C102DF15E72AAD22` |
+| `C:/fzfinal-cm3-join-grid-driver-20261104-e1/driver.py` | `9F0583FFB2D1BD0AE6769CE5F0D5B92FA622604C747A086CE23DF9CB8924CE76` |
+| `C:/fzfinal-cm3-join-grid-20261104-e2/results.json` | `8735562681DA1484E7AD1FBFA24B95874407F2FA64AA8E52D635D8B6FC20FC5E` |
+| `C:/fzfinal-cm3-join-grid-driver-20261104-e2/driver.py` | `FDFA172D6414A82AA90BE55329E922B9900030C1C6EFC010B5E898AEE149A0A7` |
+| `C:/fzfinal-cm3-join-grid-20261105-e1/results.json` | `1CCECCAE70F9116D26BFDE86045D9718B732B696E0FEE69C623B6C11934EE54A` |
+| `C:/fzfinal-cm3-join-grid-driver-20261105-e1/driver.py` | `785E7022CD9259E4A100C2404811D8CBB14CCEEB20C698986B2F435C3FFA8D0F` |
+| `C:/fzfinal-cm3-join-grid-20261105-e1/actual-admission-controls.json` | `6A2C18A6F645DC75330BF14798A11BACBCD3930154BAA9F122BE07C20E0FD456` |
+| `tools/fixtures/cm3_final_join/join.py` | `E53CDD177EF04124B766AD54301D58AA2B73D0C67AE9FBA43C979DC557C5A012` |
+| `tools/fixtures/cm3_final_join/admission.py` | `D3E4DF449B91218BC7EF7C479B9665F2ACD861A9CB815DDA193ECFF2AFBDDFE1` |
+| `tools/fixtures/cm3_final_join/test_admission.py` | `679C04E91F4EADDCB7E29DE87BF7C40CA7243C3A7973C374D4937E5420EB9107` |
+| `tools/fixtures/cm3_final_join/test_contract.py` | `CE314D6F3FEDA7329E13995968C68F50995B0F5F317FB4D08170048AB640B653` |
+| `tools/fixtures/cm3_final_join/test_join.py` | `C9DE9E3544830223B9ED3664015E33B848B459BF1A873DF0C1938365D4ED4EE3` |
+| `tools/fixtures/cm3_final_join/CONTRACT.md` | `95EE87A6DC31B1B9EAEAC0B5A6BDF3E6EAFA973FAF02CA6D0708DC22DEA79F24` |
+| `tools/fixtures/cm3_final_join/POLICY_DIFFERENCES.md` | `778B098F80EAE5EE641B323B4F8D60441C2F725921B506AEDA90B487D3EB5019` |
+
+This closes bounded CM3 ordinary final-mechanism composition only. General
+C/callee/kernel semantics, other cohorts, full ABI obligations, archive routes,
+genuine final LTO, actual MMIO/exception execution, CPU/board qualification,
+hosted exact-SHA CI and global software freeze remain outstanding. Required
+global counters remain integer zero. The next bounded gate is CM3 genuine
+direct final-LTO machine-owner/provenance transport, initially O2-lto, without
+weakening the frozen ordinary reader. No production runtime/assembly, ABI,
+feature admission, default matrix, firmware or board changes. Protected
+unrelated WIP entries remain untouched.

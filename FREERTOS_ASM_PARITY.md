@@ -2429,3 +2429,29 @@ truth, interrupt priority readback, or long-run FP preservation. Those remain
 separate ELF and hardware validation requirements. Hardware validation is an
 independent evidence layer and may be explicitly deferred; a software freeze
 does not create a hardware support claim.
+
+## CM3 Final Mechanism Composition Checkpoint
+
+Qualified locally on 2026-11-05: the opt-in
+`tools/fixtures/cm3_final_join/join.py` composes the already-qualified native
+and pinned FreeRTOS CM3 p4/BASEPRI16, soft/no-FPU direct final images at exactly
+O0/Og/O2/Os/O3. Each pair closes six transfer roots and the fixed three
+mechanisms, preserving the six existing difference IDs rather than claiming
+equal frames or instructions. Native retains nine software-frame words;
+reference retains eight and its first-restore ORR-LR-13 protocol.
+
+All five pairs, separate replay of each pair, four actual CLI negatives,
+40 contract controls and 16 closure/seal controls pass. The pure admission
+suite passes 25 controls; its separate actual-buffer run passes 27 controls
+over ten producer receipts and thirty metadata mutations. The five pairs
+cover 30 roots, 3152 raw root bytes, 1051 instructions and 80 applied
+references. These are bounded root counts, not complete-object coverage.
+
+The qualification record, exact source/receipt hashes, retained failed
+attempts and limits are in `PORT_ARCHITECTURE_AUDIT.md`, section
+"CM3 Final Mechanism Composition At Five Optimizations". Caller-bound
+receipts/manifests and manifest-bound input records now authenticate before
+output creation; original/reference/config/tool/inventory trees are denied as
+output locations. General C/kernel semantics, other cohorts, archives,
+final LTO, actual exception execution, CPU/board evidence, hosted exact-SHA CI
+and global freeze remain unproved. Required global counters stay integer zero.
