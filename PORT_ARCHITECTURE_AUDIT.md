@@ -8590,3 +8590,78 @@ full ABI/vector/negative-link obligations. Nine successful replay routes do
 not satisfy the complete 33-route or 27-group roadmap. Production, pinned
 reference, existing helper pins, default matrix and protected unrelated WIP
 are unchanged. Hardware qualification remains pending.
+
+## Explicit Ordinary Capture CLI
+
+The maintained `tools/freeze_capture.py` replaces historical-discovery-dependent
+operator scripts for fresh ordinary component capture. The closed request
+contains only schema version and ordered route IDs. All eleven tool, inventory,
+request and output options are required; arbitrary scripts, argv, environment
+overrides, LTO and archive routes cannot enter through that request. Thirty
+routes are implemented, not claimed as thirty executed qualifications.
+
+For each requested route the CLI executes fixed Native, Reference and Join
+sources from authenticated buffers with isolated Python and the unchanged
+managed runner. It authenticates the current inventory, complete artifact and
+input trees, actual per-TU compile/dependency recipes, two final link recipes,
+own-side twins, canonical joins, source/parser aliases and terminal traces.
+Completed cases receive real producer/join descriptors; incomplete work remains
+explicitly pending. No invented PriorJoin descriptor is used to start a join.
+Its catalog can subsequently drive the unchanged replay dispatcher.
+
+The parent qualification on 2026-11-06 includes twelve pure methods, three real
+admission rejections before output creation, and a real three-route smoke:
+CM0PLUSVTOR/Og, CM3/O3 and CM7/Os. The smoke executes 40 TUs, twelve final links,
+42 object checkpoints, 440 successful tool commands and nine outer Python
+invocations. The joins close twenty final bodies and nine mechanisms. An
+independent parent audit validates complete memberships, input physical
+identities, actual source traces and command bindings, and extracts all twenty
+body byte ranges from the selected final ELF PT_LOAD segments.
+
+Two confirmed defects in the new capture tooling were fixed without changing
+the runtime or existing gates: a replay-catalog-only helper incorrectly required
+an unavailable PriorJoin before the new join; terminal journal exceptions could
+replace an earlier stage failure. Pure regressions now retain the primary stage
+cause and secondary persistence cause, reject journal-only failure, keep pending
+work and prevent stale PASS after late closure/seal failures. Metadata repair
+after a one-shot journal fault does not retry a compiler or producer stage.
+
+The first pure attempt remains FAIL for the catalog-helper defect; a later
+pure attempt remains FAIL for an overly specific expected exception type in
+the new journal-only control. Both are retained outside the repository rather
+than overwritten. The final twelve-method suite passes with no skipped methods
+or source drift. Source hashes and final smoke receipts are recorded below.
+
+This is a reproducible local component-capture checkpoint, not a hosted CI run
+or completed freeze cell. Whole-cell ABI/vector/negative-link composition,
+remaining ordinary captures, LTO/archive coverage and the wider STM32 backlog
+remain pending. RequiredCellsSatisfied stays typed integer zero; global freeze,
+full API/ABI, source/IR equivalence and CPU/board execution remain false.
+Production C/assembly, the five-operation public API/eight-operation port
+boundary, fixed helper pins and protected unrelated work are unchanged.
+
+The final smoke closes 5,410 artifacts plus its manifest, 5,916 watched inputs
+and 465 authenticated source-execution records. The final pure suite closes
+fifteen source inputs, with twelve executed methods, no failures/errors/skips
+and no drift. The first successful smoke at the earlier capture source remains
+historical local evidence; the final-source smoke below is a separate rebuild.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/freeze_capture.py` | `9C6A92D972562FDFA17AB28CCBD4A052D9364EAE365C8C00364E4F1EB8E3F054` |
+| `tools/fixtures/freeze_cohorts/CAPTURE_CONTRACT.md` | `698BB42BFC5923252FAE03BEFF6387F3AA6FD1E582BA2144D6EF361E0882F963` |
+| `tools/fixtures/freeze_cohorts/test_capture.py` | `55DCA818E354DAD7F606EE3770B30FCE513EBBA29DC215B14128A69A66A30F95` |
+| `%TEMP%/freeze-capture-pure-parent-20261106-e4/results.json` | `4BD68E06216E9652771F3584D552DE3C1D5650713091BD6A491CD596E61719D4` |
+| `C:/fz-freeze-capture-inputs-20261105-e1/smoke.json` | `4E9C5DFF111BFD6CF0D09FAA1C90635CBEF563460290D45FF3D63A63CBAA33D8` |
+| `C:/fz-freeze-capture-smoke-20261106-e2/results.json` | `A3506ADB03AB9BBBC8D66B210C589C0D2154E7F1A899C3D0B42A357B1B6AD654` |
+| `C:/fz-freeze-capture-smoke-20261106-e2/artifacts.json` | `F22231DE35D081DCC40FB5CBDEA012F350EFEA1F35DEC9E8AD9D7734B9C30BD9` |
+| `C:/fz-freeze-capture-smoke-20261106-e2/catalog.json` | `57852AAEB5C9A8DAC2FE5D9AF5995B5A8DEE24E00885CE9B50E62AE022F31D66` |
+| `C:/fz-freeze-capture-inputs-20261105-e1/audit_capture.py` | `2D5D97685317D9D2A3C41E134EE1432DE618910EA9EB7986793CF5BB792EA20C` |
+| `C:/fz-freeze-capture-inputs-20261105-e1/smoke-independent-audit-e2.json` | `3D84A7C08CD5580F8289189F6F166B886BDC694CE09A272D70F17CE0EACCC85D` |
+
+The explicit input inventory is current E9 (`C:/fzin-20261104-e9`), with receipt
+`1910B53001FD37DF4B6DC57805EE49E4381B2529E1E3ECB47FDB312EB43A4DFC`,
+manifest `640C2CAC37DFC0A10F5A6E8538E7A9F81C7967DEEDEAA4B2924A15CAA1600CEA`
+and source fingerprint
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+FreeRTOS remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.

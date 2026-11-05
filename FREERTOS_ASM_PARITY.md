@@ -3026,3 +3026,38 @@ routes still require refreshed captures/joins after their historical live
 helper originals drifted. Keep that refusal, rather than virtualizing old
 originals or weakening the existing gates. Production, fixed helpers and
 default matrix are unchanged.
+
+## Explicit Ordinary Capture CLI
+
+`tools/freeze_capture.py` adds a maintained fresh-build entry point for the
+thirty ordinary direct routes: CM0, CM0PLUS, CM0PLUSVTOR, CM3, CM4 and CM7,
+each at O0, Og, O2, Os and O3. GCC, CMSIS, Git, the pinned FreeRTOS worktree,
+parser modules, current inventory and the ordered request are explicit inputs.
+No old producer receipt supplies tool paths or discovery data. Each requested
+route executes the unchanged Native, Reference and Join stages, then emits a
+dispatcher-format catalog after input/output closure.
+
+The parent local smoke on 2026-11-06 rebuilds CM0PLUSVTOR/Og, CM3/O3 and CM7/Os:
+40 translation units, twelve final links, 42 checkpoints, 440 successful tool
+commands and nine outer Python stages. The unchanged joins close twenty final
+bodies and nine transfer mechanisms, retaining the documented native/reference
+differences. An independent audit rehashes the artifacts and watched inputs,
+checks actual command/source execution records, and reads the final body bytes
+directly from ELF PT_LOAD segments. Exact receipts are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#explicit-ordinary-capture-cli`.
+
+Twelve maintained pure methods also cover admission, the exact thirty-route
+surface, fixed arguments, current-inventory binding, source/tool/output drift,
+partial catalogs, fail-stop behavior and terminal-journal errors. A failed
+stage remains the primary cause if persisting its journal also fails; the
+persistence failure is recorded separately. A successful child with a failed
+journal cannot produce batch PASS. Three actual CLI admission negatives reject
+extra command fields, LTO requests and duplicate routes before output creation.
+
+Registration is not execution coverage of all thirty routes. This smoke is
+current-inventory ordinary root/mechanism/twin evidence, not all-mode or final
+LTO coverage for every port, full API/ABI or source/IR semantics, hosted CI,
+hardware qualification or global freeze. Required-cell credit remains literal
+integer zero. The remaining fresh ordinary captures and the broader profile,
+LTO/archive and cell-composition obligations stay open. Runtime C/assembly,
+public API, fixed producers/gates, reference pin and default matrix are unchanged.
