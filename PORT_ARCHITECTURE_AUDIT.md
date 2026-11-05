@@ -7799,3 +7799,72 @@ fresh links remain pending, independently of archive extraction, other modes/
 cohorts, CPU/board, hosted exact-SHA CI and global freeze. Required-cell counters
 stay typed integer zero. No production code, frozen helpers, public/port ABI,
 default matrix or protected unrelated WIP was changed.
+
+## Fresh CM3 LTO Link-Control Capture
+
+The opt-in `tools/fixtures/cm3_lto_link_controls/` starts the next independent
+link-control cohort without changing production code. It reuses the authenticated
+CM3 O2-lto eight slim IR inputs and explicit non-LTO startup. Three small added
+TUs provide a canonical attributed strong application panic and isolated strong
+SVC/PendSV conflicts. Positive twins represent ten TUs/nine IR/one startup;
+neither their labels nor receipts reuse the old nine-TU qualification scope.
+
+Final local E3 on 2026-11-05 passes the bounded capture:
+
+- Twenty-eight actual captured host-tool commands comprise three added slim-IR
+  compiles, four links and 21 inspections. Ordinary/emit-relocs override links
+  retain actual machine, map, resolution, response and verbose tool identities.
+  Both conflict commands remain FAIL/exit 1; separate control records require
+  their intended duplicate strong symbol, no timeout and no final ELF.
+- Source/header/object/tool bindings, process environment and command streams
+  are frozen before consumption. Completed command JSON matches its actual
+  in-memory record, and the final command catalog is bound. Consumed IR, .d,
+  final/machine/map/resolution and diagnostic bytes remain watched through seal.
+  Full inherited trees, physical identities and source hashes close. Artifact
+  membership/hash comparison and semantic/late manifest checks fail closed.
+- An independent observer closes 334 artifacts and 3131 watched hashes, parses
+  both actual .res files through immutable parser source, and retains every
+  ordered provider/symbol row. Both have nine providers and 108 rows. The exact
+  fallback provider reports PREEMPTED_IR; the application provider reports
+  PREVAILING_DEF_IRONLY for panic and its marker; the exact six other panic
+  providers report RESOLVED_IR. Global final panic alone is not the proof.
+- Twelve pure grammar methods pass for complete provider/row counts/order,
+  duplicate/truncated/trailing records, statuses, IDs, text types and purity.
+  Six pure recorder methods pass for consumed-byte/physical drift, output escape,
+  closing drift during intended failure, late manifest corruption and consistent
+  successful sealing. These fake-tool tests execute no compiler/ELF/target.
+
+Earlier E1/E2 remain historical. E1 did not freeze consumed generated outputs
+or verify the written manifest, and its broad exception catch could confuse
+closing drift with an expected tool failure. E2 fixes those paths; review then
+finds the generated process-environment file was not pinned. E3 pins and checks
+that file too and reruns all 28 commands. Neither earlier run is relabeled final.
+The two pure grammar receipts are byte-identical deterministic independent runs.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_link_controls/CONTRACT.md` | `4BC136D1894057B8E9EBDAA1E0A993BBBD7CCED2B0E9D51EB6977FBBEF262C8B` |
+| `tools/fixtures/cm3_lto_link_controls/panic_override.c` | `4A47E0E59115F70B283AAFB39E1286330D931C592C63DBEDB6B067946E73F0E5` |
+| `tools/fixtures/cm3_lto_link_controls/duplicate_svc.c` | `FD294BC5A7E458B7A463725AA2F00A2E2CD74C7C6ADF4B199412768326B87E14` |
+| `tools/fixtures/cm3_lto_link_controls/duplicate_pendsv.c` | `E0B70C157F5D52C132B98B6DF5BB76150BBF759B932B0A2AF0BABB52BFB466E0` |
+| `tools/fixtures/cm3_lto_link_controls/probe.py` | `CE2C86F8FB1A391977ED385636108CC24307F495D22FAE495FBD2B449DA9F99F` |
+| `tools/fixtures/cm3_lto_link_controls/resolution.py` | `9EEFBB859BF703950FEF7CD1507CDE79942AE671648B5A5D73AB77C2016BD62A` |
+| `tools/fixtures/cm3_lto_link_controls/test_probe.py` | `D29883E86B160BC5DDCF0B36A90918679743C66342B3462C1956FBF9B074FB7B` |
+| `tools/fixtures/cm3_lto_link_controls/test_resolution.py` | `DC3FB156CC4521B4396BF57A066AFB54DAA06161B32DD4C375ABC96A44EE8E86` |
+| `C:/fz-cm3-lto-link-controls-capture-20261105-e1/results.json` | `28E159661C67BF1E4D26F357127D43E5805970419333AF195FC9E53B3264821A` |
+| `C:/fz-cm3-lto-link-controls-capture-20261105-e2/results.json` | `D882E8ADDB91406117FE78C4FF4F2C0239EE3A3813B5ECD7A52C80BD4D83BACC` |
+| `C:/fz-cm3-lto-link-controls-capture-20261105-e3/results.json` | `957BD1BE82266C81AC09A68A1011EA1835595C2AB85B766911C90DDAC328E38B` |
+| `C:/fz-cm3-lto-link-controls-capture-20261105-e3/artifacts.json` | `58CA519D5B7AD131E3A3CD57001FD7A550DB4660D1FB05F7F18DE3BB9AAACA90` |
+| `%TEMP%/cm3-lto-resolution-pure-20261105-e1/results.json` | `16A33DFDF85C484587540357F392F0637633D75D5AC380230DCAF94AF2BF6B55` |
+| `%TEMP%/cm3-lto-resolution-pure-20261105-e2/results.json` | `16A33DFDF85C484587540357F392F0637633D75D5AC380230DCAF94AF2BF6B55` |
+| `C:/fz-cm3-lto-link-controls-observer-driver-20261105-e1/driver.py` | `E693167810A6C08D4414BBE1CBEF329EFDB831F1A484DABB3CE0824DD6030E4E` |
+| `C:/fz-cm3-lto-link-controls-observer-20261105-e1/results.json` | `588D407AAA016A3AA5EFB4A6F08EBF2405C543D4EF5919F77655799838BC5380` |
+
+Status is `CM3-LTO-FRESH-LINK-CAPTURE-PASS-NOT-QUALIFIED`. This does not yet
+qualify complete strong-panic override: definition placement, final applied
+call destinations, new twins/root protocols and their negative witnesses must
+be independently recomposed from these new machine objects. Valid-but-mismatched
+ABI/cohort/storage links remain future controls. Full ABI, source/IR semantics,
+archive/other cohort/mode, CPU/board, hosted exact-SHA CI and global credits stay
+unproved, with required-cell counters typed zero. No production source, frozen
+helper, public/port ABI, default matrix or protected unrelated WIP was changed.

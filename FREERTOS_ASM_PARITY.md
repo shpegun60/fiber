@@ -2680,3 +2680,26 @@ source/IR semantics. Panic override, duplicate-handler and identity-mismatch
 fresh-link controls remain separate work, as do archives, other modes/cohorts,
 CPU/board, hosted exact-SHA CI and global freeze. No production, frozen-helper
 or default-matrix changes are made. Required-cell counters remain integer zero.
+
+## Fresh CM3 LTO Link-Control Capture
+
+`tools/fixtures/cm3_lto_link_controls/` adds a typed strong application panic
+and two isolated duplicate-handler fixtures. The opt-in producer reuses eight
+authenticated slim IR inputs plus explicit startup; the positive links contain
+ten represented TUs/nine IR/one startup, not the original nine-TU cohort label.
+Final E3 captures both fresh LTO twins and intended SVC/PendSV conflict failures
+in 28 host-tool commands. Failed link command records remain FAIL while their
+separate intended-diagnostic control records pass. Nothing executes on a target.
+
+Independent observation closes 334 artifacts and 3131 watched hashes. Both
+actual resolution files contain nine providers/108 complete rows: fallback
+panic is PREEMPTED_IR, application panic is PREVAILING_DEF_IRONLY, and the six
+expected references are RESOLVED_IR. Twelve pure grammar and six pure recorder
+methods pass. Exact sources, receipts and earlier capture limitations are in
+`PORT_ARCHITECTURE_AUDIT.md`, "Fresh CM3 LTO Link-Control Capture".
+
+This is capture/grammar/role observation, not qualified override semantics.
+Final mapped definitions/call targets, new actual root protocols/twins, identity
+mismatch controls and complete callable ABI remain pending. Archive, other
+cohort/mode, CPU/board, hosted exact-SHA CI and global credits remain unproved.
+Production code, frozen readers/checkers and the default matrix are unchanged.
