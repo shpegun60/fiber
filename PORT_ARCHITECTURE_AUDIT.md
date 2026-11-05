@@ -8084,3 +8084,68 @@ unproved. Archives, other modes/cohorts, runtime priority/kernel behavior,
 CPU/board, hosted exact-SHA CI and global freeze remain independent gates.
 Required-cell credit stays typed integer zero. No production, frozen-helper,
 public/port ABI, default-matrix or protected unrelated WIP change is made.
+
+## CM3 Os-LTO Capture
+
+The additive `tools/fixtures/cm3_os_lto_transport/` captures the next missing
+optimization transport for the fixed CM3 soft p4/BASEPRI16 direct cohort. Its
+factory reuses the frozen native tool/source/seed closure and the separately
+pinned reference admission/capture plumbing. No frozen module globals, expected
+symbols, root predicates or production sources are changed.
+
+Each source, including startup, replaces the sole admitted `-O2` token with
+`-Os` in place. The C sources add `-flto -fno-fat-lto-objects`; native startup
+does not. Both fresh final link recipes independently make the same optimization
+replacement while retaining single-partition LTO, explicit plugin retention,
+verbose worker capture, exact provider order, section GC, script and target ABI.
+Actual dependency sets must match the admitted seed; all section-header records
+are accounted for, and slim IR must contain no executable fat fallback.
+
+Local E1 on 2026-11-05 passes:
+
+- Native: nine newly compiled TUs, eight slim IR objects plus one startup,
+  two final executable links and two real saved machine objects. There are 57
+  successful commands, 1,464 artifacts plus manifest and 1,402 watched inputs.
+- Pinned FreeRTOS reference: four newly compiled TUs, three slim IR objects plus
+  one startup, two final executable links and two real saved machine objects.
+  There are 37 successful commands, 1,350 artifacts plus manifest and 1,269
+  watched inputs. The upstream pin remains
+  `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+- Each side independently compares its ordinary and emitted-relocation final
+  load images using the authenticated unchanged reader. Both pairs are identical;
+  no native/reference or O2/Os byte-equivalence claim follows.
+- An independent operator audit rehashes every artifact and watched input,
+  compares full raw command JSON to the catalog, requires successful outcomes,
+  binds inspection sidecars to stdout, and checks all compile/link Os flags,
+  per-source seed transforms, counts and non-promoting result flags.
+
+The read-only architecture review finds no confirmed main/seed blocker. The
+fixed helper hashes match; the producer is frozen before both actual captures.
+Status `PASS` is explicitly scoped to native/reference Os-LTO capture
+feasibility, not qualified root, protocol, callable ABI or parity evidence.
+The retained post-LTO symbols and layouts must still be independently checked
+against the actual Os machine-to-final origins and complete canonical bodies;
+the O2 checker's fixed scope is not widened or relabeled.
+
+Fourteen pure synthetic control methods also pass without launching processes.
+They cover exact flag/side transforms, both complete source groups, compile
+dependencies, slim/startup distinctions, object hashes/counts, two independent
+link invocations, extra-partition and command failures, incomplete results and
+late closing-failure nonpromotion. Synthetic objects/metadata are not genuine
+ELF or IR evidence; the two actual capture receipts above are separate.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_os_lto_transport/CONTRACT.md` | `BB82C9C700A34D99C102A6B248DA3BC388C51249241BA5E7C7471114AE7376D5` |
+| `tools/fixtures/cm3_os_lto_transport/probe.py` | `F5F75D7439B97049B5440695CB78862AA0815D7E1E69224BDBDC2B9AADE2AD01` |
+| `tools/fixtures/cm3_os_lto_transport/test_probe.py` | `498CADE649621A7C83DBE14B85E350D46261D4037200B85C1EEBFEE28FCA82DA` |
+| `%TEMP%/cm3-os-lto-transport-pure-20261105-e1/results.json` | `B3FB66862D968291A5ADDA367DE6BD267DBA29B8EA0FB3B5F4DFB7A8DECA10B8` |
+| `C:/fz-cm3-os-lto-native-20261105-e1/results.json` | `E4B756AD671D51E4505ABB381031891C79765D5A8F5E5064EB63A2D33AD1916D` |
+| `C:/fz-cm3-os-lto-native-20261105-e1/artifacts.json` | `D1B3823ABBA3610D3C6701F31C66E38F1040B96481D317592431AD685FAF5F79` |
+| `C:/fz-cm3-os-lto-reference-20261105-e1/results.json` | `DF57936A48EAF1AD9AB2F8CD56B4EF14839697CAA85E78C278CDB830921E43B8` |
+| `C:/fz-cm3-os-lto-reference-20261105-e1/artifacts.json` | `B22441D816BE8E3AD5C4A8127B5282643196FDF851A48FF4283DDE045F0EF900` |
+
+Full ABI, source/IR semantics, policy/kernel equivalence, whole-object proof,
+archives, CPU/board execution, exact-SHA hosted CI and global freeze remain
+separate. Required-cell credit remains typed integer zero. No production,
+frozen helper, default matrix or protected unrelated WIP is changed.

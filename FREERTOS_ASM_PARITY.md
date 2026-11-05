@@ -2788,3 +2788,33 @@ root/protocol or fresh FreeRTOS parity. Other modes/cohorts, archives, hardware,
 hosted exact-SHA CI and global freeze remain separate. Required-cell credit
 stays integer zero. Production sources, frozen helpers and default matrix are
 unchanged.
+
+## CM3 Os-LTO Native And Reference Capture
+
+The opt-in `tools/fixtures/cm3_os_lto_transport/probe.py` adds fresh Os-LTO
+capture for the same soft CM3 p4/BASEPRI16 direct-link cohort. Its native and
+pinned FreeRTOS sides independently admit their recorded ordinary-O2 seeds.
+Only the single optimization token changes to `-Os`, including startup and
+the final link; C sources additionally use genuine slim LTO IR. Frozen O2
+capture, root and protocol checkers are unchanged.
+
+Local E1 on 2026-11-05 passes both capture-only runs: nine native translation
+units (eight slim IR plus startup), four reference units (three slim IR plus
+startup), and four actual final links in total. Each ordinary/emit-relocs pair
+retains its own generated LTRANS machine objects, maps, verbose worker traces,
+resolution files and inspection outputs; each within-side load-image pair is
+identical. No ELF, emulator or board executes.
+
+Independent operator checks rehash exact artifact memberships and all watched
+inputs, bind each command record/catalog and inspection stdout, and verify the
+Os-only compile/link transform: native has 1,464 artifacts plus manifest,
+1,402 watched inputs and 57 successful commands; reference has 1,350 artifacts
+plus manifest, 1,269 watched inputs and 37 successful commands. Exact hashes
+and the subsequent pure-control result are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#cm3-os-lto-capture`.
+
+This closes capture feasibility, not the Os final-root/protocol comparison or
+seven-mode aggregation. Those must use these actual machine/final bytes and
+the documented difference ledger, with independent negative controls. Full ABI,
+global freeze, required-cell credit, runtime and hardware claims stay unproved;
+production and default matrix are unchanged.
