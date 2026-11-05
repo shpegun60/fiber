@@ -7632,3 +7632,99 @@ kernel execution, other modes/cohorts/archives, CPU/board, hosted exact-SHA CI
 and global software freeze remain pending. Required-cell counters stay typed
 integer zero. No production runtime, frozen reader/decoder/checker, public/port
 ABI, default matrix or protected unrelated WIP was changed.
+
+## CM3 LTO Six-Body Mechanism Join
+
+The opt-in `tools/fixtures/cm3_lto_join/` composes the independently captured
+native and pinned FreeRTOS CM3 O2-lto, direct, single-partition p4/BASEPRI16
+soft/no-FPU cohorts. It does not broaden ordinary-mode admission, fabricate an
+opposite-side view, patch frozen helpers or infer full post-LTO API/ABI proof.
+
+Final E3 passed locally on 2026-11-05:
+
+- Both caller-bound protocol receipts/manifests, producer input closures,
+  capture/ordinary-seed/inventory trees and fixed helper source cohorts are
+  authenticated before qualified imports or mkdir. Fourteen binary/provider
+  roles are physically distinct across the two sides. Shared source buffers
+  must agree; both captured parser packages must have identical file/hash sets.
+- From immutable source/binary buffers, the witness independently recomputes
+  each actual machine-to-final adapter, all canonical evidence and both genuine
+  ordinary/emit-relocs twins. Complete new records bind the unchanged prior
+  records by name. Then the unchanged `check_pair()` receives the real native
+  and reference protocol views and matches all six complete bodies, zero tails.
+- The six roots retain 628 bytes including literal/padding spans, 209 machine
+  instructions, 16 original/applied references and 215 canonical tokens. Native
+  retains its two origin-proven slot-role projections; reference retains raw
+  named `pxCurrentTCB` tokens with no projection. Old raw transport records keep
+  their false canonical flags and separate raw-byte/token-JSON hash domains.
+- The exact first-start, first-restore and PendSV assignments use six existing
+  difference IDs. Both the admitted inventory's immutable master ledger and
+  fixed `cm3_final_join/POLICY_DIFFERENCES.md` provide unique nonempty rationales.
+  Nine native software words/saved EXC_RETURN and eight reference words with
+  actual ORR-LR-13 remain distinct, not normalized or declared equivalent.
+- Prior 32 transport and two canonical controls are authenticated, not rerun.
+  After source pins pass, AST literal evaluation reads exact catalogs without
+  executing mutation sources. Exact case names/families/diagnostics, coherent
+  markers, expected five/six private file roles/paths/hashes, artifact bindings,
+  directory memberships and recorded reference physical IDs must match.
+  Both original/private SVC fields and both disassembly edit hashes bind the
+  canonical controls. Count-only PASS labels do not suffice.
+- Eighteen pure join methods pass over synthetic views and unchanged captured
+  checker source. Twenty-six pure envelope methods separately cover strict
+  prior records, catalog/file/edit bindings, immutable readers, nested trees,
+  predetermined output membership, semantic manifest comparison and FAIL-only
+  late drift recovery. Neither pure suite executes qualified ELF parsing or
+  compilers/targets; the actual witness supplies the real ELF proof above.
+- Independent controls rehash 274 artifacts, 5767 watched files and seven full
+  nested trees before/after eight real CLI negatives: each side's wrong receipt
+  and wrong manifest, repository/native/reference overlap, and native-as-reference
+  substitution. Each rejects at its expected admission guard before output
+  creation. No compiler, firmware, emulator, target or board executes here.
+
+E1's actual six-body replay passed, but review found two weaker admission
+checks: arbitrary prior control names/files were accepted at a count-only layer,
+and duplicate top-level root names could collapse during dictionary conversion.
+E2 adds exact control/file authentication and unique ordered root membership.
+The first 26-method envelope run then reproduces four closing-float subcase
+failures: Python accepted 5.0/6.0 as equal to integer 5/6 on both sides. Explicit
+literal integer guards fix both counters; the second pure run and full fresh E3
+actual/independent runs pass. E1/E2 and the failed pure receipt remain historical,
+not relabeled as final E3. These are evidence-schema gaps, not a demonstrated
+failure of E1's independently recomputed six-body protocol coverage.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_join/join.py` | `F4EF2402495FF90C6D781762EC2B85A458F7DA702F14B2C6A1581D9E09343CE3` |
+| `tools/fixtures/cm3_lto_join/witness.py` | `413089068C1C42ED1B9BE3E0E67E8E56BB6ABDF55CA3E3D866AC657C74B7EA97` |
+| `tools/fixtures/cm3_lto_join/test_join.py` | `79761EF94D936B950F84A55EEAC4C0D600CBF66ABB451993A40F69356EAA6D69` |
+| `tools/fixtures/cm3_lto_join/test_witness.py` | `0553C6189AAA22754C95032B1F27AB5062981693A913219186E25DB1465A10A1` |
+| `tools/fixtures/cm3_lto_join/CONTRACT.md` | `CB61811B70D6CE5F18B40191402037BD4996B1EB63FF4BA12AEA42678BA7F69A` |
+| `tools/fixtures/cm3_final_join/POLICY_DIFFERENCES.md` | `778B098F80EAE5EE641B323B4F8D60441C2F725921B506AEDA90B487D3EB5019` |
+| `%TEMP%/cm3-lto-join-pure-20261105-e1/results.json` | `B1C4BBAA6B5ECAA88A3AA05E4E4BF9916316A9E8301DF73C52B336AE7A0D40D8` |
+| `%TEMP%/cm3-lto-join-witness-pure-20261105-e1/results.json` | `63C16B54096D782F178F165E7CA10AD479E7E5E240C0ACC3CA1B02D3640AEED4` |
+| `%TEMP%/cm3-lto-join-witness-pure-20261105-e2/results.json` | `905CA1F28D91D8C2DEB949638DC99A5EEB41CFE05E3AD013A3AECF6E816D8E14` |
+| `C:/fz-cm3-lto-join-witness-20261105-e1/results.json` | `15B8EF36C7FEE3DF31EF356B7BDBA9C71167F8371F296D150FE8EDA2CE97B75B` |
+| `C:/fz-cm3-lto-join-witness-20261105-e2/results.json` | `26759D54D31F4113A319FE21F8D169170EABD3D4B1F679547F18D8122ACDB358` |
+| `C:/fz-cm3-lto-join-witness-20261105-e3/results.json` | `CDE1D4B6451D088496795DD08C0D97158E48E0C233F54BF8293A2BC7877908B5` |
+| `C:/fz-cm3-lto-join-witness-20261105-e3/artifacts.json` | `E9ECBF630F1F5798AEB6B869D68CC91B4F952CCF720E0C475E1B132A05AF2781` |
+| `C:/fz-cm3-lto-join-runner-driver-20261105-e1/driver.py` | `0F5895CBAA1B9A780724E44624BE4882689980625F83891DC1FBCD8E2294FA7B` |
+| `C:/fz-cm3-lto-join-runner-driver-20261105-e2/driver.py` | `A36F25E9F9085F90D97BCED8C85886E3B87C711E73C982C97B40033C12B29667` |
+| `C:/fz-cm3-lto-join-runner-driver-20261105-e3/driver.py` | `1C41B85BDB015DDCCAB66E722257590E64F0B2EB6F22B9A991930B629DA594A1` |
+| `C:/fz-cm3-lto-join-runner-20261105-e1/results.json` | `F2E743AC4519C51E83833154BA2B08F296C8E3D215718CEB84F40964904502F6` |
+| `C:/fz-cm3-lto-join-runner-20261105-e2/results.json` | `009239629B7F04F9C1E2CC4245F7FAB6F5587E558129F2C7BFCB115F7CBEA187` |
+| `C:/fz-cm3-lto-join-runner-20261105-e3/results.json` | `4A8D3178CCA1A9FF0DE742BAE72A055199EC56B26683423FA99C43FA28E07234` |
+| `C:/fz-cm3-lto-join-controls-driver-20261105-e1/driver.py` | `E7D1449A5C1583D1F26C39E773D1D1047DC0B1C31C0EA407922CD7156B2B3919` |
+| `C:/fz-cm3-lto-join-controls-driver-20261105-e2/driver.py` | `23C8FE86BE625191BD53AF085E4BB2DD37F6FD64A5A6B21B9EE37F0045FA6494` |
+| `C:/fz-cm3-lto-join-controls-driver-20261105-e3/driver.py` | `33CDE68D8E6D13893C4AD562FB4955C8E16784CE84B0596E809F7DD153A21DEB` |
+| `C:/fz-cm3-lto-join-controls-20261105-e1/results.json` | `B6867393B752B51B00178FF2C6DA6E29D5AC06E6AF8869F49DCA5DEF752DF27D` |
+| `C:/fz-cm3-lto-join-controls-20261105-e2/results.json` | `0C7DC3BA2B2D8C2EB6B8C42A2050669A8F2E422BF9428C74205287CEC50D420D` |
+| `C:/fz-cm3-lto-join-controls-20261105-e3/results.json` | `3B425F636872F49938B136C3DF108B0070845F9F3A3077C439401E2C4F7665F9` |
+
+The component status is `CM3-LTO-SIX-BODY-JOIN-PASS-NOT-QUALIFIED`; the outer
+receipt is `CM3-LTO-JOIN-PASS-NOT-QUALIFIED`. This closes only the six-root
+mechanism/difference composition for this cohort. Full post-LTO API/ABI,
+override/cohort, source/IR semantics, original TU ownership, complete-object or
+kernel/policy correctness, archives/other modes/cohorts, CPU/board, hosted
+exact-SHA CI and global software freeze remain pending. Required-cell counters
+stay typed integer zero. No production mechanics, frozen reader/decoder/checker,
+public/port ABI, default matrix or protected unrelated WIP was changed.

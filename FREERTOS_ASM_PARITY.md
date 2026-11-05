@@ -2625,3 +2625,31 @@ native/reference LTO mechanism join. Full ABI, source/IR semantics, policy,
 complete-object, other modes/cohorts/archives, CPU/board, hosted exact-SHA CI
 and global freeze remain unproved. Required-cell counters stay zero. No
 production, frozen-helper or default-matrix change is made.
+
+## CM3 LTO Six-Body Mechanism Join
+
+`tools/fixtures/cm3_lto_join/` now independently recomputes both real CM3 O2-lto
+root transports, both canonical compositions and both positive load-image twins
+from the two separately captured machine/final/provider sets. The unchanged
+six-body checker matches all six complete protocols with zero tail NOPs:
+628 root bytes, 209 instructions and 16 original/applied references in total.
+Native's two proved slot projections and reference's unprojected named slot
+remain distinct. Both captured master and fixed CM3 policy ledgers bind the
+three exact mechanisms and six existing difference IDs.
+
+Final E3 passes 18 pure join and 26 pure envelope methods. Independent controls
+close 274 artifacts, 5767 watched files and seven complete protocol/capture/
+seed/inventory trees, then exercise eight real CLI refusals before mkdir.
+Prior 32 transport and two canonical mutation controls are authenticated by
+exact pinned catalogs, diagnostics, file roles/paths/hashes, memberships and
+edit bindings; the join does not claim to execute those controls again.
+
+Exact hashes, E1/E2 admission limitations and the reproduced float-counter
+regression are in `PORT_ARCHITECTURE_AUDIT.md`, "CM3 LTO Six-Body Mechanism Join".
+This is `CM3-LTO-SIX-BODY-JOIN-PASS-NOT-QUALIFIED`, not instruction or policy
+equivalence: native's nine-word saved-LR frame is not normalized into the
+reference's eight-word/ORR-LR-13 protocol. Full post-LTO ABI/override/cohort,
+source/IR semantics, other modes/cohorts/archives, CPU/board, hosted exact-SHA
+CI and global freeze remain separate pending gates. Required-cell counters
+stay integer zero. Production code, frozen helpers and default matrix are
+unchanged.
