@@ -2818,3 +2818,43 @@ seven-mode aggregation. Those must use these actual machine/final bytes and
 the documented difference ledger, with independent negative controls. Full ABI,
 global freeze, required-cell credit, runtime and hardware claims stay unproved;
 production and default matrix are unchanged.
+
+## CM3 Os-LTO Six-Body Replay
+
+`tools/fixtures/cm3_os_lto_join/` now independently authenticates both Os-LTO
+captures above and recomputes their actual machine-to-emitted-final transport
+and complete canonical protocols. It does not relabel an O2 receipt or extend
+the frozen O2 admission. The new pure composition explicitly applies the same
+unchanged predicates and creates its own Os-labelled result.
+
+Local E4 on 2026-11-05 passes six full bodies: native 492 bytes / 170
+instructions / 13 REL references; reference 136 bytes / 39 instructions /
+three REL references. The exact three mechanism assignments and six captured
+difference rationales pass, with zero tail NOPs. Original raw symbols,
+addends, provider/map origins and applied destinations remain bound. Native's
+two proved slot-role projections remain separate from raw reference tokens.
+
+All 32 actual transport mutations and two coherent SVC-constant mutations pass
+their intended refusals; each coherent SVC mutation first passes transport
+preservation and then fails the full canonical protocol. Both within-side
+ordinary/emitted load images are independently recomputed as identical.
+Ordinary images receive no independent root-preservation claim.
+
+Ten pure composition, five pure identity and five pure sealing/control-binding
+methods pass. Closing checks cover
+634 artifacts plus manifest, 5,609 watched hashes, 445 immutable source copies
+and fourteen physically distinct binary roles. The seed-authenticated installed
+Git executable is nonexecuted provenance data; only it may retain multiple hard
+links, with exact identity/hash closing. Exact receipts, source hashes and the
+pre-output E1 refusal are in `PORT_ARCHITECTURE_AUDIT.md#cm3-os-lto-six-body-replay`.
+
+E2 is retained as a preliminary replay, not the current closing proof. E3
+remains FAIL: a newly added intended-receipt check exposed LF versus Windows
+CRLF serialization. E4 uses the same platform serialization as the frozen
+writer, binds the receipt hash to intended bytes rather than relearning it
+from disk, and closes each control's returned hash and physical identity.
+
+This is bounded six-body Os-LTO mechanism evidence with explicit differences,
+not whole-program equivalence, full callable ABI, archive coverage, global
+seven-mode qualification, CPU/board execution or CI. Required-cell credit stays
+integer zero; production, frozen helpers and default matrix are unchanged.

@@ -8149,3 +8149,92 @@ Full ABI, source/IR semantics, policy/kernel equivalence, whole-object proof,
 archives, CPU/board execution, exact-SHA hosted CI and global freeze remain
 separate. Required-cell credit remains typed integer zero. No production,
 frozen helper, default matrix or protected unrelated WIP is changed.
+
+## CM3 Os-LTO Six-Body Replay
+
+The separate `tools/fixtures/cm3_os_lto_join/` admits the two fresh Os captures
+above, including their complete artifact trees, original O2 seeds/inventory,
+source/dependency/configuration authority, tools and recorded commands. Before
+creating output, it authenticates the capture producer and all frozen helpers.
+It reconstructs all 57 native and 37 reference argv/cwd/stream bindings, exact
+Os transforms, slim/startup inputs, section records and cloned-tool identities.
+Both original seed closures remain live through final closing so membership
+watches are not lost when hashes are merged. Nested Seed loader execution uses
+the already authenticated immutable source buffers, not a transient live file.
+
+Local E4 on 2026-11-05 passes:
+
+- Native emitted final: three complete roots, 492 bytes, 170 instructions,
+  thirteen original/applied REL references. Reference emitted final: three
+  complete roots, 136 bytes, 39 instructions and three REL references. The
+  unchanged adapters check raw symbols, bounds, mappings, full provider/map
+  section placement, addends, decoded destinations and every non-relocated byte.
+- The same actual machines feed the unchanged decoder and protocol views, then
+  the unchanged six-body checker. All six bodies, three mechanism assignments,
+  zero tail NOPs and six captured master-ledger rationales pass. The separately
+  pinned CM3 policy ledger is authenticated too; it is specialization, not a
+  substitute for the captured master ledger. Native keeps its two origin-proved
+  slot projections and nine-word saved-LR frame; reference keeps its raw named
+  slot tokens, eight-word frame and `orr lr,lr,#13` first return.
+- Sixteen actual private transport controls per side reject at their expected
+  families. One coherent SVC-immediate mutation per side changes real machine
+  and final bytes plus disassemblies: all three transport roots still preserve,
+  but the complete canonical protocol rejects the intended changed constant.
+  These 34 controls run anew; old receipts are not substituted for execution.
+- Both within-side ordinary/emitted load images are recomputed as identical.
+  The ordinary images have no independent root-relocation proof; equality does
+  not transfer emitted metadata or source/IR authority to them.
+- Closing covers 634 artifacts plus manifest, 5,609 watched hashes, 445 source
+  copies and fourteen physically distinct positive binary roles. An independent
+  operator audit rehashes all artifacts/inputs/copies and checks the result,
+  command-binding counts, controls, identities and nonpromotion flags.
+- Ten pure composition, five pure physical-identity and five pure
+  sealing/control-binding methods pass.
+  They are synthetic evidence, separate from the actual Os ELF replay above.
+
+E1 refused before output creation because installed
+`C:/Program Files/Git/cmd/git.exe` has two hard links. This file is already
+authenticated as the reference seed's external Git tool and is never executed
+or used as an ELF provider in the replay. The corrected guard admits multiple
+links only for that exact seed-validated Git identity; it still closes hash,
+device, file ID and link count. All other inputs/outputs remain single-link,
+and the fourteen-role alias check is unchanged. The five pure tests reject
+non-Git multi-links, lookalikes, zero links, regular-file failures and closing
+identity drift. E1 left no output directory and has no successful receipt.
+
+E2 is a retained preliminary PASS at an earlier witness revision, not the
+current closing proof. Review then required direct binding of each control's
+returned hashes/physical identities and of the intended serialized receipt.
+E3 remains FAIL: that new receipt comparison used LF while the frozen writer
+uses Windows CRLF. E4 corrects the representation using the writer's platform
+newline semantics. Its manifest hashes the intended receipt bytes, excludes
+the actual receipt from the learned file map, and rechecks actual output
+after manifest writing and at late closing. The failed E3 run is not relabeled.
+The five sealing methods exercise platform-default serialization, immediate
+and post-write receipt substitution, recorded control hash/path/identity drift,
+and matching closure with generated temporary files. They do not execute the
+witness constructor, compiler, linker or retained ELF.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_os_lto_join/CONTRACT.md` | `7FF9B2EF1896268DC5415DDA33396A5800FB2137D744B02830F64ACC2EDD64C7` |
+| `tools/fixtures/cm3_os_lto_join/compose.py` | `359BB0E7463F4514F5964529702DDC07CCED773927970AC3C246A1B7E845367E` |
+| `tools/fixtures/cm3_os_lto_join/witness.py` | `BEC9C699F8C62A69CB2BF35B24CF51D8815329517F83A11517BF9657D294D7AB` |
+| `tools/fixtures/cm3_os_lto_join/test_compose.py` | `5F07F9F944E6B7DC2DED82C3BC4B4D12EF99BA30BF0EF3F86E6A6E7C97DA2896` |
+| `tools/fixtures/cm3_os_lto_join/test_identity.py` | `CA6EDE2A5D81F51898041C6A9D92998B6B0E0C7C685DC25D9FF27DE407649C12` |
+| `tools/fixtures/cm3_os_lto_join/test_seal.py` | `A99058C826929760B860F010801DD79C198D800A8412C1CE5C5C70DEF02B2078` |
+| `%TEMP%/cm3-os-lto-join-pure-20261105-e1/results.json` | `2BC6BA58340D3FA5FFCA1D658A2CBC6809166BDCED25CB464363A55B99C81B8E` |
+| `%TEMP%/cm3-os-lto-identity-pure-20261105-e3/results.json` | `5CDE9578272CBC012D6B80154689596DA187B06CFD20D77F1E7CA889FF5B2F1F` |
+| `%TEMP%/cm3-os-lto-join-seal-pure-20261105-e1/results.json` | `514BA6FAF850CF960D49EC5E000804ECFBCB9EA4AA8ADB2A0EE03F3BA88C16AF` |
+| `C:/fz-cm3-os-lto-join-witness-20261105-e3/results.json` (FAIL) | `D9BC26FF22EC20968C5E994BE79557EC0EBBEA3931EA401EB722465F37C30B7F` |
+| `C:/fz-cm3-os-lto-join-witness-20261105-e3/artifacts.json` (FAIL) | `8E2DDF7BE78C0B83C3D4FDC567F3D26C809BCE345F4F73757416DEB72B4E6CF3` |
+| `C:/fz-cm3-os-lto-join-witness-20261105-e4/results.json` | `EE5229483754CB3A6F485DB24F0E7201029ABAE1B869AA4C6FF660CDCD4E4626` |
+| `C:/fz-cm3-os-lto-join-witness-20261105-e4/artifacts.json` | `FAE1DC08D04099128477501018693E89EA7735F63607F78261B0A2A6F0B46F3C` |
+
+The independent replay is not a compiler, linker, emulator or target execution.
+It closes only the bounded Os-LTO six-body transport/canonical/difference
+composition. Full API/callable ABI, C/IR semantics, original per-TU machine
+ownership, whole-object/kernel/policy equivalence, archive/other-cohort coverage,
+global seven-mode qualification, board and hosted exact-SHA CI remain separate.
+Required-cell credit is typed integer zero. No production, frozen helper,
+default-matrix or protected unrelated WIP change is made.
