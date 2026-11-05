@@ -8238,3 +8238,80 @@ ownership, whole-object/kernel/policy equivalence, archive/other-cohort coverage
 global seven-mode qualification, board and hosted exact-SHA CI remain separate.
 Required-cell credit is typed integer zero. No production, frozen helper,
 default-matrix or protected unrelated WIP change is made.
+
+## CM3 O2-LTO Indexed Archive Capture
+
+The opt-in `tools/fixtures/cm3_lto_archive/probe.py` captures the actual native
+static-library route for the fixed soft CM3 p4/BASEPRI16 cohort. The unchanged
+ordinary-O2 seed receipt and manifest are caller-authenticated before capture.
+All nine translation units compile afresh; eight C inputs are genuine slim IR
+and startup remains native assembly. The indexed archive contains exactly
+Context core/state/panic and CM3 runtime/boot/exception (seed indices 0..5).
+Explicit startup, application and cohort expectation (8/7/6) precede it.
+No whole-archive, forced undefined symbols, extra anchors, rescue providers or
+production/linker-script changes are used.
+
+The archiver is an explicit extension to the seed's tool inventory, not a
+silently accepted ambient executable: its caller-supplied SHA-256 is
+`F90685490B207A237A5BD0D32CDC35A8653E682D9313BBE12907712D128299A5`.
+It must be the admitted GCC sibling, is copied into the private toolchain,
+and uses the same captured LTO plugin explicitly. Hash and physical identities
+of the original and cloned archiver close. Helper execution uses the single
+authenticated source buffers; the receipt seals intended platform-serialized
+bytes rather than relearning its expected hash from the written file.
+
+Local E2 on 2026-11-05 passes capture:
+
+- Nine fresh units, eight slim IR objects, one deterministic-header indexed
+  archive and two successful actual final executable links. Repeated-build
+  byte determinism is not claimed.
+- The archive is 107,394 bytes with six members and 48 raw index entries.
+  Member order, headers, complete payloads, raw index offsets, actual `ar t`
+  listing and plugin-aware `nm` index output are retained. Each raw payload
+  equals both its newly compiled object and its private `ar x` extraction.
+- Both ordinary and emit-relocs maps record six actual inclusion reasons:
+  application -> Context core/panic; core -> state; state -> port runtime;
+  runtime -> boot/exception. This is extraction evidence for the fixed consumer,
+  not independent full provider-resolution or callable-ABI qualification.
+- Both links retain their own generated LTRANS machine, map, resolution file,
+  verbose worker traces and machine/final inspections. The authenticated
+  unchanged comparator reports identical within-side load images. No old
+  direct-link machine substitutes for these new artifacts.
+- Independent operator audit rehashes all 1,505 artifacts plus manifest, 1,415
+  watched inputs and 1,367 input copies; independently parses member/index
+  bytes, rechecks the exact four link inputs, 66 successful command records,
+  both raw map inclusion tables and both final PT_LOAD images.
+- Eleven pure methods pass: raw GNU archive grammar/index, required index NUL
+  alignment, exact object roles/recipe, capture-only flags, and file-based
+  extraction despite altered stdout. Synthetic controls do not execute tools.
+
+E1 remains FAIL at the first extraction byte comparison. The raw archive and
+object were equal (9,304 bytes), but Windows `ar p` text stdout expanded LF to
+CRLF (9,325 bytes). E2 uses files produced by `ar x` in a fresh private
+directory; it never repairs or normalizes binary stdout. That platform defect
+was in this new capture harness, not production assembly or member contents.
+The original ten-method E1 pure result is historical; the current eleven-method
+E2 result covers the corrected producer. An earlier malformed hash argument
+was refused before output creation and did not produce a capture receipt.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_archive/CONTRACT.md` | `7022A32FFB7987D11D89A71AFBE4A83167953A1807C44E7E3AB214589EE918E7` |
+| `tools/fixtures/cm3_lto_archive/probe.py` | `E2E068AEBEE77E344EA924B08CCE61E0B57D0B5B2F04652D9391680351655FF7` |
+| `tools/fixtures/cm3_lto_archive/test_probe.py` | `753CBA2319A65B0A6E8EA7E7F9EE11E369E7188DC8B3EFB83C69938B88FA5D3A` |
+| `%TEMP%/cm3-lto-archive-pure-20261105-e2/results.json` | `4F6A93379FED189DE8BFD3D4797D7E3F94B2FE557CC5D825F8E5F41322EF7D75` |
+| `C:/fz-cm3-lto-archive-20261105-e1/results.json` (FAIL) | `2A2A15C4C86C3456E711F13872A2BE35C19E21BD4100279D4FA6CAE6E532EEEF` |
+| `C:/fz-cm3-lto-archive-20261105-e1/artifacts.json` (FAIL) | `2099F1356B0571AE9685C30D4899C96B9B95AD175180E034D2FB63BF0AC3665C` |
+| `C:/fz-cm3-lto-archive-20261105-e2/results.json` | `2811E3BB558BE7C6E93D20D1B24CE68AA6EB607630D74235B4219C0644AFF34E` |
+| `C:/fz-cm3-lto-archive-20261105-e2/artifacts.json` | `A5C5028132CB91216A0CDAF9C7A2B3569FAF26992DD838A17802FF1BD7C2D954` |
+| `C:/fz-cm3-lto-archive-20261105-e2/archive/libcm3_context.a` | `7467B1D6FBE0EDD8559097BD72503D742D52039AFB036F5492F125481A7A6117` |
+
+The receipt deliberately keeps `ArchiveExtraction` and
+`ArchiveExtractionQualified` false: `ArchiveCaptureComplete` is not a substitute
+for independent qualification. Root preservation, canonical protocols and
+pinned-reference composition must replay these actual archive-link machines.
+Full API/ABI, source/IR equivalence, general archive behavior, startup weak-alias
+precedence, override/cohort negatives through archives, other modes/cohorts,
+runtime, CPU/board, hosted exact-SHA CI and global freeze remain separate.
+Required-cell credit is typed integer zero. Production sources, frozen helpers,
+default matrix and protected unrelated WIP are unchanged.

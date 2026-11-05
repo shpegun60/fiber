@@ -2858,3 +2858,34 @@ This is bounded six-body Os-LTO mechanism evidence with explicit differences,
 not whole-program equivalence, full callable ABI, archive coverage, global
 seven-mode qualification, CPU/board execution or CI. Required-cell credit stays
 integer zero; production, frozen helpers and default matrix are unchanged.
+
+## CM3 O2-LTO Indexed Archive Capture
+
+`tools/fixtures/cm3_lto_archive/` adds the real native static-library route for
+the same soft CM3 p4/BASEPRI16 cohort. It recompiles the nine authenticated O2
+seed units: six Context/port slim IR members form one indexed archive; startup,
+application and the outside-archive cohort expectation remain explicit, in
+that order, before the archive. No whole-archive, forced undefined roots,
+additional anchors or source/linker changes manufacture extraction.
+
+Local E2 on 2026-11-05 passes capture: both ordinary/emit-relocs final links
+retain their own actual generated machines, maps, resolution and inspection
+outputs. Each map records all six members' inclusion reasons. All complete
+raw member payloads equal the newly compiled objects and private binary file
+extractions; the archive has 48 indexed symbol entries. The two final load
+images are identical. Independent operator checks cover 1,505 artifacts plus
+manifest, 1,415 watched inputs, 1,367 input copies and 66 successful commands.
+
+Eleven pure grammar/recipe/extraction methods pass. E1 remains FAIL because
+Windows `ar p` translated binary LF bytes in stdout; raw archive/object bytes
+were equal. E2 uses private `ar x` files, never stdout newline normalization.
+Exact source, receipt and manifest hashes are in
+`PORT_ARCHITECTURE_AUDIT.md#cm3-o2-lto-indexed-archive-capture`.
+
+This is capture/extraction evidence for the fixed Context consumer, not full
+archive qualification or new FreeRTOS parity. The unchanged startup has no
+weak SVC/PendSV aliases, so their precedence is not proved here. Complete
+root/protocol/reference replay of these new machines, other modes/cohorts,
+full ABI, CPU/board execution, CI and global freeze remain separate. All
+qualification flags and required-cell credit remain false/zero. Production,
+frozen helpers and default matrix are unchanged.
