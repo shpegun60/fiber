@@ -7728,3 +7728,74 @@ kernel/policy correctness, archives/other modes/cohorts, CPU/board, hosted
 exact-SHA CI and global software freeze remain pending. Required-cell counters
 stay typed integer zero. No production mechanics, frozen reader/decoder/checker,
 public/port ABI, default matrix or protected unrelated WIP was changed.
+
+## Native CM3 LTO Direct-Link Contract
+
+The separate opt-in `tools/fixtures/cm3_lto_link_contract/` statically audits
+the retained native CM3 O2-lto direct-link cohort. Both existing ordinary and
+emit-relocs images use their own actual saved machine, map, final attributes
+and startup provider. The unchanged generic ELF/map reader constructs them;
+ordinary-mode global-anchor/current-slot predicates are not relaxed.
+
+Local evidence on 2026-11-05 passes:
+
+- Exactly 26 prescribed definitions per twin bind complete input-section
+  placements, offsets, extents, types and bindings. These include the public
+  five, forward eight, reset/strong handlers, default panic, reverse-v1 anchor,
+  current slot, both cohort identities and consumer pointer objects.
+- Both machine and final CM3 attributes and EABI5/soft flags are checked. The
+  fixed post-LTO anchor/current slot are LOCAL; default panic is GLOBAL.
+  Invalid aliases, overlapping extents, undefined/legacy/foreign cohort symbols,
+  wrong providers and contradictory architecture attributes fail closed.
+- The five API roots and two cohort expectations have seven exact named original
+  ABS32+0 references. Actual applied words bind exact map-backed definitions,
+  including Thumb entries. The emitted final also retains seven matching REL
+  records; the ordinary image correctly has none. All 256 final vector words,
+  entry/MSP, slots 11/14 and read-only/load geometry are checked.
+- The frozen twin reader independently compares both real load images. All
+  parsing consumes immutable source/binary buffers. Full capture, ordinary-seed
+  and inventory trees close alongside source hashes, physical identities,
+  predetermined output membership and semantic artifact-manifest comparison.
+- Twenty pure synthetic audit methods pass, including missing/extra/wrong ABI
+  symbols, binding/type/Thumb/extent/provider/alias failures, vector changes,
+  original/applied pointer membership/kind/target/addend changes, storage/load
+  violations, contradictory attributes and bool/float numeric aliases. They
+  explicitly claim no real ELF parsing or toolchain/target execution.
+- Four separate pure controls pass for repeated/late sealing failures, physical
+  identity drift and output-path refusal. Review found a failure-only manifest
+  gap: after repeated sealing failure, the final FAIL receipt could outgrow its
+  old manifest hash. The fallback now refreshes that manifest; tests reproduce
+  both failure paths without creating false PASS.
+- Independent host controls close 182 artifacts and 3013 watched hashes before
+  and after seven real CLI refusals: wrong receipt, wrong manifest, repository,
+  capture and seed overlap, existing output, and reference-as-native substitution.
+  Every refusal has the intended diagnostic and creates no rejected output.
+
+The first smoke replay and final runner both use the same frozen audit/witness
+source hashes. Neither invokes a compiler, linker, emulator, firmware or board.
+Source review also tightened an admission mismatch before the actual runs:
+GLOBAL anchor/current-slot metadata can no longer satisfy the fixed LOCAL role.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_link_contract/audit.py` | `9D6B4E1694A8C0A2D7F2E1C7B6D108B58B103131DD7C19D45CD08238E4CED759` |
+| `tools/fixtures/cm3_lto_link_contract/witness.py` | `599D384B53F45093F01949A4E95A9DF8A15BC4EABE9EA5E12A1C2E7138F3297E` |
+| `tools/fixtures/cm3_lto_link_contract/test_audit.py` | `3E215D413CC4ADBA6DE85901B394EE1550804EA0A714604AF0269C64D6B68B9D` |
+| `tools/fixtures/cm3_lto_link_contract/test_witness.py` | `E7568CA67888CB12FDCFAE0C1B8818FB786F8E8FA0D7C2215D78ADB5C1ECB8B2` |
+| `tools/fixtures/cm3_lto_link_contract/CONTRACT.md` | `3FBB88B2895C9BC63F9F400E669E0DEFD22CC6CE80B21A03E343C3C0C5F59A83` |
+| `C:/fz-cm3-lto-link-smoke-20261105-e1/results.json` | `200448314D306929F5AA1B67460ACDC3DA8D9A0E35BC37BB8AE40860AD0A82D1` |
+| `C:/fz-cm3-lto-link-smoke-20261105-e1/artifacts.json` | `2B7E7EFFFE93D4DEFDA0D436785C1AA902F7597298B28F471F501699A47AAFB7` |
+| `%TEMP%/cm3-lto-link-pure-20261105-e1/results.json` | `D47A69ABB6DBBC8558FE4396DB0A24C074279999F570171A64D8E94C1103A419` |
+| `C:/fz-cm3-lto-link-witness-20261105-e1/results.json` | `776F355C53ACD1A8F8E575316379A8DD457C4E1EB29F7890AE4C036E460B953D` |
+| `C:/fz-cm3-lto-link-witness-20261105-e1/artifacts.json` | `7396B0AEFF24D1C05EE01CF2837C6A8259091575DC86FC77CD485E6EB6DBC344` |
+| `C:/fz-cm3-lto-link-runner-driver-20261105-e1/driver.py` | `700A2E342BD5F9A737C3986AF695D70F2BD0ACFC49ED47878F2EADC183AFCC02` |
+| `C:/fz-cm3-lto-link-runner-20261105-e1/results.json` | `004D95AF1C1B5C9B7DB8D980AB8E6EBA4193F5A91AFD19D609000E51653EF4BC` |
+
+Status is `CM3-LTO-DIRECT-LINK-CONTRACT-PASS-NOT-QUALIFIED`. This closes static
+surface/placement/pointer evidence only. Full callable ABI, source/IR semantics,
+original-TU ownership and whole-kernel correctness are not inferred. Strong
+application panic override, duplicate-handler and valid-but-mismatched identity
+fresh links remain pending, independently of archive extraction, other modes/
+cohorts, CPU/board, hosted exact-SHA CI and global freeze. Required-cell counters
+stay typed integer zero. No production code, frozen helpers, public/port ABI,
+default matrix or protected unrelated WIP was changed.

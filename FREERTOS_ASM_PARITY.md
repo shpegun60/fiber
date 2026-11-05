@@ -2653,3 +2653,30 @@ source/IR semantics, other modes/cohorts/archives, CPU/board, hosted exact-SHA
 CI and global freeze remain separate pending gates. Required-cell counters
 stay integer zero. Production code, frozen helpers and default matrix are
 unchanged.
+
+## Native CM3 LTO Direct-Link Contract
+
+`tools/fixtures/cm3_lto_link_contract/` separately audits the retained native
+CM3 O2-lto ordinary and emit-relocs finals. Each uses its own saved machine,
+map and startup provider; the frozen ordinary global-symbol predicates are
+not weakened. Target attributes and soft ABI flags bind both machine/final.
+
+The exact public five, forward eight, strong handlers and reset, default panic,
+LOCAL reverse-v1 anchor/current slot, private/storage cohort identities and
+consumer expectation objects have unique bounded map-backed placements.
+Seven original named ABS32+0 fields bind the five consumer API pointers and
+two cohort pointers. Only the emitted twin requires their applied REL records;
+both twins require exact pointer bytes and the complete strong-vector template.
+
+Local 2026-11-05 evidence passes both real twins, 20 pure audit methods,
+four pure failure-record controls and seven independent real CLI refusals.
+The latter close 182 witness artifacts, 3013 watched hashes and full capture,
+ordinary-seed and inventory tree memberships. Exact hashes and the bounded
+scope are recorded in `PORT_ARCHITECTURE_AUDIT.md`, "Native CM3 LTO Direct-Link
+Contract". Pure synthetic controls do not substitute for the actual ELF audit.
+
+This is static final-link evidence, not complete callable ABI, original-TU or
+source/IR semantics. Panic override, duplicate-handler and identity-mismatch
+fresh-link controls remain separate work, as do archives, other modes/cohorts,
+CPU/board, hosted exact-SHA CI and global freeze. No production, frozen-helper
+or default-matrix changes are made. Required-cell counters remain integer zero.
