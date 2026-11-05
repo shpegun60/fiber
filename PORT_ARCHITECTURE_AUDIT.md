@@ -7483,3 +7483,83 @@ source/IR semantics, policy/kernel execution, archives/other modes/cohorts,
 CPU/board validation, hosted exact-SHA CI and global software freeze remain
 unproved. Required-cell counters stay typed integer zero. No production runtime,
 ordinary reader, public/port ABI, default matrix or protected WIP was changed.
+
+## Pinned CM3 Reference LTO Root Preservation
+
+The separate `tools/fixtures/cm3_reference_lto_roots/` adapter and enclosing
+witness consume the authenticated reference E3 capture above. The scope is
+only O2-lto, direct, single-partition CM3 p4/BASEPRI16 soft/no-FPU. The unchanged
+ordinary core supplies generic ELF/map/disassembly construction and bounded
+utilities; its ordinary symbol/function policies and the native adapter are
+neither changed nor patched. The new reference predicates preserve actual
+LOCAL first-start and GLOBAL handler/callee/slot bindings.
+
+Final E2 passed locally on 2026-11-05:
+
+- All three complete machine-to-final roots preserve 136 bytes, 39 instructions,
+  exact mapping boundaries and all pool/padding bytes. Full original machine
+  sections, provider identities, symbol offsets/extents and containing output
+  sections independently bind every root, slot and root BL destination.
+- Three named references retain original and applied metadata: two ABS32
+  `pxCurrentTCB` addends zero and one THM_CALL `vTaskSwitchContext` addend minus
+  four. Final words/BL bits independently match mapped definitions; addends
+  come from unapplied bytes, not final readelf values. The four-byte global
+  slot is at original `.bss+8` within 12 bytes and final `0x20000010`.
+- Six positive roles are copied and consumed from immutable buffers. All 16
+  actual private ELF/map controls reject at their declared guard. Each case
+  binds five distinct regular single-link physical files before parsing,
+  admits only those strict immutable snapshots, and closes physical identity,
+  bytes and exact membership afterwards.
+- The coherent slot control swaps final `ulMaxPRIGROUPValue`/`pxCurrentTCB`
+  object locations and edits both applied words and disassembly. All BSS
+  objects remain aligned, bounded and nonoverlapping; the rejection is exactly
+  `REF-LTO-ORIGIN`, not an accidental alias check. The coherent callee control
+  changes final callee entry/extent, actual BL bits and disassembly and also
+  fails exactly origin. Neither control claims unchanged provider semantics
+  or a mutated twin comparison.
+- Eighteen pure reader methods and 26 separate pure envelope methods pass.
+  These use explicit synthetic/mocked boundaries and execute no qualified
+  captured parser or compiler. Review found one diagnostic-only gap: the
+  frozen generic parser can retain a malformed literal-data record as `None`.
+  An explicit guard now returns typed `REF-LTO-DECODE` instead of `TypeError`;
+  regression coverage passes. No false-acceptance claim is made.
+- The enclosing witness authenticates producer receipts/manifests, input/source
+  cohort and all captured helpers before use. Frozen parser/helper code executes
+  retained buffers; positive and private reader lookups have no unknown-file
+  disk fallback. The written manifest is semantically compared with the intended
+  dictionary; predetermined outputs, late byte hashes and memberships close.
+- Independent controls rehash all 251 artifacts and 2834 watched files, raw
+  named-reference records, captured/original bindings and actual private inputs.
+  Four real CLI negatives (wrong receipt, wrong manifest, repository overlap,
+  capture overlap) refuse before output creation. Full closure is rechecked
+  afterwards. These stages execute Python only, never compiler/target/board code.
+
+E1 is retained as positive-only history: it passed three roots but executed no
+actual mutation controls, before the explicit malformed-record guard. Its
+receipt is not relabeled as final E2 or canonical qualification.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_reference_lto_roots/reference.py` | `3E53C4C0C5030B973A599FBDD0CB0B7FDECC625DEFD8C204A8C9691C5F6A616D` |
+| `tools/fixtures/cm3_reference_lto_roots/witness.py` | `3B9168D52F7AA63339264A8E7B655DF94FF1AC644FF08D20E4B617CED5699B54` |
+| `tools/fixtures/cm3_reference_lto_roots/mutations.py` | `E20E55734138E5F9AE76019D3C3EF1260EE708FDF222DC72E5C8B5552E02029C` |
+| `tools/fixtures/cm3_reference_lto_roots/test_reference.py` | `6DEB17086F07862C1CAADA8FA2982CC4A6A57F73D4D55E7FA0A11EF6E0F4943E` |
+| `tools/fixtures/cm3_reference_lto_roots/test_witness.py` | `0BE87F106405E6195F181843699BA2FE4D9747F73E00F9A273E8BF227CE18CEF` |
+| `tools/fixtures/cm3_reference_lto_roots/CONTRACT.md` | `379DC16C29847D681926A478CA101E8DCECAB40FB0BA759EBEA741D1981533FA` |
+| `%TEMP%/cm3-reference-lto-reader-pure-20261105-e1/results.json` | `CCF145161B23692BD534FB973AE1689BEE6DBEE3D9E3F17CA053CDBC006FEE65` |
+| `%TEMP%/cm3-reference-lto-witness-pure-20261105-e1/results.json` | `6664BADF12F2922F4AADB68F5B102B3BE4B138685C2BC86646A702CC03523C95` |
+| `C:/fz-cm3-reference-lto-roots-witness-20261105-e1/results.json` | `59BFE630B621B1D757FF5F00FD5DBAE0E1F44E3AC5B42C1A99DE5EBF81F1BBCA` |
+| `C:/fz-cm3-reference-lto-roots-witness-20261105-e1/artifacts.json` | `28EAD0FD4E27BC458403A70E68CBA02D4406AC1A040DFE0C6E18D533FBD865C1` |
+| `C:/fz-cm3-reference-lto-roots-witness-20261105-e2/results.json` | `C43BBFC363BAAF204ECC1DCD9A44445F568B6E73E0E7CE2A64A2FBBD0E2B6A17` |
+| `C:/fz-cm3-reference-lto-roots-witness-20261105-e2/artifacts.json` | `9C0E2618B30010AEFE24C18B63873CD975469A3FA8EE1A0375E81E751E577CC6` |
+| `C:/fz-cm3-reference-lto-roots-controls-driver-20261105-e1/driver.py` | `805A8A3D87FB2D4253E826E8CAA257681FBD547BB9E118D8C8B6E90D5E2E566C` |
+| `C:/fz-cm3-reference-lto-roots-controls-20261105-e1/results.json` | `4C532B882438800E2F75767F36161A2C39114E96CE7DD8F95A0BF20264521F26` |
+
+The status is deliberately `REFERENCE-MACHINE-ROOT-PASS-NOT-QUALIFIED`.
+Canonical reference protocols and the real native/reference LTO mechanism join
+remain separate subsequent gates, not fabricated opposite-side views. Original
+TU/source/IR semantics, complete ABI/object proof, policy/kernel execution,
+other modes/cohorts/archives, CPU/board, hosted exact-SHA CI and global software
+freeze remain unproved. Required-cell counters stay typed integer zero. No
+production mechanics, frozen helpers, public/port ABI, default matrix or
+protected unrelated WIP was changed.

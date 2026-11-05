@@ -2572,3 +2572,30 @@ mechanism qualification. The separate reference machine-to-final adapter and
 canonical checker composition are next, before the native/reference join.
 ABI, source/IR semantics, CPU/board, other modes/cohorts, archives, hosted
 exact-SHA CI and global claims remain unproved; required-cell counters stay zero.
+
+## Pinned CM3 Reference LTO Root Preservation
+
+`tools/fixtures/cm3_reference_lto_roots/` now binds the actual captured reference
+machine to its final ELF without changing ordinary/native symbol predicates.
+It independently proves three complete roots (136 bytes, 39 instructions),
+whole merged-section placements and three named original/applied references.
+First-start remains LOCAL; the GLOBAL `pxCurrentTCB` has its actual input BSS
+offset 8 within 12 bytes. Original ABS32 addends are zero and the BL addend is
+minus four. All mapping boundaries, literal words and alignment bytes remain.
+
+Actual E2 passes 16 private ELF/map controls, including coherent final slot and
+callee retargets that specifically fail independent origin checks. The slot
+control swaps neighboring BSS metadata and both applied words/disassembly, so
+alias or stale-disassembly rejection does not substitute for origin evidence.
+Six positive roles and five private inputs per case use immutable buffers;
+private physical identities and byte/membership closure are retained.
+Eighteen pure adapter and 26 pure envelope methods pass separately. Independent
+closure checks 251 artifacts, 2834 watched hashes and four real CLI refusals.
+
+Exact hashes and E1's positive-only limitations are recorded in
+`PORT_ARCHITECTURE_AUDIT.md`, "Pinned CM3 Reference LTO Root Preservation".
+Status remains `REFERENCE-MACHINE-ROOT-PASS-NOT-QUALIFIED`: reference canonical
+protocols and the actual native/reference six-body join are next. Complete ABI,
+source/IR semantics, complete-object, other modes/cohorts/archives, CPU/board,
+hosted exact-SHA CI and global freeze are not established; counters stay zero.
+Production mechanics, frozen helpers and the default matrix are unchanged.
