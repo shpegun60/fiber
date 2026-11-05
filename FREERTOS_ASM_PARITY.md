@@ -2890,6 +2890,37 @@ full ABI, CPU/board execution, CI and global freeze remain separate. All
 qualification flags and required-cell credit remain false/zero. Production,
 frozen helpers and default matrix are unchanged.
 
+## Pinned CM3 O2-LTO Reference Archive Capture
+
+`tools/fixtures/cm3_reference_lto_archive/` adds the pinned FreeRTOS archive
+consumer for the same CM3 soft p4/BASEPRI16 cohort. Four authenticated sources
+are compiled afresh: the upstream `portable/GCC/ARM_CM3/port.c` forms the sole
+indexed archive member; startup, consumer and typed providers remain explicit,
+in that order, before the archive. No direct duplicate, whole-archive, forced
+undefined symbol or source/linker change manufactures extraction.
+
+Local E1 on 2026-11-05 passes this capture-only route: three slim IR C objects
+plus native startup, two actual final LTO links and two saved generated machine
+objects. The raw archive has one member and ten index entries. Its full member
+payload equals the newly compiled object and the private binary `ar x` file.
+Both maps record extraction by startup's `vPortSVCHandler` reference; both
+within-side final load images are independently checked as identical.
+
+Ten pure admission/recipe/archive methods pass. The independent operator audit
+rehashes 1,372 artifacts plus manifest, 1,278 watched inputs and 1,235 input
+copies; checks 41 successful commands and both link orders; parses complete
+raw index/member bytes and both final load images. Exact hashes are in
+`PORT_ARCHITECTURE_AUDIT.md#pinned-cm3-o2-lto-reference-archive-capture`.
+
+This proves only the fixed pinned consumer's archive capture and own-twin
+equivalence. Typed provider fixtures are not an upstream kernel or scheduler
+execution proof. New reference root/canonical replay and the paired native
+archive comparison remain separate; the native-only archive proof does not
+qualify this capture. Full ABI, general archive/weak-alias behavior, other
+modes/cohorts, CPU/board execution, CI and global freeze remain unproved.
+Required-cell credit stays typed integer zero. Production, frozen helpers and
+default matrix are unchanged.
+
 ## CM3 O2-LTO Archive Native Root Replay
 
 `tools/fixtures/cm3_lto_archive_roots/` independently admits the actual archive

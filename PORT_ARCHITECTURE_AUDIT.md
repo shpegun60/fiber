@@ -8372,3 +8372,56 @@ whole-kernel/policy correctness, other modes/cohorts, CPU/board, hosted CI and
 global freeze remain separate. No compiler, linker, emulator or target runs
 in this replay. Required-cell credit stays typed integer zero. Production,
 frozen helpers, default matrix and protected unrelated WIP are unchanged.
+
+## Pinned CM3 O2-LTO Reference Archive Capture
+
+The opt-in `tools/fixtures/cm3_reference_lto_archive/probe.py` admits the
+original ordinary-O2 pinned reference seed independently and recompiles its
+four sources for the CM3 soft p4/BASEPRI16 cohort. Only the new port object is
+archived. The exact explicit link order is source indices 3/2/1 (startup,
+consumer, typed providers), then the archive. There is no direct port duplicate,
+whole-archive, forced undefined root, rescue anchor or source/script change.
+
+Local E1 on 2026-11-05 passes capture:
+
+- Four fresh translation units: three genuine slim IR C objects and native
+  startup. Both ordinary and emit-relocs final executable links retain their
+  own saved LTRANS machine, map, resolution, verbose worker traces and raw
+  inspections. The 41 recorded commands all finish successfully.
+- The regular GNU archive is 15,964 bytes with one `00-port.o` member and ten
+  index entries. Complete raw member bytes equal the new compiled object and
+  private binary-file extraction. Both raw maps record inclusion by startup's
+  `vPortSVCHandler` reference. This is this consumer's extraction evidence, not
+  a general weak-alias or provider-resolution qualification.
+- The parser accepts only the bounded GNU index/member grammar, including
+  exact index alignment padding and an optional single `//` name table; it
+  refuses foreign/duplicate records. No long-name member is needed or admitted.
+  Binary `ar x` files, not text stdout or newline normalization, are authority.
+- Independent operator checks rehash exact memberships of 1,372 artifacts
+  plus manifest, all 1,278 watched inputs and 1,235 original/copied input pairs;
+  bind every command sidecar to the catalog; independently parse raw archive
+  index/member bytes, both exact link recipes and map inclusion tables; and
+  recompute matching within-side final PT_LOAD structures, bytes and entry.
+- Ten separate pure methods pass, including archive/index boundaries, optional
+  table grammar, fixed four-TU recipe, file-based extraction and prepare-path
+  smoke coverage. These tests do not execute target code.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_reference_lto_archive/CONTRACT.md` | `5BE49FDCFB84B0AC9823314A6C7D1E90455F5A1074BA7D7A6B608C238498BD0B` |
+| `tools/fixtures/cm3_reference_lto_archive/probe.py` | `966501D5AB3F8D5EC33375514FC9CA5E43833564DBFA6684D0C1A4E61702BB3B` |
+| `tools/fixtures/cm3_reference_lto_archive/test_probe.py` | `71986A1BC1EBD3CA354835A92C5FAB412BDF80AF79CF7D8AE414726DFAD54DFF` |
+| `%TEMP%/cm3-reference-lto-archive-pure-20261105-e1/results.json` | `6974346C2EA4DA527937A178C0EBBC7EBE9A827B458D660EC47DC8FDA6E8829F` |
+| `C:/fz-cm3-reference-lto-archive-20261105-e1/results.json` | `C4933DB832AEEC664F320CF8478D640BA4C80A915095B1E12B27109580B56DDD` |
+| `C:/fz-cm3-reference-lto-archive-20261105-e1/artifacts.json` | `4BE6CAEC090F743A75B8986D3482CD92E3B439132FC36CEB6B19BF1D17F8369E` |
+| `C:/fz-cm3-reference-lto-archive-20261105-e1/archive/libfreertos_cm3.a` | `E7E1BD06598E9D01D571488F992B789C5A360FFCBC603ADD33B7EE2D3EB12B16` |
+
+The typed provider fixture is not the real FreeRTOS kernel, scheduler or runtime.
+Capture PASS does not promote the new reference machine to root/canonical
+qualification or paired native-reference parity. Those must replay these
+actual new archive artifacts with the unchanged adapters and difference ledger.
+Full callable ABI, source/IR and original-TU semantics, general archive and
+weak-alias behavior, other modes/cohorts, CPU/board execution, hosted exact-SHA
+CI and global freeze remain separate. Required-cell credit is typed integer
+zero. Production, frozen helpers, default matrix and protected unrelated WIP
+are unchanged.
