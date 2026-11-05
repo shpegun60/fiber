@@ -8494,3 +8494,99 @@ original per-TU post-LTO ownership, general archive/weak-alias or override/cohor
 negative behavior, other modes/cohorts, CPU/board, hosted exact-SHA CI or global
 freeze. Required-cell credit remains typed integer zero. Production sources,
 frozen predicates, default matrix and protected unrelated WIP are unchanged.
+
+## Executing Freeze Replay Dispatcher
+
+The opt-in `tools/freeze_replay.py` implements the closed interface in
+`tools/fixtures/freeze_cohorts/REPLAY_CONTRACT.md`. Its 33 fixed routes execute
+the existing gates against authenticated retained inputs. Registration is not
+route execution or whole-cell qualification. No new ELF decoder, canonical
+equivalence checker, compiler route or runtime adapter is introduced here.
+
+Admission hashes the exact parsed catalog and receipt buffers; closes complete
+artifact trees and original/captured input bindings; rejects role aliases and
+output overlap; and independently reconstructs the declared current plan.
+Reachable Capture/Seed inventory authority must agree with each selection's
+historical snapshot, including protocol envelopes with no top-level inventory
+scalar. Fresh optional report facts must also agree. Immutable source buffers
+are executed through isolated Python and the unchanged managed runner.
+Nested loaders are admitted only with the fixed loader code and exact captured
+closure bytes. ATTEMPT and terminal byte streams remain separate. Primary
+child errors survive additional closing failures; no recovery path restores
+usable components or PASS after failure.
+
+Parent local execution on 2026-11-05 passes:
+
+- Twelve maintained pure methods, with six source hashes closed and no drift.
+  They include three in-process synthetic bootstrap controls: nested loading
+  with inner/outer traces, rejection of an unapproved custom loader, and
+  rejection of altered nested bytes. No subprocess, real gate or target runs
+  in this pure suite. Caller command injection, bad hashes, aliases, stale or
+  malformed child evidence, historical promotion, late drift and intended
+  receipt substitution also reject.
+- Five actual CLI admission controls: unknown route, extra command field,
+  wrong receipt hash, Native/Reference alias, and a forged current-E9 inventory
+  selection over actual nested-E8 O2-LTO inputs. All reject with the expected
+  diagnostic before creating the requested output directory.
+- Eight actual CM3 child gates: five ordinary optimization modes, direct
+  O2-LTO, direct Os-LTO, and archive O2-LTO. All execute anew and reproduce the
+  authenticated complete root/protocol/twin evidence. O2-LTO direct authenticates
+  earlier controls without rerunning them; Os-LTO and archive each execute
+  their fresh 32 transport plus two coherent canonical controls. Eight E8
+  components remain historical; none is current-E9 eligible.
+- One actual current-E9 CM0/O2 direct replay. Its Native and Reference captures
+  are rebuilt afresh: fourteen TUs, four links and 152 successful tool commands
+  (73 native, 79 reference, including inspections/provenance). Three outer
+  Python invocations drive the two producers and unchanged join. The new join
+  closes eight bodies and three mechanisms. The subsequent dispatcher replay
+  is current-E9 eligible, not an old capture with a new label.
+- Separate independent parent audits rehash complete output memberships and
+  watched inputs, physical identities, terminal command/stream bindings and
+  immutable source execution records. They independently map final ELF32
+  PT_LOAD bytes to all 48 CM3 and eight CM0 body hashes. The CM3 run closes
+  3,195 artifacts plus manifest, 23,925 inputs and 520 execution records; CM0
+  closes 236 artifacts plus manifest, 2,439 inputs and 51 records.
+
+Every actual dispatcher result retains all 2,774 canonical keys (730 object,
+2,044 final), the ordered missing-work queue and all 26 backlog records.
+Current and historical component references never replace missing whole-cell
+requirements. Full API/ABI, source/IR and whole-object/kernel semantics,
+CPU/board execution, hosted exact-SHA CI and global freeze remain unproved.
+Required-cell credit is the literal integer zero.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/freeze_replay.py` | `142BDDE647122DB2D66EF66E4C44A33ECEAA9292FFE304EF3C7CBCC740283275` |
+| `tools/fixtures/freeze_cohorts/REPLAY_CONTRACT.md` | `4F386EF0AFC933064C4179AB7EB07EA33C4534153DA663B0BC0D48D281F15C9B` |
+| `tools/fixtures/freeze_cohorts/test_replay.py` | `E8B5C793D22AE9300C59BF4FCC14E548EEFEF0D85AE562A3118B9AF4DA5AB459` |
+| `%TEMP%/freeze-replay-pure-parent-20261105-e3/results.json` | `2C49E57FA395E8ED67F834F6936C48F019B3E8F07049C9BFB150BDA81C6BFB34` |
+| `C:/fz-freeze-replay-admission-20261105-e2/results.json` | `1BD239BC3D8A89936DDCA322B7EFAE1A765980AB2EED80E0AA60AAFB907390A7` |
+| `C:/fz-freeze-replay-inputs-20261105-e1/cm3.json` | `52A137EE8645BBD9FC210522689FF08ECC16AF688EC00628E85893EC99438446` |
+| `C:/fz-freeze-replay-cm3-20261105-e2/results.json` | `92C405B738308E9562F830DA5B470927F45006B9FDAC15866B21A066E9297E62` |
+| `C:/fz-freeze-replay-cm3-20261105-e2/artifacts.json` | `12447770F83169DD3D298E0212D434BFD04D1DF1DEB19EDFD98C72ED2F075B82` |
+| `C:/fz-freeze-replay-inputs-20261105-e1/cm3-independent-audit-e1.json` | `009A5D0AF22811499A49781950B49BF4AFB8B5302E417A35A15363ED21194062` |
+| `C:/fz-replay-refresh-cm0-o2-20261105-e2/results.json` | `F02DA67EC091242806972640B91EDE1D5D936DEB5951332865148F8E9AAA3A70` |
+| `C:/fz-freeze-replay-inputs-20261105-e1/cm0-current.json` | `39E08F24184D31883E5F85234C191060F680E2C76F0C40048F93B84649610CB7` |
+| `C:/fz-freeze-replay-cm0-current-20261105-e1/results.json` | `DFD89424D3C0EA93C35CB2C778F64A8617F5401FECBC37127181611107AAE773` |
+| `C:/fz-freeze-replay-cm0-current-20261105-e1/artifacts.json` | `F2ED47D1DCC4FB71F55A6636A9B72ED0BE671F2E1E86C38DD4F95A0CC9AB5ECF` |
+| `C:/fz-freeze-replay-inputs-20261105-e1/cm0-current-independent-audit-e1.json` | `984FA3E00CB539BDECA62673D87EE7912689CF4C8CD16F1C9E6F65C73CCB5417` |
+
+Historical attempts remain intact. The original broad smoke refuses before
+output because 25 old ordinary CM0/CM4/CM7 routes bind a live helper Original
+that has changed; the frozen gates also require that Original hash. Do not
+virtualize historical originals or weaken those readers. One route, CM0/O2,
+is refreshed above; the other 24 require fresh producer captures and joins.
+The first actual CM3 dispatcher attempt remains FAIL for the nested-loader
+conflict. Pure worker E3 remains FAIL for fresh-report fingerprint promotion;
+parent E1 remains FAIL because an overlapping test-source edit tripped source
+closing despite passing methods. The final frozen source passes the fresh
+runs above. The independent audit's first root-level receipt write was refused
+by Windows permissions after read-only checks; its successful receipt uses
+the external inputs directory and never modifies sealed proof trees.
+
+Next work is the remaining 24 current ordinary routes, then missing
+source-group/cohort/mode/final/archive proof adapters and composition with
+full ABI/vector/negative-link obligations. Nine successful replay routes do
+not satisfy the complete 33-route or 27-group roadmap. Production, pinned
+reference, existing helper pins, default matrix and protected unrelated WIP
+are unchanged. Hardware qualification remains pending.

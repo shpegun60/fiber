@@ -2986,3 +2986,43 @@ differences, not full API/ABI, whole-object/kernel or source/IR equivalence,
 general archive/weak-alias behavior, other modes/cohorts, CPU/board execution,
 hosted CI or global freeze. Required-cell credit stays typed integer zero;
 production, frozen helpers and default matrix are unchanged.
+
+## Executing Freeze Replay Dispatcher
+
+`tools/freeze_replay.py` now executes the existing unchanged gates through a
+closed 33-route catalog, instead of treating their old PASS labels as new
+proof. It authenticates current and historical inventories independently,
+closes producer/prior-join artifacts and inputs before creating output, and
+executes fixed source buffers with isolated Python and the managed runner.
+Caller-selected commands, modules, helper pins and unknown routes reject.
+
+Local parent qualification on 2026-11-05 covers nine routes in two actual runs:
+eight retained CM3 E8 routes (`O0`, `Og`, `O2`, `Os`, `O3`, direct O2-LTO,
+direct Os-LTO and archive O2-LTO), plus a freshly compiled current-E9 CM0/O2
+direct pair. Every child gate passes anew. The independent parent audit
+rehashes 3,195 CM3 output artifacts and 23,925 watched inputs, binds 520 source
+execution records, and reads all 48 final root bodies directly from ELF
+PT_LOAD bytes. The CM0 replay closes 236 artifacts, 2,439 inputs, 51 source
+records and eight raw final bodies. No target image executes.
+
+The current CM0 pair is not a relabeled historical capture: fourteen TUs,
+four final links and 152 native/reference tool commands run afresh against
+the pinned reference. Its one component is current-E9 eligible. All eight
+CM3 components remain historical E8 evidence, not current-E9 proof.
+
+Twelve maintained pure methods pass, including nested-loader positive and
+two rejection controls, same-buffer trace admission, fresh-report source
+identity, child failure, late drift and seal failures. Five actual CLI
+admission negatives also pass before output creation. Exact receipts and
+failure history are in
+`PORT_ARCHITECTURE_AUDIT.md#executing-freeze-replay-dispatcher`.
+
+Both actual runs retain all 2,774 canonical keys and 26 backlog records.
+Root transport, canonical mechanisms and within-side twins remain partial
+components: full API/ABI, source/IR, CPU/board, hosted CI and global freeze
+are not established; required-cell credit stays integer zero. Registering
+33 routes is not an execution claim for all 33. The other 24 ordinary cold
+routes still require refreshed captures/joins after their historical live
+helper originals drifted. Keep that refusal, rather than virtualizing old
+originals or weakening the existing gates. Production, fixed helpers and
+default matrix are unchanged.
