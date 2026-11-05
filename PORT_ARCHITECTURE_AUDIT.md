@@ -7868,3 +7868,80 @@ ABI/cohort/storage links remain future controls. Full ABI, source/IR semantics,
 archive/other cohort/mode, CPU/board, hosted exact-SHA CI and global credits stay
 unproved, with required-cell counters typed zero. No production source, frozen
 helper, public/port ABI, default matrix or protected unrelated WIP was changed.
+
+## CM3 LTO Strong-Panic Link Composition
+
+The opt-in `tools/fixtures/cm3_lto_override/` admits the exact E3 fresh-link
+capture above. It reuses authenticated immutable readers/checkers, not old
+default-only PASS records, and executes no compiler, linker, emulator or target.
+The scope remains native CM3 O2-lto direct linkage, ten represented TUs with
+nine slim IR objects and one explicit non-LTO startup.
+
+Final local E5 on 2026-11-05 passes:
+
+- Both own-machine twins independently pass all 26 fixed definition roles,
+  seven original named ABS32/zero-addend pointer bindings, complete vectors,
+  machine/final target attributes, soft ABI flags and unique section origins.
+- Both complete actual .res files retain nine ordered providers and 108 rows.
+  All eight panic resolution roles are exact: original fallback PREEMPTED_IR,
+  added application PREVAILING_DEF_IRONLY, six referencing providers RESOLVED_IR.
+  Original weak and added strong IR symbol records are independently checked.
+- Every named machine panic relocation is checked, not just calls in three
+  assembly roots: 153 BL sites across 43 functions per twin. Each has an exact
+  original target, addend -4, containing Thumb instruction and full kept caller
+  section/map origin. Applied instruction bits and disassembly independently
+  target the unique mapped strong panic definition. The emitted final has exact
+  matching REL metadata; the ordinary final correctly has no residual REL.
+- The frozen native transport/canonical composition runs only on the emitted
+  twin: three complete first-start/SVC/PendSV bodies, 492 bytes, 170 instructions,
+  13 references and zero tail NOPs. Both genuine load images compare identically.
+  Ordinary canonical evidence is absent; byte equality is not relabeled as an
+  independent ordinary-machine/root-REL proof.
+- All 170 fresh captured-source copies bind their original buffered bytes and
+  exact ordered catalog. The 28 actual command records bind argv, cwd, statuses,
+  exits, errors, streams, complete catalog and environment. Each inspection
+  sidecar equals its actual command stdout. Only explicit startup may physically
+  alias across twin roles. Both isolated duplicate-handler controls retain exact
+  added/original providers, intended diagnostic, exit 1 and absent final image.
+- Closing checks cover 3364 watched hashes, physical identities, full inherited
+  trees and 190 output artifacts plus the manifest. Eighteen pure synthetic
+  call-audit methods pass, including non-root C callers, raw-bit/addend/target
+  mutations, unsupported transfers, missing/extra REL, metadata types, aliases,
+  complete map extents, mappings, purity and nonclaim preservation. Four inherited
+  failure-record and six recorder methods also pass in this continuation.
+- Seven guarded real CLI refusals pass: wrong receipt/manifest hashes, output
+  overlap with repository/control-capture/base-capture/seed roots, and existing
+  output. Every case has the intended diagnostic before any output write; the
+  existing output remains unchanged. A Python audit guard rejects writes,
+  descendant/tool processes, protected WIP reads and qualified parser execution.
+  These admission-negative runs do not replace the separate positive ELF replay
+  and do not claim semantic mutation coverage of captured command/source rows.
+
+Earlier E1 failed before mkdir on a dependency Path/string comparison; E2 failed
+closed because the emitted-only native adapter was incorrectly applied to the
+ordinary ELF. E3 fixes those paths. E4 additionally binds every captured-source
+row. Review then identifies missing explicit inspection-stdout equality and
+cross-twin alias checks; E5 adds both and recomputes the complete result. No
+earlier receipt is relabeled as the final qualification source.
+
+| Evidence Or Source | SHA256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_override/calls.py` | `B7D66EFEEFB1AF48F236D80F6E03A690B73369A451C39A061BF5B75B6AEF890B` |
+| `tools/fixtures/cm3_lto_override/witness.py` | `6B43C4BABE7093B06F9694490A3CFF522D599EDC1829A550D9CA3AADC680ACA9` |
+| `tools/fixtures/cm3_lto_override/test_calls.py` | `75C81F0777FBC1CED215A1CF2B11A476C30AE89901DFFF653801A4C0340B7816` |
+| `tools/fixtures/cm3_lto_override/CONTRACT.md` | `D7A8BBDB000412CB7058919EB3CA95C9D7BCE591FC3BEAE9B26EE6B95AD74E3E` |
+| `tools/fixtures/cm3_lto_override/test_witness.py` | `986157BF7161E29BCAB605B7EB73EF7C882978EADDB855BED328B8D55B4EE2DC` |
+| `%TEMP%/cm3-lto-override-calls-pure-20261105-e1/results.json` | `EF826B5536614575A53D89DB7AB2D47D2432D3B15BCECFACF5A5D07CC715E220` |
+| `%TEMP%/cm3-lto-override-refusals-20261105-e1/results.json` | `B52C02AA1AD455C2350D223FAC800E3241AC09B3B2A69E9CBDEC1236EC748BFD` |
+| `C:/fz-cm3-lto-override-witness-20261105-e5/results.json` | `5431E8BF0DB4C54228FCD8E8AABEA8A87E382EE82802611FD7E1B031C3F7EBEF` |
+| `C:/fz-cm3-lto-override-witness-20261105-e5/artifacts.json` | `7F9EB6C3ACE3B5FF555251CBEE040C2099F08CFDE8D201F15F1DBDFBA6A93E66` |
+
+Status is `CM3-LTO-OVERRIDE-LINK-PASS-NOT-FULL-ABI-QUALIFIED`. It closes bounded
+strong-panic selection/applied-call and duplicate-handler link evidence only.
+Full callable ABI, C-panic body/IR/source-to-machine semantics, original-TU machine
+ownership, all unrelocated transfers and whole-object/kernel behavior are not
+inferred. Valid-but-mismatched ABI/cohort/storage links, archive extraction,
+other modes/cohorts, fresh reference parity, CPU/board, hosted exact-SHA CI and
+global freeze remain independent gates. Required-cell counters stay typed zero.
+No production source, frozen helper, public/port ABI, default matrix or protected
+unrelated WIP was changed.

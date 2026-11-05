@@ -2703,3 +2703,36 @@ Final mapped definitions/call targets, new actual root protocols/twins, identity
 mismatch controls and complete callable ABI remain pending. Archive, other
 cohort/mode, CPU/board, hosted exact-SHA CI and global credits remain unproved.
 Production code, frozen readers/checkers and the default matrix are unchanged.
+
+## CM3 LTO Strong-Panic Link Composition
+
+`tools/fixtures/cm3_lto_override/` independently recomputes the fresh ten-TU
+override cohort instead of extending the old default-only result by label.
+Both actual O2-lto direct-link twins pass the fixed 26-definition audit, seven
+pointer bindings, full vector/attribute checks, all 108 resolution rows, and
+153 named machine panic calls from 43 functions. Original REL addends, whole
+caller-section map origins and actual applied BL targets are checked; only
+the emit-relocs image additionally requires matching final REL records.
+
+The unchanged native transport/canonical checker runs on the emitted twin's
+three complete first-start/SVC/PendSV roots. It intentionally cannot consume
+an ordinary ELF without final REL records. The ordinary twin has independent
+static/resolution/call evidence and identical structured load-image bytes,
+not an invented independent canonical/root-transport result.
+
+Final local E5 on 2026-11-05 passes. Eighteen pure synthetic call-audit methods
+also pass, including C callers beyond the three assembly roots, wrong raw BL
+targets/addends, map origins, REL metadata/membership, mappings and aliases.
+The complete 170 captured-source rows, 28 command records, inspection stdout,
+environment and both exact duplicate-handler diagnostics are authenticated.
+Cross-twin physical aliases are forbidden except the explicit shared startup.
+Seven guarded CLI refusal tests also pass with intended diagnostics and no
+unexpected output writes. They cover hash/path admission, not ELF semantics.
+Exact sources, receipts and earlier replay limitations are recorded in
+`PORT_ARCHITECTURE_AUDIT.md`, "CM3 LTO Strong-Panic Link Composition".
+
+This closes bounded override-selection/call-target and duplicate-link evidence,
+not full callable ABI, panic-body/IR semantics, original-TU machine ownership,
+new native/reference parity, archive extraction, other modes/cohorts, hardware,
+hosted exact-SHA CI or global freeze. Required-cell credit remains integer zero.
+No production, frozen helper, public/port ABI or default-matrix change is made.
