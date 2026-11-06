@@ -3547,3 +3547,44 @@ This closes one bounded software cell, not full C/IR/ABI/instruction semantics,
 arbitrary callback safety, FreeRTOS instruction identity, archive qualification,
 hosted CI, global software freeze or hardware qualification. Runtime C/assembly,
 the public5/port8 boundary, frozen helpers and pinned FreeRTOS are unchanged.
+
+## Current CM3 Os-LTO Roots And Bindings
+
+Current E9 native/reference `-Os` captures now have measured replay evidence;
+no O2 result or receipt projection supplies Os generated-code credit.
+The additive `tools/fixtures/cm3_os_lto_final_cell/runner.py` provides two
+explicit stages, both with zero whole-cell credit:
+
+- `--stage roots`: six complete start/SVC/PendSV bodies, own saved machines,
+  final ELFs/maps, declared differences and fresh 32 transport plus two
+  coherent canonical controls. The protected E2 run closes 5,793 input
+  bindings and 777 output files, including the manifest.
+- `--stage bindings` (default): both native ordinary/emitted twins, public5,
+  forward8, selected reverse providers/references, exact identities, pointer
+  tables, strong vectors and cold anchor reads. E2 closes 5,018 input bindings
+  and 603 output files. Both twins retain 30 mandatory definitions and five
+  selected reverse references; selected applied REL counts are zero/ten.
+
+Os context initialization uses a T32 literal load into r8 and a later byte1
+ABI-anchor read, distinct from the earlier byte0 cohort read. The Os-only
+matcher binds raw instructions, section-relative literal/addend, final placement
+and six intervening named calls. It rejects possible r8 writes and unsupported
+forms; AAPCS callee-save preservation remains an explicit assumption. The
+frozen O2 predicates, runtime and assembly are not widened or changed.
+
+Forty focused synthetic methods pass: 25 pure ABI/binding tests and 15
+orchestration/failure tests. The new entrypoint protects flushed summary output
+as well as replay and seal failures; it does not invoke the frozen frontend's
+CLI, whose post-PASS stdout handling was outside its protected block.
+
+Both stages authenticate current Os recipes (57 native / 37 reference
+commands) and close their actual artifacts without executing a compiler,
+linker, target or board. Independent byte/accounting review is distinct from
+predicate execution. Exact identities are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-roots-and-bindings`.
+
+The Os cell is not complete: typed ABI/link controls, complete current-slot
+isolation, common/selected-port compiler-stress proofs and normal-image census
+remain to be composed in this same fixture. All 2,774 inventory keys and 26
+backlog records remain authoritative; these two zero-credit proofs do not
+change coverage or imply CI, hardware or global-freeze qualification.

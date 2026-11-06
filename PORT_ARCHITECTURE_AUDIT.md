@@ -10125,3 +10125,99 @@ callee safety, source-to-machine ownership, another mode/profile/archive,
 hosted CI, global freeze or hardware qualification follows from this cell.
 The next integration work is to extend actual final-LTO cell coverage, not
 to count existing zero-credit components as completed cells automatically.
+
+## Current CM3 Os-LTO Roots And Bindings
+
+The next mode now has actual current-source evidence, using the E3 native and
+reference Os captures and independent E9 inventory. The ordinary O2 Seeds
+remain source-copy authority only. Current capture records retain the sole
+O2-to-Os optimization transformation and genuine saved workers/final ELFs.
+No frozen helper globals, O2 result modes or historical receipts are rewritten.
+
+`tools/fixtures/cm3_os_lto_final_cell/` is the single staged home for the
+remaining Os cell work. Its initial two stages are not full-cell qualifiers:
+
+| Stage | Actual Terminal Evidence |
+| --- | --- |
+| `roots` | Protected E2 PASS, six complete bodies / three mechanisms, own-side twins, declared rationales, fresh 32 transport and two coherent canonical controls |
+| `bindings` | E2 PASS, both own native machine/final twins, 30 mandatory definitions, five selected reverse references, two cold reads and three original startup vector references per twin |
+
+Both constructors reconstruct the full 57 native / 37 reference capture
+recipes and bind the same current source fingerprint, capture producer and
+ordinary Seeds. The roots run closes 5,793 input hashes and 777 output files;
+it captures 587 source buffers and executes 61 reader-source records. The
+binding run closes 5,018 input hashes/physical identities and 603 output files.
+Its one immutable parser graph has 587 source buffers / 600 input paths and
+52 executed-source records. These provenance counts are not test counts.
+
+The native Os binding model calls only explicit mode-neutral low-level
+predicates and the unchanged Bindings class, not their O2 top-level audit or
+inspect entrypoints. Original and final symbols/sections/RELs, read-only pointer
+tables, ABI/private/storage identities, BSS slot geometry and strong vector
+slots are checked independently on ordinary and emitted-relocation twins.
+Selected applied binding counts are zero and ten respectively; load images
+must agree. Typed declarations, all consumers and whole-body semantics are not
+inferred from these selected-site bindings.
+
+Os context initialization retains the cohort and ABI anchors through r8.
+The initial byte0 read is not the later byte1 runtime ABI read. The new narrow
+T32 alternative binds the positive PC-relative literal, raw LDRB instruction,
+section ABS32/addend, final byte address and contiguous entry-to-read bytes.
+Possible r8 writes and unsupported encodings reject. Six intervening calls
+require named original RELs, map-bound targets and emitted applied RELs where
+applicable. AAPCS callee-save behavior remains an explicit assumption; callee
+semantics and dominance/control flow are not proved.
+
+The first actual binding attempt E1 failed because the new matcher expected
+width-suffixed `ldr.w`/`ldrb.w` mnemonics, while the frozen reader normalizes
+them to `ldr`/`ldrb`. E2 fixes only that interface mismatch; raw 32-bit opcode,
+register, literal, REL and preservation checks remain. The synthetic fixture
+now models actual normalization and rejects false width-suffixed records.
+E1 remains a retained FAIL with zero credit, not a relabeled success.
+
+Twenty-five pure ABI/binding methods and fifteen orchestration methods pass.
+They cover typed counters/nonpromotion, original/final site mutations, r8
+clobbers, cohort-versus-anchor reads, call authority, exact pin authentication,
+O2 rejection, process prohibition and late failure revocation. The new CLI
+keeps flushed summary printing inside its protected failure path, including
+the roots stage. Legacy roots reports acquire ClosingErrors before recovery;
+a transient FAIL-write fault cannot skip retries. The frozen frontend remains
+unchanged and is not used as the CLI here.
+
+Independent E2 bindings review rehashes all 603 output files, all 5,018 inputs
+and physical identities, five original trees, recipe/journal records, source
+pins and leaf accounting with zero drift. This is accounting/byte-closure
+review, not independent execution of ELF/protocol/slot predicates. The earlier
+current roots E1 review similarly checks its 772 outputs and 5,783 inputs;
+that historical entrypoint is distinct from the new protected E2 run.
+The protected E2 roots review independently checks all 777 outputs, 5,793
+input hashes, five original trees, 57/37 recipes, six roots and 32/2 control
+records with zero closing drift. Historical physical identities are not fully
+persisted by the frozen roots interface; the review checks current identities,
+not an invented historical physical-identity record.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_os_lto_final_cell/CONTRACT.md` | `7F6FA323F1DC117541B7DFCB7CAE4844252E7C3FD19FCF46C8CF8174E4020057` |
+| `tools/fixtures/cm3_os_lto_final_cell/abi.py` | `D0471869CA413901AB51016BDA662683FAED60231FB87CD9F9BA14BFD121A73E` |
+| `tools/fixtures/cm3_os_lto_final_cell/runner.py` | `1B4BFC82D20398FA4F128B368104360C888C27DDBF5104ED74A80819F4371716` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_abi.py` | `3DE1A1AC6199AC5F8E0ADAB02827A1964CF40C387EA0785DB0B785E8E9C9613D` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_runner.py` | `7323343DCE90524FE9184CC1E282191A9E1C402695F6F061FDEE70E4A3221E0C` |
+| `%TEMP%/cm3-os-lto-final-cell-parent-abi-pure-20261106-e1/results.json` | `C0135ECDED4B1050FDCC475FB2C8633B8B6D7F15E467DEA4D896E7D0FC5DA893` |
+| `%TEMP%/cm3-os-lto-bindings-20261106-e2/results.json` | `369526F5CE2DEA3B1A496AEF5437A8EF25FBB0F131D38C71E5696509CE0D12A9` |
+| Binding E2 `artifacts.json` | `BB08641ABE9E715CFA4C9FADEA0DABAF6032867C152D62A976C3710C8985EA88` |
+| `%TEMP%/cm3-current-os-protected-replay-20261106-e2/results.json` | `F74E17BE8B55C0359F807E968ED7D7EFC42FA495F2E2AF37A4ED78B69EF2A57A` |
+| Protected roots E2 `artifacts.json` | `0F91EF537CE6E138297F3A1A152E532789CD586E37C4328E523284BB45ECD858` |
+| `%TEMP%/cm3-os-lto-bindings-independent-review-20261106-e2/results.json` | `96EE8E5D230F341ED9F18FBB28AB9518400562894CD84AC9D0CCBF22B2C413F8` |
+| `%TEMP%/cm3-current-os-replay-independent-review-20261106-e1/results.json` | `EC6343610E75D55699A9E8A702DC497005AC370A3C50861091F0558B6E015AA5` |
+| `%TEMP%/cm3-current-os-protected-independent-review-20261106-e2/results.json` | `8C2884023959AFF4E53FC7A33E944E6B8BDB5312411D64880C6736F1C9293E79` |
+
+Compiler/linker/target executions are zero in both replay stages. Runtime
+C/ASM, public5/port8, qualified helpers and pinned FreeRTOS remain unchanged.
+Both results have literal zero required-cell credit. The full 2,774-key plan
+and 26-entry backlog are not reduced by these components. The next executable
+batch must provide Os typed ABI/link controls, complete slot isolation,
+common/selected-port compiler-stress evidence and the normal-original census
+before a same-fixture composer may credit the Os cell. No full semantic ABI,
+source/IR/machine equivalence, arbitrary callback safety, archive/hosted CI,
+global freeze or hardware qualification is claimed.
