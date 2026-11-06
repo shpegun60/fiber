@@ -10374,11 +10374,26 @@ the corrected 12/12 suites pass without runtime-phase source changes.
 | `%TEMP%/cm3-os-isolation-build-pure-parent-20261106-e2/results.json` | `46EB3EE2ADC5CA06F117438117B3F288F32D5589878C852475FC68FFDDAC9CEE` |
 | `%TEMP%/cm3-os-lto-attributes-phase-parent-20261106-e1/results.json` | `48005AE4FAC8B9ACCB12082A4BC1BEC7808A723A4975E040810828E703F9BEF0` |
 | `%TEMP%/cm3-os-batch-independent-review-20261106-e2/results.json` (earlier slot/support accounting) | `4F1B71F3FD81C24CE928C839E6FF2A70FA9D1E9F9BDDE9142B7B608102BFCFE8` |
+| `%TEMP%/cm3-os-abi-independent-review-20261106-e2/results-r2.json` | `6F0DCEB582472EC6D0FED65D6652608E0409D18EC26CA1887E2378F576EB11DC` |
+| ABI E2 independent `audit.py` | `45335DA6AEDBE57BAA54000CE6C03FE4185D812C16CD6FD35F79A8B30925676D` |
 
 The earlier slot/support independent review confirms 603 mapped artifacts /
 604 total files, 5,627 inputs and identities, 598 source copies, 23 bootstrap
 and 54 executed-source bindings with zero drift. It verifies accounting and
 recorded leaf counts, not independent slot predicate execution.
+
+Independent ABI E2 accounting review closes every mapped output and the
+manifest (1,054 files), all 5,862 original inputs/physical identities, 41
+journals and 82 raw streams with zero drift. It binds 600 source copies, 25
+bootstrap and 54 executed-source records, nine providers, twelve canonical
+declarations, five intended link and three undeclared compile records.
+Reader accounting distinguishes 662 buffered input paths from 75 actual
+unique read bindings. Its initial assumption about that relationship fails;
+the first reviewer receipt is retained. The corrected r2 review changes no
+production source, artifact or predicate. Positive raw ELF byte identity,
+the single recorded immutable graph and load-image comparison are bound but
+not independently recomputed. No compiler, ELF predicate, target or board is
+executed by this review, and it grants no additional credit.
 
 The Os cell still has zero credit: the remaining build phases and actual
 machine/worker proofs, selected-port policy, normal-original census and
