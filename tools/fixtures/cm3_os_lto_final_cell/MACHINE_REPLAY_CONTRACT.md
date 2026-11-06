@@ -47,6 +47,23 @@ readable PT_LOAD owner, matching section/load offsets and raw bytes, strong
 Reset/SVC/PendSV symbol values in slots 1/11/14, and the matching ELF entry. This
 does not prove active hardware vector routing or the complete transfer protocols.
 
+## Composition And Worker Options
+
+`machine_replay.py` binds twelve common machine roles and eight port machine
+roles, plus eight disassemblies, to the pending catalog's exact path/hash pairs.
+The parser must consume those same bytes. Both aggregate and saved-worker common
+dispositions must agree, and each intended control must fail the unchanged clean
+predicate. Pending attribution is propagated, never erased by composition.
+This composer does not establish the enclosing immutable scope or worker origin.
+
+`common_workers.py` replays the raw common WPA/LTRANS chain using a private helper
+view. Saved arguments and compiler-reported invocations must have sole `-Os`,
+the soft CM3 target and all six uncancelled hostile flags. Specs, ordered IR
+responses, intermediate, partition and assembler output remain bound. No helper
+global is modified. The caller still owns source admission, physical identity
+and the binding to the original batch journal. Compiler-reported execution is
+not an OS process trace; worker facts do not establish machine effects.
+
 ## Scope
 
 Pure tests use synthetic bytes and do not execute a compiler, a real ELF parser,
