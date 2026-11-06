@@ -3061,3 +3061,31 @@ hardware qualification or global freeze. Required-cell credit remains literal
 integer zero. The remaining fresh ordinary captures and the broader profile,
 LTO/archive and cell-composition obligations stay open. Runtime C/assembly,
 public API, fixed producers/gates, reference pin and default matrix are unchanged.
+
+## Current Ordinary Direct Baseline
+
+The 2026-11-06 parent run completes the remaining fresh ordinary captures for
+CM0, CM0PLUS, CM0PLUSVTOR, CM3, CM4 and CM7 at O0, Og, O2, Os and O3. A fresh
+29-route request executes 391 translation units, 116 final links, 406 object
+checkpoints, 4,288 tool commands and 87 outer Python stages. It excludes the
+already refreshed current-E9 CM0/O2 pair, rather than rebuilding or relabeling
+historical evidence. The unchanged joins close 202 final bodies and 87 transfer
+mechanisms. Capture input/output closure and an independent raw-ELF audit pass.
+
+An explicit catalog combines those 29 pairs with that current CM0/O2 pair.
+The unchanged replay dispatcher executes all thirty gates anew. Its independent
+audit confirms thirty current components, zero historical components, 210 raw
+final bodies, 4,413 output artifacts and 56,539 watched inputs. All thirty use
+the same E9 source inventory and pinned FreeRTOS reference. Detailed hashes are
+in `PORT_ARCHITECTURE_AUDIT.md#current-ordinary-direct-baseline`.
+
+This closes the pending fresh-capture/replay work for these thirty ordinary
+direct routes only. It is complete bounded start/restore/PendSV mechanism
+comparison with declared differences and own-side twin checks, not a claim
+that every instruction or function equals FreeRTOS. Full typed ABI, vector and
+negative-link cell composition, broader feature profiles, final LTO/archive
+coverage, hosted CI and hardware qualification remain separate requirements.
+All 2,774 canonical keys and 26 backlog records remain visible; required-cell
+credit is still integer zero and global freeze remains false. No production
+C/assembly, public API, fixed helper, reference pin or default-matrix change
+is part of this checkpoint.

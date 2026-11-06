@@ -8665,3 +8665,47 @@ manifest `640C2CAC37DFC0A10F5A6E8538E7A9F81C7967DEEDEAA4B2924A15CAA1600CEA`
 and source fingerprint
 `69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
 FreeRTOS remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+## Current Ordinary Direct Baseline
+
+The 2026-11-06 actual fresh capture requests the twenty-nine ordinary direct
+routes other than the already current CM0/O2 pair. Together they cover CM0,
+CM0PLUS, CM0PLUSVTOR, CM3, CM4 and CM7 at O0, Og, O2, Os and O3. The actual
+29-route batch terminates successfully with 391 TUs, 116 final links, 406 object
+checkpoints, 4,288 tool commands and 87 outer Python invocations. Its unchanged
+joins close 202 final bodies and 87 mechanisms. An independent audit rehashes
+50,519 artifacts, 50,750 watched inputs and 4,439 source-execution records,
+binds actual commands/dependencies, and extracts all final body ranges from
+ELF PT_LOAD bytes.
+
+The explicit thirty-route catalog adds only the previously refreshed current-E9
+CM0/O2 pair from `C:/fz-replay-refresh-cm0-o2-20261105-e2`. It does not promote
+historical E8 CM3 evidence. All catalog selections bind the identical E9 source
+fingerprint `69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+The unchanged dispatcher then executes all thirty fixed gates anew and closes
+successfully. A second independent audit confirms thirty current components,
+zero historical components, 210 raw final bodies, 4,413 artifacts, 56,539 watched
+inputs and 1,590 source-execution records. The existing 2,774-key inventory and
+all 26 backlog records remain intact.
+
+| Local evidence | SHA-256 |
+| --- | --- |
+| `C:/fz-freeze-capture-inputs-20261105-e1/ordinary29.json` | `A8AB5675CAB5D3F0E65D6259FE9B0A61A0C71E0808D95B380735CDB8D56F6D1C` |
+| `C:/fz-freeze-capture-ordinary29-20261106-e1/results.json` | `665347E5A4F1791D1FED359FC02C81B4802B2242F9DFB051B6A494F5B14C2C31` |
+| `C:/fz-freeze-capture-ordinary29-20261106-e1/artifacts.json` | `8104EE875E9F09BBC1E33390975173842EA15773F37F5B52495FDD1E9FFBB8F3` |
+| `C:/fz-freeze-capture-inputs-20261105-e1/ordinary29-independent-audit-20261106-e1.json` | `DD31064FF069EF0F150F0AB7BD186C05B6F454F1FDC9D283E428F826A9CAE140` |
+| `C:/fz-freeze-capture-inputs-20261105-e1/ordinary30-current.json` | `EB7864CBDEC4257BBBE13830BE8757E508512BB47E4185BBD5FE473473857C4B` |
+| `C:/fz-freeze-replay-ordinary30-current-20261106-e1/results.json` | `DFF6A68611361EF83F905C09B0F8807843414FB42879A4E7FEE5C7AC252693FB` |
+| `C:/fz-freeze-replay-ordinary30-current-20261106-e1/artifacts.json` | `A335839ED169A485254AA489E0653537EAE6A0104640C7A0FF8C3205F937157F` |
+| `C:/fz-freeze-replay-inputs-20261105-e1/ordinary30-current-independent-audit-20261106-e1.json` | `78DF45AA037D3C3176CBDDEEC289325688E1A83753FB82760567B28A17ACF4AB` |
+
+This supersedes the earlier pending-fresh-ordinary-capture statement only for
+these thirty ordinary direct routes. The scope remains final root transport,
+three canonical transfer mechanisms and within-side twins, with the existing
+declared native/reference differences. Whole-cell typed ABI/vector/negative-link
+composition is not inferred from these component receipts. Required-cell credit
+stays typed integer zero; full semantic API/ABI, source/IR equivalence, broader
+profile/LTO/archive coverage, hosted CI, CPU/board execution and global freeze
+remain unproved or pending. Runtime code, fixed helpers, the five-operation
+public API/eight-operation port boundary, pinned reference and unrelated WIP
+are unchanged.
