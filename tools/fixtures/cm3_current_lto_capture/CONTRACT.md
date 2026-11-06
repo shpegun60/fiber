@@ -100,6 +100,27 @@ execution. Admission denial roots are fixed before output creation; later
 watched output paths do not make the output reject itself. Do not baseline the
 entire still-growing output tree as an immutable input tree.
 
+## One Provider Per Input Catalog Entry
+
+Successful fresh captures require exactly one `inputs.json.Files` binding per
+Original path. The inherited preparation and later twin comparison both append
+the pinned `tools/fixtures/classic_final_join/join.py` helper. Only that known
+pair may be reduced from two catalog rows to one, and only when both complete
+rows have exactly the same Original, Captured and Sha256 fields and values.
+Both rows must bind the admitted helper pin and the same authenticated captured
+bytes. Reject a conflicting row or any duplicate Original for another input,
+even when its digest happens to agree; do not apply general deduplication.
+
+Normalization metadata retains both unmodified raw helper rows, their original
+positions and the single retained binding, making the two-to-one correction
+explicit. Preserve source buffers, captured files, hashes and physical closing;
+catalog normalization grants no permission to merge distinct providers, change
+path identities or weaken input admission. Perform this producer-side correction
+before successful receipt/manifest sealing. Downstream root/protocol guards
+remain unchanged and receive a unique provider catalog, not a repaired view of
+a historical receipt. Existing E2 evidence stays intact; this contract makes no
+measured-success claim for the revised producer or its fresh captures.
+
 ## Actual Capture Requirements
 
 O2-lto uses the unchanged native/reference probe factory. Os-lto uses the pinned

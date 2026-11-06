@@ -3251,3 +3251,29 @@ replay, canonical native/reference protocol composition, complete provider/ABI
 controls and direct/archive whole-cell qualification remain separate gates.
 Historical E8 captures retain their original scope. Runtime C/assembly,
 public5/port8, the reference pin and default matrix are unchanged.
+
+## Current CM3 O2-LTO Mechanism Replay
+
+The 2026-11-06 follow-up fixes one capture catalog defect exposed by the
+unchanged native root witness: the prebound twin helper appeared twice with
+identical Original/Captured/Sha256 fields. The producer now admits only that
+specific pinned two-row repeat, retains both raw bindings and positions as
+metadata, and emits one input-provider row. Any conflicting or other duplicate
+rejects; the downstream root/protocol guards are not weakened. Forty-four
+maintained host methods pass, including the new duplicate-catalog controls.
+
+All four native/reference O2-lto/Os-lto captures were rebuilt with this producer
+in fresh E3 directories. The unchanged native and reference O2-LTO protocol
+witnesses then each pass three complete machine-to-final roots, sixteen actual
+ELF mutation controls and one coherent SVC-immediate canonical rejection. The
+unchanged six-body join recomputes the current two-sided root/protocol evidence
+and passes all three mechanisms with the existing difference rationales.
+The join authenticates its children's 32+2 controls; it does not rerun them.
+
+This closes the bounded current-source O2-LTO root/REL/origin and canonical
+mechanism replay, not an ABI/whole-cell qualification. Os-LTO replay admission,
+all mandatory provider/attribute controls, archive and broader-profile final
+LTO coverage, portable CI and hardware remain separate work. Exact E3 capture
+and O2 replay receipts, source pins and the superseded E2 catalog limitation are
+in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-catalog-and-o2-lto-replay`.
+No target execution or runtime C/assembly change occurs.

@@ -254,9 +254,34 @@ def probe_type(environment):
         def command(self, argv, label, *, cwd=None, timeout=120):
             return modules['commands'].command(self, api, argv, label, cwd=cwd, timeout=timeout)
 
+        def compare_twins(self):
+            super().compare_twins()
+            original, pin = BUFFER_PINS['binding']
+            helper = str(ROOT / original)
+            seen, positions, catalog, repeated = {}, {}, [], None
+            for index, row in enumerate(self.inputs):
+                need(type(row) is dict and set(row) == {'Original', 'Captured', 'Sha256'}
+                     and all(type(value) is str for value in row.values()), 'exact captured input catalog row')
+                prior = seen.get(row['Original'])
+                if prior is None:
+                    seen[row['Original']] = row
+                    positions[row['Original']] = index
+                    catalog.append(row)
+                else:
+                    need(repeated is None and row['Original'] == helper and row['Sha256'] == pin
+                         and row == prior, 'only the identical prebound twin-helper catalog repeat is admitted')
+                    repeated = copy.deepcopy(row)
+                    repeated_positions = [positions[row['Original']], index]
+            need(repeated is not None, 'one exact legacy twin-helper catalog repeat required')
+            self.inputs[:] = catalog
+            self.report['CoalescedTwinHelperInput'] = dict(repeated, RawRows=2, RetainedRows=1,
+                Positions=repeated_positions, RawBindings=[copy.deepcopy(repeated), copy.deepcopy(repeated)])
+
         def write_seal(self):
             if self.report.get('Status') == 'PASS':
                 require_capture(self.report, model, sealed=False)
+                need(len({row['Original'] for row in self.inputs}) == len(self.inputs),
+                     'unique captured-input providers before successful sealing')
                 authority = environment['Group']['Descriptor']
                 need(Path(self.report['SeedBuild']) == environment['Group']['Root']
                      and self.report['SeedReceiptSha256'] == authority['ReceiptSha256']

@@ -35,7 +35,7 @@ BUFFER_PINS = {
     "binding": ("tools/fixtures/classic_final_join/join.py",
                 "2785F72E5F86257A403141EB856BB8D49F0A9A6CF4D005CC858D8D2B60EBF013"),
 }
-EXPECTED_METHODS = 13
+EXPECTED_METHODS = 14
 COHORT = "cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default"
 SIDES = ("native", "reference")
 MODES = ("O2-lto", "Os-lto")
@@ -189,6 +189,7 @@ class Fixture:
 
     def __init__(self, root, side="native", mode="O2-lto"):
         self.root, self.events = root, []
+        self.twin_inputs = []
         self.constructor_buffers = {path: path.read_bytes() for path in (LOADER, PARSER_BINDING)}
         self.constructor_reads, self.constructor_hook = [], None
         self.args = arguments(root, side, mode)
@@ -276,6 +277,8 @@ class Fixture:
                 self.report.update(SeedBuild=str(seed.root), SeedReceiptSha256=args.native_receipt_sha256,
                     SeedArtifactsSha256=args.native_artifacts_sha256, SourceInventoryReceipt=str(seed.inventory))
                 self.tool_hashes = {}
+                self.inputs = []
+                self.compare_calls = 0
                 self.verify_calls = self.finish_calls = self.build_calls = 0
 
             def verify_tools(self):
@@ -284,6 +287,11 @@ class Fixture:
             def build(self):
                 self.build_calls += 1
                 fixture.events.append("build")
+
+            def compare_twins(self):
+                self.compare_calls += 1
+                fixture.events.append("compare_twins")
+                self.inputs.extend(copy.deepcopy(fixture.twin_inputs))
 
             def finish(self, error=None):
                 self.finish_calls += 1
@@ -634,6 +642,79 @@ class CaptureTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "hash|drift"):
                         probe.verify_tools()
 
+    def test_only_exact_prebound_twin_helper_repeat_is_coalesced(self):
+        for side in SIDES:
+            for mode in MODES:
+                with self.subTest(side=side, mode=mode), tempfile.TemporaryDirectory() as directory:
+                    f = Fixture(Path(directory), side, mode)
+                    probe, _ = f.probe()
+                    known = dict(Original=str(PARSER_BINDING),
+                        Captured=str(probe.output / "input-bytes" / (BUFFER_PINS["binding"][1] + "-join.py")),
+                        Sha256=BUFFER_PINS["binding"][1])
+                    first = dict(Original=str(f.header), Captured=str(probe.output / "first.h"), Sha256="A" * 64)
+                    last = dict(Original=str(f.root / "last.h"),
+                                Captured=str(probe.output / "last.h"), Sha256="B" * 64)
+                    probe.inputs[:] = [first, known, last]
+                    catalog = probe.inputs
+                    f.twin_inputs = [copy.deepcopy(known)]
+                    probe.compare_twins()
+                    self.assertEqual(probe.compare_calls, 1)
+                    self.assertEqual(f.events, ["compare_twins"])
+                    self.assertIs(probe.inputs, catalog)
+                    self.assertEqual(probe.inputs, [first, known, last])
+                    self.assertIs(probe.inputs[1], known)
+                    self.assertEqual(probe.report["CoalescedTwinHelperInput"],
+                                     dict(known, RawRows=2, RetainedRows=1, Positions=[1, 3],
+                                          RawBindings=[copy.deepcopy(known), copy.deepcopy(known)]))
+                    for field in ("RawRows", "RetainedRows"):
+                        self.assertIs(type(probe.report["CoalescedTwinHelperInput"][field]), int)
+                    probe.report["CoalescedTwinHelperInput"]["Captured"] = "metadata-copy-only"
+                    self.assertEqual(probe.inputs[1], known)
+                    probe.report["CoalescedTwinHelperInput"]["RawBindings"][0]["Captured"] = "raw-copy-only"
+                    self.assertEqual(probe.report["CoalescedTwinHelperInput"]["RawBindings"][1], known)
+                    self.assertEqual(probe.inputs[1], known)
+
+                    files = {name: path.read_bytes() for name, path in files_under(probe.output).items()}
+                    for remaining in (known, first):
+                        with self.subTest(remaining_duplicate=remaining["Original"]):
+                            probe.inputs[:] = [first, known, last, copy.deepcopy(remaining)]
+                            with self.assertRaisesRegex(ValueError, "unique captured-input providers"):
+                                probe.write_seal()
+                            self.assertEqual({name: path.read_bytes()
+                                              for name, path in files_under(probe.output).items()}, files)
+
+                cases = (
+                    ("zero known rows", lambda k, other: [other]),
+                    ("no repeat", lambda k, other: [k]),
+                    ("three known rows", lambda k, other: [k, copy.deepcopy(k), copy.deepcopy(k)]),
+                    ("other repeat", lambda k, other: [other, copy.deepcopy(other)]),
+                    ("additional other repeat", lambda k, other: [k, copy.deepcopy(k), other, copy.deepcopy(other)]),
+                    ("different captured path", lambda k, other: [k, dict(k, Captured=k["Captured"] + ".other")]),
+                    ("different hash", lambda k, other: [k, dict(k, Sha256="F" * 64)]),
+                    ("identical wrong pin", lambda k, other: [dict(k, Sha256="F" * 64), dict(k, Sha256="F" * 64)]),
+                    ("extra key on repeat", lambda k, other: [k, dict(k, Extra=True)]),
+                    ("extra key on both", lambda k, other: [dict(k, Extra=True), dict(k, Extra=True)]),
+                    ("missing key", lambda k, other: [k, {name: value for name, value in k.items() if name != "Captured"}]),
+                    ("nonstr value", lambda k, other: [k, dict(k, Sha256=True)]),
+                    ("nondict row", lambda k, other: [k, None]),
+                )
+                for name, rows in cases:
+                    with self.subTest(side=side, mode=mode, rejected=name), tempfile.TemporaryDirectory() as directory:
+                        f = Fixture(Path(directory), side, mode)
+                        probe, _ = f.probe()
+                        known = dict(Original=str(PARSER_BINDING),
+                            Captured=str(probe.output / "input-bytes" / (BUFFER_PINS["binding"][1] + "-join.py")),
+                            Sha256=BUFFER_PINS["binding"][1])
+                        other = dict(Original=str(f.header), Captured=str(probe.output / "other.h"), Sha256="A" * 64)
+                        raw = rows(known, other)
+                        probe.inputs[:] = raw[:-1]
+                        f.twin_inputs = raw[-1:]
+                        with self.assertRaisesRegex(ValueError, "catalog|captured input"):
+                            probe.compare_twins()
+                        self.assertEqual(probe.compare_calls, 1)
+                        self.assertEqual(probe.inputs, raw)
+                        self.assertNotIn("CoalescedTwinHelperInput", probe.report)
+
     def test_literal_postconditions_command_counts_and_zero_credit(self):
         nonclaims = ("Qualification", "FullABIProof", "FullSemanticABIProof", "SourceIRProof",
             "SourceToMachineSemanticProof", "OriginalTranslationUnitOwnership", "CanonicalProtocolValidated",
@@ -938,7 +1019,7 @@ def main(cli=None):
             subject = load_subject(buffers[SUBJECT])
             suite = unittest.defaultTestLoader.loadTestsFromTestCase(CaptureTests)
             if suite.countTestCases() != EXPECTED_METHODS:
-                raise ValueError("exactly thirteen implemented frontend controls required")
+                raise ValueError("exactly fourteen implemented frontend controls required")
             result = unittest.TextTestRunner(verbosity=2).run(suite)
         report.update(Tests=result.testsRun, Failures=len(result.failures), Errors=len(result.errors),
             Skipped=len(result.skipped), FailureDetails=[dict(Test=str(case), Detail=detail)

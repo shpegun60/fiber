@@ -9228,3 +9228,94 @@ IR semantic proof, full semantic ABI, native/reference policy equality, global
 freeze or CPU/board execution follows. Runtime C/assembly, public5/port8, pinned
 helpers, the reference pin and default matrix are unchanged; unrelated protected
 WIP is neither inspected nor included.
+
+## Current CM3 Catalog And O2-LTO Replay
+
+The 2026-11-06 next gate first exposes a capture metadata defect: the unchanged
+native O2-LTO witness rejects E2's duplicate input-provider row before creating
+output. The current capture preparation had already bound
+`tools/fixtures/classic_final_join/join.py`, while inherited twin comparison
+appended the same Original/Captured/Sha256 row again. This was not a target-code
+or root-preservation defect. E2 remains immutable historical capture evidence,
+not an input catalog silently repaired for a stricter downstream checker.
+
+The producer correction admits exactly the known pinned helper's two identical
+three-field rows, retains both raw rows and original positions in
+`CoalescedTwinHelperInput`, and emits one unique provider binding. Conflicting
+paths/digests/fields, three repeats and every other duplicate reject. Successful
+sealing independently requires unique Original providers. Source buffers,
+captured files, original bytes, physical closing and all downstream predicates
+remain unchanged. The frontend suite now has fourteen methods and multiple
+duplicate subcases; combined with fourteen constructor and sixteen command
+methods, all 44 maintained host methods pass.
+
+### Fresh Captures And Actual O2 Gate
+
+All four routes are rebuilt at `C:/fz-current-cm3-lto-capture-20261106-e3/` on
+the corrected frozen producer. They retain the same current E9 fingerprint,
+ordinary CM3/O2 seed authority and reference pin as the preceding checkpoint.
+Each native capture has nine TUs/eight slim IR inputs/57 terminal commands;
+reference has four TUs/three slim IR inputs/37 commands. Across the four routes
+there are 26 TUs, 22 slim IR inputs, 188 successful host-driver commands, eight
+final links and eight genuine saved machine objects. All own-side twin and
+input/output closing checks pass. The unchanged parent byte/accounting auditor
+also passes all four bundles: 5,668 artifact entries, 5,454 input physical/hash
+bindings and 7,833 unique files. These are capture facts, not cell credits.
+
+The unchanged `cm3_lto_protocol/witness.py` and
+`cm3_reference_lto_protocol/witness.py` then consume the fresh O2-LTO captures
+and pass in separate isolated Python processes. Native preserves 492 complete
+root bytes, 170 instructions and thirteen references; reference preserves 136
+root bytes, 39 instructions and three references. All original/applied REL
+fields, provider/map origins, decoded address forms, mapping/literal boundaries
+and complete machine/final body hashes are checked. Each side freshly executes
+sixteen actual private ELF mutation controls plus one coherent SVC-immediate
+change that preserves transport but must fail the canonical protocol.
+
+The unchanged `cm3_lto_join/witness.py` independently replays both resulting
+protocol groups and returns `CM3-LTO-JOIN-PASS-NOT-QUALIFIED`. It binds six full
+roots to three mechanisms and the existing six difference rationales. The join
+authenticates its children's 32 transport and two canonical controls with
+`MutantsReexecuted=False`; their actual execution belongs to the preceding
+fresh child witnesses. Native's nine saved core slots and per-context
+EXC_RETURN remain distinct from the reference eight-slot/ORR-LR-13 first-restore
+protocol. No instruction, frame-policy or scheduler-policy equality is inferred.
+
+| Bundle | Receipt SHA-256 | Artifact Manifest SHA-256 |
+| --- | --- | --- |
+| E3 `native-O2-lto` | `DC640E58A210B4608B57EA23077E4406D2C061CBB2475F5A77A81D9985298BD6` | `9578F526EEB9444F2D80482DBC7DFAD9FC69C2B1C1DB1C35544A70B99038CB58` |
+| E3 `native-Os-lto` | `D8BBA48B5EBEA3555226A9BA2E9D65D7B5E7EFED44A817902A11A23E0A6317B4` | `422958DE9A8F5BB0F43C7EABC763A0FAF7EEEC796CFAB946D7275EA8761E2F9E` |
+| E3 `reference-O2-lto` | `4FBF9F47DF259DF44618A044CA79EC2E9AB1FE6C1B6A77B7ACEEDBCCB05B74B9` | `D0D74ED79D5594454A802310095FE577A9EB993DE232ACB713CFD0232251E4A6` |
+| E3 `reference-Os-lto` | `B7D7D82EAF35E1B73BFC788B204EF998E45B9FDA077D583201362E7B2EBBE246` | `F527A4D21B4CC77C91F7C3314B9D83DBCDC2B208A4A83CEC11180DFDF2226785` |
+| Native O2 protocol | `933A475BABFAE76E6905789D5E642E6E30B5ED070EA73F88ADD6F847E0F5BB4F` | `1C088E38FB42FE0E58472A35BAD6B388E857F7FA1DDAB8D79020EB345FCB0038` |
+| Reference O2 protocol | `D22ABC473B5D19A546BE7D9ED0EC78D53AB3851E7413E39EB5BE4EB7AC6E8910` | `646EB56E4161065E8B152A5319BAB78E0CBC27194CA17D87FFB1EDC14915C606` |
+| O2 six-body join | `6713CA83F2A08349AB5B86DF0B4417698C6D5ABE05008E0C34160E2B18F807F1` | `BBAD1EF5B7D882545C9B7E3D585606EB1317AF8A5102AF61DB428F9749248379` |
+
+Protocol bundle root is
+`C:/fz-current-cm3-lto-protocol-20261106-e2/{native,reference}-O2-lto/`.
+The earlier native attempt at the sibling `20261106-e1` path rejected the E2
+catalog before output creation. Join root is
+`C:/fz-current-cm3-lto-join-20261106-e1/O2-lto/`.
+
+| Revised Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_current_lto_capture/capture.py` | `1191CDCDA9FC9312B09858D6439674DBCA19ABFCE5B0108F3575AEF3C65C0852` |
+| `tools/fixtures/cm3_current_lto_capture/CONTRACT.md` | `103BA538B11930BDD736CFF4756A8E9C7EAE4E07FF26726892CBAA7433B59D80` |
+| `tools/fixtures/cm3_current_lto_capture/test_capture.py` | `2B5AF148320684AA429BA7ED3456A4951E8515D41303CB099DB505E41FF58436` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-capture-tests-20261106-e3/results.json` | `DB4507F7C49AFA2A8624DAB85889A8118D6A9C07B838CF12764F7F70AF4D51DA` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-audit-20261106-e1/results-e3.json` | `2AB0C880AE878E0E1F83495A09CC63491693E9E4C97DAC3B291419AC722F1072` |
+
+All helper/decoder/checker hashes remain those of their existing frozen
+contracts. The byte auditor source remains `605B35F726661CC83B87429A90420E530A7CA5BCAFD7432ADD23F1A59C9966B1`.
+The independent E2 reference review also reports actual section,
+WPA-versus-machine, twin and recipe checks. Those observations retain their
+historical E2 scope and are not relabeled E3 replay or current Original-byte
+closing after the producer revision.
+
+Every capture, protocol witness and join awards zero cells. Current-source
+O2 root/REL/origin and canonical mechanism replay is now closed, but complete
+provider/attribute/ABI controls, whole-cell composition and archive linkage are
+not. A new Os-LTO admission frontend is separate work and is not qualified by
+this checkpoint. Broader-profile LTO, portable CI, source/IR semantics, full
+semantic ABI, global freeze and hardware remain unproved. No runtime C/assembly,
+public5/port8 operation, frozen reader/protocol helper or reference pin changes.
