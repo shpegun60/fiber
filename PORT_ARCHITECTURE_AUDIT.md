@@ -10023,3 +10023,105 @@ The existing common-attribute and normal-original image proofs stay distinct
 from this replacement variant. The next integration is complete same-capture
 CM3 O2-LTO cell composition, not another standalone component. Runtime C/ASM,
 public5/port8, frozen helpers and the pinned FreeRTOS checkout are unchanged.
+
+## Current CM3 O2-LTO Direct Static Cell
+
+The additive `tools/fixtures/cm3_lto_final_cell/` composer closes exactly
+`CM3/O2-lto/direct` for
+`cm3-cortex-m3-soft-nofpu-none-v1-mpu0-p4-b16-aapcs-default`, fingerprint
+`C7C37950A2C7391B8E9C719A828CE9A288A5634FBEB6C3934A41F5AF6177C700`.
+It does not adapt an ordinary-only helper by mutating globals or relabeling
+LTO metadata. The ordinary coverage helper validates the full E9 plan; a
+separate pure model selects only this fixed LTO key.
+
+The caller-bound catalog has nine exact roles: Inventory, Native, Reference,
+Join, Bindings, ABIControls, Isolation, CommonAttributes and PortPolicy.
+Complete manifests/input closures and exact capture/Seed/source identities
+are admitted before replay. The two protocol children are derived from the
+authenticated join producer bindings, not selected through a second unrelated
+catalog. Both child captures must equal the selected current capture records.
+
+Final E4 at `%TEMP%/cm3-lto-final-cell-20261106-e4/` terminates exit zero/PASS.
+All three common prerequisites and eight runtime obligations are composed:
+
+| Evidence | Actual Replay |
+| --- | --- |
+| Component recipes | 134 records: ABI 41, isolation 12, common attributes 45, selected policy 36 |
+| Actual slim IR | ABI 7, isolation 3, common attributes 8, selected policy 5 |
+| Runtime bindings | Both original normal machine/final pairs, forward8, reverse references, anchors and startup vectors |
+| FreeRTOS mechanisms | Six complete native/reference start/SVC/PendSV bodies, own twins and declared rationales |
+| Common isolation | Source ownership, three CPU-free compile/dependency records, replacement images and both slot proofs |
+| Compiler effects | Twelve common aggregate/worker roles; eight selected-policy roles including final/vector/root evidence |
+| Negative controls | Five intended link rejections, five typed/slot probes, actual undefined machine REL sites and diagnostics |
+| Original normal census | Independent emitted LTRANS/final complete byte, symbol, allowed REL and recognized-form census |
+
+One immutable source/binary reader scope contains 456 source buffers and 2,977
+input paths. It consumes 87 recorded paths and executes 58 reader buffers.
+Physical closing remains outside that scope. The final seal closes 8,666
+input bindings and eleven output artifacts (twelve files including manifest).
+These overlapping provenance counts are not independent test cases.
+
+Only two new host inspection commands run, both captured `objdump -drwC -z`:
+one for the original emitted LTRANS object and one for its final ELF. Their
+attempt/terminal journals and raw streams are sealed. Compiler/linker/target
+executions are zero. The original worker census has 71 functions, 4,382
+instruction bytes and 206 mapped-data bytes; the original final has 72,
+4,444 and 236 respectively. Supported-policy replacement bodies are not
+presumed identical to the original generated bodies. Prior 32 transport and
+two canonical-control catalogs/edits are authenticated, not reexecuted.
+
+Coverage preserves all 2,774 exact required rows and all 26 backlog entries.
+It credits only the fixed runtime/final/O2-lto/direct key, leaves 2,773 keys
+pending and preserves 23 Pending / 3 ReferenceOnly backlog statuses. This is
+one per-cell receipt, not a merged global rollup of historical cell receipts.
+
+Thirty-seven focused synthetic methods pass: model 15, replay 13 and
+orchestration/recovery 9. Recovery independently revokes provisional PASS,
+coverage and every obligation on late failures, including stdout failure after
+sealing. Nonzero/timeout inspector results retain their primary cause even
+when stream storage fails; manifest recovery errors remain in FAIL diagnostics.
+
+Earlier attempts remain unsuccessful. E1 failed admission because a catalog
+file directly under TEMP made its parent overlap the fresh output; isolating
+the catalog fixed the layout without weakening the guard. E2 revoked credit
+when the new replayer treated deliberately reused common-IR inspection labels
+as globally unique. It now requires the exact object-specific label/argv pair.
+E3 revoked credit when an inherited empty `Compilations` field hid isolation's
+three actual `IsolatedCommon` records. Both maintained regressions preserve
+the complete fixed 23-object census. No runtime defect or frame change was
+introduced or repaired in this proof-only slice.
+
+Independent read-only review rehashes all eleven output artifacts, all nine
+bundle trees, 8,666 retained input hashes and their recorded physical identities.
+It checks full coverage/backlog accounting, all eleven current source pins,
+the recorded recipe/machine evidence, snapshot bindings and separate original
+censuses. It closes 8,676 unique files with zero drift and no reported issue.
+This is an independent byte-closure/accounting review, not another execution
+of ELF/protocol/slot/policy/diagnostic predicates or an additional cell credit.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_final_cell/CONTRACT.md` | `7D5D8814CCBBC0E6DE242D0FFAF32D522E87DC6BB1844E3FE1E2C43756B1B6C2` |
+| `tools/fixtures/cm3_lto_final_cell/compose.py` | `A056B0EDB67C87944819108A7113591791924E83BFB9D6E75735AE42F0681B1C` |
+| `tools/fixtures/cm3_lto_final_cell/model.py` | `B9E75BFD97510F7571F9D80161D92AF6FE2E251FEC629FE7608D7ED37CC75815` |
+| `tools/fixtures/cm3_lto_final_cell/replay.py` | `2A4C48B121F991B6E509D9F57661867C5D638FE4FA3F4BD3F71FB1E90ACF2638` |
+| `tools/fixtures/cm3_lto_final_cell/test_model.py` | `10654FF33B7A344C197087D1C09B39D35D2DF2B94CBCBC50FE79589EA34489A3` |
+| `tools/fixtures/cm3_lto_final_cell/test_replay.py` | `D823AAA4A3BD401075723AF06B069588A9599FCDE9389DDF76372378E21629D6` |
+| `tools/fixtures/cm3_lto_final_cell/test_compose.py` | `807358A3C5DC25A09042BCC285418DBF957D6BF3B57E3426FD5C6A7E150082C4` |
+| `%TEMP%/cm3-lto-cell-catalog-20261106-e2/catalog.json` | `AF1162F6726B37C27AC5D64860743C18782EE6308A17CF365EA4E153778D9F34` |
+| `%TEMP%/cm3-lto-cell-model-parent-20261106-e1/results.json` | `7A1464955ACE6C9AFE9549BCF0F63D79D91400C3906AF1BF7351B40EC86D16EE` |
+| `%TEMP%/cm3-lto-cell-replay-parent-20261106-e3/results.json` | `D6CA3F1B6574E263B441C427E62AF64B6D35406CC844548834DD47517E028E60` |
+| `%TEMP%/cm3-lto-cell-compose-pure-20261106-e4/results.json` | `7E7175DCF41639B0ADE8BD23A66989A5E752602522713766C07AC70907913878` |
+| Actual E4 `results.json` | `BA28CD3732C649EFB8B9C6CC778FEBB80F14E4583B974C7374238AC9DAD1E60C` |
+| Actual E4 `artifacts.json` | `27FD717042DDA8BA1C96704047993DF5C479EEC70DC030E4BFBE5BE3FD0F3B02` |
+| Actual E4 `coverage.json` | `568DB0EA3B094EA5B092482DDC7827B627FB93E4C3DBCE49E138886F6B724180` |
+| Actual E4 `missing-work.json` | `1C1C23BD26BD3AFF00873724C0EC6C379AAE3E9A842EACF3DBC62A842E557DC9` |
+| `%TEMP%/cm3-lto-final-cell-independent-review-20261106-e4/audit.py` | `B576F1286F569FFB66AC163047EEABC615F2BA4E10C30C8B2A428B084E84DA80` |
+| `%TEMP%/cm3-lto-final-cell-independent-review-20261106-e4/results.json` | `8B9FD9FF7966D8F00A419FEB1F6B0EF49CCF652751E9CDBFF6CDABD57EB0E21B` |
+
+Runtime C/ASM, public5/port8, qualified helpers and pinned FreeRTOS are
+unchanged. No full semantic ABI/C/IR/instruction/policy equivalence, arbitrary
+callee safety, source-to-machine ownership, another mode/profile/archive,
+hosted CI, global freeze or hardware qualification follows from this cell.
+The next integration work is to extend actual final-LTO cell coverage, not
+to count existing zero-credit components as completed cells automatically.

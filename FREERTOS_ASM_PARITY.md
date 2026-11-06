@@ -3505,3 +3505,45 @@ another profile/mode/archive, CI or hardware qualification. Normal-original
 and supported-policy replacement images remain distinct evidence. Complete
 same-capture LTO-cell composition remains the next integration gate. Runtime
 C/assembly, public5/port8 and qualified helpers are unchanged.
+
+## Current CM3 O2-LTO Direct Static Cell
+
+`tools/fixtures/cm3_lto_final_cell/compose.py` now composes the complete bounded
+`CM3/O2-lto/direct` static cell for the current p4/b16 soft/no-FPU/no-MPU cohort.
+Its nine-descriptor catalog binds E9, independent current native/reference
+captures, their six-body join, normal runtime bindings and the four component
+bundles. Receipt booleans alone cannot replace the component/machine replay.
+
+Final E4 reclassifies all 134 component command records, dependency sets,
+source/control plans, actual saved worker chains and intended diagnostics.
+One immutable captured-parser scope audits 23 actual slim-IR objects, both
+normal own-machine/final binding sets and twins, six complete native/reference
+canonical bodies with declared FreeRTOS differences, original/replacement slot
+protocols, common hostile-attribute machines and selected-policy machines.
+The five negative links and five typed/slot probes remain independently bound.
+Prior transport/canonical mutation catalogs and actual edits are authenticated,
+not rerun or counted as new executions.
+
+The normal original image is not inferred from the supported-policy replacement.
+Two captured host `objdump -drwC -z` inspections supply a complete original
+LTRANS/final byte census: 71 worker and 72 final functions, respectively. The
+worker has 4,382 instruction bytes and 206 mapped-data bytes; the final has
+4,444 instruction bytes and 236 mapped-data bytes. No compiler, linker, target
+program or board runs in this composition.
+
+The final seal closes 8,666 input hash/physical bindings. All 2,774 coverage rows
+and all 26 backlog records remain: exactly this one runtime/final/O2-lto/direct
+key is satisfied, with 2,773 other keys pending and the unchanged 23 Pending /
+3 ReferenceOnly backlog split. This per-cell result is not a global coverage
+rollup or an implicit extension to Os, archives or another profile.
+
+Thirty-seven synthetic model/replay/orchestration methods pass. They include
+strict object-specific binding for deliberately repeated slim-inspection labels,
+the isolation receipt's separate `IsolatedCommon` field and late-failure credit
+revocation. Exact source/receipt identities and independent review are recorded
+in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-direct-static-cell`.
+
+This closes one bounded software cell, not full C/IR/ABI/instruction semantics,
+arbitrary callback safety, FreeRTOS instruction identity, archive qualification,
+hosted CI, global software freeze or hardware qualification. Runtime C/assembly,
+the public5/port8 boundary, frozen helpers and pinned FreeRTOS are unchanged.
