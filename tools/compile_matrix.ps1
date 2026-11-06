@@ -2617,6 +2617,7 @@ typedef enum IRQn {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
     $portSources = @(
@@ -2810,6 +2811,7 @@ typedef enum IRQn {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
 
@@ -3116,6 +3118,7 @@ typedef enum IRQn {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
     $variants = @(
@@ -4148,6 +4151,7 @@ function Test-ArmCm23NtzRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
 
@@ -5245,6 +5249,7 @@ function Test-ArmCm33MpuRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
     $mainHeader = @"
@@ -6435,6 +6440,7 @@ function Test-ArmCm55MpuRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
     $mainHeader = @"
@@ -18790,6 +18796,7 @@ function Test-ArmCm4MpuRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
     $variants = @(
@@ -20494,6 +20501,7 @@ function Test-ArmCm0MpuRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
 
@@ -22015,6 +22023,7 @@ function Test-ArmCm3MpuRuntimeIntegration {
         "-fno-profile-arcs",
         "-fno-test-coverage",
         "-fno-sanitize=all",
+        "-fno-sanitize-coverage=trace-pc",
         "-mgeneral-regs-only"
     )
 

@@ -1082,10 +1082,13 @@ ABI-sensitive common functions and scheduler hooks use the canonical
 integration globally enables function instrumentation, stack protection,
 profiling, or sanitizers, selected-port translation units must add equivalent
 counter-options: `-fno-instrument-functions`, `-fno-stack-protector`,
-`-fno-profile-arcs`, `-fno-test-coverage`, `-fno-sanitize=all`, and
-`-mgeneral-regs-only`. CMSIS `always_inline` helpers cannot inherit a caller's
-function attributes, so source attributes alone cannot prove the full port
-call graph. The matrix audits both layers under adversarial compiler flags.
+`-fno-profile-arcs`, `-fno-test-coverage`, `-fno-sanitize=all`,
+`-fno-sanitize-coverage=trace-pc`, and `-mgeneral-regs-only`. The explicit
+trace-pc override is necessary when that separate coverage mode is enabled;
+`-fno-sanitize=all` alone does not disable it. CMSIS `always_inline` helpers
+cannot inherit a caller's function attributes, so source attributes alone cannot
+prove the full port call graph. The matrix audits both layers under adversarial
+compiler flags.
 
 ## Safety Defaults
 

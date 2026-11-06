@@ -290,10 +290,16 @@ proof uses:
 -fno-profile-arcs
 -fno-test-coverage
 -fno-sanitize=all
+-fno-sanitize-coverage=trace-pc
 -mgeneral-regs-only
 ```
 
 These flags supplement rather than replace the canonical source attributes.
+The explicit trace-pc counter-option extends the older six-option recipe:
+GCC treats sanitizer coverage separately, so `-fno-sanitize=all` does not disable
+`-fsanitize-coverage=trace-pc`. Historical results for a bundle without trace-pc
+are not retroactively broadened to cover it. Counter-options also apply to
+the actual LTO lowering, not merely to the source compiler driver.
 The matrix first compiles common ABI functions and a scheduler-hook fixture
 under adversarial flags without counter-options, then compiles the complete CM7
 selected-port source group with the required counter-options placed last and

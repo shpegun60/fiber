@@ -9897,3 +9897,33 @@ This is not a final firmware, full source/IR/ABI or arbitrary IPA/ICF theorem,
 transitive callee protection, GRO-effect proof on an FPU target, full cell,
 archive/other mode/profile, portable CI or board qualification. Required-cell
 credit remains literal zero, with all 2,774 keys and 26 backlog records intact.
+
+## Supported Sanitizer-Coverage Build Policy
+
+The supported selected-port counter-option bundle now explicitly includes
+`-fno-sanitize-coverage=trace-pc` after `-fno-sanitize=all`. GCC14 does not treat
+trace-pc as disabled by the latter option. All nine supported-counter arrays
+in `tools/compile_matrix.ps1`, the README and the normative runtime-boundary
+contract use the same extension. Raw attributes-only tests are unchanged.
+
+Development CM3/O2 slim-LTO experiments retained under
+`C:/fz-cm3-port-policy-development-20261106-e1/` through `e5/` establish the
+reason for the amendment, not qualification. The actual three selected-port
+providers lower cleanly with the older six counters because their present
+annotations suppress the observed effects. Removing only the function-entry
+counter still produces a clean machine and is not an effective negative.
+Applying the raw-six stress vector plus the old six counters to the nine-input
+final causes undefined trace-pc calls in ordinary cold registration and the
+fixture entry. That failed e3 link is preserved. An ordinary-driver replacement
+link in e4 succeeds but is not a hostile final. With the explicit seventh
+counter, the supported-policy final in e5 links without unresolved symbols.
+No source annotation or runtime body was changed in these experiments.
+
+PowerShell AST parsing and the exact nine seven-option bundle shapes pass.
+Current E9/capture prewrite admission still passes after the policy/docs edits;
+the runtime source fingerprint is unchanged. These are targeted development
+and integration checks, not a rerun of the complete compile matrix, a sealed
+new generated-code component, raw attributes-only suppression, additional
+profile/mode or required-cell credit, CI qualification, or hardware evidence.
+The selected-three machine/final audit and effective identical-source stress
+control are a separate component under development.
