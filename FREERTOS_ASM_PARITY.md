@@ -3418,3 +3418,44 @@ qualification, portable CI or hardware claim. Exact final source and receipt
 identities are recorded in
 `PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-common-and-slot-isolation`.
 Runtime C/assembly, public5/port8, qualified helpers and FreeRTOS are unchanged.
+
+## Current CM3 O2-LTO Attribute Effects
+
+`tools/fixtures/cm3_lto_attributes/` adds a separate hostile-codegen component
+for the current CM3 p4/b16 soft-float O2-LTO direct cohort. It uses the actual
+Context core, state and panic providers rather than a legacy facade-only TU.
+The three positive common IRs are compiled without CPU/CMSIS/selected-port
+headers and genuinely lowered together with all six instrumentation, SSP,
+gcov, UBSan and trace-pc flags. No executable fat fallback or ordinary rebuild
+can substitute for those IRs and their machine-producing LTRANS worker.
+
+A byte-bounded compiler-specs adapter removes only automatic `-lgcov` insertion,
+not any instrumentation flag. The driver, saved WPA/LTRANS argument files and
+compiler-reported executed worker/assembler commands remain bound to the same
+captured toolchain. This is compiler-reported execution evidence, not OS process
+tracing. The relocatable lower deliberately leaves genuine compiler imports
+unresolved instead of hiding them behind a runtime archive or test stub.
+
+The component independently inventories fourteen protected bodies, three Thread
+placements and ordinary cold registration. Three declaration/definition bundle
+removal controls must expose instrumentation in their intended actual carriers.
+A paired volatile dispatcher stress body must activate all five families only
+without its protected bundle; gcov constructor metadata alone is insufficient
+without the actual bounded stress-counter reference. It never assumes that a
+sensitive caller transitively protects an ordinary helper.
+
+Final E6 executes 45 managed exit-zero commands, eight inspected slim-IR
+compilations and six genuine lowerings. Both aggregate and worker machines
+are audited: fourteen clean protected bodies in the positive group, detected
+effects at all intended annotation-control carriers, and all five active stress
+families only in the ordinary counterpart. Forty-three pure methods pass,
+including failed-seal/output recovery, exact worker chains and malformed
+counter/constructor metadata. Earlier failed attempts are not qualification.
+
+Exact source/receipt identities and independent review are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-attribute-effects`.
+Required-cell credit remains literal zero. Complete same-capture LTO-cell composition,
+Os/archive/broader-profile coverage, portable CI and hardware remain separate
+gates; full attribute/IPA or general-registers-only semantic equivalence is not
+claimed by this bounded CM3 test. Runtime C/assembly, public5/port8, qualified
+helpers and the pinned FreeRTOS reference are unchanged.

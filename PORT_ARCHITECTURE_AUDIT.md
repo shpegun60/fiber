@@ -9785,3 +9785,115 @@ Os/archive/broader-profile qualification, portable CI and board evidence remain
 separate. All 2,774 keys and 26 backlog records remain visible; this component's
 RequiredCellsSatisfied stays literal integer zero. No runtime C/assembly,
 public5/port8, qualified helper, reference or protected unrelated WIP changes.
+
+## Current CM3 O2-LTO Attribute Effects
+
+This additive component uses fixed current admission, not inherited ABI-control
+success flags. It independently authenticates E9, the current O2-LTO capture,
+its ordinary Seed and all consumed source/header/tool/worker/parser bytes before
+creating fresh output. Source-copy authority and actual LTO compile authority
+remain distinct. CPU-free flags remove the forced platform header and rebase
+only the three approved common include paths; discovery and actual dependencies
+must agree. Every successful compilation is inspected as real slim IR.
+
+The raw hostile flags are `-finstrument-functions`, `-fstack-protector-all`,
+`-fprofile-arcs`, `-ftest-coverage`, `-fsanitize=undefined` and
+`-fsanitize-coverage=trace-pc`. They remain normal driver arguments during actual
+`-nostdlib -r -flinker-output=nolto-rel` lowering, not plugin-only intent.
+Fresh captured-GCC `-dumpspecs` bytes permit exactly one removal of `-lgcov`
+inside its existing conditional. No other specs edit, counterflag, compiler
+change, runtime archive or hook provider is permitted.
+
+Retained argument files bind the exact ordered WPA inputs and single LTRANS
+temporary/output chain. Verbose compiler records bind the actual reported WPA,
+LTRANS and assembler executable identities and hashes, all six lto1 flags and
+their consumed owned response files. This does not claim an independent OS
+process trace. The aggregate and worker ET_REL machines are both inspected in
+one initially fresh immutable parser scope over twelve distinct binary roles.
+No parser-cache deletion, module-global override or qualified-reader edit is used.
+
+The protected catalog is six engine, seven state and one panic definitions.
+Original declarations and definitions must carry canonical sensitive/GRO
+tokens; actual bounded machine extents, maps, symbols and RELs determine effects.
+Thread placement is checked on both actual machine roles. Ordinary cold
+registration remains intentionally instrumentable, and constructor/counter
+metadata is classified separately rather than treated as protected code.
+
+Three private copies remove only the canonical bundle at the intended actual
+declaration and definition, replacing exactly one positive IR each. They must
+compile/lower and expose instrumentation at that named carrier; the unchanged
+protected predicate must reject. The weak noreturn panic carrier requires an
+actual enter transfer, not an impossible return-side exit. Paired stress sources
+differ only by the definition's dispatcher bundle and require actual SSP,
+instrumentation, gcov counter, signed/bounds UBSan and trace-pc activation in
+the ordinary body, with suppression in the protected counterpart.
+
+Final fresh E6 at `C:/fz-current-cm3-lto-attributes-20261106-e6/` is terminal
+PASS-NOT-QUALIFIED. All 45 managed commands exit zero: eight discovery/compile/
+IR-inspection/plugin-NM groups, one fresh specs query and six lower/disassembly
+pairs. Original CPU-free dependency counts are 11/10/8, replacements are
+11/10/8 and the two stress sources each have four dependencies. There are six
+aggregate and six actual worker machine roles, not twelve separate compiler
+runs. The sealed bundle contains 669 artifacts (670 files with the manifest),
+3,355 hash/physical input bindings, 351 captured source buffers and 49 executed
+reader buffers. These overlapping provenance counts are not independent tests.
+Source fingerprint remains
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+
+The positive aggregate has fourteen clean protected roots, three Thread
+placements, two compiler constructors and sixteen imports: eight forward ABI
+operations plus eight ordinary cold compiler-support imports. All three
+annotation variants retain fourteen audited roots and expose the intended
+carrier effects; their constructor counts are six/two/six. Their unchanged
+positive predicate is refused on the aggregate. Both machine roles detect each
+intended carrier. Protected stress has zero imports/constructors; ordinary
+stress has twelve imports, two constructors and all five active families,
+including an actual bounded resolved gcov-counter reference. LTO's numeric and
+`.lto_priv.N` constructor suffixes are narrowly classified with unchanged
+extent/mapping/per-body checks, not an arbitrary prefix exemption.
+
+Forty-three pure methods pass: thirty source/metadata predicates and thirteen
+runner controls. Synthetic fixtures are not genuine-ELF evidence. The tests
+cover exact raw options, source deltas, one parser scope/twelve roles, wrong
+worker identities/response chains, malformed nested records, constructor names
+and a reproduced stress-profiling false positive. Ctor metadata without the
+stress body's counter reference can no longer earn profiling activation. Late
+failure tests begin with a written synthetic PASS and require matching FAIL
+receipt/manifest bytes even when the failure hook and first diagnostic write
+throw; there is no process retry.
+
+E1..E5 remain failed historical attempts: dependency target grammar, an omitted
+legitimate LTRANS gcno output, dotted compiler-worker path normalization,
+repeated fresh-parser admission and legitimate constructor suffixes were
+corrected before E6. Read-only successful inspection of earlier objects does
+not relabel those failed receipts or qualify later source versions. Failure
+revokes all component phases before fallible diagnostics; late seal/closing or
+success-output failure cannot leave a reusable PASS receipt. Runtime C/assembly,
+public5/port8, qualified helpers and the pinned FreeRTOS reference are unchanged.
+
+Independent E6 replay rehashes all 669 artifacts and 3,355 watched input
+hashes/physical identities, verifies every command journal/stream and checks
+all 351 source copies. It recomputes eight compilation/dependency records, six
+complete saved worker chains, source/annotation/mutation plans and all twelve
+aggregate/worker effect proofs in one captured-reader scope. All four aggregate
+unchanged-predicate refusals reproduce; closing reports zero hash or physical
+drift. This is independent replay of frozen predicates, not a second decoder,
+another compiler run, OS process tracing or additional cell qualification.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_attributes/CONTRACT.md` | `47E6E37823358DD1025A1BA5D6A5491F1A2A1FF91FAC62CB20B2F00D7F22635F` |
+| `tools/fixtures/cm3_lto_attributes/runner.py` | `9C99D38EACC8F3E3B2B63F343CA79555A66264AC76A3CA11957D2BEB0745987A` |
+| `tools/fixtures/cm3_lto_attributes/attributes.py` | `93275A5903A67CB2DAEABB76BEF1431B052878BB478455E54343DB20881E83C0` |
+| `tools/fixtures/cm3_lto_attributes/test_attributes.py` | `DBD593615066CC531F64432CEDD6680F9E0F6BFDC20D00D1350A098B139413C7` |
+| `tools/fixtures/cm3_lto_attributes/test_runner.py` | `9882725918C24D5ABE9F420A9EBEA5E90E256E3FBD2F48563D44CE15A78E70D5` |
+| `%TEMP%/cm3-lto-attributes-parent-pure-20261106-e3/results.json` | `EC9210E9A66D82520085DA3559AC0518A52D9FA6FB50F6F25E17B8E7A22CC72A` |
+| `%TEMP%/cm3-lto-attributes-runner-parent-pure-20261106-e2/results.json` | `904560E100FD08637BA02BDE80473A5B8E9EE35E34453B78E9B362571DD94FCA` |
+| Actual E6 `results.json` | `F164FF283B0EC4D422C83120152C3DFA32B6D75FC67C446309EFBF3DE26F944B` |
+| Actual E6 `artifacts.json` | `CA0B0EC8B2349CED192C798CD26F4938764ADE904145FFE340EB1D7B36D0B54B` |
+| `%TEMP%/cm3-lto-attributes-independent-review-20261106-e6/results.json` | `82C121E9E856981AC8A8D8F5FC16D4B5FC15A700CE15409DC419A1C4D86B3BE7` |
+
+This is not a final firmware, full source/IR/ABI or arbitrary IPA/ICF theorem,
+transitive callee protection, GRO-effect proof on an FPU target, full cell,
+archive/other mode/profile, portable CI or board qualification. Required-cell
+credit remains literal zero, with all 2,774 keys and 26 backlog records intact.
