@@ -3605,7 +3605,8 @@ actual Os providers, the captured tool/environment identities and the exact
 Os link recipe. Its constructor creates no output or child process. This
 probe uses one immutable captured-parser graph, then writes/seals results
 outside that graph. It closes 5,627 input hash/physical bindings and 603
-output files; it executes no compiler, linker or target.
+mapped artifacts (604 files including the manifest); it executes no compiler,
+linker or target.
 
 Forty-six focused synthetic methods pass: 16 slot, 20 recipe and 10 session
 tests. The batch recipe exposes planned command ranges 41/12/45/36, not
@@ -3622,3 +3623,40 @@ normal-image census and same-fixture composition remain pending. This static
 leaf and support infrastructure grant zero required-cell credit and no CI,
 hardware, global-freeze or full semantic-equivalence claim. Runtime C/ASM,
 public5/port8 and pinned FreeRTOS are unchanged.
+
+## Current CM3 Os-LTO ABI Controls
+
+`abi_attempt.py` now executes and seals the real current Os ABI-control
+component: 41 managed commands, including five intended link rejections,
+two accepted type/attribute probes and three undeclared current-slot probes.
+Negative controls must have the exact intended diagnostic, actual replacement
+objects/imports/definitions and absent final output. A random compile or link
+failure cannot satisfy the component.
+
+The pure declaration adapter binds eighteen fixed source identities, nine
+actual Os provider/dependency records and twelve canonical CPP declarations.
+Its helper receives authenticated bytes explicitly; no O2 admission or
+mutable helper-global replacement supplies Os credit. One immutable final
+reader recomputes those declarations and checks the reproduced positive
+load image against the actual captured native ELF.
+
+The final E2 run closes 5,862 input hashes/physical identities and 1,053 mapped
+artifacts (1,054 files including the manifest). Its 41 host tool calls include
+26 compiler-driver calls; target/board calls are zero. Literal phase/count,
+nonclaim and clean-error schemas reject boolean/float aliases and false
+promotions. `NegativeLinkControlsExecuted` is correctly true here, unlike the
+unchanged bindings-only stage. The earlier prototype execution is retained
+but not accepted as this hardened checkpoint.
+
+Forty-eight focused pure methods pass: 16 declaration, 12 build and 20 driver
+tests. They include late summary/seal failure revocation and no retry. The
+next 12-command isolation and 45-command common-attribute build modules also
+have 12/14 passing synthetic tests, respectively; their real tool executions
+and machine/worker-effect proofs remain pending. They cannot publish PASS.
+
+The exact source/evidence record and remaining integration gates are in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-abi-controls` and the local
+`ABI_CONTROLS_CONTRACT.md`. This component gives zero Os-cell credit. Full
+same-fixture composition, selected-port policy, normal census, archive, CI,
+hardware and global freeze are not claimed. Runtime C/ASM and public5/port8
+are unchanged.

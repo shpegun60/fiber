@@ -10251,8 +10251,9 @@ persist a leaf output while the immutable read-only scope is active. The
 guard rejects that new path. E2 moves persistence outside the scope and
 repeats the whole probe in a fresh directory; the slot predicates and session
 sources are unchanged. E1 remains FAIL with zero credit. The E2 probe closes
-5,627 input hash/physical bindings, 603 output files, 598 source buffers and
-54 executed reader-source records. Compiler/linker/target invocations are
+5,627 input hash/physical bindings, 603 mapped artifacts (604 files including
+the manifest), 598 source buffers and 54 executed reader-source records.
+Compiler/linker/target invocations are
 zero; these provenance counts are not test counts.
 
 Forty-six synthetic methods pass: 16 slot, 20 recipe and 10 session tests.
@@ -10290,3 +10291,98 @@ ABI/link/probe batch, isolated-common replacement, compiler-stress evidence,
 normal-original census and final same-fixture composition remain pending.
 All 2,774 inventory keys and 26 backlog records remain. No runtime C/ASM,
 public5/port8, frozen helper, FreeRTOS, CI or hardware change is implied.
+
+## Current CM3 Os-LTO ABI Controls
+
+The same Os fixture now has an executed ABI-control component, not just a
+planned command count. `abi_controls.py` runs exactly [0,41) over the admitted
+Os session. The positive link retains all nine original Os objects. Three
+stale identity/anchor and two duplicate strong-handler variants are compiled
+from explicit copies/additions. Real slim-IR/plugin symbols and complete
+diagnostics establish each intended missing or duplicate definition. Separate
+types/attribute probes compile; C reads, writes and address-taking of the
+current slot fail with the exact undeclared-symbol diagnostic. Exactly eight
+of the 41 commands have intended nonzero exits.
+
+`declarations.py` receives the authenticated ordinary oracle explicitly and
+reuses only mode-neutral source/type/CPP predicates. Fixed eighteen-source
+identities and nine provider/dependency declarations are bound independently.
+The ordinary Seed flags and actual Os/slim transform have separate checks;
+objects and external dependency bytes remain capture/admission obligations.
+The positive recipe removes only one verbose flag, preserving actual Os
+input order, target, LTO and linker policy.
+
+`abi_attempt.py` waits for every tool to finish, then enters one immutable
+captured-parser graph. It recomputes provider declarations and twelve CPP
+canonical declarations and compares positive/original load images. Writes,
+source physical closing and exact output membership checks happen outside
+that graph. The successful E2 report closes 5,862 input hash/physical bindings
+and 1,053 mapped artifacts (1,054 total files with the manifest), with 600
+source buffers, 662 reader input paths and 54 executed-source records.
+There are 41 host tool calls, including 26 compiler-driver calls, and no
+target or board execution. These provenance counts are not test counts.
+
+The E1 prototype also executes all 41 commands and its positive reader, but
+three synthetic methods expose 63 malformed-record acceptances in its
+completion predicate. Phase equality accepts numeric aliases, the nonclaim
+set is incomplete and clean-error fields are checked by truthiness. The
+driver is repaired only after that attempt terminates. E2 reruns all 41
+commands on the stricter source in a fresh directory. E1 is retained as
+prototype evidence, not rewritten as the accepted hardened checkpoint.
+Its later original-driver source drift is intentional; its captured source
+buffer preserves the prototype bytes. No CPU/runtime defect is inferred
+from these report-checker defects.
+
+The fixed checker requires exact integer phase boundaries/counts, literal
+2,774-key/zero-credit counters, all applicable nonclaims literally false,
+present None error fields and an exactly empty closing-error list. The five
+fresh link controls are truthfully recorded as NegativeLinkControlsExecuted;
+the frozen bindings-only runner is unchanged. Post-seal output, manifest or
+flushed-summary failures revoke the result without replaying tools. Forty-eight
+focused methods pass: 16 declaration, 12 phase-build and 20 driver controls.
+
+Next-phase `isolation.py` and `attributes_phase.py` have 12 and 14 passing
+synthetic tests. They are build-only [41,53) and [53,98) adapters, not executed
+phase evidence. Own Os flags, CPU-free dependency checks, explicit replacement
+objects, source edits, specs adapter, saved worker roles and zero-inclusive
+disassembly plans are retained. Worker options, load-image/slot/provider
+proofs and hostile-machine effects are deferred to the enclosing reader.
+Both modules leave overall FAIL/zero. A test-harness review moves frozen
+helper authentication before execution in isolation and ABI-build tests;
+the corrected 12/12 suites pass without runtime-phase source changes.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_os_lto_final_cell/ABI_CONTROLS_CONTRACT.md` | `7DECF4FA302A3DC1C92C3E0B882A90BDAF851BE2B86C3E33EBFBE46A52BB40B6` |
+| `tools/fixtures/cm3_os_lto_final_cell/abi_attempt.py` | `18237999981DAF689C4D297CC93A9CE574804F1C65578FD4A9E91CD715440279` |
+| `tools/fixtures/cm3_os_lto_final_cell/abi_controls.py` | `A05048E4A5047EDF0090C39AD8199C5D5A6B5981A1E0EBA9FA69ACD2850F8379` |
+| `tools/fixtures/cm3_os_lto_final_cell/declarations.py` | `B502C330A5F00CE10393390866F160030EE604E8A9BC8080F8633D9BF66245B2` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_abi_attempt.py` | `B63285AF21F5CFAD01415CE6AC9929C5E0D26B78392356C1BE0864B556628699` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_abi_controls.py` | `E62A1C732513DBE0AD8D8C5C5EED13182377D3A8F092E2032850BF91B1732868` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_declarations.py` | `8ED2DA88049C251D410CA5FAE61D5941D4E40359AB3A58E5D1C306CF703A0F9F` |
+| `tools/fixtures/cm3_os_lto_final_cell/isolation.py` | `3838848CF4421656ECF0DAFBDA03AE72FC4A2EFD5083C31202A592CBA16D9F65` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_isolation.py` | `900DDD53F8CD675CCAF027A870571073B5D67FF76236F1D179925A593AE3CC46` |
+| `tools/fixtures/cm3_os_lto_final_cell/attributes_phase.py` | `CAD8817F486DE3E3B945C54CC8AAF2EACCC185A85134BEE8D343835E3F07DF3C` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_attributes_phase.py` | `9C63AF7DADBCA3D4D079B728F3534FB5EE99288FF6A4110B9FD0ED97E28360D3` |
+| `C:/fzosabi-20261106-e2/results.json` | `A02D7DE621786FDE7AC187AEB703C40C8D0A149CC1C5E86384A6076B30CB33F4` |
+| ABI E2 `artifacts.json` | `2E72A67FB2FC696E6B7BC4E190FB6412A248E1361173611E36DF535B2519E439` |
+| Prototype E1 `results.json` (not accepted checkpoint) | `9896B8EB81CDBECA2995A3F6CF09BD22A869D82A6E018696D4709455362E35F5` |
+| `%TEMP%/cm3-os-lto-abi-attempt-owner-20261106-e1/results.json` (FAIL) | `3507DD6E25DE371255214BD1EA5C6C0DB69D1F0F715EF7341739ECDAADEFC2EF` |
+| `%TEMP%/cm3-os-lto-abi-attempt-parent-20261106-e2/results.json` | `478773C4F2A327CD89CDB0285214B27FD5E2311BDD1221939136A256BE7C7742` |
+| `%TEMP%/cm3-os-lto-abi-controls-parent-20261106-e2/results.json` | `1D278C85E1231983F606780CA5F92C71573087265EB6F66CFBE4CEAB1B42A1C7` |
+| `%TEMP%/cm3-os-lto-declarations-parent-20261106-e1/results.json` | `6268E6F9631BB94313DCD90A7A08349942D0482F2F1DE8E5A8F32EE1775357BF` |
+| `%TEMP%/cm3-os-isolation-build-pure-parent-20261106-e2/results.json` | `46EB3EE2ADC5CA06F117438117B3F288F32D5589878C852475FC68FFDDAC9CEE` |
+| `%TEMP%/cm3-os-lto-attributes-phase-parent-20261106-e1/results.json` | `48005AE4FAC8B9ACCB12082A4BC1BEC7808A723A4975E040810828E703F9BEF0` |
+| `%TEMP%/cm3-os-batch-independent-review-20261106-e2/results.json` (earlier slot/support accounting) | `4F1B71F3FD81C24CE928C839E6FF2A70FA9D1E9F9BDDE9142B7B608102BFCFE8` |
+
+The earlier slot/support independent review confirms 603 mapped artifacts /
+604 total files, 5,627 inputs and identities, 598 source copies, 23 bootstrap
+and 54 executed-source bindings with zero drift. It verifies accounting and
+recorded leaf counts, not independent slot predicate execution.
+
+The Os cell still has zero credit: the remaining build phases and actual
+machine/worker proofs, selected-port policy, normal-original census and
+same-fixture composition are pending. This does not reduce the 2,774-key plan
+or 26 backlog records. Full semantic ABI, arbitrary-callback protection,
+archive, CI, global freeze and hardware qualification remain unclaimed.
+Runtime C/ASM, public5/port8 and pinned FreeRTOS are unchanged.
