@@ -9555,3 +9555,122 @@ semantic ABI, source/IR equivalence, policy/instruction equality, original TU
 ownership, kernel/CPU/board execution and global qualification remain false.
 Runtime C/assembly, public5/port8, qualified readers/producers and reference pin
 are unchanged. Unrelated protected WIP is not inspected or included.
+
+## Current CM3 O2-LTO ABI And Link Controls
+
+The additive `tools/fixtures/cm3_lto_abi_controls/` component now executes fresh
+typed declaration probes and five negative links for exactly current native
+CM3 p4/b16 soft-float O2-LTO/direct. It does not invoke an ordinary-only receipt
+constructor or falsify an LTO report as ordinary. The fixed runtime-bindings
+admission rechecks E9, capture producer 1191CDC, the independent ordinary Seed,
+tools/inputs and all 57 capture argv records without granting its ELF-binding
+verdict. The source-copy tree belongs to the Seed; actual positive objects,
+source-specific compile flags and link recipe belong to the current capture.
+
+The pure ABI adapter preserves the independently spelled CM3 type/attribute
+oracle and source pins. It binds the real capture's nine source rows, eight
+slim-IR roles and explicit non-LTO startup, actual dependency declarations,
+canonical provider headers, object/dependency paths and exact compile flags.
+The original Seed discovery comparison, object/external bytes and command
+authority are separate outer obligations, not an invented Dependencies field.
+GCC14 no_sanitize reflection remains explicitly unproved; accepted declarations
+and CPP scans do not establish attribute effects or full semantic ABI.
+
+The final E3 run at
+`C:/fz-current-cm3-lto-abi-controls-20261106-e3/` is terminal PASS-NOT-QUALIFIED.
+Its 41 actual managed commands contain 33 exit-zero attempts, five intended
+link rejects and three intended compile rejects. There are six fresh links,
+ten C compile attempts and seven inspected successful slim-IR objects. No target
+image is executed. Discovery/actual dependencies are checked for every fresh
+compile, including the three exact undeclared-slot rejections.
+
+The positive link reuses the actual nine inputs and semantic linker flags,
+removing only standalone `-v` for closed diagnostics. Single-partition LTO,
+saved-temporary/plugin flags, input order and linker script are unchanged.
+The original ordinary-kind LTO twin (without --emit-relocs) and fresh positive
+ELF have identical raw bytes. The frozen reader independently checks load
+geometry/bytes, allocated sections, vectors and entry. Reader/helper execution
+uses captured source and binary buffers with lexical path resolution; real
+path/physical admission and closing run outside the immutable reader scope.
+Forty-nine executed reader buffers are recorded.
+
+| Fresh Negative | Controlled Compilation | Required Cause |
+| --- | --- | --- |
+| private cohort | expectation TU 6; NVIC bits 4 to 5 in its private header copy | only the actual alternate private cohort import is unresolved |
+| storage cohort | application TU 7; selected storage revision 1 to 999 | only `fiber_port_storage_cohort_arm_cm3_v999_r0` is unresolved |
+| reverse ABI | state TU 1; v1 anchor definition renamed v2 | unchanged consumers lack `fiber_internal_runtime_port_abi_v1_anchor` |
+| SVC conflict | one added strong slim-IR SVC_Handler provider | exact original/added plugin-object duplicate |
+| PendSV conflict | one added strong slim-IR PendSV_Handler provider | exact original/added plugin-object duplicate |
+
+All controlled compilations succeed before the link rejection is counted.
+Plugin-aware NM binds each intended import/definition; ordinary machine-size
+assertions are not applied to slim IR. Complete closed diagnostic grammars
+reject wrong symbols/providers, unrelated compiler/plugin failures, timeouts,
+extra causes and stdout. The three unresolved diagnostics bind retained actual
+ARM ELF32 REL LTRANS machines and their hashes, not just expected filenames.
+All five failed links leave no final image. Saved LTO auxiliaries, including
+cwd-owned wrapper argument files, are enrolled in the output namespace.
+
+Five typed probes retain the unchanged independent source oracle: types and
+attributes accept, while slot read/write/address reject for the exact undeclared
+identifier. Accepted objects are genuine slim IR; raw ELF section counts bind
+the complete indexed readelf table before the no-fat-fallback predicate. The
+attribute probe's CPP scan retains both canonical header origins from that same
+accepted attempt. This is a declaration proof, not post-LTO slot isolation or
+an assertion that compiler attributes defeated every adversarial option.
+
+Forty-seven pure methods pass: twelve ABI, eighteen diagnostic and seventeen
+admission/orchestration methods. The combined late-error control starts from
+a written synthetic PASS, makes the failure hook raise and the first FAIL
+receipt write fail, then requires an independent bounded diagnostic write to
+leave matching FAIL receipt/manifest bytes, original primary error and both
+secondary errors. Separate stdout write/flush failures must also revoke a
+written PASS through the protected CLI failure path. No tool/replay retry
+occurs. Replaced output-directory or
+hard-linked diagnostic destinations are rejected before fallback writes.
+
+The measured E3 output has 799 declared artifacts (800 files with its manifest),
+347 captured source buffers and 3,451 input hash/physical bindings. These are
+overlapping provenance records, not independent execution counts. The source
+fingerprint remains `69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+
+Independent final E3 review rehashes all artifacts and watched/physical inputs,
+binds every command stream, reclassifies five link and three compile failures,
+and recomputes accepted probe sources, twelve CPP declarations/header origins,
+provider facts and the positive ELF load-image comparison. It parses all seven
+accepted slim objects and finds no unexplained source/input/output drift. This
+review executes neither GCC nor a target and grants no additional qualification.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_abi_controls/CONTRACT.md` | `B592F0B7741C5FA69507FEF67DD4B03D424926A1A9245E2A3929D656693623DC` |
+| `tools/fixtures/cm3_lto_abi_controls/controls.py` | `7984A228966FC17641BD83D23486DB7E50BC2B7E5BC12D70A712F6E83800F14F` |
+| `tools/fixtures/cm3_lto_abi_controls/abi.py` | `672508E25F984A6F3F7224E019395C874C2745786D318390699F80BCCD055CC6` |
+| `tools/fixtures/cm3_lto_abi_controls/diagnostics.py` | `0A1CD4EB14172C3E3FF1E5B05A733C7837404E7DD95C8D6953323EB26FEA250C` |
+| `tools/fixtures/cm3_lto_abi_controls/test_abi.py` | `B7ABB10BFF30AB83FFC6AE20EBA82D487D06692D3DC9E23ACAE687512A1D40C2` |
+| `tools/fixtures/cm3_lto_abi_controls/test_diagnostics.py` | `A10AFE5C33AA4EFBEF7D02506D333A29BEB0C63D61AE54EDD42378FB70196AE2` |
+| `tools/fixtures/cm3_lto_abi_controls/test_admission.py` | `6B2508EAAA61EB17984035DFC91D838EC66442FE7A7C13E4175D30C477661729` |
+| `%TEMP%/fiber-cm3-lto-abi-parent-20261106-e1/results.json` | `C1D7410345567BF760604E5A0B7F9130B9C542CDDA9456A75803DD8C0F7F5BBA` |
+| `%TEMP%/fiber-cm3-lto-diagnostics-parent-20261106-e1/results.json` | `3E759D8743F423649DF756DF4AAD6570F91D1F71F2E6EAB42B770AE7801BD936` |
+| `%TEMP%/fiber-cm3-lto-controls-admission-parent-20261106-e3/results.json` | `2D7D81F084CAEFB075F8D63FF67C34121E46CA8F002348C663B3310A39F36723` |
+| Actual E3 `results.json` | `815E2D568C7EFD4430E074EFF9A53342D33573EFEA4B8C7F56E872BF8DECA7DB` |
+| Actual E3 `artifacts.json` | `5F78EA3FEFAB669D4E3B50817DF11DFA87100C66145AB8C9D4F41463450DEF88` |
+| `%TEMP%/cm3-lto-abi-controls-independent-review-20261106-e3/results.json` | `B9A01CB90DD523A9EF2078D63CDD196003390F1C944E0D9C55DF96D39011E2CF` |
+
+The sibling actual E1 and E2 runs are historical successful evidence before the
+final hardening and CLI stdout guard, not qualification of final E3 sources.
+The earlier parent admission E1 test receipt is a red development fixture with
+stale mocked fields; the final seventeen-method E3 run uses the final source.
+None is a target failure or relabeled PASS.
+Raw LF helper pins reject newline conversion; portable CI bootstrap remains debt.
+
+This closes only current CM3 O2-LTO typed declaration and five-link-control
+components. Whole-slot source/generated isolation, CPU-free common LTO evidence,
+hostile-codegen/attribute-effect obligations and complete same-capture cell
+composition remain pending. Os/archive/broader-profile cells, portable CI and
+hardware remain separate. All 2,774 keys and 26 backlog records retain their
+authority; RequiredCellsSatisfied stays integer zero. Full ABI/semantic ABI,
+source/IR semantics, original-TU ownership, policy/instruction equality, kernel/
+CPU/board execution and global qualification remain false. No runtime C/assembly,
+public5/port8, qualified helper or FreeRTOS reference byte changes. Protected
+unrelated WIP is neither inspected nor included.

@@ -3342,3 +3342,38 @@ separate gates. Exact source/receipt pins, initial adapter rejections and
 measured counts are in
 `PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-runtime-bindings`.
 Runtime C/assembly, public5/port8, frozen readers and the reference pin are unchanged.
+
+## Current CM3 O2-LTO ABI And Link Controls
+
+`tools/fixtures/cm3_lto_abi_controls/` adds fresh declaration and link controls
+for the same current CM3 p4/b16 soft-float, O2-LTO, direct cohort. It independently
+re-admits E9, the current capture and its ordinary Seed, including reconstruction
+of the 57 capture commands. It reuses generic command/dependency utilities, not
+the ordinary-only constructor, receipt inspector or two-reference slot checker.
+
+The final measured run executes 41 commands: 33 exit zero, five intended link
+rejects and three intended compile rejects. Seven successful C compilations
+produce inspected slim IR without executable fat fallback. The unchanged nine
+positive inputs reproduce the original LTO ELF byte-for-byte; a separate frozen
+reader compares PT_LOAD bytes/geometry, allocated sections, vectors and entry.
+The positive link omits only `-v`, retaining single-partition LTO and saved
+machine/plugin intermediates.
+
+Fresh private-priority, storage-revision and reverse-anchor replacements fail
+only on their expected missing symbols. Both added strong-handler cases fail
+only for the intended duplicate. Plugin NM binds the controlled IR imports or
+definitions; exact diagnostics bind actual provider paths and, for unresolved
+links, retained hash-checked ARM LTRANS objects. No failed link leaves a final ELF.
+Five independent declaration probes accept types/attributes and reject slot
+read/write/address use for the exact undeclared identifier. Accepted CPP origins
+and discovery/actual dependency sets are checked. Forty-seven synthetic methods
+cover the pure adapters and orchestration, including independent bounded FAIL
+persistence after a failed failure hook and first diagnostic write.
+
+This closes typed declaration and five-link-control components only, with zero
+cell credit. It does not prove compiler attribute effects, hostile-codegen or
+full semantic ABI, whole-slot isolation, CPU-free common LTO composition or a
+complete LTO cell. Those obligations, archive/broader-profile coverage, portable
+CI and hardware remain pending. Exact source, test and E3 receipt identities are
+in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-abi-and-link-controls`.
+Runtime C/assembly, public5/port8, qualified helpers and FreeRTOS are unchanged.
