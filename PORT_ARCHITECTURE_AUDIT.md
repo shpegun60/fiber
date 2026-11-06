@@ -10221,3 +10221,72 @@ common/selected-port compiler-stress evidence and the normal-original census
 before a same-fixture composer may credit the Os cell. No full semantic ABI,
 source/IR/machine equivalence, arbitrary callback safety, archive/hosted CI,
 global freeze or hardware qualification is claimed.
+
+## Current CM3 Os-LTO Slot And Batch Support
+
+The additive Os `slot.py` has its own six complete protocols and narrow
+encoder/assembly grammar. It receives authenticated neutral origin, mapping,
+REL and handler-address helpers; it neither changes their global O2 program
+table nor calls their O2 top-level inspect and relabels a result.
+
+The real E2 session/slot probe authenticates the existing E9 Os native and
+reference captures before constructing the new command session. Nine actual
+Os providers and the source-copy Seed, actual tool/plugin identities,
+captured environment and exact Os link recipe are retained. The constructor
+is dry: no output exists and no child process is started. Session start then
+captures its enrolled bootstrap bytes. Both original Os native twins are
+audited in one immutable parser graph, with writes performed only after that
+scope has closed.
+
+Both slot leaves pass with six complete bodies / 272 bytes, five common
+loads, one common publication store, eight slot references and two immediate
+load-only handler pairs. Ordinary/emitted applied slot-reference counts are
+zero/eight. Original/final raw bytes, section-mediated symbols and RELs,
+source/generated inline pairs and all slot-bearing word membership remain
+bound. This does not establish arbitrary-pointer alias safety, complete
+handler-body semantics or source-to-machine semantic equivalence.
+
+The first actual probe E1 fails because its temporary driver attempts to
+persist a leaf output while the immutable read-only scope is active. The
+guard rejects that new path. E2 moves persistence outside the scope and
+repeats the whole probe in a fresh directory; the slot predicates and session
+sources are unchanged. E1 remains FAIL with zero credit. The E2 probe closes
+5,627 input hash/physical bindings, 603 output files, 598 source buffers and
+54 executed reader-source records. Compiler/linker/target invocations are
+zero; these provenance counts are not test counts.
+
+Forty-six synthetic methods pass: 16 slot, 20 recipe and 10 session tests.
+Source-reviewed mutations cover instruction/REL/branch/alias/pool/store
+changes, wrong modes/flags/recipes, literal counters, undeclared helper
+buffers, managed journal faults, object drift and timeout without retry.
+An independent session-source review finds no confirmed inherited-method
+attribute or closure blocker. Its pure tests mock tool results; the actual
+probe establishes admission and slot replay, not real compile/link execution.
+
+`BATCH_CONTRACT.md` keeps 41 ABI-control, 12 isolation, 45 common-attribute
+and 36 selected-port-policy commands explicitly planned, not executed. The
+session records complete terminal phase ranges but cannot publish PASS/cell
+credit. Exact command-label/disposition checks and phase semantics belong to
+the new Os driver. One immutable final reader must compose the actual outputs
+before the Os cell can receive credit. The old O2 phase drivers and verdicts
+are not reused.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_os_lto_final_cell/BATCH_CONTRACT.md` | `D9EAE7806028289EDB5A69B6317DA6247A19E1B15ACED5B75FF5D6194DE8EE66` |
+| `tools/fixtures/cm3_os_lto_final_cell/batch_recipes.py` | `C15D57AA9FE3963FF84F22D831F4E1F5F941AC351571AB347ECBC29E9172004B` |
+| `tools/fixtures/cm3_os_lto_final_cell/batch_session.py` | `E600788C8563ED44327A61CED2B5D518A354DE19B33BA6614B04733E3E5D4FB6` |
+| `tools/fixtures/cm3_os_lto_final_cell/slot.py` | `B47B8ACF2F98172D79509BC60DF42D4603F3FAF7CEC9F1BA29995057621F7F9F` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_batch_recipes.py` | `0634225EB7527728E22916679ED76FC076ECC4E364E4D760B4D272269EF8BA87` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_batch_session.py` | `B53991270787B33381E5C8159674B2FFBAFFCCA1C9EF49CF7CF08E70F71243DC` |
+| `tools/fixtures/cm3_os_lto_final_cell/test_slot.py` | `EC6EC3F2ADFB25747897927FCFE587F2F7C0DCBECD6A602C6C75B4425E4330C2` |
+| `%TEMP%/cm3-os-batch-probe-20261106-e2/results.json` | `436E2A955B026061485F6B0C4184EA4C844FC50B9D9552F671D5D52734A7623B` |
+| Session/slot E2 `artifacts.json` | `97AB10CD1B31F3C7649AFDFCC31503758D040DE82457CB3D036F35C7267A7B2C` |
+| `%TEMP%/cm3-os-lto-slot-parent-pure-20261106-e1/results.json` | `68F1E80C65F8D3D5A1F71D710D964131DAC33969E90FF83194169E208486B6F8` |
+| `%TEMP%/cm3-os-lto-batch-recipes-parent-20261106-e1/results.json` | `F3B680804A3364AA73722EA03C5B59BD0D74DF663D67B87A8B0B30E96C4A9650` |
+
+This is a zero-credit support/static-replay checkpoint. The actual Os
+ABI/link/probe batch, isolated-common replacement, compiler-stress evidence,
+normal-original census and final same-fixture composition remain pending.
+All 2,774 inventory keys and 26 backlog records remain. No runtime C/ASM,
+public5/port8, frozen helper, FreeRTOS, CI or hardware change is implied.

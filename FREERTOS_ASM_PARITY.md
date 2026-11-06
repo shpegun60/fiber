@@ -3588,3 +3588,37 @@ isolation, common/selected-port compiler-stress proofs and normal-image census
 remain to be composed in this same fixture. All 2,774 inventory keys and 26
 backlog records remain authoritative; these two zero-credit proofs do not
 change coverage or imply CI, hardware or global-freeze qualification.
+
+## Current CM3 Os-LTO Slot And Batch Support
+
+The same Os fixture now owns six complete common current-slot protocols,
+without replacing the frozen O2 helper's program table or relabeling its
+verdict. Actual ordinary and emitted-relocation native twins pass the new
+slot leaf: 272 complete common-body bytes, eight original slot references,
+zero/eight applied references and two load-only handler pairs per twin.
+The common publisher remains the only permitted slot writer. Unsupported
+address forms, extra references, cross-owner handler pool reuse and altered
+raw instructions/RELs fail closed.
+
+A real same-admission probe also constructs the new batch session from nine
+actual Os providers, the captured tool/environment identities and the exact
+Os link recipe. Its constructor creates no output or child process. This
+probe uses one immutable captured-parser graph, then writes/seals results
+outside that graph. It closes 5,627 input hash/physical bindings and 603
+output files; it executes no compiler, linker or target.
+
+Forty-six focused synthetic methods pass: 16 slot, 20 recipe and 10 session
+tests. The batch recipe exposes planned command ranges 41/12/45/36, not
+executed evidence. Session range accounting alone cannot qualify a phase;
+the phase-specific driver must also validate exact labels, dispositions,
+diagnostics, dependencies and machine predicates. Full inherited pre-command
+closing is retained. O2 constructors, phase drivers and finish/verdict paths
+remain forbidden for the Os session.
+
+Exact evidence, including the failed first driver attempt, is recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-slot-and-batch-support`.
+The isolated common replacement build, 134-command control/stress batch,
+normal-image census and same-fixture composition remain pending. This static
+leaf and support infrastructure grant zero required-cell credit and no CI,
+hardware, global-freeze or full semantic-equivalence claim. Runtime C/ASM,
+public5/port8 and pinned FreeRTOS are unchanged.
