@@ -3377,3 +3377,44 @@ complete LTO cell. Those obligations, archive/broader-profile coverage, portable
 CI and hardware remain pending. Exact source, test and E3 receipt identities are
 in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-abi-and-link-controls`.
 Runtime C/assembly, public5/port8, qualified helpers and FreeRTOS are unchanged.
+
+## Current CM3 O2-LTO Common And Slot Isolation
+
+`tools/fixtures/cm3_lto_isolation/` closes two more bounded components for the
+same current CM3 p4/b16 soft-float, O2-LTO direct capture. The runner independently
+re-admits E9, the capture and its ordinary Seed through the fixed admission;
+it owns its isolation phases and never borrows the old ABI-control verdict.
+
+Three fresh common compilations remove the forced platform main header and all
+CPU/CMSIS/selected-port search paths, preserving the other flags and genuine
+`-flto -fno-fat-lto-objects`. Discovery/actual dependencies agree and consume no
+CMSIS or `fiber/port` header. All three objects are inspected slim IR, not fat
+machine fallback. Replacing exactly inputs 0..2 and retaining 3..8 produces
+fresh ordinary-kind and emitted-relocation links. The frozen ELF reader compares
+both twins and the original/replacement PT_LOAD geometry/bytes, allocated
+sections, vectors and entry. Raw IR identity is neither required nor claimed.
+
+The slot predicate binds both the original and fresh emitted LTRANS machines,
+maps, final bytes and disassembly. Six complete fixed common-body protocols
+contain five slot loads and the sole common publication store. All eight
+section-mediated slot words retain their raw section-symbol/addend/placement
+evidence. Both handler streams require their immediate load-only pairs and reject
+unsupported PC address forms, extra uses of their own literal and cross-owner
+reuse of any of the eight words. Source/generated alias membership supplements,
+not replaces, machine and final REL evidence.
+
+The final measured E2 component executes twelve exit-zero commands: three
+discovery/compile/IR-inspection groups, two links and one final disassembly.
+Thirty-five pure methods cover the runner and malformed source/record/byte
+cases, including late-failure revocation and coherent/final-only cross-pool
+reuse. The earlier E1 success is historical before the cross-pool guard, not
+qualification of final sources.
+
+The scope is section-mediated slot isolation, not arbitrary pointer aliases or
+whole-program memory safety. Full canonical handler protocols, hostile-codegen
+attribute effects and complete LTO-cell composition remain independent gates.
+There is no cell credit, source/IR semantic equivalence, archive/other-profile
+qualification, portable CI or hardware claim. Exact final source and receipt
+identities are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-common-and-slot-isolation`.
+Runtime C/assembly, public5/port8, qualified helpers and FreeRTOS are unchanged.

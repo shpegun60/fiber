@@ -9674,3 +9674,114 @@ source/IR semantics, original-TU ownership, policy/instruction equality, kernel/
 CPU/board execution and global qualification remain false. No runtime C/assembly,
 public5/port8, qualified helper or FreeRTOS reference byte changes. Protected
 unrelated WIP is neither inspected nor included.
+
+## Current CM3 O2-LTO Common And Slot Isolation
+
+The additive `tools/fixtures/cm3_lto_isolation/` component now compiles common
+core/state/panic without CPU headers and binds section-mediated current-slot
+accesses in both original and freshly linked CM3 O2-LTO machines. Its literal
+scope is current native CM3 p4/b16 soft-float direct evidence, not all profiles.
+The fixed ABI-control admission independently rechecks current E9, capture
+producer 1191CDC, ordinary Seed, source/tool/plugin authority and all 57 capture
+commands. An explicit subclass reuses only command/output/IR utilities; it owns
+its twelve-command completion, phase revocation, final schema and sealing.
+Old typed-probe and five-link-control flags remain false, not inherited credit.
+
+The unchanged common-source ownership predicate checks the admitted core,
+state, panic and runtime source-role manifest. Three fresh compilations keep
+the same source bytes, O2/CM3/soft flags and real slim LTO, removing only the
+forced platform main header and replacing all include search paths with
+context/fiber/root. Discovery and actual dependency lists agree at 11, 10 and
+8 files respectively; all are admitted and none is CMSIS or `fiber/port`.
+The three new ARM ELF32 REL objects have indexed header-bound section tables,
+`.gnu.lto_` content and no nonempty executable fallback. This does not require
+or claim equality of raw slim IR or serialized compiler options.
+
+The two fresh links replace exactly input objects 0/1/2 with the isolated IR
+and retain original objects 3..8, semantic flags, ordering and linker script.
+The ordinary recipe omits only diagnostic `-v`; the second link adds only
+`-Wl,--emit-relocs`. Both retain one-partition LTO and actual machine/plugin
+temporaries, including cwd-owned wrapper argument files. The frozen ELF reader
+compares the original/replacement ordinary images and both ordinary/emitted
+twin pairs: entry/flags, PT_LOAD geometry/bytes, allocated sections and vectors
+are identical. Nonallocated metadata and raw IR may differ.
+
+For each original and fresh emitted image, the pure slot predicate binds the
+actual merged LTRANS machine, map, final ELF and final disassembly. It retains
+local four-byte NOBITS slot identity, whole-section placement and final writable,
+non-executable zero-fill storage. Six complete source-derived fixed common
+code-generation protocols bind guards, branches, calls, all stores and literal
+pools; their five slot reads and single publication store are explicit. These
+protocols do not establish general C semantics or callback/callee correctness.
+
+Exactly eight original ABS32 words reference the dedicated slot section; eight
+applied emitted references resolve to that same local slot. Their raw empty-name
+STT_SECTION targets, addends and placements are preserved, not rewritten as
+invented named imports. Both handler instruction streams census all eight
+slot-bearing words projected from original RELs and map placements. Projection
+does not require final REL metadata; pure controls cover nonemitted finals, but
+both actual E2 slot proofs use emitted images. Ordinary images are load-compared,
+not independently slot-inspected in E2. Each handler has exactly its own immediate
+address/pointer-load pair. Extra own-pool loads, cross-owner pool reuse and
+unsupported covered PC literal/address forms reject closed. The generated
+`.LANCHOR`/source membership checks supplement the ELF evidence.
+
+The leaf deliberately reports `CompleteHandlerBodiesValidated=False` and
+`ArbitraryPointerAliasProof=False`. The outer `WholeSlotAccessIsolation` flag
+is explicitly qualified by
+`WholeSlotAccessIsolationScope=SECTION_MEDIATED_CURRENT_CM3_O2_LTO_ONLY`.
+Full native handler preservation/canonical protocols remain separate enclosing
+cell prerequisites; arbitrary constants/computed aliases and whole-program
+memory safety are not claimed by this census.
+
+Final E2 at `C:/fz-current-cm3-lto-isolation-20261106-e2/` is terminal
+PASS-NOT-QUALIFIED: twelve actual managed exit-zero commands, three isolated
+slim objects, two replacement links and one final disassembly. It seals 424
+artifacts (425 files with the manifest), 3,238 hash/physical input bindings,
+351 captured source buffers and 49 executed reader buffers. Those overlapping
+provenance counts are not extra independent executions. The source fingerprint
+remains `69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+
+Thirty-five pure methods pass: thirteen runner and twenty-two slot controls.
+They include complete synthetic positive records, malformed nested leaves,
+typed/count/scope promotion, dependency/recipe changes, raw relocation/addend/
+branch/map changes, coherent machine/disassembly stores and final-only/coherent
+cross-pool loads. Source ownership and real ELF parsing are not delegated to
+these synthetic models. Recovery tests start from a written synthetic PASS,
+make the failure hook throw and the first diagnostic write fail, then require
+matching FAIL receipt/manifest bytes and all isolation phases false without
+rerunning tools. Success-output flush failure follows the same revocation path.
+
+Review found and closed runner recovery/empty-leaf gaps and two handler-census
+gaps (final/T32 forms and cross-owner pool reuse). E1 actual success precedes the
+last gap's fix and remains historical. The earlier twelve-method pure receipts
+and red development scaffolding likewise do not qualify the final sources.
+
+Independent E2 review rehashes every artifact and watched input/physical identity,
+checks all command journals/streams and recomputes transformed flags, both
+dependency sets, three slim objects, source ownership, all three load comparisons
+and both slot proofs. Each proof reproduces six complete common bodies (276
+bytes), two handler pairs and eight original/applied slot references. It closes
+with zero drift. This is independent replay of frozen predicates, not a second
+independent decoder, another compiler run or additional cell qualification.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_isolation/CONTRACT.md` | `5327BB040CE5DF0FE96A3F965C4548F555A3FD5B843B07C071DC7E36CF943C1F` |
+| `tools/fixtures/cm3_lto_isolation/isolation.py` | `6EC1242D0ABBB120E2D684B30389B81043A67D267DE6F01F63F400FEC3E76524` |
+| `tools/fixtures/cm3_lto_isolation/slot.py` | `669F294A622B076984E36F6FA9C73235BD0D3F778AA4A36F496051D49DE822B3` |
+| `tools/fixtures/cm3_lto_isolation/test_isolation.py` | `B7416F7FC9249AED7762BB1F5F6042910C0F7043379BD65C80646D805ED457B9` |
+| `tools/fixtures/cm3_lto_isolation/test_slot.py` | `0816B192F630259E6C4DD6579D9268A3A22898EAC1D8AE248F1B9DAF35C26AAE` |
+| `%TEMP%/cm3-lto-isolation-parent-pure-20261106-e3/results.json` | `EB60B8F824099533E3E43BDF5CB388708D7E014E8A838B1154EAE6CE14E696EE` |
+| `%TEMP%/cm3-lto-slot-parent-pure-20261106-e2/results.json` | `C1169473C46B8C96BB922F4E0E98B6BCE0FF0DC2A9156C8C142B2455C4A6CA14` |
+| Actual E2 `results.json` | `30E54547F28D488EAAE776ADEAD18828C674E264927FF2CF1379AE6FAB91DB0C` |
+| Actual E2 `artifacts.json` | `06406BD929ABB8AB323C08E1860488ED3766CBC18B9028B9FCC5BD466B9743F5` |
+| `%TEMP%/cm3-lto-isolation-independent-review-20261106-e2b/results.json` | `AEC4FB2B520B9614FD1C7FCAF6103EF407FDB1102ED4BE349A5D5B7440535C3F` |
+
+This closes only CPU-header-free common LTO compilation and bounded
+section-mediated slot isolation for this current capture. Hostile-codegen
+attribute effects and complete same-capture LTO cell composition are next;
+Os/archive/broader-profile qualification, portable CI and board evidence remain
+separate. All 2,774 keys and 26 backlog records remain visible; this component's
+RequiredCellsSatisfied stays literal integer zero. No runtime C/assembly,
+public5/port8, qualified helper, reference or protected unrelated WIP changes.
