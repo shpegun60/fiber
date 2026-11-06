@@ -3668,3 +3668,36 @@ raw-byte-identical load-image result without independently executing those
 predicates. An initial reviewer-count assumption is corrected and its FAIL
 retained; production evidence and sources are unchanged. The exact bounded
 review receipt is recorded with the component evidence.
+
+## Current CM3 Os-LTO Batch And Machine Preparation
+
+The additive build driver now attempts all four Os phases in one admitted
+session. The first real attempt completes 115 managed host commands, including
+65 compiler-driver calls and eight intended negative exits. The three first
+phases complete their 41/12/45-command ranges. Selected runtime/boot/exception
+compilation and its first genuine lowering also succeed, but the option checker
+then rejects GCC's canonical `-march=armv7-m`. This is a retained FAIL attempt,
+not a completed 134-command batch or an Os-cell qualification.
+
+The port checker and common worker adapter now accept repeated exact `-Os`,
+`-march=armv7-m` and `-mlibarch=armv7-m` worker facts while rejecting foreign,
+split or valueless alternatives. The original captured source/driver flags
+remain unchanged. Updated port-policy/common-worker pure suites pass 12/13
+methods. A fresh full tool execution remains required.
+
+Os-owned common effects, port machine census and a twenty-machine-role composer
+have 14/17/10 passing synthetic methods, respectively, and bounded independent
+reviews. No O2 top-level result is relabeled. Missing provider surfaces and
+unallocated or incompletely loaded vector tables reject. Setter/cold-inline
+attribution stays pending when unresolved. Both aggregate and saved-worker
+outputs still require actual one-scope replay, with worker provenance and
+ABI/isolation/transfer proofs composed independently. These helpers have no
+whole-cell credit. Runtime C/ASM, public5/port8, inventory and backlog are unchanged.
+
+The batch driver additionally closes the reviewed catalog/recovery gaps: exact
+142-role correspondence with original component records and input hashes,
+unchanged successfully claimed output-directory identity before each recovery
+write, and regular unaliased bounded destination files. The driver/guard suites
+pass 22/12 synthetic methods, including coherent role omission and unclaimed or
+replaced output roots. This is source hardening, not a successful fresh producer
+execution. The failed E1 and its executed source bytes remain unchanged.

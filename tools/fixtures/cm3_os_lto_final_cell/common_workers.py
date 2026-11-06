@@ -43,7 +43,8 @@ def _options(args, stage, *, saved):
     marker = '-fwpa' if stage == 'WPA' else '-fltrans'
     need(args.count(marker) == 1 and ('-fltrans' if stage == 'WPA' else '-fwpa') not in args,
          stage + ' exact worker stage')
-    need([arg for arg in args if arg.startswith('-O')] == ['-Os'], stage + ' sole Os optimization')
+    optimizations = [arg for arg in args if arg.startswith('-O')]
+    need(optimizations and all(arg == '-Os' for arg in optimizations), stage + ' sole Os optimization')
     need(all(flag in args for flag in ('-mcpu=cortex-m3', '-mthumb', '-mfloat-abi=soft')),
          stage + ' actual soft CM3 Thumb target')
     need(all(flag in args for flag in RAW_FLAGS), stage + ' all six uncancelled raw flags')
@@ -51,12 +52,14 @@ def _options(args, stage, *, saved):
         need(all(flag in args for flag in LOWER_FLAGS), stage + ' fixed real nolto-rel lowering')
     forbidden = ('-fno-instrument-functions', '-finstrument-functions-exclude-', '-fno-stack-protector',
                  '-fno-profile', '-fno-test-coverage', '-fno-sanitize', '-fno-lto', '-ffat-lto-objects',
-                 '-march', '-mfpu', '-mno-general-regs-only')
+                 '-mfpu', '-mno-general-regs-only')
     for arg in args:
         need(not arg.startswith(forbidden) and arg not in ('-mgeneral-regs-only', '-marm', '-lgcov'),
              stage + ' forbidden counter/target/runtime option')
         need(not arg.startswith('-mcpu=') or arg == '-mcpu=cortex-m3', stage + ' foreign CPU')
         need(not arg.startswith('-mfloat-abi=') or arg == '-mfloat-abi=soft', stage + ' foreign float ABI')
+        if arg.startswith(('-march', '-mlibarch', '--march', '--mlibarch')):
+            need(arg in ('-march=armv7-m', '-mlibarch=armv7-m'), stage + ' foreign architecture option')
         need(not arg.startswith('-flto-partition=') or arg == '-flto-partition=one', stage + ' foreign partition')
         need(not arg.startswith('-flinker-output=') or arg == '-flinker-output=nolto-rel', stage + ' foreign lowering kind')
         if arg.startswith(('-finstrument-functions', '-fstack-protector', '-fprofile-arcs', '-ftest-coverage', '-fsanitize')):

@@ -10401,3 +10401,93 @@ same-fixture composition are pending. This does not reduce the 2,774-key plan
 or 26 backlog records. Full semantic ABI, arbitrary-callback protection,
 archive, CI, global freeze and hardware qualification remain unclaimed.
 Runtime C/ASM, public5/port8 and pinned FreeRTOS are unchanged.
+
+## Current CM3 Os-LTO Batch And Machine Preparation
+
+The new build-only orchestration uses one admitted session and the exact
+41/12/45/36 command plan. It does not execute O2 phase drivers, constructors,
+readers or verdicts. All source/helper buffers are enrolled before admission,
+and the existing full pre-command closure remains in force.
+
+Real attempt `C:/fzosbatch-20261106-e1` terminates FAIL after 115 managed host
+commands. The first 98 commands complete ABI controls, isolated common builds
+and six common hostile lowerings. Selected runtime/boot/exception compilation,
+plugin queries and the first selected aggregate lowering also complete. All
+115 command records are terminal: 65 compiler-driver calls, eight intended
+nonzero controls and no unexpected tool nonzero result. This is not a finished
+134-command batch and gives zero required-cell credit.
+
+The immediate rejection is in the option checker, after GCC succeeds: actual
+saved WPA/LTRANS arguments contain canonical `-march=armv7-m` and
+`-mlibarch=armv7-m`, including repetition. Exact `-Os` is also repeated. The
+checker had rejected all `-march` options; the common worker adapter separately
+assumed only one `-Os` occurrence. The corrected source accepts repeated exact
+CM3 facts but rejects foreign values, split forms and valueless forms. Original
+source/compile flags are not rewritten. Updated pure port-policy/common-worker
+suites pass 12/13 methods. E1 is retained as FAIL, not retroactively promoted.
+
+The failure receipt has stale zero command counters; the separate sealed
+`commands.json` is the actual 115-command authority. The driver now preserves
+that journal and its real counters in failure reports. Parent post-terminal
+checking verifies every one of the 1,522 manifest-mapped artifacts and exact
+membership (1,523 files including the manifest). This verifies byte/accounting
+closure, not the pending machine predicates. Later original driver/phase source
+changes are intentional; E1's captured source copies retain the executed bytes.
+
+Pure Os-owned machine support is separate from the tool build: common effects
+(14 methods), port census (17), machine composition (10) and common worker
+provenance (13 after canonicalization fix). The census public API cannot use
+`None` to skip provider validation. Final vectors require allocated file-backed
+sections, unique readable load coverage and matching raw bytes. The composer
+binds twelve common plus eight port machine roles and eight disassemblies to
+their declared path/hash pairs. Parser bytes must equal those bound bytes.
+No O2 top-level verdict is relabeled. Unresolved setter attribution stays pending;
+no caller may convert it into a clean protected-body result.
+
+| Local Evidence | SHA-256 |
+| --- | --- |
+| E1 `results.json` (FAIL) | `47E2DD49B2A0D9CF81B161A8AF261FA19FE4E1707F4EB539824656E316244669` |
+| E1 `artifacts.json` | `2653E362B7367D42DB4077EA315056C9580D8D50B2152332558B0C1C8DBD2909` |
+| `%TEMP%/cm3-os-port-policy-pure-parent-20261106-e2/results.json` | `75D24AB44B379508BB983A4E08523A21119D8814335B7C7950D7F162CF755C3E` |
+| `%TEMP%/cm3-os-common-workers-pure-parent-20261106-e2/results.json` | `104CA8B4B4E03C40FDDA04558627258505ED1ED8F9980106962721F85144D669` |
+| `%TEMP%/cm3-os-common-effects-pure-parent-20261106-e1/results.json` | `061256F9C3B67EE6EBBE1142CFCA5D38D7931E47C3AF25CF16C860431A1A9E1C` |
+| `%TEMP%/cm3-os-port-census-pure-parent-20261106-e2/results.json` | `CF35358BCFA1E7F8F5F3FE70C848EC7A355CF07960CC72133CBB11CF629C6837` |
+| `%TEMP%/cm3-os-machine-replay-pure-parent-20261106-e1/results.json` | `745CD9F271BCF6EE1D2686137D7024E29BD665A2B6EF7D1F9CE89FD701CB3962` |
+
+A bounded review also identifies two driver-hardening duties: pending catalog
+membership must equal its original component projection, and recovery writes
+must require the successfully claimed output directory's unchanged physical
+identity. The supplemental `BATCH_RECOVERY_CONTRACT.md` records both obligations.
+The next producer execution must use the fixed checker/guards in a fresh output;
+all actual machine/worker predicates still require the single immutable reader.
+These records grant no Os-cell, archive, CI, global-freeze or hardware credit.
+The 2,774 inventory keys and 26 backlog entries remain unchanged. Runtime C/ASM,
+the five-operation public API and eight-operation port boundary are unchanged.
+
+Both reviewed driver gaps are now implemented, with twelve pure guard methods
+and twenty-two orchestration methods passing. `batch_guard.py` reconstructs the
+complete ordered 142-role handoff from original top-level records and InputHashes,
+not copied pending metadata, and checks typed component correspondence. The
+driver calls it before sealing a build-only disposition. Recovery retains the
+existing failure-persistence routine inside a per-write guard: the originally
+claimed root must remain the same non-reparse directory; only direct regular
+single-link results/manifest files may be overwritten. Unclaimed/preexisting
+and replaced roots are regression-tested without modifying unrelated files.
+The root check is not an atomic hostile-filesystem race defense.
+
+| Updated Source Or Pure Evidence | SHA-256 |
+| --- | --- |
+| E1 executed batch driver, retained in captured source buffers | `2C477E6190BC23621F3FE9A8547841484724657F2DED20BAEF9735007DBA99B1` |
+| E1 executed port-policy phase, retained in captured source buffers | `FA1EEED580BA905A0F8F04D7731A6F581D26820BBA4E44F9D720BDC0BE14A205` |
+| Current `batch_attempt.py` | `EC52A23182A5B0B4A09E18429E5BFB94902FBC42592785295D7283ACB572F38A` |
+| Current `test_batch_attempt.py` | `A6BF61A3B5293FB48AD253D88838C90A81127B7A57A2E8F01A312717C3988B7F` |
+| `batch_guard.py` | `1281084AF70A6AADEA9590E4839311D3F3FA813B17ED06EEE5CD402F4E69BAFD` |
+| `test_batch_guard.py` | `BE47EA9F0984DB09803DB4E5FE95AA0D05402E87B5BD36F5A80B6380B918013E` |
+| Current `port_policy_phase.py` | `371821947E1F14E0C0DEBC5561EFD3EF8B539B20C9B00F288A8534143D29EB80` |
+| Current `common_workers.py` | `F12A77717924A11DF5F6FA29800271D335A09C475819171C31EFC0B757474EDB` |
+| `%TEMP%/cm3-os-batch-attempt-pure-parent-20261106-e3/results.json` | `7103D834F41335731F8193F6A9ABFF81F976F1CC0DFE639116FC9B84246B660F` |
+| `%TEMP%/cm3-os-batch-guard-pure-parent-20261106-e1/results.json` | `02F9E70E05BB6528F643EBFF5ACB2612BBB85423F70C281C4D72D0522B4B97AB` |
+
+No corrected full-batch tool run is claimed by these pure tests. The next actual
+producer attempt must use a fresh output directory and this fixed source cohort;
+its one-scope machine/worker/ABI/isolation/transfer replay remains required.

@@ -63,6 +63,9 @@ responses, intermediate, partition and assembler output remain bound. No helper
 global is modified. The caller still owns source admission, physical identity
 and the binding to the original batch journal. Compiler-reported execution is
 not an OS process trace; worker facts do not establish machine effects.
+GCC may repeat the same effective `-Os` and canonical `-march=armv7-m` /
+`-mlibarch=armv7-m` facts. Repetition is not a foreign optimization or target;
+different values, split forms and valueless forms remain rejected.
 
 ## Scope
 

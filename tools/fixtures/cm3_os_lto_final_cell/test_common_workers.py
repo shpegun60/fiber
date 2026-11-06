@@ -18,7 +18,7 @@ HELPER = ROOT / 'tools/fixtures/cm3_lto_attributes/runner.py'
 HELPER_SHA = '9C99D38EACC8F3E3B2B63F343CA79555A66264AC76A3CA11957D2BEB0745987A'
 RAW = ('-finstrument-functions', '-fstack-protector-all', '-fprofile-arcs',
        '-ftest-coverage', '-fsanitize=undefined', '-fsanitize-coverage=trace-pc')
-METHODS = 12
+METHODS = 13
 API = HELPERS = HELPER_MODULE = None
 
 
@@ -122,8 +122,11 @@ class WorkerTests(unittest.TestCase):
                 self.assertIs(proof['Execution']['OsProcessTraceVerified'], False)
 
     def test_saved_options_sole_os_target_and_raw_six(self):
-        for flag in ('-O2', '-O0', '-Os', '-mcpu=cortex-m7', '-mfloat-abi=hard', '-mfpu=fpv4-sp-d16',
-                     '-march=armv7-m', '-marm', '-flto-partition=none', '-ffat-lto-objects'):
+        for flag in ('-O2', '-O0', '-mcpu=cortex-m7', '-mfloat-abi=hard', '-mfpu=fpv4-sp-d16',
+                     '-march=armv6-m', '-mlibarch=armv8-m.main', '-march', '-mlibarch',
+                     '-march=', '-mlibarch=', '-marcharmv7-m', '-mlibarcharmv7-m',
+                     '--march=armv7-m', '--mlibarch=armv7-m', '-march=armv7-m+nofp',
+                     '-marm', '-flto-partition=none', '-ffat-lto-objects'):
             with self.subTest(flag=flag):
                 fixture = Fixture()
                 fixture.ltrans.insert(0, flag)
@@ -137,6 +140,28 @@ class WorkerTests(unittest.TestCase):
             with self.subTest(missing=flag), self.assertRaises(API.Rejected):
                 fixture.run()
 
+    def test_canonical_repeated_os_and_armv7_m_worker_forms(self):
+        fixture = Fixture()
+        prefix = ['-mcpu=cortex-m3', '-mthumb', '-mfloat-abi=soft',
+                  '-mlibarch=armv7-m', '-march=armv7-m', '-Os']
+        architecture = ['-mlibarch=armv7-m', '-march=armv7-m']
+        for values, tail in ((fixture.wpa, len(fixture.objects)), (fixture.ltrans, 1)):
+            values[:0] = prefix
+            position = len(values) - tail
+            values[position:position] = architecture
+        for values in (fixture.actual_wpa, fixture.actual_ltrans):
+            values[1:1] = prefix
+            values[-1:-1] = architecture
+        fixture.write_saved()
+        machine, proof = fixture.run()
+        self.assertEqual(machine, fixture.machine)
+        self.assertIs(proof['SavedArgumentOsOptionsValidated'], True)
+        self.assertIs(proof['ActualInvocationOsOptionsValidated'], True)
+        for values in (fixture.wpa, fixture.ltrans, fixture.actual_wpa, fixture.actual_ltrans):
+            self.assertEqual(values.count('-Os'), 2)
+            self.assertEqual(values.count('-march=armv7-m'), 2)
+            self.assertEqual(values.count('-mlibarch=armv7-m'), 2)
+
     def test_all_counter_and_contradictory_stress_options_rejected(self):
         for flag in ('-fno-instrument-functions', '-finstrument-functions-exclude-function-list=ctxrt',
                 '-fno-stack-protector', '-fno-profile-arcs', '-fno-test-coverage', '-fno-sanitize=all',
@@ -149,7 +174,10 @@ class WorkerTests(unittest.TestCase):
                 fixture.run()
 
     def test_actual_reported_options_checked_not_only_saved_intent(self):
-        for flag in ('-O2', '-fno-sanitize=all', '-fno-instrument-functions', '-mfloat-abi=hard', '-mgeneral-regs-only'):
+        for flag in ('-O2', '-fno-sanitize=all', '-fno-instrument-functions', '-mfloat-abi=hard',
+                     '-mgeneral-regs-only', '-march=armv6-m', '-mlibarch=armv8-m.main',
+                     '-march', '-mlibarch', '-march=', '-mlibarch=',
+                     '--march=armv7-m', '--mlibarch=armv7-m'):
             fixture = Fixture()
             fixture.actual_ltrans.insert(1, flag)
             with self.subTest(flag=flag), self.assertRaises(API.Rejected):
@@ -331,7 +359,7 @@ def main(argv=None):
                 for name in ('worker_chain', 'argument_lines', 'worker_diagnostics')})
             tests = unittest.defaultTestLoader.loadTestsFromTestCase(WorkerTests)
             if tests.countTestCases() != METHODS:
-                raise ValueError('exact twelve methods required')
+                raise ValueError('exact thirteen methods required')
             result = unittest.TextTestRunner(verbosity=2).run(tests)
         report.update(Tests=result.testsRun, Failures=len(result.failures), Errors=len(result.errors),
             Skipped=len(result.skipped), Details=[dict(Test=str(test), Detail=detail)
