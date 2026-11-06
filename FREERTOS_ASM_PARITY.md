@@ -3218,3 +3218,36 @@ Full semantic ABI, source/IR equivalence, all-profile final LTO/archive coverage
 portable hosted CI, CPU/board execution and global freeze are not established
 by this ordinary-only composer. Runtime C/assembly, public5/port8, fixed helpers,
 the reference pin and default matrix remain unchanged.
+
+## Current CM3 LTO Capture Frontend
+
+`tools/fixtures/cm3_current_lto_capture/capture.py` provides four explicit
+current-source capture routes: native/reference crossed with O2-lto/Os-lto,
+direct linkage only. Its nine-argument CLI independently binds the current E9
+inventory and an ordinary CM3/O2 seed before creating output. The additive
+reference constructor preserves every inherited validator while replacing only
+historical directory/receipt authority with authenticated caller descriptors.
+Native and reference captures retain the existing compile/link recipes, parser,
+actual slim IR inputs, saved LTRANS machine objects and structural twin reader.
+
+The frontend also binds bootstrap helper buffers before execution, restores the
+temporary native bootstrap read hook before physical closing, and combines
+legacy byte/membership checks with current physical-identity checks. Its local
+command adapter preserves primary failures, attempts independent terminal
+journals/streams and permits only bounded diagnostic-write recovery, never a
+compiler or build retry. Intended receipt/manifest bytes are fixed before
+normal seal writes. Failure recovery revokes stale PASS evidence without
+promoting diagnostic consistency into input/output qualification.
+
+Forty-three maintained host test methods cover the reference constructor,
+frontend admission/sealing and command failure paths. These use synthetic
+authorities and fake process boundaries; they do not constitute compiler, ELF,
+runtime or full-cell tests. The contract and exact measured capture evidence
+are recorded separately in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-lto-capture-frontend`.
+
+Capture PASS awards zero canonical cells. Current-source final-root/REL/origin
+replay, canonical native/reference protocol composition, complete provider/ABI
+controls and direct/archive whole-cell qualification remain separate gates.
+Historical E8 captures retain their original scope. Runtime C/assembly,
+public5/port8, the reference pin and default matrix are unchanged.

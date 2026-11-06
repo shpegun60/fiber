@@ -9085,11 +9085,12 @@ then archive linkage. Historical CM3 LTO captures remain E8 evidence and cannot
 be relabeled current E9. Reuse the existing complete-root readers and transport
 machinery, with explicit closure of these remaining differences:
 
-The native O2-LTO/Os-LTO seed admission is already parameterized for the current
-ordinary CM3/O2 source group. Reference admission still requires its historical
-directory and receipt/manifest hashes. The next additive reference adapter must
-preserve its full validation while accepting independently bound current seed
-descriptors; it must not patch frozen admission globals or relabel E8 receipts.
+At this ordinary checkpoint, native O2-LTO/Os-LTO seed admission was already
+parameterized for the current ordinary CM3/O2 source group, while reference
+admission still required its historical directory and receipt/manifest hashes.
+The additive current capture frontend below now closes that capture-admission
+gap without patching frozen globals or relabeling E8 receipts. Complete LTO
+root/protocol/provider/ABI and whole-cell composition remain separate work.
 
 - Native LTO has eight slim C IR providers and one native startup assembly TU,
   not nine IR providers. Bind source/header/flags and plugin resolutions to IR
@@ -9110,3 +9111,120 @@ No full semantic ABI, source/IR semantics, CPU/board execution, actual runtime
 handler routing, hosted CI or global freeze follows from these ordinary cells.
 No runtime C/assembly, public5/port8 boundary, qualified helper, reference pin or
 default matrix is changed. Unrelated protected WIP remains outside this scope.
+
+## Current CM3 LTO Capture Frontend
+
+The 2026-11-06 maintained frontend in
+`tools/fixtures/cm3_current_lto_capture/` admits current E9 evidence for four
+direct capture routes: native/reference crossed with O2-lto/Os-lto. It is a
+capture-only preparation step for the still-pending current LTO whole-cell
+gate, not a final native/reference parity result. Its fixed source fingerprint
+is `69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+E9 receipt/manifest authority remains respectively
+`1910B53001FD37DF4B6DC57805EE49E4381B2529E1E3ECB47FDB312EB43A4DFC`
+and `640C2CAC37DFC0A10F5A6E8538E7A9F81C7967DEEDEAA4B2924A15CAA1600CEA`.
+The reference remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+Both target optimizations start from independently admitted ordinary CM3/O2
+seeds. The nine-argument CLI authenticates seed receipt/manifest and current
+inventory descriptors before constructing a seed or creating output. The
+unchanged current admission recomputes all 2,774 canonical keys and retains all
+26 backlog records. The local reference adapter duplicates only the legacy
+constructor to remove its historical path/hash authority; every validator and
+its defining globals remain inherited from the pinned original implementation.
+Native admission retains the existing parameterized constructor.
+
+All executable helper buffers have fixed source pins before use. A temporary
+read hook supplies only the authenticated native bootstrap-loader buffer and
+is removed before real physical closing. The twin helper has an independent
+pre-use pin. The combined instance closure preserves legacy hashes/membership
+and current physical identities/trees. Cloned tools are enrolled and checked
+before and after commands. Output is fresh and disjoint from admitted roots.
+Neither helper globals nor source/ELF predicates are weakened or overlaid.
+
+The local command wrapper records ATTEMPT before launch and exact TERMINAL
+state afterward. It preserves a compiler/runner primary failure even if stream,
+tool-closing, object-closing or diagnostic writes fail later. The frontend also
+revokes unsuccessful finishing results, including swallowed legacy failures.
+Only diagnostic persistence has bounded retries; the compiler, process and
+build stage are never retried. Normal sealing hashes intended receipt/manifest
+bytes before writes. Best-effort FAIL recovery writes matching forensic
+evidence with both verification flags false; diagnostic consistency is not PASS.
+
+Forty-three maintained host methods pass: fourteen reference-adapter controls,
+sixteen command controls and thirteen frontend methods with multiple route,
+type, drift and failure subcases. They cover exact constructor inheritance,
+caller descriptor admission, four closed factories, bootstrap buffer/restoration,
+physical closing, typed zero credit, terminal journals, primary preservation,
+unsuccessful finish revocation and bounded transient-write recovery. These are
+synthetic tests with fake process boundaries, not compiler or ELF execution.
+
+### Final-Source Capture Evidence
+
+The four fresh captures at `C:/fz-current-cm3-lto-capture-20261106-e2/` all
+terminate successfully on the frozen source below. Native runs each compile
+nine TUs, including eight genuine slim C IR providers and one non-LTO startup.
+Reference runs each compile four TUs, including three slim C IR providers and
+one non-LTO startup. Across the four routes there are 26 TUs, 22 slim IR inputs,
+188 successful terminal host-driver commands, eight actual final links and
+eight retained LTRANS machine objects. Each route independently compares its
+ordinary and emitted-relocation image's load/allocated contents; this is four
+within-side twin comparisons, not native/reference instruction equivalence.
+WPA IR is retained as transport evidence, never substituted for machine code.
+
+The separate read-only parent audit verifies exact receipt/manifest bindings,
+all 5,668 outer artifact entries, 5,454 input hash/physical bindings and all
+command journals/streams. It rehashes 7,833 unique files, re-enumerates outer and
+link-directory membership at closing, and derives descriptor hashes from the
+checked buffers. Its only multi-link input exception is the exact authenticated
+Git provenance executable with its captured two-link physical identity. The
+audit output is disjoint from audited trees. This audit proves byte/accounting
+closure, not ELF semantics, compiler replay, full ABI or cell qualification.
+
+A separate native review also inspects actual ARM ELF32LE section inventories,
+distinguishes slim inputs/native startup/WPA IR/LTRANS machine objects, and
+rechecks flags, dependencies, maps and own-side structural twins for both native
+modes. The reference second review closes byte/physical/journal evidence only;
+independent reference ELF-section parsing, twin recomputation and complete
+recipe crosschecking are not completed by that review. Those remain explicit
+work for the following independent root/protocol gate, not an implied PASS.
+
+| Route Under The Final Capture Root | Receipt SHA-256 | Artifact Manifest SHA-256 |
+| --- | --- | --- |
+| `native-O2-lto` | `26B967A51A9546BD7F5234A61B6DF6D36381E6BB402D6EBCC3801E0A202F0EBB` | `3A6F6251AC23EF69EA5FE9BFF94B3F3FDE8CFF8ADD55002DC0865D3E543C3159` |
+| `native-Os-lto` | `B85DA52838459F717EBCAB1F36B041F39323084E32301481F966165FBA510FB2` | `9AB69DF1309C6F6A08663C1E5027C29CC14C32BF003EB7C4EF412048CBBB8B33` |
+| `reference-O2-lto` | `3969D3E2453A067F9F7E94C280060123CB621168711F54D76C93AF89DBD6DD9C` | `3DFD451295EB14C7F4F83C698D582031F33E5D0C0F2F5E7DBC83C5841F2C7541` |
+| `reference-Os-lto` | `D8A6845268D9C83FAB8BED56F11EDF92F51BE248E6A266C104CD88D5469DDFBA` | `C4EB20E595DE2771960C918942F56814CB6B34FD1287049C3D914D26DBD58009` |
+
+| Maintained Source Or Local Test Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_current_lto_capture/CONTRACT.md` | `A49E0A59323356AC225B057E501583FB6EC7A0481CB09B1716AF9D4F6CBE1271` |
+| `tools/fixtures/cm3_current_lto_capture/capture.py` | `128AEAF877FDB6FAC56E1A87CAE9B7F47A3EA41232739FFC0BFCEEBF9737BF2C` |
+| `tools/fixtures/cm3_current_lto_capture/admission.py` | `BB4927C3046CC7FEEB42BF37D84CDF0790CB6C58D7C5F17E0AB2983E6727AEAF` |
+| `tools/fixtures/cm3_current_lto_capture/commands.py` | `C89CF702850D10582479F57D24590F13AFB757ECBE3A45BEF77F1B705DECC6BF` |
+| `tools/fixtures/cm3_current_lto_capture/test_admission.py` | `2040085C2DD4A2E2B33A1E66DDAC82B9AA92C2BC907DE2218A77289632CF67D5` |
+| `tools/fixtures/cm3_current_lto_capture/test_capture.py` | `26F4E9659E93913CC38B3BFCF775C822FC1BBE4A52179E7EE9F7ADB10EF25DFD` |
+| `tools/fixtures/cm3_current_lto_capture/test_commands.py` | `71E67CF0961A0A48F8A417A38050AD66D0DCBF2D2A07CC67EA20B42A832AA2F5` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-admission-20261106-e1/results.json` | `C5B02EA0F0A97DEC0CB5ACE9D267BB408B68CCCAF0CEEABB672DF32CF3E9A160` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-commands-20261106-e1/results.json` | `B35E26BF45C6C62EA268CA540E42C554701632736683E629E090B72C3ECF820F` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-capture-tests-20261106-e2/results.json` | `D415AC17A4FB2A717D8BD91E1B7FB471771864E63958E959F0D10E123DC5BD43` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-audit-20261106-e1/audit.py` | `605B35F726661CC83B87429A90420E530A7CA5BCAFD7432ADD23F1A59C9966B1` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-lto-parent-audit-20261106-e1/results-e2.json` | `B5C00E3B2178169D85BC92DCE2CAA05CDC9C36C2A28C99A5E36691E229FC836C` |
+
+Two successful preliminary O2 captures at the sibling `20261106-e1` root use
+the earlier producer and contract before the final failure-recovery fixes.
+They remain historical and are not final-source qualification evidence.
+Raw source pins refer to the measured LF working-tree bytes. Automatic checkout
+line-ending conversion must reject rather than normalize these authenticated
+buffers; portable checkout/tool bootstrap remains part of the separate CI gate.
+
+Each final capture grants literal zero canonical cells. Current-source complete
+root/REL/origin replay and native/reference canonical protocol composition are
+the next bounded gate. Complete forward/reverse provider and attribute controls,
+fresh storage/reverse/cohort/duplicate-handler negatives, archive resolution,
+broader profiles and portable hosted CI remain pending. Raw slim-object equality
+is not required or claimed: compiler-generated LTO suffixes can vary. No source/
+IR semantic proof, full semantic ABI, native/reference policy equality, global
+freeze or CPU/board execution follows. Runtime C/assembly, public5/port8, pinned
+helpers, the reference pin and default matrix are unchanged; unrelated protected
+WIP is neither inspected nor included.
