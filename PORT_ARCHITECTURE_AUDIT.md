@@ -9319,3 +9319,101 @@ not. A new Os-LTO admission frontend is separate work and is not qualified by
 this checkpoint. Broader-profile LTO, portable CI, source/IR semantics, full
 semantic ABI, global freeze and hardware remain unproved. No runtime C/assembly,
 public5/port8 operation, frozen reader/protocol helper or reference pin changes.
+
+## Current CM3 Os-LTO Mechanism Replay
+
+The 2026-11-06 additive `tools/fixtures/cm3_current_lto_replay/` frontend admits
+the current E9 inventory and E3 native/reference Os-LTO captures from the prior
+section. It replaces only `cm3_os_lto_join.Witness.__init__`; inherited readers,
+complete-body predicates, actual mutation catalogs, command reconstruction,
+sealing and mechanism composition retain their frozen source bytes. The old
+constructor's historical producer and E8 reference-seed authority are not used.
+Independent current inventory, both complete capture trees, their ordinary
+CM3/O2 seed descriptors, source buffers and physical identities must agree
+before output creation. The sole optimization transform remains O2 to Os.
+
+The runner authenticates all bootstrap buffers before executing them and blocks
+host subprocess/shell creation during admission and replay. It invokes the
+inherited replay exactly once, then validates the unchanged structured-report
+schema. Failure handling retains the primary error if the failure hook or
+seal also fails. A standalone diagnostic writer can make at most two bounded
+attempts to persist matching FAIL receipt/manifest bytes after a failed seal;
+this is never a compiler, process or replay retry. Persistent inability to write
+diagnostics still returns failure, not qualification.
+
+Fourteen synthetic admission methods verify constructor-only inheritance,
+caller/current/capture/seed authority, literal route/transform fields, unique
+provider catalogs, watched counts, source/ledger bindings, role alias rejection,
+disjoint output and pre-output closing failures. Fourteen frontend methods
+cover isolated bootstrap, exact arguments, structured-result enforcement,
+single invocation, forbidden processes, primary-error preservation and stale
+PASS revocation after transient diagnostic errors. All 28 pass in fresh parent
+isolated Python processes; six constructor inputs and three frontend inputs
+close without drift. These are host synthetic controls with mocked admission
+and process boundaries, not 28 ELF or target tests.
+
+### Measured Actual Replay
+
+The fresh actual bundle is:
+
+```text
+C:/fz-current-cm3-lto-join-20261106-e1/Os-lto/
+```
+
+It returns `CM3-OS-LTO-JOIN-PASS-NOT-QUALIFIED` with
+`Scope=CM3_OS_LTO_SIX_BODY_MECHANISM_JOIN_ONLY`. The fixed cohort is current
+CM3 p4/b16 soft-float, Os-LTO, direct linkage. Source fingerprint remains
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+
+Native's three roots preserve 492 bytes, 170 instructions and thirteen references;
+reference's three preserve 136 bytes, 39 instructions and three references.
+The inherited readers bind actual saved machine objects to final ELF bodies,
+all REL/addend/provider/map origins and each side's structural load-image twins.
+The canonical composition consumes six complete bodies and three mechanisms,
+with the existing six difference IDs and no instruction-equivalence claim.
+All 32 actual private transport mutations and two coherent SVC-immediate
+canonical controls execute freshly here (`MutantsReexecuted=True`). This differs
+from the O2 join's authentication of already-executed child controls.
+
+The replay retains 582 source-buffer copies, fourteen binary-role copies and
+61 executed source buffers. All 5,783 input bindings and 771 artifact entries
+close. A separate parent read-only rehash also verifies exact receipt/manifest
+identity, output membership, all input/output hashes, typed result/control
+counts and literal zero cell credit across 5,784 unique files. That parent
+check is byte/accounting evidence, not an independent ELF-semantic proof.
+
+An independent consumer review also matches both descriptors and rehashes
+5,785 unique files, including the manifest. It inspects retained full-root,
+origin/REL, twin, protocol and control evidence, including 172 private control
+files, without discrepancies or input drift. It does not independently rerun
+the pinned readers/checkers; that review is not a second predicate computation.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_current_lto_replay/CONTRACT.md` | `CDB260181CF3A1E4999E392A7478921198A1B868DC108261390ADBC3E490A0EF` |
+| `tools/fixtures/cm3_current_lto_replay/os_admission.py` | `DA5EB7F209A1787A8C909267B258D7E5B835E64B77785ACCF052306D9D91E857` |
+| `tools/fixtures/cm3_current_lto_replay/witness.py` | `7AFE40E8344E0E9329004BB4D9682606251C9FB05E7B17A3233BF16F1798AC4A` |
+| `tools/fixtures/cm3_current_lto_replay/test_admission.py` | `0C862D4F4872DB51B4667D213678C1C03A8078AB2AE276E4495C11114162E1B5` |
+| `tools/fixtures/cm3_current_lto_replay/test_witness.py` | `06E8879DC086FE1593DF9EBE2D83DDBDE46E2A279C8B7718F0E82F8AADBC3265` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-os-replay-parent-admission-20261106-e2/results.json` | `E79E6D7594F66C7540743D390F7556CA44170D979CAAB794FC6072E4D28BD2AA` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-current-cm3-os-replay-parent-frontend-20261106-e1/results.json` | `343A1EB0A7FE3333CA9F6F4A39D5A9DF9B0DE26B62BCAE8C7548BC69F371636F` |
+| Actual replay `results.json` | `ABB6F0227ACB482B185BAE9A67A2BB787543D56242A3D1F13AAF06DDFB665247` |
+| Actual replay `artifacts.json` | `EF27FCD461602994CE6052DC72DED57B5B3D0DC1952AEB7E6F1F4ECFC3C6C634` |
+
+The capture producer stays `1191CDCDA9FC9312B09858D6439674DBCA19ABFCE5B0108F3575AEF3C65C0852`;
+the inherited Os witness stays
+`BEC9C699F8C62A69CB2BF35B24CF51D8815329517F83A11517BF9657D294D7AB`.
+Other decoder/protocol/helper pins remain those of their existing contracts.
+Raw new-source pins refer to measured LF working-tree bytes; automatic newline
+conversion must reject, not normalize authenticated code. Portable checkout
+and tool bootstrap remain part of the later CI gate.
+
+This checkpoint closes the bounded current-source Os-LTO root/origin/canonical
+replay, not a whole-cell proof. All 2,774 inventory keys and 26 backlog records
+remain visible and receive zero credit here. Complete forward/reverse provider
+and attribute controls, fresh storage/reverse/cohort/duplicate-handler link
+negatives, current-slot whole-cell evidence, archive resolution, broader-profile
+LTO and portable hosted CI remain pending. Full semantic ABI, source/IR
+equivalence, runtime policy equality, global freeze and CPU/board execution are
+not claimed. No runtime C/assembly, public5/port8, existing frozen predicate or
+reference pin changes; unrelated protected WIP is neither inspected nor staged.

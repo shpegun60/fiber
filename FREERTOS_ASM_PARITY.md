@@ -3277,3 +3277,34 @@ LTO coverage, portable CI and hardware remain separate work. Exact E3 capture
 and O2 replay receipts, source pins and the superseded E2 catalog limitation are
 in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-catalog-and-o2-lto-replay`.
 No target execution or runtime C/assembly change occurs.
+
+## Current CM3 Os-LTO Mechanism Replay
+
+The additive `tools/fixtures/cm3_current_lto_replay/` frontend now admits the
+same current E9 inventory and both E3 Os-LTO captures. Only the historical Os
+witness constructor is replaced: its complete root readers, REL/origin checks,
+canonical predicates, command reconstruction, mutation catalogs and composition
+remain unchanged. All bootstrap bytes and both independently re-admitted
+ordinary seeds participate in closing. No compiler or target executes during
+this replay.
+
+Fourteen synthetic constructor methods and fourteen frontend methods pass.
+The latter include failure-hook and failed-seal controls: a secondary error
+must not hide the primary failure or leave a reusable stale PASS receipt.
+Only diagnostic writes have bounded recovery, never a replay/process retry.
+
+The fresh actual Os-LTO run preserves six complete roots and composes three
+mechanisms with the existing six documented difference rationales. It executes
+32 actual private ELF mutation controls and two coherent SVC-immediate controls
+in this invocation; unlike the O2 join, it does not merely authenticate child
+control receipts. Native has 492 root bytes/170 instructions/thirteen references;
+reference has 136 bytes/39 instructions/three references. Input and output
+closing pass, with literal zero cell credit.
+
+This closes current-source Os-LTO root/REL/origin and canonical mechanism replay
+for the fixed CM3 p4/b16 soft-float direct cohort, not a complete ABI/whole-cell
+proof. Provider/attribute/control composition, archive linkage, broader-profile
+final LTO, portable CI and hardware remain separate gates. Exact source pins,
+test receipts and measured bundle identity are in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-mechanism-replay`.
+Runtime C/assembly, public5/port8 and the pinned FreeRTOS reference are unchanged.
