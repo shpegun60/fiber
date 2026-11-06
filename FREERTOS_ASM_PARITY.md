@@ -3459,3 +3459,49 @@ Os/archive/broader-profile coverage, portable CI and hardware remain separate
 gates; full attribute/IPA or general-registers-only semantic equivalence is not
 claimed by this bounded CM3 test. Runtime C/assembly, public5/port8, qualified
 helpers and the pinned FreeRTOS reference are unchanged.
+
+## Current CM3 O2-LTO Selected-Port Policy
+
+`tools/fixtures/cm3_lto_port_policy/` separately checks the supported compiler
+policy for the current CM3 p4/b16 soft/no-FPU/no-MPU direct cohort. Three actual
+unchanged runtime/boot/exception providers receive the six raw stress options,
+then the seven supported counter-options, including the explicit trace-pc
+override. This is supported-policy evidence, not attributes-only suppression.
+
+Final E6 executes 36 managed exit-zero commands, five inspected slim-IR
+compilations, three genuine relocatable lowerings and a fresh nine-input final
+link. Both the selected aggregate and its actual LTRANS machine cover all 49
+emitted functions: 29 public/bridge definitions and 20 private helpers. A full
+byte/mapping/disassembly census rejects missing roots, hidden executable gaps,
+compiler-runtime dependencies and the explicitly recognized FP/MVE forms.
+The REL census binds all 241 selected and 530 final references to complete
+allowed fields/sites; it does not prove every C relocation's addend semantics.
+
+One identical ordinary stress source is clean with the supported policy and
+activates all five requested instrumentation families with raw flags alone.
+The unchanged clean predicate rejects both actual raw machine roles. The raw
+lower uses only the existing single-conditional `-lgcov` specs adapter.
+
+The final replaces only the three selected IRs; the remaining six input
+objects are byte-identical. The final driver applies the counter-policy
+globally, so equality of those six later generated bodies is not inferred.
+Its actual worker has 71 functions and four exact linker-provided address
+imports; the final ELF has 72 functions and no unresolved symbols. Both are
+fully censused. Strong vectors/entry and the frozen reader's three complete
+machine-to-final transfer roots are bound separately.
+
+Nineteen pure policy and thirteen runner methods pass. Actual `nm` whitespace,
+GCC target-option grouping, numeric branch targets, inline relocation notes,
+zero-filled literal pools and the distinction between worker/linker imports
+have explicit maintained handling. All disassembly commands use `-z`; skipped
+zero bytes are not reconstructed or silently exempted from coverage.
+
+Exact sources, receipts, earlier failed attempts and independent replay are
+recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-selected-port-policy`.
+This component grants no required-cell credit, complete instruction/IR/ABI
+semantics, arbitrary-callee protection, FreeRTOS instruction equivalence,
+another profile/mode/archive, CI or hardware qualification. Normal-original
+and supported-policy replacement images remain distinct evidence. Complete
+same-capture LTO-cell composition remains the next integration gate. Runtime
+C/assembly, public5/port8 and qualified helpers are unchanged.

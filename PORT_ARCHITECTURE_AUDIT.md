@@ -9927,3 +9927,99 @@ new generated-code component, raw attributes-only suppression, additional
 profile/mode or required-cell credit, CI qualification, or hardware evidence.
 The selected-three machine/final audit and effective identical-source stress
 control are a separate component under development.
+
+## Current CM3 O2-LTO Selected-Port Policy
+
+`tools/fixtures/cm3_lto_port_policy/` now implements that separate component
+for the current CM3 p4/b16 soft/no-FPU/no-MPU O2-LTO direct capture. It admits
+the same current E9 inventory, actual eight-slim-IR/one-startup capture,
+ordinary Seed, unchanged providers/dependencies, toolchain/plugin/workers and
+fixed reader buffers before creating managed output. It owns its stages and
+closing predicate; no earlier component's success label is reused.
+
+The actual three selected providers compile unchanged with the raw six stress
+options followed by the supported seven counters. Dependency discovery and
+actual compilation agree. Plugin-NM binds the exact 31-definition IR surface:
+29 functions and two context/storage cohort objects. Both the combined
+selected machine and the actual LTRANS worker census all 49 function extents,
+3,806 instruction bytes, 122 mapped data bytes and 241 original REL fields.
+Missing bodies, aliases, overlaps, uncovered bytes, malformed mapping/REL sites
+and forbidden compiler-runtime dependencies fail closed. Recognized extended-
+register encoding/mnemonic/operand forms are enumerated, not advertised as a
+complete instruction decoder or a GRO-effect theorem on an FPU target.
+
+An identical ordinary stress source is compiled under supported and raw-only
+recipes. Both actual supported machine roles are clean. Both raw roles expose
+all five instrumentation families, twelve compiler imports and an actual
+bounded gcov-counter reference; the unchanged clean predicate rejects them.
+Fresh dumpspecs bytes bind the existing single-conditional automatic `-lgcov`
+removal used only for raw lowering. No runtime archive, stub, source annotation
+difference or cancellation of a requested raw family creates the negative.
+
+The final link replaces only the three selected IRs and preserves the other
+six input object hashes/order. Its seven counter-options apply globally;
+those six generated bodies are not presumed unchanged or raw-attribute-protected.
+The complete actual final LTRANS has 71 functions and only four unresolved
+linker-script symbols: `__pilot_ram_begin`, `__pilot_ram_end`,
+`__pilot_text_begin`, `__pilot_text_end`. The final ELF has 72 functions, zero
+unresolved symbols and 530 checked REL fields. Both roles receive the complete
+byte census; the ELF also binds entry and vector slots 1/11/14. The unchanged
+transport adapter independently retains the three complete transfer roots,
+original/applied references and actual generated-machine origins. It does not
+infer source-TU ownership, every C addend, or canonical FreeRTOS equivalence.
+
+Final E6 at `C:/fz-current-cm3-lto-port-policy-20261106-e6/` is terminal
+PASS-NOT-QUALIFIED. All 36 managed commands exit zero: five IR compilations,
+three real relocatable lowerings, one final link and their discovery/inspection/
+disassembly work. Eight physically separate machine roles are audited. There
+are 538 sealed artifacts (539 files including the manifest), 3,281 input
+hash/physical bindings, 352 captured source buffers and 49 executed reader
+buffers. These overlapping provenance counts are not independent test cases.
+Nineteen pure policy and thirteen runner methods pass, including ordered
+overrides, byte/REL corruption, actual output grammar and late-failure recovery.
+
+E1..E5 remain failed historical attempts. E1 rejected legitimate plugin-NM
+trailing whitespace; E2 incorrectly ordered the independent GRO target flag
+against GCC's regrouped `-f` options; E3 treated wide-objdump inline relocation
+annotations as branch operands; E4 lacked `-z` and therefore could not census
+suppressed zero literal words; E5 incorrectly required the pre-link final
+worker to have no linker-provided address imports. The final checks retain
+strict individual option precedence, complete real disassembly and exact
+role-specific import surfaces. Bare hexadecimal branch targets such as `d0`
+are distinguished from D-register operands, without exempting FP instructions.
+Earlier diagnostic inspections and intermediate unit-test failures do not
+relabel any failed receipt as successful or qualify later source versions.
+
+Independent E6 replay rehashes all 538 artifacts and 3,281 retained input
+bindings, rechecks every command journal/recipe/dependency/specs record and
+four actual worker/assembler chains, and verifies all 352 source copies.
+One captured-reader scope recomputes all eight machine roles and three root
+transports: 492 root bytes, 170 instructions and thirteen original/applied
+references. Closing verifies 3,419 hashes/physical identities with no errors.
+This reuses frozen predicates independently of the producer verdict; it is
+not a second decoder, another compiler/target run or extra cell credit.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_port_policy/CONTRACT.md` | `05A871A63F6EDACA98AFFFEF7A78533F1F0CE8CE81023A9C7C2D489DC69781B9` |
+| `tools/fixtures/cm3_lto_port_policy/policy.py` | `8FC3AD729BF8903D716E34579700FC22D417040156EFCF0B434D2C43D75F0CA0` |
+| `tools/fixtures/cm3_lto_port_policy/runner.py` | `E06E55AC26B3828EDA54333DC7D5E0982DCC791694A2E9FE64E2A31C3BBE9AAB` |
+| `tools/fixtures/cm3_lto_port_policy/test_policy.py` | `34B4F6663E765D9D093789F9EFD441DEA657C64F718E3946BC8049097BDEC24D` |
+| `tools/fixtures/cm3_lto_port_policy/test_runner.py` | `81C009ED0F6F9A17AADAD854E978D4EC956C72F381F0DF3B30AECD79AFE74487` |
+| `%TEMP%/cm3-lto-port-policy-parent-pure-20261106-e6/results.json` | `676CEF0DB27BF596033B270E04FA4D2538180F187951BC967FA4C7334D0C5DBF` |
+| `%TEMP%/cm3-lto-port-policy-parent-runner-pure-20261106-e8/results.json` | `7FE3CAE18656FB7EC11E6549F40FC35F51CD11A6DD8F848BA954E37B7EC2CE88` |
+| Actual E6 `results.json` | `67881BF68FFF5BB4F5FE482170F8300FABA6D9260464037992CE9BD3D6A61B6B` |
+| Actual E6 `artifacts.json` | `41ADD7F0BDE6528B8C871DDE1C1D554DC75CE30E494B7851EB7F15682AB22585` |
+| `%TEMP%/cm3-port-policy-review-20261106-e1-driver/audit.py` | `1507D2057812AD48C4029737D0E2818D6CFD0FC8C196260B657160C9D2428A22` |
+| `%TEMP%/cm3-port-policy-independent-review-20261106-e6/results.json` | `042FFE031D273768EEF2C63B2BFB0185CB9E2BB1D7C99C3D03237C3D1AF26BE8` |
+| `%TEMP%/cm3-port-policy-independent-review-20261106-e6/artifacts.json` | `F721DED49E385AE150EF488D398F19D584676ABE3A2F4ED98B2E3F14B8E72B13` |
+
+This is supported-policy, concrete-compiler/static-fixture evidence, not
+attributes-only protection, arbitrary callback/callee behavior, full IR/ABI or
+instruction semantics, source-to-machine or FreeRTOS instruction equivalence,
+an archive/other mode/profile, hosted CI or hardware qualification. Required-
+cell credit remains literal zero; all 2,774 keys and 26 backlog records remain.
+The existing common-attribute and normal-original image proofs stay distinct
+from this replacement variant. The next integration is complete same-capture
+CM3 O2-LTO cell composition, not another standalone component. Runtime C/ASM,
+public5/port8, frozen helpers and the pinned FreeRTOS checkout are unchanged.
