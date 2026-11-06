@@ -2,14 +2,15 @@
 
 ## Status And Boundary
 
-This directory maintains prerequisites for extending the bounded CM0/O2/direct
-static-cell contract to thirty ordinary routes. `profiles.py` supplies independent
-metadata; `abi.py` supplies declaration probes and source/dependency predicates;
-`controls.py` adapts the qualified generic Suite; `components.py` executes one
-selected fresh component batch. Thin final bindings remain a separate input to
-future composition. There is no ordinary-cell composer here and these modules
-do not qualify a cell or promote retained producer/join receipts. The published
-CM0 component and its qualified helpers remain unchanged for their existing scope.
+`compose.py` implements a generic single-cell composition for one explicitly
+selected ordinary route. `profiles.py` supplies independent metadata;
+`recompute.py` replays unchanged family predicates and thin `bindings.py`
+checks; `abi.py`, `controls.py` and `components.py` supply fresh declaration,
+link-control, generated-slot and common-source evidence. `coverage.py` accounts
+for the one final verified key without dropping the rest of the inventory.
+Metadata and component modules alone still grant no cell credit. The published
+CM0 composer and qualified producers/readers/helpers remain unchanged for their
+existing scopes; this composer does not broaden their individual claims.
 
 Only these profiles crossed with `O0`, `Og`, `O2`, `Os`, `O3`, linkage `direct`,
 artifact role `runtime`, representation `final`, are admitted:
@@ -59,6 +60,40 @@ private and storage identities to runtime index 3; startup to index 8.
 Native C recipes append the exact TU parent include directory; reference C
 recipes do not. Both startup recipes are separately fixed by their producers.
 
+## One-Cell Composer Interface
+
+Use one fresh unoptimized Python process per route, with isolation, site loading
+disabled and bytecode writes disabled. `compose.py` requires `-I -S -B` and
+rejects inherited `elftools` package/module state. There is no implicit route.
+The seven required arguments are:
+
+```powershell
+& $Python -I -S -B tools/fixtures/ordinary_final_cell/compose.py `
+  --inventory $Inventory `
+  --inventory-receipt-sha256 $InventoryReceiptSha256 `
+  --inventory-artifacts-sha256 $InventoryArtifactsSha256 `
+  --catalog $Catalog `
+  --catalog-sha256 $CatalogSha256 `
+  --route $Route `
+  --output-dir $FreshOutput
+```
+
+`$Route` is an exact selector such as `CM3/Os/direct`. All catalog rows must
+have closed ordinary-route metadata, even when only one is selected. Catalog
+membership and unselected receipt descriptors grant no proof or credit. Select
+exactly one row; authenticate its native, reference and prior-join receipts,
+artifact maps, original/captured/generated inputs and their inventory bindings
+before creating output. The selected inventory descriptor must equal the
+independently caller-bound current E9 descriptor, not a historical substitute.
+Reject output overlap with repository, admitted inputs/tools and catalog-declared
+evidence roots before creation. No catalog value supplies executable code or argv.
+
+The programmatic orchestration is `compose(prepare(args))`; `succeeded(report)`
+requires the final one-cell scope, exact common/runtime satisfaction, literal
+credit one, successful input/output closure, no errors and false broad claims.
+Run another route in another fresh process. A 30-row catalog is not an atomic
+batch, an in-process replay request or authority to award aggregate credit.
+
 ## Maintained Component Interface
 
 The generic CLI is `components.py` with exactly these required arguments:
@@ -104,9 +139,11 @@ input/command/ELF closure. Component success additionally requires complete
 phases, error-free input closure and output sealing, with literal integer
 `RequiredCellsSatisfied=0`; it is not exit-zero or prior-PASS trust.
 
-Measured profile-smoke and test receipts, source revisions and outcomes belong
+Measured component/composer and test receipts, source history and outcomes belong
 only to [the parent audit section](../../../PORT_ARCHITECTURE_AUDIT.md#ordinary-direct-component-generalization).
-This contract asserts no forthcoming smoke or test result.
+This contract asserts neither a forthcoming run result nor a final measured
+thirty-route PASS. Preliminary source revisions must not be relabeled as the
+final Cartesian-product qualification.
 
 ## Independent Source Authority
 
@@ -122,11 +159,12 @@ Canonical content fingerprints are not raw-file hashes. Bind full artifact
 facts, selected source groups and the complete unchanged 2774-key plan and
 26 backlog records. Historical E8 is not current E9.
 
-The maintained prerequisite modules themselves must be captured and pinned by
-their enclosing run; they were not present in E9. Actual consumed current C/H/provider bytes and
-commands have their own producer authority, not presumed equality to every
-historical E9 source capture. Expected symbol spellings follow the published
-port/layout/trait identity macros, not observed ELF symbols or output hashes.
+The composer and maintained prerequisite modules themselves must be captured
+and pinned by their enclosing run; they were not present in E9. Actual consumed
+current C/H/provider bytes and commands have their own producer authority, not
+presumed equality to every historical E9 source capture. Expected symbol
+spellings follow the published port/layout/trait identity macros, not observed
+ELF symbols or output hashes.
 
 ## Required Composition
 
@@ -137,6 +175,37 @@ predicates. Authenticate producer receipts/manifests, all actual providers,
 original/captured/generated dependencies, tools, streams and source buffers
 before execution; close physical identities and exact memberships afterward.
 Metadata equality, a queue label or a prior PASS is not one of these proofs.
+
+The common prerequisites are exactly `cpu-neutral-engine`,
+`reverse-v1-ownership` and `source-provider-identity`. The runtime obligations
+are exactly `forward-eight`, `reverse-v1`, `current-slot-isolation`,
+`strong-handlers`, `exact-profile-context-cohort`,
+`generated-assembly-reference-parity`, `final-elf-vectors` and
+`negative-link-controls`. Every one must complete for the selected exact key.
+
+Recomputation binds native Pilot owner/prelink/final predicates to the same
+authenticated source/object providers, and compares complete family protocols,
+final roots, own twins and producer bindings with the selected prior join.
+Difference acceptance requires nonempty captured master-ledger rationales and
+the independently pinned FP policy supplement where applicable, not equal
+native/reference instructions or policy. Thin bindings and metadata do not
+replace these complete checks.
+
+Predicate reads execute against admitted immutable data/source buffers and exact
+capture aliases. For CM3, its inner frozen source loader is the sole spec-loader
+authority, delegated through the original stdlib spec function rather than a
+second stacked frozen spec loader. The outer buffered data/source/code hooks,
+capture aliases and lexical path-resolution hooks remain active. This routing is
+not filesystem identity proof. Leave the immutable scope before fresh component
+tool execution and real physical closing; restore all temporary hooks without
+changing qualified-helper globals.
+
+Fresh components must use the selected native descriptor, profile, mode, cohort
+and inventory identity. Authenticate their returned/written receipt equality and
+complete artifact map. Close both replay and outer inputs against real hashes,
+physical identities and memberships, and seal the exact intended output bytes
+and output membership. Only the successfully sealed final result can retain
+one-cell credit; partial predicate or component success is insufficient.
 
 Each selected runtime has four reverse BL references with original addend
 -4 and one task-return ABS32 with original addend zero. The independent rows
@@ -203,17 +272,34 @@ native/reference bytes as if declared differences were absent.
 
 ## Accounting And Nonclaims
 
-Only a complete newly composed bounded static cell may receive its exact
-canonical key's credit. No such ordinary composer is implemented by these
-prerequisites: they return zero new cell credit and leave all 2774 canonical
-keys and 26 backlog records unchanged. Actual positive/negative compiler/link evidence must
-be distinguished from pure admission controls and independently admitted for
-the selected profile/mode. Do not relabel historical components or the prior
-CM0 qualification to cover the new Cartesian product.
+`coverage(required, backlog, contracts, verified_keys)` returns the full coverage
+and missing-work dictionaries. The pure layer preserves all 2774 canonical keys
+in order, every role's missing obligations and deep copies of all 26 backlog
+records (23 Pending, three ReferenceOnly). It does not authenticate inputs or
+infer completion from receipt labels. The one-cell composer passes only
+`[selected_contract]` and either `[]` or `[exact_five_tuple]`, where the tuple is
+`(Cohort, ArtifactRole, Representation, Mode, Linkage)`.
+
+The selected key may receive exactly one bounded static-cell credit only after
+all common-three/runtime-eight proofs and final closures succeed. The other
+2773 keys and all backlog records remain uncredited. Any late replay, component,
+input, output or sealing failure revokes every obligation and all credit.
+Recovery attempts to persist the FAIL receipt first, then regenerates full
+zero-credit coverage/missing-work with `verified_keys=[]`, and refreshes the
+failure receipt/manifest. Secondary persistence errors remain explicit and do
+not restore a PASS or credit. There is no atomic batch or aggregate credit
+inferred from the other catalog rows.
+
+Actual positive/negative compiler/link evidence must be distinguished from pure
+admission controls and independently admitted for the selected profile/mode.
+Do not relabel historical components or the prior CM0 qualification to cover
+the new Cartesian product.
 
 Full semantic ABI, whole-provider/instruction/policy equivalence, source/IR
 semantics, C-callee semantics, kernel execution, CPU/board operation, handler
 routing, hardware, hosted CI, final-LTO/archive and global freeze qualification
-remain pending and unclaimed by these ordinary prerequisites.
-`FullSemanticABIProof=False` is an intentional nonclaim, not a blocker to the
-explicit bounded static obligations. No measured thirty-cell PASS is asserted.
+remain pending and unclaimed by this ordinary composition. `FullABIProof=False`
+and `FullSemanticABIProof=False` are intentional nonclaims, not blockers to the
+explicit bounded static obligations. The eager-native/lazy-reference FP policy
+difference is retained, not qualified as equal. No measured thirty-cell PASS is
+asserted.

@@ -8926,3 +8926,187 @@ and reproducible-CI obligations. Full semantic ABI, source/IR equivalence,
 CPU/board execution, actual handler routing and global freeze remain unproved
 or pending. No runtime C/assembly, public5/port8, qualified helper, reference pin
 or default matrix changes are part of this checkpoint.
+
+For the subsequent implemented composer and its measured receipts, continue to
+[Ordinary Direct Static Cell Composition](#ordinary-direct-static-cell-composition).
+
+## Ordinary Direct Static Cell Composition
+
+The maintained ordinary composer builds on the preceding component checkpoint.
+It accepts exactly one explicit route from the closed six-profile/five-mode
+ordinary direct surface. `prepare()` authenticates the caller-bound current E9
+inventory, catalog and selected Native/Reference/PriorJoin bundles, source and
+tool identities, complete plan, and output separation before creating output.
+The seven-argument CLI requires fresh isolated, no-site, no-bytecode,
+unoptimized Python (`-I -S -B`), with no inherited ELF parser package state.
+
+`recompute.py` reruns unchanged family join/protocol and native prelink/final
+predicates against the admitted immutable buffers. It compares complete roots,
+own-side twins, mechanisms, producer bindings and captured nonempty difference
+rationales, rather than trusting an earlier PASS. Thin `bindings.py` checks
+actual original references, provider/map origins, applied final targets,
+strong handlers, vectors, current slot and exact cohorts. CM4/CM7 additionally
+bind the independently pinned FP-policy supplement; their eager native and lazy
+reference policies are not claimed equivalent.
+
+CM3's existing family loader is the sole inner spec-loader authority. The new
+orchestrator temporarily delegates through the original stdlib spec factory;
+it does not stack two frozen spec loaders or mutate qualified helper globals.
+Outer buffered data, source/code and lexical path hooks remain active. Fresh
+compiler components and real physical closing execute only after leaving that
+read-only scope. Host-loader fixtures and actual CM3 integration cover this
+handoff separately.
+
+Each cell reruns the existing 38-command component suite and authenticates the
+returned result against its written receipt and artifact manifest. The complete
+common-three/runtime-eight obligations can become satisfied only after both
+recomputed and fresh evidence, real closing hashes/identities/memberships, and
+exact output sealing succeed. Late failures revoke all obligations and credit;
+recovery attempts to persist FAIL before secondary accounting artifacts and
+preserves primary and secondary failures separately.
+
+`coverage.py` preserves every canonical key and role-specific missing obligation,
+plus deep copies of all 26 backlog records. One invocation passes either no
+verified key or its one exact literal five-tuple, never inferred completion from
+receipt labels. Its successful coverage has 2,774 keys, one bounded static-cell
+credit and 2,773 uncredited keys. An index of independently composed receipts is
+discovery data, not an atomic batch proof or aggregate-credit authority.
+
+The independent final-source test-log review confirms 120 unique methods:
+ABI 12, bindings 9, components 17, compose 14, controls 14, coverage 12,
+prepare 11, profiles 12 and recompute 19. All pass without failures, errors or
+skips. There are 114 host controls and six retained-ELF integration methods.
+Host controls include actual source/E9 JSON reads and temporary loader/filesystem
+fixtures; they are not all mock-only. The two PilotReplay methods use a fake
+Pilot. The six retained-ELF methods cover the thirty admitted ordinary pairs,
+but neither classification means thirty fresh compiler runs or portable CI.
+
+Four actual CLI negatives also reject before creating their requested output:
+missing Python isolation, an unsupported LTO route, a bad catalog SHA256 and
+a missing route argument. The terminal admission receipt is separate from
+compiler/cell proof and grants zero credit. The first parent diagnostic matcher
+expected the word `hash` instead of the real `SHA256 mismatch` diagnostic;
+a subsequent receipt-write attempt hit Windows root-file permissions. Neither
+was a composer admission defect; the retained terminal run uses the exact
+intended diagnostics and a writable temporary receipt directory.
+
+### Final Ordinary Campaign
+
+The final-source campaign on 2026-11-06 terminates successfully for all thirty
+explicit ordinary routes. Every child runs in a fresh isolated Python process;
+all eighteen ordinary implementation/test/contract files remain unchanged
+throughout. Each child authenticates the same current E9 authority and its own
+selected producer/prior-join descriptors, recomputes the complete family
+root/protocol evidence and executes fresh components. The final catalog index
+contains thirty independently sealed receipt/manifest pairs, not thirty labels
+copied from earlier component runs.
+
+| Profile | Individual Cells | Outer Artifact Entries | Outer Input Bindings | Final Bodies |
+| --- | ---: | ---: | ---: | ---: |
+| CM0 | 5 | 2,525 | 14,235 | 40 |
+| CM0PLUS | 5 | 2,525 | 14,235 | 40 |
+| CM0PLUSVTOR | 5 | 2,525 | 14,235 | 40 |
+| CM3 | 5 | 3,470 | 15,975 | 30 |
+| CM4 | 5 | 2,465 | 13,955 | 30 |
+| CM7 | 5 | 2,465 | 13,955 | 30 |
+| Totals | 30 | 15,975 | 86,590 | 210 |
+
+There are ninety recomputed transfer mechanisms. Fresh components execute
+1,140 terminal commands: 900 successful commands and 240 intended exit-1
+results. Those intended failures comprise 150 link rejections and ninety
+undeclared-slot compile rejections. The suite also contains 150 ABI probes in
+total, ninety isolated common-object compiles and thirty saved-assembly runtime
+replays. Each child has the matching positive link and all five intended
+negative links. The ordinary source-trivia adapter and qualified checker remain
+unchanged from the preceding component checkpoint.
+
+The separate read-only parent audit authenticates the final index and every
+individual descriptor, preserves all canonical coverage/missing-work keys and
+backlog records, verifies exact artifact membership and rehashes 68,405 unique
+files with 68,274 stored physical bindings. The thirty outer manifests bind
+15,975 artifacts, or 16,005 files including their own manifests. Their nested
+component reports contain 11,790 artifact entries and 81,610 input bindings;
+these overlap the outer evidence and are not additional independent artifacts.
+The audit checks byte/identity closure and receipt accounting, not ELF semantics
+or compiler reexecution. Its own report grants no cell credit, atomic-batch
+proof or global qualification.
+
+Independent read-only reviews also close all six five-cell profile groups.
+They recheck the 210 raw final ELF bodies, owning spans, original/applied
+references, provider/map bindings, sixty within-side twin comparisons, source
+and physical closure, exact one-key accounting and fresh component records.
+CM3's loader handoff and CM4/CM7's FP supplement, slot-trivia transformations
+and retained policy differences receive their profile-specific checks. These
+reviews neither rerun compilers nor infer native/reference instruction or
+FP-policy equality; no new port defect is confirmed in this campaign.
+
+Preliminary complete-cell integration at
+`C:/fz-ordinary-cell-compose-smoke-20261106-e1/` exercised CM0/O0, CM3/Os and
+CM7/O3 before the final contract freeze. Those attempts remain historical and
+are not relabeled final-source qualification. The measured thirty-route run is
+`C:/fz-ordinary-cell-compose-ordinary30-20261106-e1/`, with one case directory
+per profile/mode. No target image is executed. No emulator, board, flash or
+reset operation is used.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/ordinary_final_cell/ORDINARY_CELL_CONTRACT.md` | `5B5D72313762DAEABC21F40E3CAD2075DD142CD43927D52216655E167C0A98C1` |
+| `tools/fixtures/ordinary_final_cell/compose.py` | `C9E68DC6478C43074553A660FF6751AC7D84F13F498DCF7ED92AF42BFBF1F888` |
+| `tools/fixtures/ordinary_final_cell/recompute.py` | `23BCFCD22B2C49F4066A7D32EA6126674D03D09CEEB6AB12AED9A352796B6956` |
+| `tools/fixtures/ordinary_final_cell/coverage.py` | `D513BEA4622DB4C0CD4FC7DED6D341BF940233E4FA3B219F9723EA84E6B31DC9` |
+| `C:/fz-ordinary-cell-compose-ordinary30-20261106-e1/parent-tests.log` | `E748EBEC648DC135F34E4B619017468EB4D07202A477E945227F8017393466B1` |
+| `C:/fz-ordinary-cell-compose-ordinary30-20261106-e1/cell-index.json` | `F612F0521780518343EA7CDB0C33A2B3B9376BE65F0B97040D17FCB65E8FADCC` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-ordinary-cell-parent-audit-20261106-e1/audit.py` | `CA008EC2B6F6DD12E4EF0414ACDBFDD57CDC1F6A67526B99016D9FA5CBB0DE92` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-ordinary-cell-parent-audit-20261106-e1/results.json` | `1087CC959DE481AE438643F0937ABBE424006F36A441CF04E358E7AF903C2CD1` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-ordinary-cell-admission-20261106-e3/results.json` | `2AB6041BFD31F35E0160C911AE35CB4190396124B55E435994555377FBD3CA0D` |
+
+All individual descriptor hashes and all eighteen source hashes are retained
+in the index above. The catalog remains `ordinary30-current.json`, SHA256
+`EB7864CBDEC4257BBBE13830BE8757E508512BB47E4185BBD5FE473473857C4B`.
+E9 receipt/artifact authority remains respectively
+`1910B53001FD37DF4B6DC57805EE49E4381B2529E1E3ECB47FDB312EB43A4DFC`
+and `640C2CAC37DFC0A10F5A6E8538E7A9F81C7967DEEDEAA4B2924A15CAA1600CEA`,
+with source fingerprint
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+The reference remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+This closes thirty individual bounded ordinary/direct static compositions.
+Every child still has only one credited key in its own complete plan; the index
+has literal aggregate credit zero. No combined coverage projection or atomic
+thirty-cell batch receipt is created. This is not a count of thirty newly
+implemented ports, an effort percentage, complete native/reference instruction
+equivalence, full semantic ABI, portable fresh-checkout CI or hardware evidence.
+
+### Remaining LTO And Integration Boundary
+
+This ordinary composition does not close the separate final LTO/archive gates.
+The next bounded target is current-E9 CM3 O2-LTO and Os-LTO direct composition,
+then archive linkage. Historical CM3 LTO captures remain E8 evidence and cannot
+be relabeled current E9. Reuse the existing complete-root readers and transport
+machinery, with explicit closure of these remaining differences:
+
+The native O2-LTO/Os-LTO seed admission is already parameterized for the current
+ordinary CM3/O2 source group. Reference admission still requires its historical
+directory and receipt/manifest hashes. The next additive reference adapter must
+preserve its full validation while accepting independently bound current seed
+descriptors; it must not patch frozen admission globals or relabel E8 receipts.
+
+- Native LTO has eight slim C IR providers and one native startup assembly TU,
+  not nine IR providers. Bind source/header/flags and plugin resolutions to IR
+  inputs separately from actual LTRANS machine-to-final placement.
+- Post-LTO assembly also defines the local current slot. Use a bounded separate
+  predicate for that definition and both handler loads; do not filter mentions
+  or weaken the ordinary two-load-only checker.
+- Authenticate actual slim objects without assuming raw replay equality:
+  compiler-generated LTO unit suffixes can differ. Do not normalize those bytes
+  or claim reproducibility from a successful link.
+- Bind all forward-eight/reverse-four providers, typed/attribute evidence and
+  fresh intended storage/reverse/cohort/duplicate-handler failures to the same
+  exact LTO mode and base. Hostile-codegen claims need effective positive controls.
+- Archive provider authority also needs raw member offsets and actual plugin
+  resolution order; direct-object role ordering is not interchangeable.
+
+No full semantic ABI, source/IR semantics, CPU/board execution, actual runtime
+handler routing, hosted CI or global freeze follows from these ordinary cells.
+No runtime C/assembly, public5/port8 boundary, qualified helper, reference pin or
+default matrix is changed. Unrelated protected WIP remains outside this scope.

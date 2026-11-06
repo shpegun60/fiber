@@ -3177,3 +3177,44 @@ profiles, final LTO/archive gates, portable CI bootstrap and hardware evidence
 remain separate work. Runtime C/assembly, public5/port8, fixed helpers, reference
 pin and default matrix are unchanged. Exact local evidence and failure history
 are in `PORT_ARCHITECTURE_AUDIT.md#ordinary-direct-component-generalization`.
+
+## Ordinary Direct Static Cell Composition
+
+`tools/fixtures/ordinary_final_cell/compose.py` now composes one explicitly
+selected ordinary direct cell. It admits the independently bound current E9
+inventory and selected native/reference/prior-join bundles before output
+creation, recomputes unchanged family mechanisms and original/final bindings,
+then executes fresh compiler/link components. Only final input/output closure
+can retain one bounded static-cell credit. A prior PASS or a catalog row is not
+qualification authority.
+
+The closed surface is six profiles (CM0, CM0PLUS, CM0PLUSVTOR, CM3, CM4, CM7)
+crossed with O0, Og, O2, Os and O3, direct/non-LTO only. Each invocation needs
+seven explicit arguments and a fresh unoptimized `-I -S -B` Python process.
+The complete 2,774-key plan and all 26 backlog records remain visible in every
+cell receipt bundle; the other 2,773 keys remain uncredited by that invocation.
+Separate successful receipts are not an atomic batch or aggregate credit.
+
+CM3 delegates spec loading to its existing inner frozen loader while keeping
+the enclosing buffered data/code/path hooks active. CM4/CM7 retain the separate
+eager-native/lazy-reference FP-policy rationale. Neither adaptation changes a
+qualified checker, generated target code, frame layout or runtime policy.
+
+The final-source 2026-11-06 campaign passes all thirty individual compositions.
+It recomputes 210 final bodies and ninety mechanisms from the admitted current
+native/reference captures and executes 1,140 fresh component commands: thirty
+positive links, 150 intended link rejects, 150 ABI probes (ninety intended
+undeclared-slot rejects), ninety isolated common compiles and thirty runtime
+assembly/object replays. A separate receipt/byte-closure audit rehashes 68,405
+unique files and rechecks 68,274 physical input bindings. These are not thirty
+new complete native/reference capture builds or an atomic-batch qualification.
+
+All 120 maintained methods pass: 114 host controls and six retained-ELF methods.
+Actual CLI negatives also reject missing isolation/route, unsupported LTO and
+bad catalog hashes before output creation. The measured campaign, individual
+receipt identities, test classifications and remaining gates are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#ordinary-direct-static-cell-composition`.
+Full semantic ABI, source/IR equivalence, all-profile final LTO/archive coverage,
+portable hosted CI, CPU/board execution and global freeze are not established
+by this ordinary-only composer. Runtime C/assembly, public5/port8, fixed helpers,
+the reference pin and default matrix remain unchanged.
