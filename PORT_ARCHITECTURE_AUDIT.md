@@ -8815,3 +8815,114 @@ port8 boundary, fixed producer/reader/checker, reference pin or default matrix
 is changed. The next software work is reusable composition/admission for the
 remaining modes and profiles, not another replay of the already current
 ordinary mechanism baseline or an unsupported hardware-completion claim.
+
+## Ordinary Direct Component Generalization
+
+The new maintained `tools/fixtures/ordinary_final_cell/` modules provide
+prerequisites for thirty ordinary direct routes, not another composer or a
+new runtime boundary. `profiles.py` supplies closed independent profile/mode,
+recipe, provider, trait and symbol expectations. `abi.py` checks the selected
+actual source/dependency authority and canonical declarations with independently
+spelled types and attributes. `controls.py` reuses the qualified CM0 Suite's
+generic execution/closure mechanics without mutating its globals, and requires
+an explicitly admitted native bundle and current E9 inventory.
+
+`bindings.py` uses the existing qualified ELF reader to check all thirty
+retained native ordinary/emit-relocs pairs. Its independent reference classes
+fix owner, input section, kind, target and multiplicity, not CM0/O2 offsets.
+It measures and binds original addends, applied final targets, strong provider
+origins, two cold anchor reads, four cohort references, two slot references
+and three startup vector references. Each twin also has the exact eight
+forward/four reverse providers and exact slot/cohort storage. This is bounded
+binding evidence, not arbitrary callee/alias or whole-provider semantics.
+
+The final-source fresh component CLI passes these six selected routes:
+
+```text
+CM0/O0/direct          CM0PLUS/Og/direct     CM0PLUSVTOR/O2/direct
+CM3/Os/direct          CM4/O2/direct         CM7/O3/direct
+```
+
+Every route executes 38 terminal tool commands, revalidates its original
+positive ELF by byte identity and rejects exactly five intended negative
+links: changed NVIC cohort (2/3 or 4/5), storage-v1/999, reverse-v1/v2 anchor,
+duplicate SVC and duplicate PendSV. Each also compiles five ABI probes (two
+accepted and three exact undeclared-slot rejections), three common providers
+without forced main/CMSIS/selected-port includes and one runtime replay with
+saved assembly. All three common objects and the runtime replay are whole-object
+byte-identical to their admitted originals. Exact dependencies, diagnostic
+classifications, terminal command journals, input closure and output seals pass.
+
+The totals are 228 commands, thirty intended negative links, thirty ABI probes,
+eighteen isolated common compiles and six runtime replays. The six manifests
+contain 2,358 artifact entries and the receipts close 9,628 per-bundle input
+entries; those counts are not deduplicated across runs. CM0 variants and CM3
+each close 1,608 inputs; CM4 and CM7 each close 1,598. All component reports keep
+integer `RequiredCellsSatisfied=0` and false cell/full-semantic/global/runtime
+claims. No earlier producer or reference-join PASS is relabeled as a new cell.
+
+A separate read-only audit confirms all twelve supplied receipt/manifest
+hashes, exact output closure (2,364 files including six manifests) and all
+9,628 watched bindings across 6,883 unique input paths. Hash and physical
+identity closing rechecks cover 7,879 unique files. The 228 command records
+contain 180 successful commands and 48 intended exit-1 results: thirty link
+rejections plus eighteen absent-slot compile rejections. Positive ELF, probe,
+isolated-object and original/normalized slot bindings also pass this audit.
+This audit does not rerun compilers or execute target code.
+
+The final parent test run passes all 64 methods without errors, failures, skips
+or source drift: 58 model/declaration/admission/adapter controls and six retained
+ELF integration methods. The latter use all thirty explicit current native
+pairs and targeted negative mutations. They are read-only retained-data tests,
+not thirty new compiler component runs or a portable CI bootstrap.
+
+The first smoke (`C:/fz-ordinary-components-smoke-20261106-e1`) passed its first
+four routes, then failed on CM4 source-trivia admission after all five intended
+negative links. Fail-stop prevented the CM7 attempt. The unchanged qualified
+CM0 matcher allowed whitespace but not a C block comment between adjacent asm
+string literals. The new bounded adapter checks the two original symbol
+mentions and exact literal pairs, normalizes only block-comment trivia in their
+gaps and records original/normalized SHA256 plus reversible byte transformations.
+The comment token cannot backtrack past its first `*/`; nontrivia and gap
+backslashes reject. Assembly/object bytes and qualified predicates are unchanged.
+CM4/CM7 each normalize one gap; the other four routes normalize none. Focused
+architect/consumer review and negative controls cover these boundaries. The E1
+results remain historical; E2 reruns all six at final helper bytes.
+
+Each route directory below is under
+`C:/fz-ordinary-components-smoke-20261106-e2/`:
+
+| Route Directory | `results.json` SHA-256 | `artifacts.json` SHA-256 |
+| --- | --- | --- |
+| `CM0-O0` | `2BD110C292E4638161CD1E16E2E915F4795DB1FB4631FEDD82AFB4933106FE72` | `DFE5A581B47F5D2C69CC6D5E6C4152E0D3A134AAD8A318B0E8E075E0C64C1C2D` |
+| `CM0PLUS-Og` | `7C303ACCD96CB891EDB215F4E4CCB163BE9493E2E0AC22A09661758DA79B354E` | `8ADD3929B94B7A4A39A22DF5B63E5B65FA57B7B815562949484EE98F05910C36` |
+| `CM0PLUSVTOR-O2` | `B4BD39A325F3CE8A14422270FCACC9128964ED474C118EAA4CE7456EDAE36D4F` | `19BFD0BA0071C504D9FC43342A96D694A654DDB2E0AC29B1161FA9DD5C618F75` |
+| `CM3-Os` | `4F65985189716C650296FED062E56DA3845B51D0710AAC707F5871CDC460E5AC` | `5843E210CAE41DD2EE531989411E51DE0E8DA6EB90A56A0DFB3C55A1911E456E` |
+| `CM4-O2` | `8F92D7C25B45A05DC0054EF3EADDA0EBBB0138E9F65C4248FF32B6B759B6F8DA` | `945A71F9B558DC03F7BF2581EFBD691E0C857F04FE66592FD1F5CFF9F3E3F699` |
+| `CM7-O3` | `58891066798F6C0864A72D89937CAC1B16EC9C115E0A12635203EB5E9DB3E44A` | `4B9049DBE66B12C88C7010B81F4236AAD22B4F6F38FCC5D930DE1C5C987EC4C5` |
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/ordinary_final_cell/ORDINARY_CELL_CONTRACT.md` | `7FE3436F8AE1FCFE494AF526D70D20802EF564A490AD2FCB90D86C1CE46EAD5D` |
+| `tools/fixtures/ordinary_final_cell/profiles.py` | `BDD5C9A1F490FF3156CB4DC752F0C411F6FA07852BA5024124E91CC05601CFCD` |
+| `tools/fixtures/ordinary_final_cell/abi.py` | `43F2E49D638D0E586A24AD2B32D0B8D86C58CC9A63E134EF6AF064437278CAE5` |
+| `tools/fixtures/ordinary_final_cell/bindings.py` | `5AD660BFBF88F0F25B41434844FD2A5BA28C91D15D494AE92AAC5482C70DC6BB` |
+| `tools/fixtures/ordinary_final_cell/controls.py` | `10F8203B7AA24502BDCA2274DA8C5B7A8763EF7630E8FE8350C64AC50699F18A` |
+| `tools/fixtures/ordinary_final_cell/components.py` | `0421B9D9D53F9844C601AC14BC5B91074A6A4D10753C030BE2A7038FDE3D2B68` |
+| `C:/fz-ordinary-components-smoke-20261106-e2/parent-tests.log` | `7B0B70712083F87CCEAC3C703D10D07A396A70DC686D48D1CB595163A733C5BF` |
+
+The catalog remains `ordinary30-current.json` with hash
+`EB7864CBDEC4257BBBE13830BE8757E508512BB47E4185BBD5FE473473857C4B`;
+the explicit inventory is current E9 with source fingerprint
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`.
+FreeRTOS remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+
+This checkpoint does not implement ordinary whole-cell composition or award
+new credit. The previously published exact CM0/O2 bounded static cell remains
+the only composed cell; all 2,774 keys and 26 backlog records remain intact.
+Next comes generic composition and fresh components for the remaining ordinary
+combinations, followed by the separately tracked broader profile/LTO/archive
+and reproducible-CI obligations. Full semantic ABI, source/IR equivalence,
+CPU/board execution, actual handler routing and global freeze remain unproved
+or pending. No runtime C/assembly, public5/port8, qualified helper, reference pin
+or default matrix changes are part of this checkpoint.

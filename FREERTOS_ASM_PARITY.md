@@ -3132,3 +3132,48 @@ failure history are in
 
 No runtime C/assembly, public API, existing qualified helper, reference pin or
 default matrix is changed by this proof-only checkpoint.
+
+## Ordinary Direct Component Generalization
+
+The maintained `tools/fixtures/ordinary_final_cell/` prerequisites extend the
+bounded static-cell machinery to the closed CM0, CM0PLUS, CM0PLUSVTOR, CM3,
+CM4 and CM7 profiles at O0, Og, O2, Os and O3, direct/non-LTO only. Independent
+profile/source/type/attribute tables replace CM0-only assumptions. Existing
+qualified command, ownership, undeclared-slot, generated-load and object
+identity predicates remain unchanged; their module globals are not patched.
+The new contract is `ordinary_final_cell/ORDINARY_CELL_CONTRACT.md`.
+
+Retained-ELF integration tests check all thirty current native twin pairs.
+Thin bindings fix source owner, input section, relocation kind, target and
+multiplicity, while measuring mode-specific offsets from original objects.
+They bind applied final targets, addends, map origins, slot/cohort storage,
+cold anchor byte reads, strong handlers and startup vectors. This does not
+promote provider/callee semantics or replace the separate reference joins.
+
+The final-source 2026-11-06 fresh component smoke passes CM0/O0, CM0PLUS/Og,
+CM0PLUSVTOR/O2, CM3/Os, CM4/O2 and CM7/O3. Across these six selected routes it
+executes 228 tool commands, revalidates six positive links and rejects thirty
+intended negative links. It also compiles thirty ABI probes, including eighteen
+intended undeclared-slot failures, eighteen isolated common objects and six
+saved-assembly runtime replays. Each isolated/replayed object is byte-identical
+to its admitted original. All 64 maintained test methods pass: 58 model,
+declaration, admission and adapter controls plus six retained-ELF methods.
+
+The initial smoke exposed a proof-adapter limitation, not a port defect: the
+qualified CM0 source matcher rejected a block comment between two adjacent
+CM4/CM7 inline-assembly string literals. A bounded trivia adapter now checks
+both original pairs and normalizes comments only in their literal gaps. It
+preserves original and normalized hashes and exact transformations; generated
+assembly and object buffers are unchanged. Nontrivia after the first comment
+terminator and phase-two escapes reject. The initial failed attempt remains
+historical; the final-source six-route smoke uses fresh output directories.
+
+These component modules always award zero cell credit. The ordinary composer
+is not implemented by this checkpoint; only the previously qualified exact
+CM0/O2 cell has whole bounded static-cell evidence. All 2,774 canonical keys
+and 26 backlog records remain unchanged. Fresh component execution for the
+remaining ordinary combinations, complete composition, broader feature
+profiles, final LTO/archive gates, portable CI bootstrap and hardware evidence
+remain separate work. Runtime C/assembly, public5/port8, fixed helpers, reference
+pin and default matrix are unchanged. Exact local evidence and failure history
+are in `PORT_ARCHITECTURE_AUDIT.md#ordinary-direct-component-generalization`.
