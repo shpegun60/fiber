@@ -3089,3 +3089,46 @@ All 2,774 canonical keys and 26 backlog records remain visible; required-cell
 credit is still integer zero and global freeze remains false. No production
 C/assembly, public API, fixed helper, reference pin or default-matrix change
 is part of this checkpoint.
+
+## First Bounded CM0 Static Cell
+
+The maintained `tools/fixtures/cm0_final_cell/compose.py` entry point now
+composes the exact CM0/O2/direct cell under
+`tools/fixtures/freeze_cohorts/CM0_CELL_CONTRACT.md`. The actual final-source
+2026-11-06 run authenticates current E9 inventory and the current retained
+CM0 producers, then recomputes their unchanged eight-root, three-mechanism
+join. It preserves the five declared native/reference differences and their
+captured rationales. It does not require identical instruction streams or
+claim whole-provider semantics.
+
+The cell also binds the forward-eight and reverse-v1 declarations, actual
+providers and original/final references, current-slot ownership/load-only
+sequences, cold ABI anchor reads, exact cohort identity, strong handlers and
+startup vectors. A fresh component suite executes 38 tool commands: the
+matching positive link, five intended negative links, independently typed and
+attribute probes, three undeclared-slot controls, three isolated common
+compiles and a byte-identical runtime replay with saved assembly. Negative
+links reject stale NVIC, storage and reverse-ABI inputs, plus duplicate SVC
+and PendSV handlers. Unexpected diagnostics are not accepted as proof.
+
+The final composition closes 505 artifacts and 2,840 watched input paths.
+Its read-only predicates execute admitted helper/parser byte buffers and
+consume admitted data buffers; temporary content or path redirection cannot
+substitute another input. Real physical-identity/hash checks remain outside
+that scope. Separate fault-injection tests cover credit revocation and recovery
+ordering after late seal or metadata write failures. All 88 maintained methods
+pass: 73 pure controls and 15 read-only retained-ELF integration methods,
+without failures, errors, skips or source drift.
+
+Only the exact CM0/O2/direct key receives bounded static-cell credit. All
+2,774 canonical keys and 26 backlog records remain present; the other 2,773
+cells remain pending. This is not a percentage-complete estimate or a claim
+that all other ports lack component coverage. Full semantic ABI, source/IR,
+CPU/board execution, final LTO/archive qualification for every profile, fresh
+portable CI bootstrap and global freeze remain unproved or pending. Fixed
+retained test inputs are not hosted-CI qualification. Exact receipts and
+failure history are in
+`PORT_ARCHITECTURE_AUDIT.md#first-bounded-cm0-static-cell`.
+
+No runtime C/assembly, public API, existing qualified helper, reference pin or
+default matrix is changed by this proof-only checkpoint.

@@ -8709,3 +8709,109 @@ profile/LTO/archive coverage, hosted CI, CPU/board execution and global freeze
 remain unproved or pending. Runtime code, fixed helpers, the five-operation
 public API/eight-operation port boundary, pinned reference and unrelated WIP
 are unchanged.
+
+## First Bounded CM0 Static Cell
+
+The final-source actual composition on 2026-11-06 passes for only:
+
+```text
+cm0-cortex-m0-soft-nofpu-none-v0-mpu0-p2-b0-aapcs-default
+runtime / final / O2 / direct / CM0
+```
+
+The new maintained `tools/fixtures/cm0_final_cell/` modules implement the
+explicit `CM0_CELL_CONTRACT.md`, rather than treating existing component PASS
+labels as whole-cell evidence. `compose.py` admits the current E9 inventory,
+single-route catalog and complete Native/Reference/Join closures, recomputes
+the unchanged mechanism join, reruns the original producer prelink/final
+predicates, binds original/final references, and runs `components.py` afresh.
+It grants one narrowly defined static-cell credit only after input/output
+closing succeeds. Its component helpers retain zero cell credit themselves.
+
+The complete declared obligation set is now satisfied for this exact cell:
+three common prerequisites (CPU-neutral engine, reverse-v1 ownership and
+source-provider identity) plus eight runtime obligations (forward-eight,
+reverse-v1, current-slot isolation, strong handlers, exact profile/context
+cohort, generated mechanism comparison, final vectors and negative links).
+The canonical plan remains unchanged: 2,774 keys, one bounded static cell,
+2,773 pending keys and all 26 backlog records. This is proof accounting, not
+an estimate of remaining implementation effort.
+
+The final run closes 505 artifacts and 2,840 input paths. The fresh nested
+component suite closes 1,605 input paths and executes 38 actual tool commands.
+It revalidates the positive retained link and rejects exactly five intended
+negative links: NVIC-2/3 cohort mismatch, storage-v1/999 mismatch, reverse-v1/v2
+anchor mismatch, duplicate SVC and duplicate PendSV. It also compiles five
+canonical ABI probes, including three intended undeclared-current-slot
+failures, and recompiles three common providers without CMSIS/selected-port
+include dependencies. Each isolated common object is byte-identical to its
+positive original. The saved-assembly port replay is likewise whole-object
+byte-identical and accounts for both direct current-slot load-only sequences.
+
+`bindings.py` independently spells and checks exact thin bindings in both
+ordinary and emit-relocs twins: eight forward providers, four reverse
+providers, five reverse call/address references, two cold v1-anchor reads,
+four cohort references, two slot references and three original startup-vector
+references. It uses the existing qualified ELF reader, not another decoder.
+The CM0 join checks all three native and five reference transfer roots,
+including original/final transport and the declared staged-frame, startup,
+scheduler, provenance and mask-restore differences. It does not establish
+arbitrary callee semantics, pointer-alias semantics or instruction equality.
+
+The recomputed read-only phase uses 835 distinct admitted buffers for 2,333
+initial paths, with 2,291 recorded reads, 106 exact capture aliases, 48 normal
+source-loader executions and one legacy helper-loader execution. Path lookup
+is lexical within that scope; real opening/closing physical identity and hash
+checks remain outside it. Compiler components run after the buffered-reader
+scope and perform their own complete closing checks. This is not a sandbox.
+
+All 88 maintained methods pass at the final source: 73 pure model/admission/
+fault-injection methods and 15 read-only retained-ELF integration methods.
+There are no failures, errors, skipped methods or closing source drift. The
+fixed retained CM0 seed and parser paths are explicit local test dependencies,
+not a portable fresh-build CI bootstrap. An actual multi-route CLI rejection
+also fails for the exact intended single-CM0-route cause before creating its
+requested output directory.
+
+Confirmed proof-tool defects fixed during review include missing provider
+source authority in reconstructed `Pilot`, incomplete canonical ABI-header
+dependency admission, permissive negative-compile diagnostics, late-failure
+metadata ordering, live content rereads and live physical path resolution in
+buffered predicates. Regression tests cover each class. Recovery first tries
+to persist revoked FAIL credit and preserves the primary cause even if later
+debug artifacts cannot be written. It never retries a compiler stage.
+
+The external prototype and earlier maintained component/composition attempts
+are retained as historical local evidence, not final-source qualification.
+Composer E1 failed for the missing reconstructed source authority; E2 through
+E4 passed at earlier composer bytes but are superseded by E5 after hardening.
+The final-source run and parent test receipts below are separate executions.
+No old PASS is relabeled or overwritten.
+
+| Source or local evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/freeze_cohorts/CM0_CELL_CONTRACT.md` | `C50A2B105489205EC6893DA9C71919CE5A42DA4DE9E23A94E496228C62B53EBA` |
+| `tools/fixtures/cm0_final_cell/compose.py` | `E115BEC0D38CC2E753CD8331EA369414FF62C52A5BC4F6434F2A1458A00FB8DF` |
+| `tools/fixtures/cm0_final_cell/components.py` | `16490A20B1A75C5DBD2D21A5FED988C5BD82F4DE919350985B33491CE473A5F7` |
+| `tools/fixtures/cm0_final_cell/bindings.py` | `2237D0615B6D39FF2B7028F18FAC55685644F4B4A4ADD7ACEFDD736E2966E168` |
+| `C:/fz-cm0-cell-compose-20261106-e5/results.json` | `2E3550E99726C737731AFCD28218F039D8805B256F484D95F1DF8BCD49D68F62` |
+| `C:/fz-cm0-cell-compose-20261106-e5/artifacts.json` | `52E6D41AF3012AD221F6433901F563E6415249C6B071C0AB09974685E879746C` |
+| `C:/fz-cm0-cell-compose-20261106-e5/components/results.json` | `7D9170C06F8A30F67EF70A62B8389084B2989C4433C509FE9F2902B75D97CF78` |
+| `C:/fz-cm0-cell-compose-20261106-e5/components/artifacts.json` | `FCB616861E1AC78C0E2E3477DBA82FC47A4DA95F6A65E17234E80C9CD166DB79` |
+| `C:/fz-cm0-cell-parent-tests-20261106-e2/results.json` | `96D938079E061BA229B80C67097C3F767A0F28F135FE8D030FB3A066647779ED` |
+| `C:/fz-cm0-cell-parent-tests-20261106-e2/artifacts.json` | `16DE68BFD6AFD1FC9AD4B7E2AF17ACADD66E87B4400B15604AFB8CFA15C81996` |
+
+The input inventory is current E9 with source fingerprint
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`;
+the reference remains pinned to `a50edad08b29052631aa469d4df6e6ec7ff68878`.
+The admitted single-route catalog has SHA-256
+`39E08F24184D31883E5F85234C191060F680E2C76F0C40048F93B84649610CB7`.
+
+This closes only the written bounded static-cell contract. Full semantic ABI,
+source/IR and source-to-machine equivalence, CPU execution, board execution,
+runtime handler routing, every-profile LTO/archive qualification, hosted CI
+and global freeze remain false or pending. No runtime C/assembly, public5/
+port8 boundary, fixed producer/reader/checker, reference pin or default matrix
+is changed. The next software work is reusable composition/admission for the
+remaining modes and profiles, not another replay of the already current
+ordinary mechanism baseline or an unsupported hardware-completion claim.
