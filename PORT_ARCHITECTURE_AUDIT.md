@@ -9417,3 +9417,141 @@ LTO and portable hosted CI remain pending. Full semantic ABI, source/IR
 equivalence, runtime policy equality, global freeze and CPU/board execution are
 not claimed. No runtime C/assembly, public5/port8, existing frozen predicate or
 reference pin changes; unrelated protected WIP is neither inspected nor staged.
+
+## Current CM3 O2-LTO Runtime Bindings
+
+The 2026-11-06 additive component at `tools/fixtures/cm3_lto_runtime_bindings/`
+extends the fixed CM3 O2-LTO direct link audit. Its enclosing witness admits
+the current E9 inventory, E3 native O2-LTO capture and ordinary CM3/O2 Seed by
+independent descriptors before output creation. All reachable inventory facts,
+current producer, raw/captured providers, dependencies, tools and source buffers
+must agree. It retains both legacy byte/membership and modern physical/tree
+closing, with fresh disjoint owned output. The only permitted multiple-link
+provenance file is an exact admitted external Git executable, never executed.
+
+All 57 actual native capture command recipes are reconstructed using the
+unchanged Os witness command checker and a bounded O2 facade. The raw O2
+Sources rows lack SeedCompileFlags; a deep-copied command view adds precisely
+nine such fields from independently admitted ordinary Seed rows. Source/order/
+hash equality precedes that projection. Raw compile flags still have to equal
+the frozen O2 transform; raw capture records and command rows are not changed.
+Both raw receipt descriptors and projection provenance remain in the evidence.
+
+The witness executes authenticated source buffers, blocks host process/shell
+creation during replay and consumes only fixed immutable reader inputs. It
+validates exact leaf selectors, typed counts, named provider/consumer records,
+nested audit and nonclaims before promoting the component verdict. Intended
+receipt/manifest bytes and complete membership close before success. Late
+failure independently clears both new binding verdicts even when the failure
+hook throws; the pinned recovery helper permits only bounded diagnostic writes,
+not replay or process retries. An output not created by this run is not revoked.
+
+### Binding Scope
+
+On each own actual machine/final twin, the unchanged audit supplies 26 complete
+definition/origin records, eight forward functions, seven pointer roles, exact
+private/storage identities, LOCAL current slot and ABI anchor, strong handlers,
+GLOBAL post-LTO panic, attributes and full vector geometry. The extension adds
+four reverse definitions, making thirty mandatory definitions, plus three
+separately counted consumer extents. It does not relabel merged-machine origins
+as original C translation-unit ownership.
+
+The extension binds four reverse BL calls with original addend -4 and one
+task-return ABS32 with original addend zero inside independently named consumer
+function extents. Applied destinations, Thumb bits, original/final symbols,
+mapping, map placements and emitted REL metadata are checked. Other common
+runtime reverse consumers remain outside this selected-port reference scope.
+
+It also binds two cold anchor reads and startup's original ABS32 references at
+4/44/56 to Reset/SVC/PendSV and their final pointers. The cold LOCAL anchor may
+use an unnamed section symbol, a nonzero original addend and an LDRB byte
+displacement; raw metadata and the effective anchor address are retained rather
+than rewritten as a named external zero-addend import. One delayed read per
+twin, in context_init, retains r7 across five calls and records an AAPCS callee-saved
+register assumption. CalleeRegisterPreservationProven and
+ControlFlowOrDominanceProven remain false. This is retained-code binding, not
+execution or full C-callee semantics.
+
+### Tests And Actual Evidence
+
+All fifty final-source host methods pass: eighteen byte-backed synthetic binding
+methods, fifteen mocked admission/projection methods and seventeen frontend/
+failure methods. They distinguish actual-shaped O2 metadata from Os-only fields,
+file/directory admission, equivalent path spellings, raw/Seed projection and
+foreign authority, malformed leaf records, alias/addend/origin faults, retained
+cold-read linkage, owned output and stale-PASS revocation. Three suites close
+five/four/three source files respectively without drift. Synthetic fixtures do
+not execute actual ELF parsers, compilers or targets.
+
+The fresh actual bundle is:
+
+```text
+C:/fz-current-cm3-lto-runtime-bindings-20261106-e3/
+```
+
+It returns `CURRENT-CM3-LTO-RUNTIME-BINDINGS-PASS-NOT-QUALIFIED` with
+`Scope=NATIVE_CURRENT_CM3_O2_LTO_RUNTIME_BINDINGS_ONLY`. Both own-machine twins
+pass thirty mandatory definitions, three additional consumers, eight forward
+and four reverse providers, five selected reverse references, two cold reads
+and three original startup vector bindings. There are ten new original binding
+sites per twin; ordinary has zero applied REL records and emitted has ten.
+The inherited seven pointer roles remain separately checked. Own-side load-image
+twins, all 57 reconstructed command records and complete closing pass. This run
+does not execute a new compiler/linker command or a target.
+
+The bundle retains 338 source copies, fourteen binary-role copies, 51 executed
+source buffers and nine explicit Seed-flag projection rows. It closes 3,217
+input bindings and 353 artifacts. A separate parent read-only audit rehashes
+3,218 unique files, validates every recorded physical identity, exact manifest/
+receipt hashes, output membership and typed counts. That separate parent check
+is byte/physical/report evidence, not another ELF predicate recomputation.
+
+An independent consumer audit also closes the descriptors, all 353 artifacts,
+3,217 watched files/physical identities and the source/binary/executed-buffer
+bindings without drift. It independently recomputes both complete binding
+proofs and the PT_LOAD/layout/entry/vector twin comparison exactly. The delayed
+context_init read's AAPCS assumption remains explicit; no compiler or target
+executes and no callee-preservation/control-flow claim is added.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `tools/fixtures/cm3_lto_runtime_bindings/CONTRACT.md` | `DAEB282DE77E2A258A66B87651CB5302BE358A7E3B3A1AF194D089D070BA2AFB` |
+| `tools/fixtures/cm3_lto_runtime_bindings/bindings.py` | `A8C994427DDE61619AB789D62E198B24DEC0B05EF8D1EE8E1C28BE86536E4C3B` |
+| `tools/fixtures/cm3_lto_runtime_bindings/witness.py` | `DFFA1D51EA6513C31612479720695973006BE627442C53D047AE65FDCD279289` |
+| `tools/fixtures/cm3_lto_runtime_bindings/test_bindings.py` | `E879782FE6CD0149E4827757F17FFF6E8CCB9BB1EF683C8E1E30B8B50D1C75D1` |
+| `tools/fixtures/cm3_lto_runtime_bindings/test_admission.py` | `5CB3D8FFC04AFA700B4A2425562D2822DEECA05E0FE3B0C03C4719C476AE7152` |
+| `tools/fixtures/cm3_lto_runtime_bindings/test_witness.py` | `2A4A1387A74E7E8F6F58AC1DCCF69440DD47ADBE7568AB431A867D8EF6AA4CA6` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-cm3-lto-runtime-bindings-parent-pure-20261106-e1/results.json` | `A1561833C80D15C00864444F94C0E8B8FE44D1BDB5FB227B5A5A3E0FB34A84D2` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-cm3-lto-runtime-bindings-parent-admission-20261106-e1/results.json` | `BA6A240898496518FD9CA41DFBE4AACD3096182EA6CC695D8A5F1C618BF95526` |
+| `C:/Users/admin/AppData/Local/Temp/fiber-cm3-lto-runtime-bindings-parent-frontend-20261106-e6/results.json` | `D295D2FFC768CD7843EC96A6B82144450150555C9B3B5C9D91A058CA5DA7E6B1` |
+| Actual replay `results.json` | `1C2F88C7B6CF1BE52AA462960F730D897A064E75B05B9A9F96E529BE5829DCB4` |
+| Actual replay `artifacts.json` | `5BA000BFE20CC6627FA9FA67AD86740DCA3E408CFCE30604E9CC5CE40F5D34EE` |
+
+The final frontend regression set retains an earlier red result at
+`fiber-cm3-lto-runtime-bindings-parent-frontend-20261106-e4-red/results.json`
+under the same TEMP root: it exposes acceptance of junk AdditionalConsumerOrigins
+before the exact name/raw-origin check was added. Actual attempts at sibling
+`20261106-e1` and `20261106-e2` reject before output creation: the former catches
+raw-versus-canonical descriptor path spelling, the latter the omitted directory
+selector for SourceInventoryReceipt. The final E3 run uses corrected frozen
+source; those pre-output rejections are not target defects or successful
+receipts. Missing O2 SeedMode/SeedSide and SeedCompileFlags assumptions were also
+removed before final execution, with independent Seed and command-view controls.
+
+Source fingerprint remains
+`69A66CB09D699EA45A30B21BF4DBCD569CBE637A7770125E76EE64323D862313`;
+the capture producer remains 1191CDC, the link audit 9D6B4E1, the reused command
+checker BEC9C69 and the failure helper 7AFE40E at their existing full pins.
+Raw new-source hashes bind measured LF bytes. Checkout newline conversion must
+reject rather than normalize authenticated buffers; portable bootstrap is still
+a separate CI obligation.
+
+This is zero-credit provider/reference component evidence. All 2,774 keys and
+26 backlog records retain their existing authority. Whole-slot source/generated
+access isolation, typed ABI/hostile-codegen probes, fresh storage/reverse/cohort/
+duplicate-handler link negatives and complete CM3 LTO cell composition remain
+pending, as do Os/archive/broader-profile cells and portable CI. Full ABI and
+semantic ABI, source/IR equivalence, policy/instruction equality, original TU
+ownership, kernel/CPU/board execution and global qualification remain false.
+Runtime C/assembly, public5/port8, qualified readers/producers and reference pin
+are unchanged. Unrelated protected WIP is not inspected or included.

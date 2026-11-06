@@ -3308,3 +3308,37 @@ final LTO, portable CI and hardware remain separate gates. Exact source pins,
 test receipts and measured bundle identity are in
 `PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-mechanism-replay`.
 Runtime C/assembly, public5/port8 and the pinned FreeRTOS reference are unchanged.
+
+## Current CM3 O2-LTO Runtime Bindings
+
+`tools/fixtures/cm3_lto_runtime_bindings/` adds a zero-credit component for the
+current CM3 p4/b16 soft-float O2-LTO direct cohort. It recomputes the unchanged
+native link audit on each actual machine/final twin, then binds the four reverse
+service definitions, their selected-port consumers, two retained cold-anchor
+byte reads and startup's original vector relocations. Merged-machine function
+extents and map origins replace ordinary-TU indices; ordinary GLOBAL slot or
+weak-panic assumptions are not imported into LTO.
+
+The fresh actual replay passes both twins with thirty mandatory definitions and
+three additional consumer extents each. It binds eight forward/four reverse
+providers, five reverse references, two cold reads and three startup vectors:
+ten new original binding sites per twin and ten emitted applied sites. The
+frozen audit separately retains its 26 definitions and seven pointer roles.
+One delayed cold read per twin uses an explicitly reported AAPCS callee-saved
+register assumption, not a callee-preservation or control-flow proof.
+
+Before reader execution, the frontend independently re-admits current inventory,
+capture and ordinary Seed, and reconstructs all 57 recorded capture commands.
+The bounded O2 facade reuses the unchanged Os command checker. A separate
+command-view copy supplies only absent SeedCompileFlags from the authenticated
+Seed; raw capture records remain unchanged. No compiler, linker or target runs.
+Fifty synthetic binding/admission/frontend methods pass; they are distinct from
+the actual saved-ELF replay and do not grant ABI or cell qualification.
+
+This closes the scoped provider/reference component, not whole-slot isolation,
+typed ABI probes, fresh link negatives or whole-cell composition. Os-LTO,
+archive and broader-profile cell coverage, portable CI and hardware remain
+separate gates. Exact source/receipt pins, initial adapter rejections and
+measured counts are in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-o2-lto-runtime-bindings`.
+Runtime C/assembly, public5/port8, frozen readers and the reference pin are unchanged.
