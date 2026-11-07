@@ -3783,3 +3783,23 @@ Full negative ABI-control and accepted-compile replay, isolation, root/reference
 composition and whole-cell qualification remain pending. Runtime C/ASM,
 public5/port8 and inventory are unchanged; archive, hosted CI and hardware are
 not qualified by this result.
+
+## Current CM3 Os-LTO Full ABI Component Implementation
+
+`controls_census_attempt.py` adds one-reader composition of the original census,
+deferred ABI facts and all 41 ABI command records. The component includes five
+intended failed links, three absent-slot compile rejects and both accepted
+type/attribute probes. It binds fixed recipes, source mutations, dependencies,
+actual ELF section columns, plugin-NM bytes and closed diagnostic schemas.
+Five shared image/load joins prevent receipt-only composition.
+
+The new parser/component/driver suites pass 18/32/22 methods; the four preceding
+suites pass another 85. These 157 methods do not themselves qualify the actual
+combined capture. That CLI replay is pending at this implementation checkpoint;
+the canceled pre-review admission created no output or success claim. Exact
+source/test hashes and the resolved reader-role/schema/section-column findings
+are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-full-abi-component-replay`.
+Runtime C/ASM, public5/port8 and inventory stay unchanged. Final isolation,
+root/reference composition, whole-cell, archive, CI and hardware qualification
+are not granted by the new implementation or synthetic tests.

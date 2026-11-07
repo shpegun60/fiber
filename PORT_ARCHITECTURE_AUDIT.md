@@ -10757,3 +10757,54 @@ external dependency semantics, map/recipe semantics, isolation, root protocols
 or final reference parity. Full ABI, whole-cell, archive, CI, global-freeze and
 hardware qualification remain false. Runtime C/ASM, context layout, public5 /
 port8, reference pin, inventory and backlog are unchanged.
+
+## Current CM3 Os-LTO Full ABI Component Replay
+
+The additive `controls_census_attempt.py` recomputes the original census, three
+deferred ABI facts and the complete 41-command ABI component in one fresh reader.
+It does not reuse the prior reader verdict or invoke a tool. Five failed links,
+three absent-C-slot compiles and both accepted type/attribute probes are covered.
+Exact original/positive image identities and load-image comparisons are joined
+inside that reader and checked again by the composed result validator.
+
+Before reader entry, five tool/plugin paths and nine external dependency headers
+receive explicit hash-backed roles with retained identities. Review found that
+prior hash admission alone did not expose those 14 files to the reader; strict
+role regressions now reject access even when a matching buffer is available.
+The pure dependency parser folds GCC LF/CRLF continuations, decodes only the
+producer's escapes and normalizes absolute drive paths lexically, without
+filesystem resolution. The enclosing authority rejects foreign dependencies.
+
+Independent review also closed incomplete readelf section correspondence
+(`ES/Lk/Inf/Al`), nonalphabetic NM definition kinds, open control/probe classifier
+schemas and empty declaration scopes. Corruption subtests preserve valid
+baseline bytes and journals; extra false-valued claims are rejected too. The
+32-method leaf suite was strengthened without increasing its method count.
+
+The three new suites pass 18 parser, 32 component and 22 driver methods; four
+unchanged regression suites pass another 85, for 157 distinct methods. The
+parser checks ten actual dependency files read-only; leaf and driver tests are
+synthetic and do not substitute for actual capture admission or machine replay.
+The pre-review replay was canceled during admission before output creation and
+grants no result. The corrected combined CLI run remains pending at this source
+checkpoint. No whole-cell or global qualification is claimed.
+
+| Full ABI Component Implementation Evidence | SHA-256 |
+| --- | --- |
+| `controls_census_attempt.py` | `86FD9DE1DBFF1ED06546AB35FD7EE9B26F917ACF47440461BEAD40708378C234` |
+| `abi_controls_replay.py` | `4F2F543A9559628EC20F6E58BA2C5646E14717FDF9792949E67B7F097D36568D` |
+| `dependency_bytes.py` | `CB463BE1E7CD98D254E0F5DB7E67283014EAA67FA10C01E2AEEA8913E4E6B9A6` |
+| `test_controls_census_attempt.py` | `62A9F1B8963B3247650BB6BBE2EB33923EEDFBEC4B3C3C581C8230BDDA65CB72` |
+| `test_abi_controls_replay.py` | `90B0ED11F72D661438BEF52D7A141FD395759CBE2F3EF6F097C32797F1571CCB` |
+| `test_dependency_bytes.py` | `8C20B03E26A66492F79D02E5370461F08C66A1330320CABCF0237045311A2D3D` |
+| `CONTROLS_CENSUS_ATTEMPT_CONTRACT.md` | `7223DE1CADCD1ACAE1262DD5F98E9EBD36BF6C93D4403E90FEECD2F94FC95BE8` |
+| `%TEMP%/os-controls-census-parent-20261108-e3/results.json` (22 methods) | `460E7AAE219208C16041C131ABD3794A229FD95785F4640EE3A6DCA13F912034` |
+| `%TEMP%/os-abi-controls-replay-parent-20261108-e2/results.json` (32 methods) | `2E9391F3D5CC112E4EFC0C369FDFCA230C43DDF1DA3772BE570DDCE6486FE1D0` |
+| `%TEMP%/os-dependency-bytes-parent-20261108-e1/results.json` (18 methods) | `7AB79510E79FD94B8A1A3F3FACD3B74940DA5A750E35A335D4F7077C3FA9F96C` |
+
+Full semantic ABI, attribute effects, isolation, canonical root-transfer
+protocols and final same-fixture FreeRTOS composition remain separate. Manifest
+absence at the eight canonical failed outputs is not historical noncreation or
+an OS process trace. Runtime C/ASM, context layout, public5/port8, the reference
+pin, 2,774-key inventory and backlog are unchanged. Archive, hosted CI, hardware
+and global software-freeze qualification remain false.
