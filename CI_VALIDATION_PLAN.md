@@ -43,6 +43,11 @@ QEMU binary/package/shared-library identity and maintained machine manifest
 WSL distribution/userland identity for the current architectural-test wrappers
 ```
 
+Pinned Python sources and contracts require their raw LF bytes. Configure
+`core.autocrlf=false` before the initial Windows checkout and verify worktree
+bytes against raw Git blobs before admission. Checkout conversion must fail
+closed; do not normalize or repin authenticated inputs to hide that mismatch.
+
 The current locally proven baseline is:
 
 ```text

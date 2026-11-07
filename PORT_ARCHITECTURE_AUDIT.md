@@ -10684,3 +10684,76 @@ remain separate obligations; receipt-only merging is insufficient. Runtime
 C/ASM, context layout, public5/port8, the reference pin, 2,774-key inventory and
 26-record backlog are unchanged. No archive, hosted-CI, global-freeze or hardware
 qualification is claimed.
+
+## Current CM3 Os-LTO Census And Deferred ABI Composition
+
+The additive `abi_census_attempt.py` admits the sealed original-census handoff
+as input, not a reusable verdict. It verifies its receipt/manifest, exact tree,
+declared input hashes/physical identities, captured-source pairs and shared
+batch/capture authorities. The two saved zero-inclusive inspection journals,
+raw streams, dumps, original targets and captured objdump are rebound to the
+current admission. No new tool command is executed.
+
+The same fresh immutable graph reparses the batch, Native and handoff receipts,
+recomputes the original census, and invokes the pure `abi_replay.py` for three
+deferred facts: provider dependency declarations, saved preprocessed attribute
+declarations and positive load-image reproduction. All 70 admitted project
+sources are explicitly added to reader roles, covering the 43-file provider
+dependency set; prior hash admission alone is not reader access. The leaf binds
+76 unique explicit inputs, nine providers, eighteen fixed source identities,
+twelve CPP declarations (eight forward/four reverse) and two compared images.
+Both leaf results must name the same original ordinary ELF and identical load
+comparison. Stored provider/CPP/census facts are comparison targets only.
+
+Fresh actual `C:/fzosabi-census-20261107-e1` completes with exit zero and status
+`ORIGINAL-CENSUS-AND-DEFERRED-ABI-REPLAYED-NOT-QUALIFIED`. It recomputes the
+original 71/72-function worker/final census and identical ordinary/emitted load
+twins alongside the three ABI facts. The receipt closes 7,929 input hash and
+physical-identity pairs, 618 captured sources, 43 bootstrap records, 2,956
+immutable paths, 63 executed-source records and 107 unique actual reader
+bindings. The 23 census and 76 ABI leaf bindings are not total graph reads.
+Admission does not imply consumption of every buffered input. The output has
+621 mapped artifacts (622 files including its manifest), with empty primary /
+closing errors. New tool/compiler invocations and cell credit are zero; the two
+recorded upstream inspection invocations have their own separate counter.
+
+The new suites pass 22 leaf and 21 driver synthetic methods without drift,
+failures, errors or skips. The retained first driver test receipt is FAIL: a
+synthetic summary callback exposed that diagnostic printing after an exception
+could run after process/shell guards were restored. The corrected main keeps
+its catch/diagnostic path inside both guards; all 21 methods then pass without
+weakening the regression. No real process or target code was executed by that
+negative test. Independent bounded review also checks the explicit shared-image
+guards and the strengthened nested result schema; diagnostic probes are not a
+substitute for the sealed CLI execution.
+
+Post-integration repetition of all four new suites passes 85 methods with the
+same successful receipt hashes. Independent post-terminal accounting verifies
+all 7,929 input hashes/physical identities, 621 output artifacts, seven upstream
+trees with 7,034 mapped artifacts, 618 source snapshot pairs and all 63 executed
+source / 107 reader bindings. Separate bounded diagnostics verify the 76 ABI
+bindings, shared image joins and narrow nonclaims without rerunning the CLI or
+predicates. All 7,306 original-census and 6,120 batch bindings remain preserved.
+
+| Deferred ABI Composition Evidence | SHA-256 |
+| --- | --- |
+| `C:/fzosabi-census-20261107-e1/results.json` | `00551787515C6C648127D4EA16370F84726C3E099D7F2C3DF022543E08247969` |
+| `C:/fzosabi-census-20261107-e1/artifacts.json` | `152C49634E435075CD3B51ECE4D004EB38275772401E0E1A3BA59E956A783440` |
+| `abi_census_attempt.py` | `529565FAEF586E10DB09C9A913D6E2541CC4E9BBC6169FCEFB802F0B43DAC111` |
+| `abi_replay.py` | `6854D207E12345E856CB9CDCF9B7BA6281EF66FE3C003A474573524D1B1FE3FB` |
+| `test_abi_census_attempt.py` | `85726443E182DA9D8C2E1F55C77E9CC71EC10C60C85C29912BD5FF70D76B5D7A` |
+| `test_abi_replay.py` | `EC721471F18089C94DCB19FEBE731B5364BEEA9149866A3A98E8A396389EC4BF` |
+| `ABI_CENSUS_ATTEMPT_CONTRACT.md` | `A2CF578726FF811AA028D811B65CAE19321A1697D3C32E29467062F15556A900` |
+| `%TEMP%/os-abi-census-attempt-parent-20261107-e1/results.json` (FAIL) | `6E7B4CEC87C7D8073D25C38F406B53057855F5810691768CFC2DC36B7381E4E0` |
+| `%TEMP%/os-abi-census-attempt-parent-20261107-e2/results.json` (21 methods) | `EC4838BF05C8B418B806A6ADA7BD3F7F5BCBD0FF3EC5AA7FA3AC4D0D404C7C34` |
+| `%TEMP%/os-abi-replay-parent-20261107-e1/results.json` (22 methods) | `979BB0B8DA03828321D40F243E8AAC401BA2F18184DD29A50848E058D4940C7F` |
+
+The next bounded slice replays the five intended failed-link controls and three
+absent-slot compile controls from bound raw journals, including plugin-nm
+evidence, original mutations and dependency records. Accepted typed/attribute
+compile provenance is a separate remaining obligation. This composition does
+not prove those controls, source-to-machine semantics, attribute effects,
+external dependency semantics, map/recipe semantics, isolation, root protocols
+or final reference parity. Full ABI, whole-cell, archive, CI, global-freeze and
+hardware qualification remain false. Runtime C/ASM, context layout, public5 /
+port8, reference pin, inventory and backlog are unchanged.

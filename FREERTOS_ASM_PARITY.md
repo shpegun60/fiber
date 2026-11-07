@@ -3762,3 +3762,24 @@ whole-cell qualification. Same-reader ABI/isolation/root/reference composition
 remains required; there is no receipt-only join. Runtime C/ASM, public5/port8,
 inventory and backlog are unchanged, with zero required-cell credit and no
 archive, CI or hardware claim.
+
+## Current CM3 Os-LTO Census And Deferred ABI Replay
+
+`abi_census_attempt.py` completes `C:/fzosabi-census-20261107-e1` as
+`ORIGINAL-CENSUS-AND-DEFERRED-ABI-REPLAYED-NOT-QUALIFIED`. One fresh reader
+recomputes the original worker/final census and three deferred ABI facts from
+the same admitted batch/capture: provider declarations, saved CPP declarations
+and positive load-image reproduction. Explicit shared-original/image guards
+join the facts; neither a prior PASS nor stored provider/CPP results supply
+credit. All 70 project-source roles are explicitly admitted to the reader.
+
+The new leaf/driver suites pass 22/21 synthetic methods. The actual CLI closes
+7,929 input hash/identity pairs and 621 output artifacts, with zero new tool or
+compiler invocations; the two saved inspection invocations are counted only as
+recorded upstream evidence. Exact source/receipt hashes and the retained failed
+guard-regression test are in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-census-and-deferred-abi-composition`.
+Full negative ABI-control and accepted-compile replay, isolation, root/reference
+composition and whole-cell qualification remain pending. Runtime C/ASM,
+public5/port8 and inventory are unchanged; archive, hosted CI and hardware are
+not qualified by this result.
