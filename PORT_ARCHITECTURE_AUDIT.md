@@ -10604,3 +10604,75 @@ The complete Os cell is still not qualified. The next bounded slice is the
 normal-original census and its two missing zero-inclusive inspection journals,
 followed by same-reader ABI/isolation/root/reference composition. No prior O2
 top-level verdict or supported replacement-image result supplies that credit.
+
+## Current CM3 Os-LTO Original Image Census
+
+The additive `normal_attempt.py` admits the unchanged sealed 134-command batch
+and the same explicit Native/Reference/inventory descriptors. It authenticates
+all added helpers and the attempt contract before witness construction, keeping
+the original builder opening registry separate. Exactly two managed captured
+objdump commands inspect the original emitted final ELF and its original saved
+LTRANS object, both with `-drwC -z`. There are no new compiler invocations.
+Aggregate/per-command journals, raw streams, copied dumps, targets and executable
+bytes are bound to the same hashes and physical identities.
+
+The pure `normal_census.py` reconstructs the selected definition surface from
+the three actual plugin-nm outputs at batch indices 103/108/113. Source, original
+object, selected object and journal bytes are independently bound; stored
+definitions are comparison targets. The surface contains 29 public functions
+and two cohort objects across runtime/boot/exception. This is journal/object
+provenance, not source-to-IR semantics or original translation-unit ownership.
+
+Fresh actual attempt `C:/fzosnormal-20261107-e1` completes with exit zero and
+status `ORIGINAL-CENSUS-REPLAYED-NOT-QUALIFIED`. One immutable graph recomputes
+the original whole-image censuses and ordinary/emitted load-image comparison:
+
+| Original CM3 Os-LTO Input | Functions | Instruction Bytes | Mapped Data Bytes |
+| --- | --- | --- | --- |
+| Emitted saved LTRANS object | 71 | 4,078 | 206 |
+| Emitted final ELF | 72 | 4,140 | 236 |
+
+The load twins are identical. The 256-word synthetic vector table is allocated,
+file-backed and load-bound, with entry/SVC/PendSV symbol bindings; canonical root
+protocols and actual target execution are not inferred. The supported replacement
+image is not substituted for either original input.
+
+The completed receipt records 7,306 closed input hash/physical-identity pairs,
+615 captured sources, 2,900 immutable input paths, 59 executed-source records
+and 35 unique actual read bindings. The pure census records 23 bound input reads.
+Buffer admission is not proof that every buffered file was consumed. The output
+manifest maps 626 artifacts (627 files including the manifest); post-terminal
+checking verifies all output hashes and exact membership. Primary and closing
+errors are empty, tool invocations are exactly two, compiler invocations and
+required-cell credit are zero. The upstream batch and Native receipts remain
+unchanged.
+
+The two new synthetic suites pass 22 census and 20 driver methods, with no
+failures, errors, skips or source drift. Independent review found and closed
+two driver issues before execution: process creation is blocked throughout
+immutable reader entry/body/closing, and bounded JSON parsing rejects finite
+syntax that overflows to infinity as well as literal nonfinite values. Tests
+also cover typed journals, target substitution, output ownership/recovery and
+revocation after flushed-summary failure. These synthetic methods do not
+replace the actual ELF replay.
+
+| Original Census Evidence | SHA-256 |
+| --- | --- |
+| `C:/fzosnormal-20261107-e1/results.json` | `3BC6FB8489267674C035B889720F8C3599057266DC67CBBAC511CE6C7F054BBC` |
+| `C:/fzosnormal-20261107-e1/artifacts.json` | `B3846B21C347C0B8D313003A030A5E8B116293423B936BA80FE15737F7100E97` |
+| `normal_attempt.py` | `ADC2D945F336C4325D3A14151DF5B0E8566DE348871211B9EFB0280A3AC8E084` |
+| `normal_census.py` | `65CE1B6E796390CFA8EDDA36C81D4986ED07BD41351CB8CBF72117FABBBD09D1` |
+| `test_normal_attempt.py` | `4597C5C2AC7574A00856952284B1C9708A1DFAB03110395FAADA013DE70F06BD` |
+| `test_normal_census.py` | `EA39F7DD45F36111CE56A5E3334798699195079DD3EEF081E4C67F92981F5664` |
+| `NORMAL_ATTEMPT_CONTRACT.md` | `E262137A5393EC7D245A1CEDFEFB7E5B8DB9A52CB97CDF2EB226A662BD3472BB` |
+| `%TEMP%/os-normal-attempt-parent-20261107-e2/results.json` (20 methods) | `2B555F04CF2DE1DE42C75D87AA0D859E4D70A2A3A28F810D4CBE17A5C8C10575` |
+| `%TEMP%/os-normal-census-parent-20261107-e1/results.json` (22 methods) | `AA6C601E6E533C9D5B5CFB4CB868EE0C0E6469462C23F2A62A48E74D33570E39` |
+
+This closes only the missing original-image census obligation. The next bounded
+slice recomputes provider declarations, saved preprocessed attributes and
+positive-link reproduction alongside this census in one fresh reader. Full
+negative ABI-control replay, isolation, root protocols and reference composition
+remain separate obligations; receipt-only merging is insufficient. Runtime
+C/ASM, context layout, public5/port8, the reference pin, 2,774-key inventory and
+26-record backlog are unchanged. No archive, hosted-CI, global-freeze or hardware
+qualification is claimed.

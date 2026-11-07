@@ -3741,3 +3741,24 @@ or target instructions. The final output has 2,278 mapped artifacts plus its
 manifest. This result gives zero required-cell credit: complete ABI/isolation,
 normal-original census, transfer roots and same-fixture reference composition
 are still required, independently of archive, CI and hardware qualification.
+
+## Current CM3 Os-LTO Original Census Replay
+
+`normal_attempt.py` completes `C:/fzosnormal-20261107-e1` as
+`ORIGINAL-CENSUS-REPLAYED-NOT-QUALIFIED`. Exactly two captured objdump calls add
+the missing `-z` inspections of the original emitted final ELF and original
+LTRANS object; no object is recompiled. The same immutable graph reconstructs
+the selected definition surface from actual plugin-nm journals (29 functions,
+two objects), audits all 71/72 original worker/final functions and recomputes
+identical ordinary/emitted load images. Stored surfaces are comparison targets,
+not authority, and replacement images do not supply original-image credit.
+
+The new suites pass 22 census and 20 driver synthetic methods. Actual evidence
+closes 7,306 input hash/identity records and 626 mapped output artifacts. Exact
+receipt/source hashes and the distinction between admitted buffers and consumed
+reads are recorded in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-original-image-census`.
+This is not source-to-machine semantics, final FreeRTOS reference parity or
+whole-cell qualification. Same-reader ABI/isolation/root/reference composition
+remains required; there is no receipt-only join. Runtime C/ASM, public5/port8,
+inventory and backlog are unchanged, with zero required-cell credit and no
+archive, CI or hardware claim.
