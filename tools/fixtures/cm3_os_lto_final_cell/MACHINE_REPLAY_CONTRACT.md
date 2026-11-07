@@ -23,6 +23,14 @@ the old O2 top-level inspector. It covers the fourteen protected common function
 Thread-section identity, cold carrier activity, constructor/counter ownership,
 original REL fields, three annotation mutants, and protected/raw stress carriers.
 
+Original `R_ARM_TARGET1` metadata is admitted only for the unique four-byte,
+zero-addend `.init_array.00100` / `.fini_array.00100` entries, with exact array
+type/flags/alignment/entry size and a matching local Thumb compiler constructor.
+Other sites, section shapes, targets and addends reject. This is an original-field
+census, not an ABS32 assumption or a proof of the applied destination:
+[Arm ELF ABI](https://github.com/ARM-software/abi-aa/blob/main/aaelf32/aaelf32.rst)
+defines TARGET1 processing as platform-specific.
+
 An unresolved setter/cold-inline attribution returns `PENDING`. A structurally
 valid pending record is not a clean result. A future composer must not promote it
 to protected-effects PASS without an independent attribution proof. The unchanged

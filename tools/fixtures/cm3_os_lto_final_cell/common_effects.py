@@ -34,6 +34,11 @@ PANIC = 'fiber_panic'
 STRESS = 'ctxrt_attribute_stress'
 MUTATIONS = ('ctxrt_v1_current', 'fiber_internal_runtime_load_current_context', PANIC)
 CONSTRUCTOR = r'_sub_[ID]_[0-9]{5}_[0-9]+(?:\.lto_priv\.[0-9]+|\.[0-9]+)?'
+ARRAY_CONSTRUCTOR = r'_sub_([ID])_00100_[0-9]+(?:\.lto_priv\.[0-9]+|\.[0-9]+)?'
+CONSTRUCTOR_ARRAYS = {
+    '.init_array.00100': ('SHT_INIT_ARRAY', 'I'),
+    '.fini_array.00100': ('SHT_FINI_ARRAY', 'D'),
+}
 FALSE_FIELDS = ('TransitiveProtection', 'FullABI', 'FullSemanticABIProof', 'FullIRSemantics',
     'FullInstructionSemantics', 'FullAttributeEquivalence', 'CPUExecution', 'BoardExecution',
     'GlobalQualification', 'Qualification', 'CellContractSatisfied', 'RequiredCellSatisfied',
@@ -70,10 +75,11 @@ def _reference(image, core, h, functions, walks, key, pair, fields):
     section, offset = key
     kind, target = pair
     h._symbol_fields(target)
-    need(type(kind) is int and kind in (2, 10, 30) and target in image.symbols
+    need(type(kind) is int and kind in (2, 10, 30, 38) and target in image.symbols
          and 0 < section < len(image.sections) and offset >= 0, 'closed REL kind/symbol/section')
     header = image.sections[section].header
-    need(header.sh_type == 'SHT_PROGBITS' and offset + 4 <= header.sh_size, 'complete file-backed REL field')
+    need(offset + 4 <= header.sh_size and (header.sh_type == 'SHT_PROGBITS' or kind == 38),
+         'complete file-backed REL field')
     need(all(other_section != section or offset + 4 <= other_offset or other_offset + 4 <= offset
              for other_section, other_offset in fields), 'nonoverlapping four-byte REL fields')
     fields.add(key)
@@ -84,8 +90,28 @@ def _reference(image, core, h, functions, walks, key, pair, fields):
     if owner:
         item = functions[owner]
         need(offset + 4 <= (item['value'] & ~1) + item['size'], 'REL field crosses function extent')
-    raw = image.section_read(section, offset, 4)
-    resolved, addend = None, None
+    resolved, addend, constructor_array = None, None, None
+    if kind == 38:
+        # TARGET1 is platform-specific. Census only this original zero-addend
+        # constructor pointer; do not assume ABS32 or an applied destination.
+        constructor_array = image.names[section]
+        need(constructor_array in CONSTRUCTOR_ARRAYS and image.names.count(constructor_array) == 1,
+             'exact unique constructor-array section')
+        array_type, side = CONSTRUCTOR_ARRAYS[constructor_array]
+        need(header.sh_type == array_type and header.sh_flags == 3 and header.sh_size == 4
+             and header.sh_addralign == 4 and header.sh_entsize == 4 and offset == 0 and owner is None,
+             'exact constructor-array geometry')
+        constructor = re.fullmatch(ARRAY_CONSTRUCTOR, target['name'])
+        need(constructor is not None and constructor[1] == side and target['kind'] == 'STT_FUNC'
+             and target['binding'] == 'STB_LOCAL' and target['value'] & 1
+             and functions.get(target['name']) == target, 'exact constructor-array target')
+        need(type(header.sh_offset) is int and header.sh_offset >= 0
+             and header.sh_offset + 4 <= len(image.data), 'constructor-array file bounds')
+        raw = image.data[header.sh_offset:header.sh_offset + 4]
+        need(raw == bytes(4), 'original TARGET1 zero addend')
+        addend = 0
+    else:
+        raw = image.section_read(section, offset, 4)
     if kind == 2:
         need(offset % 4 == 0, 'word-aligned ABS32 field')
         if header.sh_flags & 4:
@@ -96,7 +122,7 @@ def _reference(image, core, h, functions, walks, key, pair, fields):
         resolved = h._resolved(image, kind, target, section, offset)
         if target['section'] == 'SHN_UNDEF':
             need(addend == 0, 'original external ABS32 zero addend')
-    else:
+    elif kind != 38:
         need(owner is not None and header.sh_flags & 6 == 6 and offset % 2 == 0
              and offset in walks[owner][0] and walks[owner][0][offset] == raw,
              'REL transfer is a complete owned instruction')
@@ -119,7 +145,8 @@ def _reference(image, core, h, functions, walks, key, pair, fields):
     return dict(Section=section, Offset=offset, Kind=kind, Target=dict(target), Owner=owner,
         SiteBytes=raw.hex(), FieldBytes=4, OriginalAddend=addend, ResolvedABS32=resolved,
         SemanticTarget=semantic, CompilerHook=hook, CompilerCounter=counter,
-        OriginalHookTransferValidated=hook and kind in (10, 30), AppliedDestinationValidated=False)
+        OriginalHookTransferValidated=hook and kind in (10, 30), AppliedDestinationValidated=False,
+        ConstructorArray=constructor_array)
 
 
 def _inspect(image, core, h, *, mutation, stress):
@@ -258,7 +285,7 @@ def _hash(value, message):
 
 
 def _returned_reference(row):
-    need(type(row) is dict and type(row.get('Kind')) is int and row['Kind'] in (2, 10, 30), 'returned REL kind')
+    need(type(row) is dict and type(row.get('Kind')) is int and row['Kind'] in (2, 10, 30, 38), 'returned REL kind')
     need(all(type(row.get(key)) is int and row[key] >= (1 if key == 'Section' else 0)
              for key in ('Section', 'Offset')) and type(row.get('FieldBytes')) is int and row['FieldBytes'] == 4
          and type(row.get('OriginalAddend')) is int and (row['Owner'] is None or type(row['Owner']) is str),
@@ -269,6 +296,22 @@ def _returned_reference(row):
     for key in ('CompilerHook', 'CompilerCounter', 'OriginalHookTransferValidated'):
         need(type(row.get(key)) is bool, 'returned REL boolean/' + key)
     need(row.get('AppliedDestinationValidated') is False, 'no applied destination claim')
+    if row['Kind'] == 38:
+        array = row.get('ConstructorArray')
+        target = row['Target']
+        name = target.get('name')
+        constructor = re.fullmatch(ARRAY_CONSTRUCTOR, name) if type(name) is str else None
+        need(type(array) is str and array in CONSTRUCTOR_ARRAYS and constructor is not None
+             and constructor[1] == CONSTRUCTOR_ARRAYS[array][1]
+             and target.get('kind') == 'STT_FUNC' and target.get('binding') == 'STB_LOCAL'
+             and type(target.get('value')) is int and target['value'] & 1
+             and row['Owner'] is None and row['Offset'] == 0 and row['OriginalAddend'] == 0
+             and row['SiteBytes'] == '00000000' and row.get('ResolvedABS32') is None
+             and row['SemanticTarget'] == target['name'] and row['CompilerHook'] is False
+             and row['CompilerCounter'] is False and row['OriginalHookTransferValidated'] is False,
+             'returned original constructor-array TARGET1')
+    else:
+        need(row.get('ConstructorArray') is None, 'no constructor-array claim for other REL kind')
     if row['Kind'] == 2:
         need(row['Offset'] % 4 == 0 and row['OriginalAddend'] == struct.unpack('<I', bytes.fromhex(row['SiteBytes']))[0],
              'returned ABS32 raw addend')

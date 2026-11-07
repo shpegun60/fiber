@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 HELPER = ROOT / 'tools/fixtures/cm3_lto_attributes/attributes.py'
 HELPER_SHA = '93275A5903A67CB2DAEABB76BEF1431B052878BB478455E54343DB20881E83C0'
-METHODS = 14
+METHODS = 20
 API = H = None
 ROOTS = ('fiber_internal_task_return', 'ctxrt_v1_init', 'ctxrt_v1_current',
     'ctxrt_v1_start', 'ctxrt_v1_set_dispatcher', 'ctxrt_v1_yield',
@@ -64,7 +64,7 @@ class Image:
             contents[section] += bytes.fromhex('00bf') * 16
             self.maps[section].append((start, 't'))
             self.symbols.append(symbol(name, section, value=start | 1, size=32, kind='STT_FUNC',
-                                       binding='STB_WEAK' if name == PANIC else 'STB_GLOBAL'))
+                binding='STB_LOCAL' if name in (CTOR_I, CTOR_D) else 'STB_WEAK' if name == PANIC else 'STB_GLOBAL'))
         header = bytearray(52)
         header[:7] = b'\x7fELF\x01\x01\x01'
         struct.pack_into('<HHI', header, 16, 1, 40, 1)
@@ -147,6 +147,20 @@ class Image:
     def instrument(self, name):
         self.transfer(name, 0, '__cyg_profile_func_enter')
         self.transfer(name, 4, '__cyg_profile_func_exit')
+
+    def constructor_arrays(self, *, init=CTOR_I, fini=CTOR_D):
+        sections = {}
+        for side, name, kind, target in (('I', '.init_array.00100', 'SHT_INIT_ARRAY', init),
+                                       ('D', '.fini_array.00100', 'SHT_FINI_ARRAY', fini)):
+            section = len(self.sections)
+            self.names.append(name)
+            self.sections.append(SimpleNamespace(header=SimpleNamespace(sh_offset=len(self.data),
+                sh_size=4, sh_flags=3, sh_type=kind, sh_addralign=4, sh_entsize=4)))
+            self.data += bytes(4)
+            self.maps[section] = [(0, 'd')]
+            self.reference(section, 0, 38, self.function(target))
+            sections[side] = section
+        return sections
 
     def section_read(self, section, offset, size):
         header = self.sections[section].header
@@ -376,6 +390,185 @@ class EffectsTests(unittest.TestCase):
                 with self.assertRaises(API.Rejected):
                     self.inspect(image)
 
+    def test_target1_constructor_array_pairs_and_allowed_suffixes(self):
+        for suffix in ('', '.lto_priv.0', '.17'):
+            for raw_stress in (False, True):
+                with self.subTest(suffix=suffix, raw_stress=raw_stress):
+                    image = Image(stress=raw_stress, raw_stress=raw_stress)
+                    image.function(CTOR_I)['name'] += suffix
+                    image.function(CTOR_D)['name'] += suffix
+                    sections = image.constructor_arrays(init=CTOR_I + suffix, fini=CTOR_D + suffix)
+                    kwargs = dict(stress=True, mutation=STRESS) if raw_stress else {}
+                    saved = copy.deepcopy((image.data, image.names, image.symbols, image.relocations))
+                    with patch.object(H, '_resolved', wraps=H._resolved) as resolved:
+                        proof = self.inspect(image, **kwargs)
+                    self.assertFalse(any(value.args[1] == 38 for value in resolved.call_args_list))
+                    rows = [row for row in proof['References'] if row['Kind'] == 38]
+                    self.assertEqual(len(rows), 2)
+                    for row, side, array, name in zip(rows, ('I', 'D'),
+                            ('.init_array.00100', '.fini_array.00100'), (CTOR_I + suffix, CTOR_D + suffix)):
+                        self.assertEqual((row['Section'], row['Offset']), (sections[side], 0))
+                        self.assertEqual(row['ConstructorArray'], array)
+                        self.assertEqual(row['Target'], image.function(name))
+                        self.assertEqual(row['Target']['binding'], 'STB_LOCAL')
+                        self.assertEqual(row['Target']['kind'], 'STT_FUNC')
+                        self.assertEqual(row['Target']['value'] & 1, 1)
+                        self.assertEqual(row['SemanticTarget'], name)
+                        self.assertEqual(row['FieldBytes'], 4)
+                        self.assertEqual(row['SiteBytes'], '00000000')
+                        self.assertIs(type(row['OriginalAddend']), int)
+                        self.assertEqual(row['OriginalAddend'], 0)
+                        self.assertIsNone(row['Owner'])
+                        self.assertIsNone(row['ResolvedABS32'])
+                        for field in ('AppliedDestinationValidated', 'CompilerHook', 'CompilerCounter',
+                                      'OriginalHookTransferValidated'):
+                            self.assertIs(row[field], False)
+                        self.assertIn(row, proof['MetadataReferences'])
+                    for row in proof['References']:
+                        if row['Kind'] != 38:
+                            self.assertIn('ConstructorArray', row)
+                            self.assertIsNone(row['ConstructorArray'])
+                    self.assertIs(API.require_result(proof, **kwargs), proof)
+                    self.assertEqual(saved, (image.data, image.names, image.symbols, image.relocations))
+                    self.assertIs(proof['Qualification'], False)
+                    self.assertEqual(proof['RequiredCellsSatisfied'], 0)
+
+    def test_target1_constructor_array_section_geometry_and_uniqueness(self):
+        defects = (('sh_type', 'SHT_PROGBITS'), ('sh_type', 'SHT_NOBITS'), ('sh_flags', 0),
+            ('sh_flags', 2), ('sh_flags', 7), ('sh_addralign', 0), ('sh_addralign', 2), ('sh_addralign', 8),
+            ('sh_entsize', 0), ('sh_entsize', 1), ('sh_entsize', 8), ('sh_size', 0), ('sh_size', 3), ('sh_size', 8))
+        for side in ('I', 'D'):
+            for field, bad in defects:
+                image = Image()
+                section = image.constructor_arrays()[side]
+                setattr(image.sections[section].header, field, bad)
+                with self.subTest(side=side, field=field, bad=bad), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+            for defect in ('base-name', 'wrong-priority', 'wrong-array-type', 'duplicate'):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                if defect == 'base-name':
+                    image.names[section] = '.init_array' if side == 'I' else '.fini_array'
+                elif defect == 'wrong-priority':
+                    image.names[section] = image.names[section].replace('00100', '00101')
+                elif defect == 'wrong-array-type':
+                    image.sections[section].header.sh_type = 'SHT_FINI_ARRAY' if side == 'I' else 'SHT_INIT_ARRAY'
+                else:
+                    image.names.append(image.names[section])
+                    image.sections.append(copy.deepcopy(image.sections[section]))
+                with self.subTest(side=side, defect=defect), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+
+    def test_target1_constructor_array_sites_zero_addends_and_file_bounds(self):
+        for side in ('I', 'D'):
+            for offset in (-1, 1, 4, False, 0.0):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                image.relocations[section, offset] = image.relocations.pop((section, 0))
+                with self.subTest(side=side, offset=offset), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+            for addend in (1, 4, 0xFFFFFFFF):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                image.put(section, 0, struct.pack('<I', addend))
+                with self.subTest(side=side, addend=addend), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+            for bound in ('negative', 'bool', 'straddle', 'outside'):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                image.sections[section].header.sh_offset = {'negative': -1, 'bool': False,
+                    'straddle': len(image.data) - 3, 'outside': len(image.data)}[bound]
+                with self.subTest(side=side, bound=bound), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+
+    def test_target1_constructor_array_target_side_catalog_binding_kind_and_thumb(self):
+        for side, name, opposite in (('I', CTOR_I, CTOR_D), ('D', CTOR_D, CTOR_I)):
+            for defect in ('wrong-side', 'nonconstructor', 'priority', 'bad-suffix', 'global', 'weak',
+                           'foreign-binding', 'object', 'notype', 'no-thumb', 'foreign-symbol'):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                target = image.function(name)
+                if defect == 'wrong-side':
+                    image.relocations[section, 0] = 38, image.function(opposite)
+                elif defect == 'nonconstructor':
+                    image.relocations[section, 0] = 38, image.function(COLD)
+                elif defect in ('priority', 'bad-suffix'):
+                    target['name'] = name.replace('00100', '00200') if defect == 'priority' else name + '.lto_priv.x'
+                elif defect in ('global', 'weak', 'foreign-binding'):
+                    target['binding'] = {'global': 'STB_GLOBAL', 'weak': 'STB_WEAK', 'foreign-binding': 'STB_GNU_UNIQUE'}[defect]
+                elif defect in ('object', 'notype'):
+                    image.relocations[section, 0] = 38, dict(target, kind='STT_OBJECT' if defect == 'object' else 'STT_NOTYPE')
+                    image.symbols.append(image.relocations[section, 0][1])
+                elif defect == 'no-thumb':
+                    target['value'] &= ~1
+                else:
+                    image.relocations[section, 0] = 38, dict(target, index=99999)
+                with self.subTest(side=side, defect=defect), self.assertRaises(API.Rejected):
+                    self.inspect(image)
+            for defect in ('missing-function', 'different-function-record'):
+                image = Image()
+                section = image.constructor_arrays()[side]
+                functions = H._functions(image)
+                walks = {key: H._walk(image, CORE, item) for key, item in functions.items()}
+                if defect == 'missing-function':
+                    del functions[name]
+                else:
+                    functions[name] = dict(functions[name], index=99999)
+                with self.subTest(side=side, defect=defect), self.assertRaisesRegex(API.Rejected, 'exact constructor-array target'):
+                    API._reference(image, CORE, H, functions, walks, (section, 0), image.relocations[section, 0], set())
+
+    def test_target1_is_confined_to_exact_constructor_array_relocation_sites(self):
+        for kind in (2, 10, 30, 255, True, 38.0):
+            image = Image()
+            section = image.constructor_arrays()['I']
+            image.relocations[section, 0] = kind, image.function(CTOR_I)
+            with self.subTest(kind=kind), self.assertRaises(API.Rejected):
+                self.inspect(image)
+        for site in ('metadata', 'function'):
+            image = Image()
+            image.constructor_arrays()
+            if site == 'metadata':
+                image.reference(4, 68, 38, image.function(CTOR_I))
+            else:
+                item = image.function(COLD)
+                image.relocations[item['section'], item['value'] & ~1] = 38, image.function(CTOR_I)
+            with self.subTest(site=site), self.assertRaises(API.Rejected):
+                self.inspect(image)
+
+    def test_returned_target1_rows_preserve_narrow_constructor_and_nonclaims(self):
+        image = Image()
+        image.constructor_arrays()
+        image.transfer(COLD, 0, '__cyg_profile_func_enter', kind=30, raw=TAIL)
+        original = self.inspect(image)
+        index = next(index for index, row in enumerate(original['References']) if row['Kind'] == 38)
+        changes = [('ConstructorArray', value) for value in (None, [], '.init_array', '.fini_array.00100')]
+        changes += [('ResolvedABS32', dict(Symbol=CTOR_I)), ('ResolvedABS32', False),
+            ('AppliedDestinationValidated', True), ('AppliedDestinationValidated', 0), ('Owner', COLD),
+            ('Kind', 38.0), ('FieldBytes', 4.0), ('Offset', False), ('Offset', 2), ('OriginalAddend', False),
+            ('OriginalAddend', 0.0), ('OriginalAddend', 1), ('SiteBytes', '01000000'),
+            ('SemanticTarget', COLD), ('CompilerHook', True), ('CompilerCounter', True),
+            ('OriginalHookTransferValidated', True), ('CompilerHook', 0)]
+        target_changes = [('name', value) for value in (None, [], COLD, CTOR_D, '_sub_I_00200_0', CTOR_I + '.lto_priv.x')]
+        target_changes += [('kind', 'STT_OBJECT'), ('binding', 'STB_GLOBAL'), ('binding', 'STB_WEAK'),
+                           ('value', False), ('value', 2)]
+        for nested, mutations in ((False, changes), (True, target_changes)):
+            for key, bad in mutations:
+                proof = copy.deepcopy(original)
+                row = proof['References'][index]
+                (row['Target'] if nested else row)[key] = bad
+                proof['MetadataReferences'] = copy.deepcopy([value for value in proof['References'] if value['Owner'] is None])
+                proof['OrdinaryEvidence'] = copy.deepcopy([value for value in proof['References'] if value['Owner'] == COLD])
+                with self.subTest(nested=nested, key=key, bad=bad):
+                    with self.assertRaises(API.Rejected):
+                        API._returned_reference(row)
+                    with self.assertRaises(API.Rejected):
+                        API.require_result(proof)
+        for kind in (2, 10, 30):
+            row = copy.deepcopy(next(row for row in original['References'] if row['Kind'] == kind))
+            row['ConstructorArray'] = '.init_array.00100'
+            with self.subTest(kind=kind), self.assertRaises(API.Rejected):
+                API._returned_reference(row)
+
     def test_inputs_helpers_and_returned_records_not_mutated(self):
         image = Image()
         original = copy.deepcopy((image.data, image.symbols, image.relocations, image.maps))
@@ -440,7 +633,7 @@ def main(argv=None):
             H = SimpleNamespace(**{name: getattr(helper, name) for name in names})
             tests = unittest.defaultTestLoader.loadTestsFromTestCase(EffectsTests)
             if tests.countTestCases() != METHODS:
-                raise ValueError('exact fourteen methods required')
+                raise ValueError('exact implemented method count required: ' + str(tests.countTestCases()))
             result = unittest.TextTestRunner(verbosity=2).run(tests)
         report.update(Tests=result.testsRun, Failures=len(result.failures), Errors=len(result.errors),
             Skipped=len(result.skipped), Details=[dict(Test=str(test), Detail=detail)

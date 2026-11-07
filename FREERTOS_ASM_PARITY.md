@@ -3701,3 +3701,43 @@ write, and regular unaliased bounded destination files. The driver/guard suites
 pass 22/12 synthetic methods, including coherent role omission and unclaimed or
 replaced output roots. This is source hardening, not a successful fresh producer
 execution. The failed E1 and its executed source bytes remain unchanged.
+
+## Current CM3 Os-LTO Sealed Batch
+
+The corrected producer completes all 134 commands in
+`C:/fzosbatch-20261107-e1`: 72 compiler-driver invocations, eight intended
+nonzero controls, four complete phase ranges 41/12/45/36, and no unexpected
+tool failure or timeout. The receipt is `BUILT-PENDING-READER`, not a cell PASS.
+Independent post-terminal accounting verifies all 1,634 mapped artifacts and
+exact membership (1,635 files including the manifest), 6,120 input hashes and
+physical identities, 610 captured sources and the original 142-role handoff.
+
+The new `machine_attempt.py` admits that sealed batch plus the same explicit
+Native/Reference/inventory descriptors. It cannot execute tools. One immutable
+reader replays six common and four selected-port saved-worker chains, twelve
+common and eight port machine images. Journal/cohort binding is recomputed:
+thirteen compilation sources, actual discovery/compile commands, specs adapters,
+ordered IR inputs and supported/raw policy cannot be taken from stored verdicts.
+
+The first actual replay exposed a checker omission: GCC's original TARGET1
+constructor-array metadata was not in the closed REL vocabulary. The narrow
+fix admits only the exact priority-100 init/fini array geometry, matching local
+Thumb constructors and zero addends. It does not infer ABS32 processing or an
+applied destination. The failed attempt remains retained, not promoted.
+
+Focused synthetic suites pass 20 common-effect, 30 worker-binding, 35 driver,
+10 composer and 17 port-census methods. These 112 methods are not actual-machine
+or cell credit. Exact batch and replay evidence is recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-sealed-batch`.
+Runtime C/ASM, public5/port8, the 2,774-key plan and 26 backlog entries are unchanged.
+
+The fresh actual replay `C:/fzosmachine-20261107-e2` subsequently completes as
+`MACHINE-WORKER-COMPONENTS-REPLAYED-NOT-QUALIFIED`: twenty actual machine roles,
+ten reconstructed worker chains, all intended mutant/raw clean-predicate
+rejections and zero unresolved common attribution. One immutable graph consumes
+295 unique read bindings from 2,277 admitted paths and 618 source buffers;
+6,684 hash/physical input bindings close without drift. It executes zero tools
+or target instructions. The final output has 2,278 mapped artifacts plus its
+manifest. This result gives zero required-cell credit: complete ABI/isolation,
+normal-original census, transfer roots and same-fixture reference composition
+are still required, independently of archive, CI and hardware qualification.

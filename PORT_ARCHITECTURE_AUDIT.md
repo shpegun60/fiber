@@ -10491,3 +10491,116 @@ The root check is not an atomic hostile-filesystem race defense.
 No corrected full-batch tool run is claimed by these pure tests. The next actual
 producer attempt must use a fresh output directory and this fixed source cohort;
 its one-scope machine/worker/ABI/isolation/transfer replay remains required.
+
+## Current CM3 Os-LTO Sealed Batch
+
+Corrected producer `C:/fzosbatch-20261107-e1` completes all 134 terminal host
+commands: 72 independently recounted GCC-driver calls, eight intended nonzero
+controls, no timeouts and no unexpected exit. Its four phase ranges are exactly
+41/12/45/36. The status is `BUILT-PENDING-READER`; all component replay and
+required-cell counters remain unpromoted. This supersedes only the earlier
+statement that a fresh corrected producer execution was still required.
+
+Independent post-terminal checking verifies every one of 1,634 manifest-mapped
+artifacts and exact membership (1,635 files including the manifest). It also
+checks 6,120 input hashes/physical-identity records, 610 captured source records,
+the complete 134-command journal and the 142 original pending-reader roles.
+The earlier `C:/fzosbatch-20261106-e2` process had stopped after 26 terminal
+commands without a final manifest; it remains incomplete, not repaired in place.
+The original failed E1 and all captured executed source bytes remain unchanged.
+
+| Corrected Batch Evidence | SHA-256 |
+| --- | --- |
+| `C:/fzosbatch-20261107-e1/results.json` | `3DCE7C453AF909B6B917B9A3EED552F1725D70ED9420CEA74A36797ADB12EEC7` |
+| `C:/fzosbatch-20261107-e1/artifacts.json` | `35E2A0B0895AD8458F8476C8E6F672176E39687B69137804E3342DDC663BD635` |
+
+The additive `machine_attempt.py` authenticates the builder's exact opening
+registry before admitting the same explicit Native/Reference/inventory cohort.
+It verifies original physical identities without overwriting an earlier
+identity during role re-enrollment. All helper sources are authenticated before
+construction; frozen helper imports, receipt reparsing and ELF reads then use
+one immutable reader. Worker paths may be lexically normalized without physical
+filesystem access. Undeclared artifact paths and traversal remain forbidden.
+
+`worker_bindings.py` reconstructs ten ordered worker plans from original phase
+records and exact command positions. It binds all thirteen compilation sources
+and their discovery/compile journals, reconstructs both specs adapters from
+actual dumpspecs stdout, verifies six common and four selected-port lowering /
+final cohorts and saved WPA/LTRANS options, and binds zero-inclusive disassembly
+to the producing stdout. The final supported link replaces only three selected
+port objects; the other six native objects remain unchanged. Stored
+`ActualWorker` records are comparison targets, never input-selection authority.
+Recorded compile commands do not establish source-to-IR semantics or OS process
+tracing; those remain explicit nonclaims.
+
+First actual replay `C:/fzosmachine-20261107-e1` is retained as FAIL at
+`closed REL kind/symbol/section`. Binary census identifies type 38 TARGET1 only
+in the two original priority-100 compiler constructor arrays, across ten of the
+twelve common images. The corrected matcher accepts only unique four-byte
+`.init_array.00100` / `.fini_array.00100` sections with exact type, flags,
+alignment and entry size, zero original addends and matching local Thumb
+constructor functions. Other TARGET1 sites/targets/shapes fail. Returned rows
+retain no resolved ABS32 or applied-destination claim. The platform-specific
+meaning follows the [Arm ELF ABI](https://github.com/ARM-software/abi-aa/blob/main/aaelf32/aaelf32.rst);
+no linker interpretation is assumed by this original-field census.
+
+| Retained Failure And Focused Pure Evidence | SHA-256 |
+| --- | --- |
+| `C:/fzosmachine-20261107-e1/results.json` (FAIL) | `47D68503D0D154366618B4007E9AC13BE5C8B0BB263E5AD112CBE45343D659EC` |
+| `C:/fzosmachine-20261107-e1/artifacts.json` | `A7B63E329D10F15530FC6B2EFA82A80A1188EEDD3FB25A8731630E5E50A10F05` |
+| `%TEMP%/os-common-effects-target1-parent-20261107-e1/results.json` (20 methods) | `A4A7358534426165456B263EC27F300EA015851151E0633859519A4AF1F66E45` |
+| `%TEMP%/os-worker-bindings-parent-20261107-e2/results.json` (30 methods) | `265AD207A85F995DA4140B5D7E10EE482BB64924123FB4C1C5FD758C86B9C99D` |
+| `%TEMP%/os-machine-attempt-parent-20261107-e7/results.json` (35 methods) | `5BAB5A154DBF8B5F60AC1A2EB667C7B874C64D166E7CAB71064F070DB1018E19` |
+
+The additional unchanged composer and port-census suites pass 10 and 17 methods.
+The total is 112 focused synthetic methods, with zero failures/errors/skips and
+no source drift. They test shape/negative/ownership contracts, not actual Os
+machine qualification. Independent bounded diagnostics also accept all twelve
+common and eight selected-port images after the fix, reject the intended
+mutant/raw carriers and find no unresolved common attribution; those diagnostics
+are not a substitute for the complete sealed CLI replay.
+
+The driver preserves unresolved attribution as pending and grants zero cell
+credit even on a bounded completed replay. ABI, isolation, normal-original
+census, final roots and reference parity still require same-fixture composition.
+In particular, the original capture's disassemblies omit `-z`: two separately
+journaled zero-inclusive inspections are needed for a complete original-image
+census; the supported replacement final image cannot substitute for it.
+No runtime C/ASM, context layout, public5/port8, reference pin, 2,774-key inventory
+or 26-record backlog changes. Archive, CI, global freeze and hardware remain
+unqualified.
+
+### Actual Machine And Worker Replay
+
+Fresh attempt `C:/fzosmachine-20261107-e2` completes with exit zero and status
+`MACHINE-WORKER-COMPONENTS-REPLAYED-NOT-QUALIFIED`. Inside one immutable parser
+graph it recomputes twelve common and eight selected-port machine roles and ten
+saved worker chains, including actual mutants/raw stress rejecting the unchanged
+clean predicates. There are zero unresolved common-attribution entries. The
+first failed replay is not rewritten or used as positive evidence.
+
+The completed result closes 6,684 input hashes/physical identities, 618 captured
+source buffers and 1,659 supplemental reader inputs. Its immutable graph has
+2,277 admitted input paths, 64 executed-source records and 295 unique actual read
+bindings; admission does not imply every buffered path was consumed by a
+predicate. The output manifest maps 2,278 artifacts (2,279 files with the
+manifest). Primary/closing errors are empty. Tool/compiler invocations, target
+execution and required-cell credit are zero. Worker invocation evidence remains
+compiler-reported, not an OS process trace.
+
+| Actual Replay Or Executed Source | SHA-256 |
+| --- | --- |
+| `C:/fzosmachine-20261107-e2/results.json` | `FB8595A87A782D39C04FA17D8A5ECFF7361BF3C219DE3FE76F0E70D20644470B` |
+| `C:/fzosmachine-20261107-e2/artifacts.json` | `B2A766A0ABC31596F07C1F871F8884853ADBD724E0F79F01AD78009040ED3F53` |
+| `machine_attempt.py` | `3CB43C29FF23281AC9EC36C32BC7C700E35038C78DE7BD95389213417D8684F0` |
+| `worker_bindings.py` | `7A899F3B0EAD365900086F252455ACA25E10684ACC24F7605754D29308896834` |
+| Corrected `common_effects.py` | `800942F1CA34DCE0198258C13D85F5BA422DF6BF88726694360C16B39270C81D` |
+| `MACHINE_REPLAY_CONTRACT.md` | `89EB98B0DBE5053503DE545D77D35147A8879D6268B8E5221C743B4FAD6D8DCF` |
+| `MACHINE_ATTEMPT_CONTRACT.md` | `F8FC812307D6D8DB3074B5CE78720FC24C9353D34FD01ABC2A3787428AEE053B` |
+| `%TEMP%/os-machine-replay-parent-20261107-e1/results.json` (10 methods) | `745CD9F271BCF6EE1D2686137D7024E29BD665A2B6EF7D1F9CE89FD701CB3962` |
+| `%TEMP%/os-port-census-parent-20261107-e1/results.json` (17 methods) | `CF35358BCFA1E7F8F5F3FE70C848EC7A355CF07960CC72133CBB11CF629C6837` |
+
+The complete Os cell is still not qualified. The next bounded slice is the
+normal-original census and its two missing zero-inclusive inspection journals,
+followed by same-reader ABI/isolation/root/reference composition. No prior O2
+top-level verdict or supported replacement-image result supplies that credit.
