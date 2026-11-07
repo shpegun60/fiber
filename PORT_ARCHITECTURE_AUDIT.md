@@ -10656,6 +10656,14 @@ also cover typed journals, target substitution, output ownership/recovery and
 revocation after flushed-summary failure. These synthetic methods do not
 replace the actual ELF replay.
 
+Independent post-terminal audits additionally verify all 7,306 input hashes
+and physical identities, six dependency trees with 6,408 mapped artifacts, all
+615 source snapshot pairs, 40 bootstrap and 35 builder-opening records, and the
+59 executed-source / 35 reader bindings. Separate byte diagnostics rehash all
+143 function bodies and 592 recorded relocation fields and compare the three
+load segments and vector words. These are independent byte/accounting checks,
+not a second execution of census predicates or stronger semantic qualification.
+
 | Original Census Evidence | SHA-256 |
 | --- | --- |
 | `C:/fzosnormal-20261107-e1/results.json` | `3BC6FB8489267674C035B889720F8C3599057266DC67CBBAC511CE6C7F054BBC` |
