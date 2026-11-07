@@ -3795,11 +3795,25 @@ Five shared image/load joins prevent receipt-only composition.
 
 The new parser/component/driver suites pass 18/32/22 methods; the four preceding
 suites pass another 85. These 157 methods do not themselves qualify the actual
-combined capture. That CLI replay is pending at this implementation checkpoint;
-the canceled pre-review admission created no output or success claim. Exact
+combined capture. At implementation checkpoint `f261610`, that CLI replay was
+pending; the canceled pre-review admission created no output or success claim. Exact
 source/test hashes and the resolved reader-role/schema/section-column findings
 are recorded in
 `PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-full-abi-component-replay`.
 Runtime C/ASM, public5/port8 and inventory stay unchanged. Final isolation,
 root/reference composition, whole-cell, archive, CI and hardware qualification
 are not granted by the new implementation or synthetic tests.
+
+The subsequent fresh actual `C:/fzoscontrols-census-20261108-e2` completes as
+`ORIGINAL-CENSUS-AND-ABI-CONTROLS-REPLAYED-NOT-QUALIFIED`. It recomputes the
+original 71/72-function census and all 41 ABI commands in the same reader,
+including the eight intended rejections and two accepted probes. It closes
+7,937 input hash/identity pairs and 625 mapped output artifacts, with zero new
+tool/compiler invocations and zero cell credit. Recorded upstream inspections
+and ABI commands retain separate counters. Full semantic ABI, isolation,
+canonical roots, final reference composition and whole-cell qualification
+remain pending; exact receipts and bounded accounting are in the linked audit.
+Independent post-terminal checks confirm every input hash/physical identity,
+output/source pair, upstream tree and reader binding without rerunning the
+qualifying predicates. The next bounded obligation is the 12-command isolation
+composition, retaining separate IR-import/root/reference nonclaims.

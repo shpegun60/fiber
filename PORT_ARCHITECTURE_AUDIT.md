@@ -10786,8 +10786,9 @@ unchanged regression suites pass another 85, for 157 distinct methods. The
 parser checks ten actual dependency files read-only; leaf and driver tests are
 synthetic and do not substitute for actual capture admission or machine replay.
 The pre-review replay was canceled during admission before output creation and
-grants no result. The corrected combined CLI run remains pending at this source
-checkpoint. No whole-cell or global qualification is claimed.
+grants no result. The corrected combined CLI run was pending at implementation
+checkpoint `f261610`; its completed result is recorded below. No whole-cell or
+global qualification is claimed.
 
 | Full ABI Component Implementation Evidence | SHA-256 |
 | --- | --- |
@@ -10802,9 +10803,51 @@ checkpoint. No whole-cell or global qualification is claimed.
 | `%TEMP%/os-abi-controls-replay-parent-20261108-e2/results.json` (32 methods) | `2E9391F3D5CC112E4EFC0C369FDFCA230C43DDF1DA3772BE570DDCE6486FE1D0` |
 | `%TEMP%/os-dependency-bytes-parent-20261108-e1/results.json` (18 methods) | `7AB79510E79FD94B8A1A3F3FACD3B74940DA5A750E35A335D4F7077C3FA9F96C` |
 
+The fresh actual `C:/fzoscontrols-census-20261108-e2` exits zero with status
+`ORIGINAL-CENSUS-AND-ABI-CONTROLS-REPLAYED-NOT-QUALIFIED`. In one reader it
+recomputes the original 71/72-function worker/final census, the three deferred
+ABI facts and all 41 ABI commands: 33 successful commands and eight intended
+rejections. This includes seven actual slim-object inspections, eight plugin-NM
+inspections, twenty dependency files, three saved diagnostic LTRANS objects and
+both accepted probe save sets. New tool/compiler invocations and cell credit
+are zero; the two upstream inspections and 41 ABI commands are recorded evidence,
+not new invocations. Primary and closing errors are empty.
+
+The sealed receipt closes 7,937 input hash/physical-identity pairs, 622 captured
+source pairs and 47 bootstrap records. The reader admits 2,974 paths and records
+69 executed-source buffers and 515 distinct consumed bindings. Its census,
+deferred ABI and full ABI leaves bind 23/76/488 inputs respectively; these overlap
+and must not be added as a total read count. Admission does not imply that every
+buffer was consumed. There are 625 mapped output artifacts and 626 files including
+the manifest. The immutable runtime/source capture, batch and normal-handoff
+authorities remain the same as the preceding bounded composition.
+
+| Actual Full ABI Component Evidence | SHA-256 |
+| --- | --- |
+| `C:/fzoscontrols-census-20261108-e2/results.json` | `00578B6AC00B514C57CBA94282708405FA02D1F109BE5436E2717119AECA041D` |
+| `C:/fzoscontrols-census-20261108-e2/artifacts.json` | `A51363A1BC754ED3BB701870F959B89D247BEA9611256989E58530F98CA5D05A` |
+
+Independent post-terminal accounting confirms all 7,937 hashes/physical identity
+triples, 625 output artifacts, 622 source pairs and seven upstream trees with
+7,034 mapped artifacts (7,041 files including manifests). All 6,120 batch and
+7,306 normal input bindings remain preserved. The 2,365 explicit reader roles,
+2,974 snapshot paths and exact 515-read closure agree; the 69 recorded executed
+buffers comprise 21 helpers and 48 parser modules, with the nested oracle
+separately pinned. Separate bounded binding review verifies 507
+paths, all 41 journals/82 streams, 160 dependency references, 210 private source
+copies and 196 section rows. These are post-terminal data/accounting checks,
+not a second execution of the qualification predicates or OS process tracing.
+
 Full semantic ABI, attribute effects, isolation, canonical root-transfer
 protocols and final same-fixture FreeRTOS composition remain separate. Manifest
 absence at the eight canonical failed outputs is not historical noncreation or
 an OS process trace. Runtime C/ASM, context layout, public5/port8, the reference
 pin, 2,774-key inventory and backlog are unchanged. Archive, hosted CI, hardware
 and global software-freeze qualification remain false.
+
+The next bounded slice composes isolation commands 41--52 into the same original
+census/ABI reader: three isolated common providers, their dependency/source
+boundaries, original-to-isolated and isolated-twin load comparisons, and bounded
+section-mediated slot protocols. The 12 recorded commands contain no isolated
+object NM inspection, so they cannot establish IR import closure. Full handler /
+root-transfer protocols and final reference composition remain separate.
