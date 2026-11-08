@@ -3902,3 +3902,36 @@ E1 remains FAIL. New compiler/tool calls and required-cell credit stay zero;
 full common policy, selected-port policy, final reference composition,
 whole-cell, hosted CI and hardware proof are not granted. The next bounded
 obligation is the 36-command selected-port composition, not global freeze.
+
+## Current CM3 Os-LTO Selected-Port Component
+
+The additive selected-port replay reconstructs commands 98--133 of the sealed
+134-command batch. Five slim-IR builds, ten dependency files, the exact
+31-definition surface (29 functions and two cohort objects), four actual
+worker chains and eight aggregate/LTRANS/final images are checked. Os option
+contracts are used directly; no O2 top-level verdict is relabeled.
+
+`port_census_attempt.py` recomputes original census, ABI, ABI controls,
+isolation, common attributes and selected-port evidence in one immutable
+reader. The detailed lowered validator runs inside the replay and again at
+the final result boundary using authenticated bootstrap helpers. The new
+adapter/leaf/driver suites pass 20/25/27 methods. Real returned helpers also
+pass the frozen common validator; missing transport and a substituted final
+startup binding reject. These test counts are not new qualified cells.
+
+Fresh `C:/fzosport-census-20261108-e1` exits zero as
+`ORIGINAL-CENSUS-ABI-ISOLATION-COMMON-AND-PORT-REPLAYED-NOT-QUALIFIED`.
+It independently replays 41 ABI, 12 isolation, 45 common and 36 selected-port
+commands. Common attribution is closed. Parent post-terminal accounting
+checks 7,973 input hash/physical-identity pairs, 643 mapped artifacts and 640
+source pairs without drift. New compiler/tool calls and required-cell credit
+remain zero. Exact pins, receipts and scope are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-selected-port-component-replay`.
+
+The final nine-object cohort replaces only selected-port inputs 3/4/5; the
+other six native inputs retain their hashes and order, not a claim that their
+generated bodies are unchanged. Full selected-port policy, general-registers-
+only effects, REL addends/applied destinations, canonical root protocols,
+same-fixture final reference composition, whole-cell, hosted CI and hardware
+qualification remain separate. Next comes original provider binding and
+native/reference canonical-root composition in the same reader.

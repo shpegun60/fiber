@@ -11141,3 +11141,126 @@ five compilations, four worker chains and eight machine images. It must join
 the existing components inside one reader and test the real returned bootstrap
 helpers at the final validator boundary. Canonical roots, final same-fixture
 FreeRTOS composition and whole-cell/global software freeze remain separate.
+
+## Current CM3 Os-LTO Selected-Port Component Replay
+
+The additive `port_replay.py` reconstructs recorded commands [98,134), not
+new producer execution. It checks each command journal, ordered Os argv and
+both raw streams; specs adaptation; three unchanged selected providers; paired
+stress source; slim ELF metadata, dependencies, imports and definitions; the
+three lowering triples and final supported link triple. Stored `ActualWorker`
+records are comparison targets, not worker execution authority.
+
+`port_lowered.py` consumes four independently reconstructed plans, the exact
+18 deferred roles and immutable bytes. It replays actual WPA/LTRANS response,
+diagnostic and assembler bindings with the Os option callback, then recomputes
+eight bounded machine censuses/effect inspections. It does not invoke O2
+policy flag builders or project an O2 top-level verdict into Os.
+
+The final nine-object recipe replaces only native indices 3/4/5 with the three
+selected slim-IR objects. Native indices 0/1/2/6/7/8 preserve exact hashes and
+order. Common-positive and isolation objects are not substitutes. Unchanged
+input hashes do not prove unchanged generated bodies for those six inputs.
+
+| Replayed Item | Exact Bounded Count |
+| --- | --- |
+| Command journals / stdout-stderr bindings | 36 / 72 |
+| IR compilations / dependency files | 5 / 10 |
+| Matched discovery/compile dependency entries | 135 |
+| Listed rows across both dependency directions / distinct paths | 270 / 43 |
+| Selected definitions | 31: 29 functions and two cohort objects |
+| Worker chains / machine images / deferred roles | 4 / 8 / 18 |
+| Final inputs / unchanged native inputs | 9 / 6 |
+| Port leaf distinct byte reads / lowered adapter distinct byte reads | 258 / 74 |
+
+Review before actual execution fixes three new-tooling assumptions without
+changing runtime code, frozen helpers, generated objects or reference bytes:
+
+- The linker script requires an explicit local reader consumption before its
+  binding is published; another component's earlier read is insufficient.
+- Function census order follows original ELF symbol-table indices, not sorted
+  names. Actual selected/final symbol tables are not alphabetic. Reordered
+  symbol evidence still rejects.
+- Saved WPA/LTRANS options legitimately repeat the same `-march=armv7-m` and
+  `-mlibarch=armv7-m` pair. Preserve the byte-derived order and values instead
+  of rejecting duplicates or deduplicating compiler records. Foreign values
+  still reject.
+
+The additive `port_census_attempt.py` authenticates all new sources/contracts,
+transport and aliases before witness construction while retaining the exact
+original 35-source opening. It recomputes six components in one reader:
+original census, deferred ABI, ABI controls, isolation, common attributes and
+selected-port evidence. Detailed port validation runs both in-reader and after
+seal. The real returned bootstrap dictionary is tested with both port validators
+and the frozen common validator; removing transport reproduces the exact prior
+missing-helper failure. Outer `Final/Startup` substitution rejects separately
+from replay-level joins. No frozen entrypoint or published pin is modified.
+
+Parent fresh suites pass 20/25/27 methods with 11/69/98 current source hashes
+respectively; the driver also closes two raw common fixtures. Unchanged binder,
+phase and census regressions pass 30/12/17 methods. These are separate suite
+counts, not an assertion that all test methods are disjoint or cell credits.
+Synthetic journals/images, actual slim-parser fixtures and final-validator
+controls are distinguished from the actual combined CLI replay below.
+
+Fresh actual `C:/fzosport-census-20261108-e1` exits zero as
+`ORIGINAL-CENSUS-ABI-ISOLATION-COMMON-AND-PORT-REPLAYED-NOT-QUALIFIED`.
+All ten completion facts are true; all 41 stronger nonclaims remain false.
+Separate recorded-command credits are 41/12/45/36, with two original inspection
+records and no newly executed tool/compiler commands. Common attribution is
+closed with an empty unresolved list. Errors are explicitly null/null/empty.
+Required-cell credit remains literal zero out of the unchanged 2,774-key plan.
+
+Parent post-terminal accounting independently rehashes all 7,973 inputs and
+their persisted physical identities, all 643 mapped artifacts (644 total
+files), 640 original/captured source pairs and 66 bootstrap source records.
+One reader records 2,992 input snapshots, 1,061 distinct reads and 88 executed
+source records. The previous five nested component records compare equal to
+the prior common E2 result only after fresh recomputation; that comparison is
+not inherited success or an additional semantic proof.
+
+Independent read-only closure review also verifies all seven upstream trees
+(7,034 mapped artifacts), 4,874 upstream captured-source pairs, all 134 journals
+and 268 streams. Bootstrap accounting confirms 65 pinned paths and 47 helper
+plans behind the 66 buffers; all 2,365 explicit roles and the original35 join
+their authorities. A separate composition review passes 43 authority equalities
+and the real final validators with authenticated returned bootstrap helpers,
+filesystem/process access and producer inspectors blocked. All fourteen
+missing-port-helper controls reject. Neither review reexecutes compilers or
+promotes component facts into qualification.
+
+The independent selected-port review matches all 36 journals/72 streams,
+five builds/ten dependency files, 31 definitions, four workers, eight images
+and 18 roles. Per-build dependency counts are 38/39/36/11/11. All 258 port
+bindings, 74 adapter bindings, 24 captured control buffers and 247 reported
+function-body hashes match their byte authorities. The final nine-object order
+and unchanged native indices are rechecked. This is bounded accounting review,
+not an independent reexecution of predicates or new semantic qualification.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `port_replay.py` | `C88995AC5343B376AC1E73F0570F8AF9F025144820BD88556CF0A57814B8DE94` |
+| `test_port_replay.py` | `6ED57F709E5244BC7A8BF96F153D95B3154AAAEE2F73811613FAC5C8CB005A2D` |
+| `port_lowered.py` | `94718099EB09108ABF678FFA967487A060F38CF9ABF7FCDEB152799BF47D89C7` |
+| `test_port_lowered.py` | `2CCF52CA7C5CCC61975AE2C1AB426CB6B75704FC621DB9DA891472AB224115A3` |
+| `port_census_attempt.py` | `20822705ECE09DA3F1F4C6F5055F022377FFE014A8F888DD452A7C65E956936B` |
+| `test_port_census_attempt.py` | `C7DCA1CEFD65267A7FD3C5FCC6C2FD95C4DEABC49625ECA1C58C3E30F98848F3` |
+| `PORT_CENSUS_ATTEMPT_CONTRACT.md` | `D69B7D7344CE4CC10FAB420EF59BEAA49659895D19B53B209C762E5A2B9CEEAB` |
+| `%TEMP%/os-port-lowered-parent-20261108-e2/results.json` (20 methods) | `51526B19B07CB663BE69F91ABFF4A573F361FD51BD2B5A7542B6FC1A553B0CEB` |
+| `%TEMP%/os-port-replay-parent-20261108-e1/results.json` (25 methods) | `1ECB186364414B4A073F3182A3F287548C4E025F402F29EB798A25A007B67A71` |
+| `%TEMP%/os-port-census-parent-20261108-e2/results.json` (27 methods) | `23B047D362C8E1ED8BC421B12D5FC6FD167055FC9F95F7B63444758D31D94AB5` |
+| `%TEMP%/os-port-binder-parent-20261108-e1/results.json` (30 methods) | `265AD207A85F995DA4140B5D7E10EE482BB64924123FB4C1C5FD758C86B9C99D` |
+| `%TEMP%/os-port-phase-parent-20261108-e1/results.json` (12 methods) | `75D24AB44B379508BB983A4E08523A21119D8814335B7C7950D7F162CF755C3E` |
+| `%TEMP%/os-port-census-parent-20261108-e1/results.json` (17 census methods) | `CF35358BCFA1E7F8F5F3FE70C848EC7A355CF07960CC72133CBB11CF629C6837` |
+| `C:/fzosport-census-20261108-e1/results.json` | `0D51EBE5F1F4C34829C4352981E96DCC11E3A2365AB819A8338CE05EF4DA4516` |
+| Actual E1 `artifacts.json` | `2D7058F3B583044BD3EC2F1DCF1FFDEB590724B5FA478D4297A2D825E564BD79` |
+| `%TEMP%/os-port-composition-parent-audit-20261108-e1/results.json` | `C12DB094718BA8A20558BB30E504CABAE96386E592BAC33260C36F9497D86A33` |
+
+Runtime C/ASM, frame layout, public5/port8, pinned FreeRTOS and the backlog are
+unchanged. Full selected-port policy, general-registers-only effect, raw common
+attribute protection, REL addends/applied destinations, canonical transfer
+roots, final native/reference parity, isolation IR import closure, whole-cell,
+archive, hosted CI, hardware and global software freeze are not granted.
+The next bounded slice joins original native provider bindings and the six
+native/reference canonical roots using their own saved machines and ledgers
+inside the same reader. It must not import success from an older roots run.
