@@ -10851,3 +10851,69 @@ boundaries, original-to-isolated and isolated-twin load comparisons, and bounded
 section-mediated slot protocols. The 12 recorded commands contain no isolated
 object NM inspection, so they cannot establish IR import closure. Full handler /
 root-transfer protocols and final reference composition remain separate.
+
+## Current CM3 Os-LTO Isolation Component Replay
+
+The additive `isolation_census_attempt.py` composes the original census,
+deferred ABI, all 41 ABI controls and all 12 isolation commands in one fresh
+immutable reader. `isolation_replay.py` reconstructs recorded commands 41--52:
+three isolated common compilations, six dependency files, full slim-object
+section correspondence, two links and zero-inclusive final disassembly.
+It recomputes source ownership from the four canonical buffers and replaces
+only objects 0--2, preserving the other six object inputs and their order.
+
+All 18 deferred roles are fixed path/hash bindings. The original-to-isolated,
+isolated-twin and original-twin load comparisons are recomputed. Six isolation
+joins bind original ordinary/emitted/machine identities, the original load
+comparison and both fresh original inspection bindings to the same census.
+The preceding five ABI joins remain enforced. No receipt-only join is used.
+
+`isolation_slots.py` constructs two independent FinalImage instances with each
+image's machine, final ELF, map, assembly and explicit machine/startup providers.
+It runs the actual frozen Os slot predicate with the separately authenticated
+neutral encoding helper, not an O2 driver or verdict. Its 19 buffers include
+the fixed 18 producer roles plus the fresh original final dump. The producer
+dump and fresh dump differ only in three register-list spellings (`r10/r11`
+versus `sl/fp`); the original FinalImage uses the fresh journal-bound dump.
+They are not falsely required to have identical raw text.
+
+Review closed an outer-result validation gap: all 30 inherited false fields
+are accounted for, with three permitted completion facts and 27 required false
+fields. All 34 outer nonclaims reject mutation/deletion controls. The parent
+also invokes the full detailed slot-result validator rather than relying on
+the component's smaller delegated-result checks. Failure/closing/summary paths
+revoke all eight completion facts and both recorded-command counters.
+
+The three new suites pass 18 component, 20 slot-adapter and 15 driver methods.
+All seven preceding suites pass another 157 methods, for 210 distinct methods.
+These are bounded synthetic controls, with actual read-only slim-byte parser
+fixtures in the component suite; they are not a whole-cell admission proof.
+The initial driver-fixture test failure is retained externally; it exposed a
+synthetic direct-replay counter setup and an incomplete expected role union,
+not a runtime port defect. The pre-review actual attempt was canceled before
+output creation after the final two inherited false checks were identified;
+it grants no result. The corrected actual combined replay remains pending at
+this implementation checkpoint; its terminal result and independent output
+accounting must be recorded separately before any actual replay claim.
+
+| Isolation Component Implementation Evidence | SHA-256 |
+| --- | --- |
+| `isolation_census_attempt.py` | `3B1C0F0C29EB3C1DB4E5E3730B2A59B585979300B870DC8B2C5D398939D47C2A` |
+| `isolation_replay.py` | `4BA0D3F6C4C582FD7F883EEA468AD32C40EF9E25D0CE9DB36B11C61E63F34D3F` |
+| `isolation_slots.py` | `3A071955B0EA91D7D34F0B46D7173F5AA71471FE6C7C61FADECF532FDC87BDED` |
+| `test_isolation_census_attempt.py` | `CC01C46EDCF1714BC1D4E2A7C2739B44F8063CA22A541C72B500A8746EB0B394` |
+| `test_isolation_replay.py` | `0D5FCF059217E885C1914F6ACEC7049349F205CA021904F429A407DC40ED874B` |
+| `test_isolation_slots.py` | `23C8BD505F29D97FD24F26D0BA3AC66398892BC28A7F3883D096643610851422` |
+| `ISOLATION_CENSUS_ATTEMPT_CONTRACT.md` | `81E3F62ECE78A97AA8F2C0DACEEA9540722F9E3833BB355D8C3075C27B7EF899` |
+| `%TEMP%/os-isolation-census-parent-20261108-e5/results.json` (15 methods) | `7DAC4A51F7CC12C0A67E8E4685478487572E9645955D57A267804AE86C167D01` |
+| `%TEMP%/os-isolation-replay-parent-20261108-e1/results.json` (18 methods) | `06FD5465BA02F3052E04910B7B63214FE2EE24A9CBE63B088167B13BBE6E107B` |
+| `%TEMP%/os-isolation-slots-parent-20261108-e1/results.json` (20 methods) | `5572EBE0E0847CD45F5539D374552F833B73787DC8F15D36F36EDBFB3FB729DB` |
+
+This slice has no isolated-object NM command, so IR import closure remains
+false. Section-mediated slot protocols do not prove arbitrary pointer aliases,
+complete handler/root-transfer protocols or source-to-machine equivalence.
+Common/selected-port attribute effects, canonical roots, same-fixture final
+FreeRTOS composition and whole-cell qualification remain separate obligations.
+Runtime C/ASM, context layout, public5/port8, reference pin, inventory and backlog
+are unchanged. New tool/compiler invocations and required-cell credit remain
+zero; archive, hosted CI, hardware and global freeze are not qualified.

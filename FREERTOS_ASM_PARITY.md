@@ -3817,3 +3817,28 @@ Independent post-terminal checks confirm every input hash/physical identity,
 output/source pair, upstream tree and reader binding without rerunning the
 qualifying predicates. The next bounded obligation is the 12-command isolation
 composition, retaining separate IR-import/root/reference nonclaims.
+
+## Current CM3 Os-LTO Isolation Component Implementation
+
+`isolation_census_attempt.py` extends the one-reader census/ABI composition
+with all 12 recorded isolation commands. It binds three isolated common
+compilations, dependency/source ownership, the exact three-object replacement,
+two links, three load-image comparisons and both original/isolated Os slot
+protocols. Fixed producer roles and fresh original dump bindings are distinct;
+register aliases in the two original dumps do not imply raw-text identity.
+The actual Os predicate runs with each image's own machine/map/startup providers.
+
+The three new suites pass 18/20/15 methods and the seven unchanged regression
+suites pass another 157: 210 distinct methods. These synthetic controls and
+read-only parser fixtures do not themselves qualify the combined capture.
+The corrected actual replay and exact evidence are tracked in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-isolation-component-replay`.
+The canceled pre-review admission created no output or success claim.
+
+IR import closure remains false because the isolation phase has no NM command.
+Full handler/root-transfer protocols, attribute effects, final FreeRTOS
+composition, whole-cell, archive, hosted CI and hardware proof remain separate.
+Runtime C/ASM, context layout, public5/port8, inventory and backlog are unchanged.
+The replay starts no new compiler/tool commands and grants no required-cell
+credit. The next bounded component is the 45-command common-attribute replay,
+composed in the same reader rather than inherited from producer records.
