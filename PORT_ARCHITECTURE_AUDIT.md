@@ -11041,3 +11041,103 @@ Actual combined CLI replay is still pending at this source checkpoint.
 | `%TEMP%/os-common-lowered-parent-20261108-e1/results.json` (20 methods) | `5765F06864CB281B6F5535E7AC59AA86C72CEC16A2A3BE38A757AB2AF591469B` |
 | `%TEMP%/os-common-workers-parent-20261108-e1/results.json` (13 methods) | `104CA8B4B4E03C40FDDA04558627258505ED1ED8F9980106962721F85144D669` |
 | `%TEMP%/os-common-effects-parent-20261108-e1/results.json` (20 methods) | `A4A7358534426165456B263EC27F300EA015851151E0633859519A4AF1F66E45` |
+
+The first actual `C:/fzoscommon-census-20261108-e1` exits one with primary error
+`KeyError: 'transport'`. All five nested components completed, including the
+45-command common replay and twelve image inspections with no pending inline
+attribution. The failure is in the post-seal composed validator: its bootstrap
+helper dictionary lacks transport, although the immutable reader's local helper
+dictionary supplies it. Synthetic callback/helper-name checks did not exercise
+that actual returned bootstrap dictionary at the post-seal boundary.
+
+Recovery leaves status FAIL, all nine completion facts false, all three recorded
+command credits zero, both closure flags false and no secondary closing error.
+Nested component data is retained for diagnosis, not inherited as successful
+reader/cell evidence. A fresh additive entrypoint must enroll and load transport
+before witness construction and rerun the same frozen parent choreography.
+The failed root and its seals remain immutable.
+
+| First Actual Common Composition Failure | SHA-256 |
+| --- | --- |
+| `C:/fzoscommon-census-20261108-e1/results.json` | `A9407CE1B0C30E97A2D267CC9E922516837D57E328BBB00408B7FF303FEB398C` |
+| `C:/fzoscommon-census-20261108-e1/artifacts.json` | `1400ED75666684A566C481EDAC75627DA35971BD76BE489AA718A55551E7A506` |
+
+Independent FAIL-artifact accounting finds no additional accounting anomaly:
+7,961 current input hashes/physical triples, 637 mapped outputs/638 files,
+634 current captured-source pairs and seven upstream trees with 7,034 mapped
+artifacts/7,041 files and 4,874 upstream source pairs match. It verifies 59
+bootstrap records, 58 pinned paths and the 35 original opening buffers. The
+retained graph binds 2,365 roles, 2,986 snapshots, 889 reads and 81 executed
+source records. All 38 outer nonclaims remain false. Parent accounting separately
+checks exact output membership/hashes and all 634 source pairs. These are checks
+of a retained failed attempt, not successful admission or qualification.
+
+### Bootstrap Completion And Fresh Replay
+
+The additive `common_sealed_attempt.py` authenticates the unchanged parent and
+adds transport to the helper plan before witness construction. Its path/hash
+must equal the independently authenticated capture API. The same cached module
+is returned for post-seal validation; the original 35-source builder opening
+remains separate from the expanded source closure. No parent predicates,
+globals, result schemas, replay choreography or recovery paths are modified.
+The contract is `COMMON_SEALED_ATTEMPT_CONTRACT.md`.
+
+The new suite passes 35 methods: 16 new bootstrap/real-validator/CLI controls
+and 19 inherited driver controls, not 35 additional distinct tests. Actual
+`prepare()`-returned modules reach the real detailed common and outer result
+validators while filesystem, process and producer-predicate calls are blocked.
+Removing transport reproduces the exact post-seal `KeyError`. The pinned failed
+receipt is only a structural fixture; synthetic success uses a copy and grants
+no replay credit. Parent and owner runs yield the same receipt, with all 67
+source buffers and two fixtures unchanged at closing.
+
+The fresh `C:/fzoscommon-census-20261108-e2` exits zero as
+`ORIGINAL-CENSUS-ABI-ISOLATION-AND-COMMON-REPLAYED-NOT-QUALIFIED`.
+One immutable reader recomputes all five components: original census, deferred
+ABI, 41 ABI controls, 12 isolation commands and 45 common-attribute commands.
+Common inline-attribution projection is empty. All nine completion facts and
+both closure flags are true, with clean explicit errors. Full common policy,
+transitive protection, final reference parity and whole-cell credit remain false.
+The earlier E1 receipt remains FAIL; none of its completion credit is inherited.
+
+| Bootstrap Completion Evidence | SHA-256 |
+| --- | --- |
+| `common_sealed_attempt.py` | `97100FEEB934EBF603D8DB3C9961161272C8DA8F8FAB86D3B3D2D3AE67BF5F81` |
+| `test_common_sealed_attempt.py` | `FA5C8ACC2ACD26202AE566E502034D941470C1DBEA2A1B700E48CA06EA58E5A6` |
+| `COMMON_SEALED_ATTEMPT_CONTRACT.md` | `F5FC04B936D11C184BEEF39CA767DCDFFDAB54B54CB4F987FF15122AB9482BE1` |
+| `%TEMP%/os-common-sealed-parent-20261108-e1/results.json` (35 methods) | `1D11C0A74C8CDDF8E3278B67644526617666002BC00D353CFA36A90E6A427259` |
+| `C:/fzoscommon-census-20261108-e2/results.json` | `F62E1AB42FEAA8A34C389D8A8935EB4D964460EE2891C5F413124E8A236E7CC7` |
+| `C:/fzoscommon-census-20261108-e2/artifacts.json` | `7211594053AA7E7BE60FFC78321FEF40C3E197C0645D2CEEB6C0EC79ADBF9E99` |
+
+Parent post-terminal accounting verifies all 7,965 current input hashes and
+physical triples, exact output membership (639 mapped artifacts/640 files),
+and all 636 current captured-source pairs. The 62 bootstrap records, 2,988 reader
+snapshots, 889 reads and 81 executed-source bindings are separately retained.
+All five recomputed nested component records equal the E1 diagnostic records;
+that comparison is accounting, not inheritance of the failed attempt's verdict.
+Both final seals remain unchanged. New compiler/tool invocations, required-cell
+credit, hosted CI and hardware qualification stay zero/false.
+
+Independent common accounting confirms 341 local bindings, 45 journals/90
+streams, 12 original sources/62 copied files, six annotation-token deletions,
+eight IR objects/242 complete section rows and 16 dependency files/66 entries.
+All 84 lowering roles, 89 adapter reads, six worker chains and twelve image
+hash joins agree. It also checks 38 outer, 29 common, 27 adapter, ten per-worker
+and 17 per-image false nonclaims. This is read-only byte/accounting review;
+it does not rerun the qualifying predicates or add a hardware/CI claim.
+
+Independent full-closure accounting also verifies all 7,965 current input
+hashes/physical identities, the seven upstream trees (7,034 mapped/7,041 total
+files), and all 4,874 upstream source pairs. Bootstrap review confirms 62 buffers,
+61 pinned paths, 40 helper plans and the exact original 35-source opening.
+All 2,365 explicit roles, 2,988 snapshots, 889 read bindings and 81 executed
+source bindings (33 helpers/48 parser modules) join their byte authorities.
+A separate composed-result review passes all 28 authority equalities and the
+real final validators using authenticated captured helpers, with filesystem,
+process and producer-predicate calls disabled. E1's FAIL seals remain unchanged.
+
+The next bounded component is selected-port commands 98--133 (36 commands):
+five compilations, four worker chains and eight machine images. It must join
+the existing components inside one reader and test the real returned bootstrap
+helpers at the final validator boundary. Canonical roots, final same-fixture
+FreeRTOS composition and whole-cell/global software freeze remain separate.

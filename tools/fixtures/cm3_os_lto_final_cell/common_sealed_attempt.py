@@ -1,0 +1,155 @@
+"""Complete the frozen common composition bootstrap without changing replay.
+
+The earlier failed receipt remains failed. A fresh run delegates every replay,
+result, seal and recovery operation to the authenticated, unchanged parent.
+"""
+
+import argparse
+import hashlib
+import importlib.util
+from pathlib import Path
+import re
+import sys
+from unittest.mock import patch
+
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+BASE = ('tools/fixtures/cm3_os_lto_final_cell/common_census_attempt.py',
+        '043453302BFEEF871105100C3AA4878AB8B00FB8FFC16126DE08CBD603DDB485')
+BATCH = ('tools/fixtures/cm3_os_lto_final_cell/batch_attempt.py',
+         'EC52A23182A5B0B4A09E18429E5BFB94902FBC42592785295D7283ACB572F38A')
+PINS = {
+    'transport': ('tools/fixtures/cm3_lto_transport/probe.py',
+        'F2D4CA9F1FC1F7FAE07F275913F7DFC688BFD8570AEE32DE2144EE1EA187F626'),
+}
+DOCUMENTS = {
+    'tools/fixtures/cm3_os_lto_final_cell/COMMON_SEALED_ATTEMPT_CONTRACT.md':
+        'F5FC04B936D11C184BEEF39CA767DCDFFDAB54B54CB4F987FF15122AB9482BE1',
+}
+ARGUMENTS = ('batch-build', 'batch-receipt-sha256', 'batch-artifacts-sha256',
+    'native-build', 'native-receipt-sha256', 'native-artifacts-sha256',
+    'reference-build', 'reference-receipt-sha256', 'reference-artifacts-sha256',
+    'inventory', 'inventory-receipt-sha256', 'inventory-artifacts-sha256', 'output-dir',
+    'normal-build', 'normal-receipt-sha256', 'normal-artifacts-sha256')
+
+
+def need(value, detail):
+    if not value:
+        raise ValueError('cm3-os-lto-common-sealed: ' + detail)
+
+
+def sha(raw):
+    need(type(raw) is bytes, 'literal byte buffer')
+    return hashlib.sha256(raw).hexdigest().upper()
+
+
+def load(name, path, raw):
+    module = importlib.util.module_from_spec(importlib.util.spec_from_file_location(name, path))
+    sys.modules[name] = module
+    exec(compile(raw, str(path), 'exec'), module.__dict__)
+    return module
+
+
+def prepare(args):
+    need(sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode and not sys.flags.optimize,
+         'fresh isolated unoptimized -I -S -B interpreter')
+    need(not any(name == 'elftools' or name.startswith('elftools.') for name in sys.modules),
+         'initially unimported parser')
+    buffers = {}
+
+    def enroll(relative, digest):
+        need(type(relative) is str and relative.startswith('tools/')
+             and all(part not in ('', '.', '..') for part in relative.split('/'))
+             and '\\' not in relative and ':' not in relative and type(digest) is str
+             and re.fullmatch('[0-9A-F]{64}', digest) is not None, 'fixed authenticated source pin')
+        need(digest != '0' * 64, 'final source pin required/' + relative)
+        path = ROOT / relative
+        raw = buffers[path] if path in buffers else path.read_bytes()
+        need(sha(raw) == digest, 'source pin/' + relative)
+        buffers[path] = raw
+        return path, raw
+
+    path, raw = enroll(*BATCH)
+    builder = load('_os_common_sealed_builder', path, raw)
+    path, raw = enroll(*builder.METADATA)
+    metadata = load('_os_common_sealed_metadata', path, raw)
+    path, raw = enroll('tools/fixtures/cm3_os_lto_final_cell/runner.py', metadata.RUNNER_SHA256)
+    runner = load('_os_common_sealed_reader_entry', path, raw)
+    plans = {}
+
+    def merge(registry):
+        builder._pins(registry)
+        for name, row in registry.items():
+            need(name not in plans or plans[name] == row, 'consistent helper/' + name)
+            plans[name] = row
+            enroll(*row)
+
+    for registry in (metadata.PINS, metadata.LEAF_PINS, builder.PINS):
+        merge(registry)
+    for row in runner.PINS.values():
+        enroll(*row)
+    for documents in (runner.DOCUMENTS, metadata.DOCUMENTS):
+        for row in documents.items():
+            enroll(*row)
+    # The producer still requires its original 35-source registry, not the child closure.
+    opening = {str(path): sha(raw) for path, raw in sorted(buffers.items())}
+    path, raw = enroll(*BASE)
+    base = load('_os_common_sealed_base', path, raw)
+    need(base.BATCH == BATCH and base.ARGUMENTS == ARGUMENTS, 'fixed parent bootstrap/CLI')
+    entries = []
+    for name, row in (('normal', base.NORMAL), ('composition', base.COMPOSITION),
+                      ('controls', base.CONTROLS), ('isolation', base.ISOLATION)):
+        path, raw = enroll(*row)
+        entries.append(load('_os_common_sealed_' + name + '_metadata', path, raw))
+    for registry in (*(entry.PINS for entry in entries),
+            {'normal_entry': base.NORMAL, 'composition': base.COMPOSITION,
+             'controls_composition': base.CONTROLS, 'isolation_composition': base.ISOLATION},
+            base.PINS, PINS):
+        merge(registry)
+    for documents in (*(entry.DOCUMENTS for entry in entries), base.DOCUMENTS, DOCUMENTS):
+        for row in documents.items():
+            enroll(*row)
+    own = Path(__file__).resolve()
+    buffers[own] = own.read_bytes()
+    modules = {name: load('_os_common_sealed_admission_' + name, ROOT / row[0], buffers[ROOT / row[0]])
+               for name, row in runner.PINS.items()}
+    need(plans['transport'] == modules['capture'].PINS['api'], 'same authenticated capture transport')
+
+    def read(path):
+        need(path in buffers, 'bootstrap helper outside authenticated opening buffers')
+        return buffers[path]
+
+    with patch.object(Path, 'read_bytes', read):
+        transport = load('_os_common_sealed_bootstrap_transport', ROOT / plans['transport'][0],
+                         buffers[ROOT / plans['transport'][0]])
+    witness = modules['admission'].witness_type(modules['legacy'], modules['capture'], extra_sources=buffers)(args)
+    environment = dict(Witness=witness, Modules=modules, HelperPlans=plans)
+    with patch.object(Path, 'read_bytes', read):
+        helpers = {name: transport if name == 'transport' else
+                   load('_os_common_sealed_bootstrap_' + name, ROOT / row[0], buffers[ROOT / row[0]])
+                   for name, row in plans.items()}
+    return base, runner, environment, builder, helpers, opening, buffers
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    for name in ARGUMENTS:
+        parser.add_argument('--' + name, required=True)
+    args = parser.parse_args(argv)
+    with patch('os.system', side_effect=AssertionError('common/sealed replay cannot execute shell commands')), \
+            patch('subprocess.Popen', side_effect=AssertionError('common/sealed replay cannot start processes')):
+        try:
+            base, *prepared = prepare(args)
+            base.run(args, *prepared)
+            return 0
+        except BaseException as error:
+            try:
+                print(type(error).__name__ + ': ' + str(error), file=sys.stderr, flush=True)
+            except BaseException:
+                pass
+            return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

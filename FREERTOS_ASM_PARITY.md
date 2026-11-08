@@ -3880,3 +3880,25 @@ The unchanged worker/effect suites add 13/20 methods; prior regressions add 210:
 310 distinct methods with current-source receipts. These are bounded synthetic
 controls plus actual slim-parser fixtures, not an actual combined CLI verdict.
 The implementation source checkpoint therefore leaves that fresh replay pending.
+
+The first actual common attempt subsequently fails in the post-seal validator:
+bootstrap helpers lack transport even though all five nested components finish
+inside the reader. Recovery revokes all nine facts, three command credits and
+closure flags. The retained failed receipt is not qualification. The corrective
+entrypoint must authenticate transport before witness construction and undergo
+a fresh attempt; exact failure hashes are in the linked audit.
+
+The additive `common_sealed_attempt.py` completes that bootstrap without changing
+the frozen replay or validators. Its 35-method regression contains 16 new and
+19 inherited controls; real returned bootstrap modules pass the actual final
+validators, while removing transport reproduces the previous failure.
+The fresh `C:/fzoscommon-census-20261108-e2` exits zero as
+`ORIGINAL-CENSUS-ABI-ISOLATION-AND-COMMON-REPLAYED-NOT-QUALIFIED`.
+One reader now recomputes all five components, including 41 ABI, 12 isolation
+and 45 common commands, with no pending common inline attribution. Parent
+accounting verifies 7,965 input hashes/identities, 639 mapped artifacts and 636
+source pairs. Exact source, test and actual receipt hashes are in the audit.
+E1 remains FAIL. New compiler/tool calls and required-cell credit stay zero;
+full common policy, selected-port policy, final reference composition,
+whole-cell, hosted CI and hardware proof are not granted. The next bounded
+obligation is the 36-command selected-port composition, not global freeze.
