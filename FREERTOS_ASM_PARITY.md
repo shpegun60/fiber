@@ -3842,3 +3842,15 @@ Runtime C/ASM, context layout, public5/port8, inventory and backlog are unchange
 The replay starts no new compiler/tool commands and grants no required-cell
 credit. The next bounded component is the 45-command common-attribute replay,
 composed in the same reader rather than inherited from producer records.
+
+The final-byte actual `C:/fzosiso-census-20261108-e3` exits zero as
+`ORIGINAL-CENSUS-ABI-AND-ISOLATION-REPLAYED-NOT-QUALIFIED`. One reader now
+recomputes the original census, ABI component and isolation component from
+the same sealed inputs: 41 ABI commands, 12 isolation commands, three load
+comparisons and two bounded Os slot images. It closes 7,949 input hash/identity
+pairs, 628 source pairs and 631 mapped artifacts. Parent post-terminal checks
+verify all current input hashes/identities, outputs and source pairs. Exact
+receipts and read/count boundaries are recorded in the linked audit. New
+tool/compiler invocations and cell credit remain zero. This advances component
+composition, not full semantic ABI, IR import closure, full roots, final
+FreeRTOS parity, whole-cell, archive, hosted CI or hardware qualification.

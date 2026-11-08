@@ -10892,9 +10892,9 @@ The initial driver-fixture test failure is retained externally; it exposed a
 synthetic direct-replay counter setup and an incomplete expected role union,
 not a runtime port defect. The pre-review actual attempt was canceled before
 output creation after the final two inherited false checks were identified;
-it grants no result. The corrected actual combined replay remains pending at
-this implementation checkpoint; its terminal result and independent output
-accounting must be recorded separately before any actual replay claim.
+it grants no result. At implementation checkpoint `f605d1f`, the final-byte
+actual replay was still pending. Its completed terminal result is recorded
+below, separately from the synthetic implementation evidence.
 
 | Isolation Component Implementation Evidence | SHA-256 |
 | --- | --- |
@@ -10917,3 +10917,61 @@ FreeRTOS composition and whole-cell qualification remain separate obligations.
 Runtime C/ASM, context layout, public5/port8, reference pin, inventory and backlog
 are unchanged. New tool/compiler invocations and required-cell credit remain
 zero; archive, hosted CI, hardware and global freeze are not qualified.
+
+The fresh final-byte `C:/fzosiso-census-20261108-e3` exits zero with status
+`ORIGINAL-CENSUS-ABI-AND-ISOLATION-REPLAYED-NOT-QUALIFIED`. It authenticates the
+committed `3B1C0F...` entrypoint and recomputes the original census, deferred ABI,
+41 ABI controls and 12 isolation commands in one immutable reader. All errors
+are clean; new tool/compiler invocations and required-cell credits remain zero.
+The two original inspections, 41 ABI commands and 12 isolation commands retain
+separate recorded-evidence counters rather than masquerading as new execution.
+
+The receipt closes 7,949 input hash/physical-identity pairs, 628 captured source
+pairs and 53 bootstrap records. The reader has 2,980 admitted snapshot paths,
+74 executed-source buffers (26 helpers and 48 parser modules) and 571 distinct
+read bindings. Its four component leaves consume 23/76/488/92 overlapping
+inputs: their union is 561 paths, not a sum of leaf counts. The isolation leaf
+consumes 92 bindings; its slot adapter consumes the
+18 producer roles and one fresh original dump. There are 631 mapped output
+artifacts and 632 files including the manifest.
+
+Isolation replay verifies three dependency pairs with 29 dependency references,
+three actual slim objects with 85 section rows, nine ordered link inputs and
+all three load-image comparisons. The original and isolated slot images each
+validate six common bodies/272 bytes, five loads, one publication store, two
+handler slot-load pairs and eight applied slot references. These bounded facts
+do not become arbitrary-alias or full handler/root-transfer semantics.
+
+| Final-Byte Actual Isolation Composition | SHA-256 |
+| --- | --- |
+| `C:/fzosiso-census-20261108-e3/results.json` | `1684737F2A5B536C3A3167100242B5017F86E4A5D7F59DF256223FE44D1D68F0` |
+| `C:/fzosiso-census-20261108-e3/artifacts.json` | `EEE8B1EBC932EB43D3240DF9E1B0767539FEA773866A6298B54D2715B4686817` |
+
+Post-terminal parent accounting verifies all 7,949 current input hashes and
+physical identity triples, every output artifact and every captured-source
+pair against the final receipt. This is data/accounting evidence, not a second
+predicate replay or an OS process trace. The earlier successful pre-formatting
+run remains separate; the final-byte run follows the EOF-only cleanup and
+fresh 15-method driver regression, so its entrypoint bytes match `f605d1f`.
+
+Independent current-byte structural review confirms all eleven existing and
+isolation binding joins, detailed slot validation, all 34 outer nonclaims and
+the bounded counters. Separate isolation accounting rehashes 93 paths, including
+the batch receipt, with zero closing drift: 12 journals/24 streams, six
+dependency files, 29 dependency entries, 85 section rows, ordered objects,
+fixed roles, actual ELF load-image bytes and 60 reference byte pairs, including
+16 applied slot references across the two images.
+These audits do not rerun qualification predicates or claim OS process tracing.
+
+The independent full-closure audit also verifies all 7,949 current input hashes
+and physical triples without a drift exception, all 631 mapped outputs, and the
+seven upstream trees (7,034 mapped artifacts/7,041 files). It checks 628 current
+and 4,874 upstream captured-source pairs, 53 bootstrap records, 35 opening
+records and 52 pinned sources/documents. All 74 executed-source bindings and
+571 immutable-read bindings match; both final-byte seals remain unchanged.
+This is read-only closure accounting, not another qualification replay.
+
+The next bounded component is common-attribute commands 53--97 (45 commands),
+composed into the same reader. Selected-port attribute effects, canonical root
+protocols, final same-fixture reference composition and whole-cell qualification
+remain open. No software-freeze, hosted CI or hardware claim is granted here.
