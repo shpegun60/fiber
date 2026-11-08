@@ -3854,3 +3854,29 @@ receipts and read/count boundaries are recorded in the linked audit. New
 tool/compiler invocations and cell credit remain zero. This advances component
 composition, not full semantic ABI, IR import closure, full roots, final
 FreeRTOS parity, whole-cell, archive, hosted CI or hardware qualification.
+
+## Current CM3 Os-LTO Common Attribute Component
+
+The additive common component reconstructs recorded commands 53--97: specs,
+eight hostile slim-IR builds and six lowering/disassembly pairs. It recomputes
+source annotations, compiled controls, dependencies and imports. The lowered
+adapter binds 84 roles/89 distinct inputs and checks six actual Os worker chains
+plus twelve aggregate/LTRANS images with the frozen Os effect predicate.
+`common_census_attempt.py` composes it with the original census, ABI and isolation
+in the same reader; shared authorities are checked again at the result boundary.
+
+Unresolved cold-inline attribution remains explicit. A completed component
+replay does not grant full common-attribute policy, transitive protection,
+isolation IR import closure, canonical roots or final same-fixture reference
+parity. Exact implementation, regression and actual-capture evidence is recorded
+in `PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-common-attribute-component-replay`.
+Runtime C/ASM, context layout, public5/port8 and the inventory do not change.
+New tool/compiler invocations and cell credit stay zero; full software freeze,
+hosted CI and hardware remain unqualified.
+
+The new component/adapter/driver suites pass 24/20/23 methods, including strict
+ownership/annotation/control catalogs, nested evidence and fail-closed recovery.
+The unchanged worker/effect suites add 13/20 methods; prior regressions add 210:
+310 distinct methods with current-source receipts. These are bounded synthetic
+controls plus actual slim-parser fixtures, not an actual combined CLI verdict.
+The implementation source checkpoint therefore leaves that fresh replay pending.

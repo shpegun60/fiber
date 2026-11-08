@@ -10975,3 +10975,69 @@ The next bounded component is common-attribute commands 53--97 (45 commands),
 composed into the same reader. Selected-port attribute effects, canonical root
 protocols, final same-fixture reference composition and whole-cell qualification
 remain open. No software-freeze, hosted CI or hardware claim is granted here.
+
+## Current CM3 Os-LTO Common Attribute Component Replay
+
+The next additive composition covers recorded common-attribute commands 53--97:
+the original specs and its bounded adapter, eight hostile IR compilations, and
+six lowering/disassembly pairs. `common_replay.py` reconstructs source ownership,
+canonical annotations, three single-role mutants and paired stress buffers from
+admitted bytes. Every dependency, slim-object section table, plugin-NM import
+surface, source copy and ordered IR substitution is recomputed, not inherited.
+
+`common_lowered.py` independently binds 84 lowering roles to 79 distinct paths,
+eight input IR objects and two resolved workers: 89 local read bindings. It
+recomputes all six Os-specific worker chains and inspects both aggregate and
+LTRANS objects for each cohort with the actual frozen Os effect predicate.
+The wrapper, resolution, assembly and disassembly files are retained hash
+bindings, not independent semantic proofs. Intended compiled mutants must also
+fail the unchanged protected predicate.
+
+`common_census_attempt.py` composes these new components with the original
+census, deferred ABI, 41 ABI controls and 12 isolation commands in the same
+immutable reader. Shared source, receipt, manifest and command-journal bindings
+are checked during replay and at the result boundary. Unresolved setter/cold
+inline attribution is retained as pending rather than promoted to clean common
+policy. A failure revokes all nine completion facts and three recorded-command
+counters. Exact source/test and actual-replay evidence will be recorded below
+only after their checks complete.
+
+The contract is `COMMON_CENSUS_ATTEMPT_CONTRACT.md`. This implementation does
+not grant CommonAttributePolicyProven, transitive protection, isolation IR import
+closure, complete roots, final reference composition or whole-cell qualification.
+Runtime C/ASM, context layout, public5/port8, the reference pin, 2,774-key inventory
+and backlog stay unchanged. New compiler/tool invocations and required-cell
+credit stay zero; hosted CI, hardware and global freeze remain unqualified.
+
+Review closed the protected-stress zero-import stream case and a delegated
+result-schema gap before actual admission. The final validator also fixes two
+catalog gaps: 15 exact ownership function/source/signature rows, 28 exact
+annotation name/site/path rows, and six ordered mutant edit identities. A fresh
+independent bounded review accepts canonical baselines and rejects 167 catalog
+mutations. That is validator evidence, not compiler or target execution.
+
+The three new suites pass 24 command-component, 20 lowered-adapter and 23
+composition-driver methods. Their evidence remains bounded: synthetic binding
+models, eight actual slim-object parser fixtures, and actual frozen predicates
+over synthetic image models. The two unchanged worker/effect suites add 13/20
+methods; the preceding ten regression suites add 210. All 310 distinct methods
+have current-source receipts. The initial parent 24-method run is retained as
+failed: its root unknown-field control assigned an already-present false field
+and therefore made no mutation. The corrected pre-catalog run is historical;
+only final catalog-source receipts count for this implementation checkpoint.
+Actual combined CLI replay is still pending at this source checkpoint.
+
+| Common Component Implementation Evidence | SHA-256 |
+| --- | --- |
+| `common_census_attempt.py` | `043453302BFEEF871105100C3AA4878AB8B00FB8FFC16126DE08CBD603DDB485` |
+| `common_replay.py` | `D8EEDF06F1C83FB195236AB259A0546A71CB9F63AC627823B7179EE4BA3C8532` |
+| `common_lowered.py` | `C2B67031224EA4E8F76982B7F1BEEF7D7871516543E5CAC0CE9DC30464A58FE9` |
+| `test_common_census_attempt.py` | `6CCAA547AA06004085D5B3C904C7F3542F6D96C0336BAAB3AE2357FDFCF60401` |
+| `test_common_replay.py` | `D48FE48FABB68422B6FE202DF7D5F49B81C5FD42F39100610D26371E42361CC4` |
+| `test_common_lowered.py` | `9EF6541F34DC6E35FEC527108D8FD1F9C92F4FDA49FF9F702158DF0EECAC656C` |
+| `COMMON_CENSUS_ATTEMPT_CONTRACT.md` | `96AFC7DB6D241FAE94A77F6661CACA7164983D3A868C8D3060BB0FD83B255055` |
+| `%TEMP%/os-common-census-parent-20261108-e1/results.json` (23 methods) | `F248FEBF7A223D65DE90EEE584D2DA22EAB884972FDC7F4BE0B0B2B40BD01C00` |
+| `%TEMP%/os-common-replay-20261108-03/results.json` (24 methods) | `D1004828BE518EC8BC4DE6ABBDFDC3D945354CD5B92691DD143B467E5A876134` |
+| `%TEMP%/os-common-lowered-parent-20261108-e1/results.json` (20 methods) | `5765F06864CB281B6F5535E7AC59AA86C72CEC16A2A3BE38A757AB2AF591469B` |
+| `%TEMP%/os-common-workers-parent-20261108-e1/results.json` (13 methods) | `104CA8B4B4E03C40FDDA04558627258505ED1ED8F9980106962721F85144D669` |
+| `%TEMP%/os-common-effects-parent-20261108-e1/results.json` (20 methods) | `A4A7358534426165456B263EC27F300EA015851151E0633859519A4AF1F66E45` |
