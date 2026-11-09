@@ -4121,3 +4121,19 @@ real-nine-projection smoke pass, with only Witness construction doubled and
 all 91 bootstrap buffers closed. This source checkpoint does not execute the
 qualifier CLI, authenticate a new attempt or grant cell credit. Full boundary
 tests and a fresh qualifying run with post-terminal auditing remain pending.
+
+## Current CM3 Os-LTO Bounded Static Cell
+
+The enclosing qualifier has now completed a fresh terminal attempt at
+`C:/fzoscell-20261109-e1`, after independent source/boundary review. Final
+boundary tests pass 33/33, including disk-credit revocation, swallowed recovery
+write errors and stale-PASS rejection. The actual attempt grants only the fixed
+CM3/runtime/final/Os-lto/direct key: one of 2,774 cells, with 2,773 pending and
+all 26 backlog entries unchanged. It is a per-cell result, not a merged O2 rollup.
+All nine nested component records exactly equal the fresh nine-component
+baseline and retain their zero-credit/nonclaim fields. No new compiler or
+inspection tool executes. A separate unmodified raw auditor passes complete
+input/physical/source/dependency-tree accounting and closing; details and local
+receipt hashes are recorded in `PORT_ARCHITECTURE_AUDIT.md` below the qualifier
+source checkpoint. This is bounded static software evidence, not complete
+IR/import/instruction/ABI semantics, archive, hosted CI, hardware or global freeze.

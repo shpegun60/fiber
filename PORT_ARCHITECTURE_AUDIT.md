@@ -11813,3 +11813,81 @@ AST, ASCII, raw-LF, single-EOF and whitespace checks pass. This is source and
 smoke evidence only: no actual admission, qualifying CLI, new cell credit,
 compiler/tool command, target execution, hosted CI or hardware claim. Independent
 boundary/failure tests and fresh terminal execution remain required.
+
+### CM3 Os-LTO Bounded Cell Execution And Audit
+
+The final independent boundary fixture is `test_cell_qualifier.py`, source
+SHA-256 `DEC6E5B9F2CFA60165686D633A0B20ACF5937710FBC9386BF8D6BFB0C3C4B4BE`.
+Its exact 33-method catalog rejects omissions, skips, expected failures and type
+aliases. It exercises real prepare/returned helpers, detailed outer/nine
+validators, full zero/one accounting and real output seal/recovery functions.
+Admission, replay and input-close orchestration remain disclosed doubles;
+retention/reader metadata is synthetic. These tests are not actual admission.
+Input/source/retained-fixture closing does not independently observe all process
+history or turn lifecycle doubles into a real reader execution.
+
+Owner E1 passes 33/33 at the old `D76D552C...` test cut. Its exact source is
+preserved in an external historical archive, not substituted at the original
+path. Two existing methods then gain on-disk zero-credit and stale-PASS
+assertions. Independent AST comparison proves only those two bodies changed:
+the other 31 methods, globals and catalog are unchanged. Focused final-cut 2/2
+passes; the parent's separate final-cut full suite also passes 33/33, with zero
+failures/errors/skips/expected failures. It closes 158 source and 1,357 fixture
+files; the focused driver closes 160/1,358. Parent post-terminal rehashing passes
+for both final-cut receipts. A separate five-case physical owner smoke passes,
+with 14 source/input and 32 fixture files rehashed and physical tuples rechecked
+by the parent. None of these synthetic test reports grants required-cell credit.
+
+The actual attempt is admitted to execution after old-cut full33 plus final-cut
+focused2 readiness and the exact AST comparison, while the independent final
+full33 is still running separately. Both finish before this checkpoint; neither
+receipt inherits the other's verdict. The actual qualifier completes at
+`C:/fzoscell-20261109-e1`, exit zero,
+Status `BOUNDED_STATIC_CELL_VERIFIED`, with all thirteen facts and COMMON3 /
+RUNTIME8 satisfied. All 65 substantive evidence references and their component
+hashes join. The nine nested proofs exactly equal the earlier fresh E3
+nine-component baseline, without normalization, and keep zero-credit/nonclaims.
+Recorded producer evidence remains 2/41/12/45/36, with separate buffer controls
+32/2; new ToolInvocations and CompilerInvocations are integer zero.
+
+The complete authenticated E9 accounting contains 2,774 rows and exactly one
+credited key, CM3/runtime/final/Os-lto/direct. Other 2,773 rows remain pending;
+all 26 backlog entries remain unchanged, including 23 Pending and three
+ReferenceOnly. Coverage and missing-work bytes match their report bindings and
+manifest entries. This is not a merged historical O2/ordinary coverage rollup.
+
+The unmodified independent raw-accounting auditor executes separately from
+the qualifier. Its independent run and parent repeat produce byte-identical
+receipts; these share one checker implementation, not two proof standards.
+It passes all 7,999 current input hash/physical
+triples, 653 source pairs, 91 bootstrap buffers, 107 recorded executed-source
+rows over 101 paths, and seven complete dependency trees with 7,041 bindings.
+The recorded reader has 3,027 paths and 1,083 observed-read bindings. Its full
+path catalog/invocation history is not independently reconstructed by this
+audit. Protocol witness files remain authenticated recipe documents, not
+recorded runner executions; historical native/reference physical tables are
+not retroactively requalified. The Git executable's recorded link count of two
+is retained; sealed outputs are unaliased. Exact output membership is 658
+manifest artifacts / 659 files, with only manifest self-entry excluded. Closing
+rehashes 8,006 unique files (8,005 evidence files plus the auditor), including
+file/directory membership. Its 17,332 hash-read passes and 1,857,287,196 bytes
+include repeat reads, not additional coverage or test cases.
+
+| Local Evidence | SHA-256 |
+| --- | --- |
+| Owner E1 full33 receipt, historical `D76D552C...` cut | `959E05B20C71DA569F0CDB99CE84A1EC79FE29FD824EA0B2F58447ACA4E03E98` |
+| `%TEMP%/test_cell_qualifier.D76D552C-owner-e1-20261109.py` | `D76D552CB57AB4D62C387F8E93D3CF53EF64E7B4904CDE63B825E8C20809FB27` |
+| `%TEMP%/os-cell-qualifier-focused-owner-20261109-e1/results.json` | `6300D5E77B34F16FD77D26E643818721ECD37A99C8254CACF20A6E617DD4A0E0` |
+| `%TEMP%/cm3-os-cell-qualifier-focused-20261109.py` | `0D9C915BD58A66B76A9773A7AFBB776FA5D219C290AFCD4986E7D5DFEDA6ED5A` |
+| `%TEMP%/os-cell-qualifier-parent-20261109-e1/results.json`, final full33 | `CCA3EB1AB5D010CCE452E9562FF76907B74E23B04022239A796C521A59639DD4` |
+| Physical owner-smoke `report.json`, directory `cm3-cell-qualifier-owner-smoke-20261109-e1-h6mtq825` | `CCE8F9367BF62197A2115BBD75D424A42564E20D227CD4974321F7F2F6F98E51` |
+| `C:/fzoscell-20261109-e1/results.json` | `A81DC41D4C80832120150B166AB4CA8D442D8EDDBEAA2CB382F0B55BDD6EF9BF` |
+| `C:/fzoscell-20261109-e1/artifacts.json` | `4B7720F1FD6D76B2EA5CA67FAD1D1CB70F03699BC0749383DD0E5F81194BA219` |
+| `%TEMP%/os-cell-qualifier-raw-audit-20261109-e1/report.json` | `78CDAE52295FCCD4E6F2C3EAA58BCA8E82D5F7775639F3EA227D21933F00FEA7` |
+| `%TEMP%/os-cell-qualifier-raw-parent-20261109-e1/report.json` | `78CDAE52295FCCD4E6F2C3EAA58BCA8E82D5F7775639F3EA227D21933F00FEA7` |
+
+Runtime C/ASM, frame layout, public5/port8 and the clean pinned local FreeRTOS
+checkout are unchanged. Stronger IR/import/source/instruction semantics,
+arbitrary callback/callee safety, archive/other profiles, hosted CI, CPU/board
+execution and global freeze remain unclaimed. Software credit is bounded to
+this one cell; the other required keys and backlog remain explicit work.
