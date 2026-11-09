@@ -3935,3 +3935,40 @@ only effects, REL addends/applied destinations, canonical root protocols,
 same-fixture final reference composition, whole-cell, hosted CI and hardware
 qualification remain separate. Next comes original provider binding and
 native/reference canonical-root composition in the same reader.
+
+## Current CM3 Os-LTO Original Binding And Root Component
+
+The additive `original_replay.py` recomputes native ordinary/emitted provider
+bindings and all six original native/reference canonical roots from their own
+ELF, generated machines, startup objects, maps, disassemblies and captured
+ledgers. Thirty logical inputs occupy 29 distinct files; the only role alias
+is shared native startup. Both load-image comparisons are recomputed. The
+master ledger is the admitted inventory copy, not this working document.
+
+`original_census_attempt.py` authenticates the additional helpers before witness
+construction and joins seven freshly evaluated components in one immutable
+reader. Both producer receipt/manifest authorities and the original
+machine/map/startup/image bindings are checked again after sealing. Frozen
+parent entrypoints, predicates and pins are unchanged.
+
+Parent suites pass 24 leaf and 23 driver methods. Actual-byte fixtures,
+detached validators and explicitly doubled lifecycle tests remain distinct
+from capture admission. Independent review closes weak-handler, vector-addend
+and input-placement validator gaps, with negative controls for each.
+
+Fresh `C:/fzosoriginal-census-20261109-e1` exits zero as
+`CENSUS-ABI-ISOLATION-COMMON-PORT-AND-ORIGINAL-REPLAYED-NOT-QUALIFIED`.
+All eleven bounded completion facts are true; all 41 stronger nonclaims stay
+false. Parent post-terminal accounting verifies 7,979 hash/physical-identity
+pairs, 646 mapped artifacts and 643 source-copy pairs. Recorded command credits
+remain 41/12/45/36, with zero new compiler/tool commands or required-cell credit.
+Exact source and receipt hashes are in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-original-binding-and-root-replay`.
+
+This closes original-root composition only. It does not transfer the result
+to a selected-replacement final image by assumption, rerun fresh mutant
+controls, close isolation IR imports or grant whole-cell, archive, hosted CI,
+hardware or global software qualification. The next bounded slice must join
+the selected-port final image, its own machine/map/startup and reference roots
+explicitly. Runtime C/ASM, layouts, public5/port8 and the reference pin are
+unchanged.

@@ -11264,3 +11264,104 @@ archive, hosted CI, hardware and global software freeze are not granted.
 The next bounded slice joins original native provider bindings and the six
 native/reference canonical roots using their own saved machines and ledgers
 inside the same reader. It must not import success from an older roots run.
+
+## Current CM3 Os-LTO Original Binding And Root Replay
+
+`ORIGINAL_REPLAY_CONTRACT.md` closes the new pure API and exact schemas before
+execution. `original_replay.py` consumes native ordinary seven-role, native
+emitted eight-role and reference seven-role bundles, both load-image records,
+two captured ledgers and four receipt/manifest authorities. Thirty logical
+inputs occupy 29 distinct files. Shared native startup is the only allowed
+alias. Every role is a Path/Sha256 binding independently reconstructed from
+capture controls. All 29 paths are explicit reader permissions, including
+22 additional roles beyond the previous seven original inputs.
+
+Actual predicates recompute two native ABI/link records, both load-image
+comparisons and six complete transport/canonical roots using each side's own
+machine and saved disassembly. The captured master ledger joins both producer
+receipts; the fixed policy ledger is separately validated. No earlier binding
+or root receipt supplies an inherited PASS. Detached validation reparses the
+eight retained control buffers and reruns only pure token/ledger checks, with
+filesystem, process and binary constructors disabled by controls.
+
+The draft incorrectly treated startup SVC/PendSV imports as defined symbols.
+The correction permits only their exact GLOBAL/NOTYPE/UND zero-value/size
+tuples in OriginalRelocationSymbol. Defined provider origins remain distinct;
+Reset retains its defined-origin equality. Independent review then identified
+three detached-validator gaps, all closed before the actual attempt:
+
+- Both original and final SVC/PendSV definitions must be GLOBAL/FUNC even if
+  all duplicated records coherently claim WEAK.
+- Selected vector original bytes must encode zero ABS32 addends and Symbol
+  must match the exact selected slot target.
+- All six input/output section-placement fields join the pilot_vectors
+  origin, in addition to existing startup provider/hash/map joins.
+
+Controls cover allowed-name swaps, a complete UND tuple copied into a defined
+origin, zero-addend mutations, section-placement changes, closed nested schemas
+and all 27 literal-false leaf nonclaims. Corrupt-byte tests deliberately ignore
+the expected digest in their reader, requiring the leaf itself to reject.
+A duplicate Profile is injected into a complete valid receipt, so an unrelated
+descriptor mismatch cannot hide a lenient JSON parser. Read escapes must raise
+the leaf's own error, not merely trip an outer filesystem fence.
+
+The additive `original_census_attempt.py` retains the original 35-source opening
+and authenticates all additional helper/contract sources before constructing
+the witness. Admission retains each original hash and sealed physical identity.
+One reader recomputes census, deferred ABI, ABI controls, isolation, common,
+selected-port and original-binding/root components. The outer validator repeats
+both Native and Reference authorities and all original machine/map/dump/startup
+and load-image joins. An inner canonical result does not promote outer
+whole-cell or final-reference claims.
+
+Parent final suites pass 24 leaf methods and 23 driver methods with 68/138
+source hashes and 32/36 fixture hashes, respectively. Driver lifecycle tests
+explicitly use replay doubles; real returned bootstrap helpers also validate
+all seven detached components. The fixtures exercise actual original-byte
+predicates without capture admission or combined CLI credit. Draft driver E1
+and E2 fail during test setup (an unnecessary split-namespace exec, then a stale
+contract pin); both receipts remain FAIL. E3 passes; final E4 additionally
+closes two previously read control fixtures. None of these test receipts is
+an actual producer or qualified-cell verdict.
+
+Fresh actual `C:/fzosoriginal-census-20261109-e1` exits zero as
+`CENSUS-ABI-ISOLATION-COMMON-PORT-AND-ORIGINAL-REPLAYED-NOT-QUALIFIED`.
+All eleven completion facts are true; all 41 stronger nonclaims remain false.
+Recorded credits are exactly 41 ABI, 12 isolation, 45 common and 36 selected-port
+commands, plus two prior original-inspection records. No new tool/compiler
+commands execute. Common attribution is closed; errors are null/null/empty.
+Required-cell credit stays zero out of the unchanged 2,774-key plan.
+
+Parent post-terminal audit rehashes 7,979 input/physical-identity pairs, all
+646 mapped artifacts (647 files), 643 original/captured source pairs and 77
+bootstrap source records. The reader records 3,017 snapshots, 1,083 distinct
+reads and 101 executed source buffers. The new leaf accounts for 29 byte inputs
+and six canonical roots. Previous six nested records compare equal to the prior
+selected-port result only after this fresh recomputation, not by inheritance.
+
+Independent read-only composition review passes 59 authority joins and verifies
+the original 35-source opening, 77 bootstrap records and 643 source bindings.
+Real returned prepare helpers (synthetic witness only) pass detached final
+validation with binary inspectors, I/O and processes blocked. The permitted
+token-only checker runs once; all 26 missing-helper controls reject. This
+bounded review is not another capture admission or full-input rehash.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `ORIGINAL_REPLAY_CONTRACT.md` | `4A25542898F48287A30BF63C07B0800598EAD2433D3EFEE0E333714A30F97686` |
+| `original_replay.py` | `BF15568AE1EF2D5A67FC63573965D36AA0A9D31308A57C1B2FC860310E0DA645` |
+| `test_original_replay.py` | `F1D443F37869258C53A1FF211EA545F038FEF8100836A2CF5B9FF3E1C003D6BC` |
+| `original_census_attempt.py` | `1AD81179EF4617156CE73CA13412709668E2E7FE15AFF61FDB67E4BEAC0FAD74` |
+| `test_original_census_attempt.py` | `5AB78AA6BF02BA26A864A0C9318506B9AF3B91D8E348641EAB8137F66DF0FBA8` |
+| `%TEMP%/os-original-replay-parent-20261109-e2/results.json` (24 methods) | `4CD6D1A7903CF2D1E1DE654ECEF99F426B8D1FA79CD1C84F962673AEED4566FB` |
+| `%TEMP%/os-original-census-parent-20261109-e4/results.json` (23 methods) | `CB580A1237480EC59B55B7D0B48F959445FD165560E48815DF8589A85768C0F6` |
+| Actual E1 `results.json` | `F72CFBB8E8A9184797341220A220DB3B45B026D66E58F5ED6CDC0139114F532E` |
+| Actual E1 `artifacts.json` | `A02D702C7696A80685DB12DAD163336F2BFDFEFEAFC5BB421D08A18CA0B6469E` |
+| `%TEMP%/os-original-audit-20261109/results.json` | `9D34C869CEB8C0C4DB1DC9F5395A3B7FEC627554171B11D101BA129C8F701A14` |
+
+Runtime C/ASM, layouts, public5/port8 and pinned FreeRTOS are unchanged.
+Original-root composition is not a proof for selected-replacement final bodies.
+The next slice must bind that final image and its own machine/map/startup to
+the reference canonical roots explicitly. Fresh negative controls, isolation
+IR import closure, whole-cell, archive, hosted CI, hardware and global software
+freeze remain separate obligations; this checkpoint grants none of them.
