@@ -581,15 +581,18 @@ class ControlTests(unittest.TestCase):
         for side in ROOTS:
             bad = copy.deepcopy(self.proof); row = bad['Baseline']['CanonicalJoin']['Roots'][side][0]
             tokens = row['RawCanonicalTokens']; index = next(i for i, token in enumerate(tokens) if token[0] == 'svc')
-            tokens[index] = ('svc', '72'); row['RawTokenSha256'] = token_hash(tokens)
-            with self.subTest(side=side): self.reject(bad)
+            tokens[index] = ['svc', '72']; row['RawTokenSha256'] = token_hash(tokens)
+            with self.subTest(side=side):
+                self.reject(bad, label=r'^REJECT:CM3-OS-LTO-ORIGINAL:equality/complete baseline proof/CanonicalJoin/Roots/'
+                    + side + r'/0/RawCanonicalTokens/[0-9]+/1$')
 
     def test_canonical_svc72_rehashed_tokens_cannot_claim_elf71(self):
         for side, immediate in (('Native', '72'), ('Reference', '2')):
             bad = copy.deepcopy(self.proof); coherence = case(bad, side, 'coherent-svc-immediate')['Coherence']
             tokens = coherence['CanonicalTokens']; index = next(i for i, token in enumerate(tokens) if token[0] == 'svc')
-            tokens[index] = ('svc', immediate); coherence['CanonicalTokenSha256'] = token_hash(tokens)
-            with self.subTest(side=side): self.reject(bad)
+            tokens[index] = ['svc', immediate]; coherence['CanonicalTokenSha256'] = token_hash(tokens)
+            with self.subTest(side=side):
+                self.reject(bad, label=r'^REJECT:CM3-OS-LTO-ORIGINAL:equality/canonical tokens/transport/byte coherence/CanonicalTokens/[0-9]+/1$')
 
     def test_changed_transport_hash_provider_and_map_join_case_outputs(self):
         for side in ROOTS:
@@ -674,12 +677,13 @@ class ControlTests(unittest.TestCase):
         calls = []
         def unrelated(*args, **kwargs):
             calls.append(args)
-            if len(calls) > 1: raise core.Rejected('REJECT:UNRELATED:deliberate noncatalog predicate failure')
+            if len(calls) == 2: raise core.Rejected('REJECT:UNRELATED:deliberate noncatalog predicate failure')
             return real(*args, **kwargs)
         with patch.object(H['native_roots'], 'NativeCM3LTOImage', side_effect=unrelated), \
-                self.assertRaises((ValueError, RuntimeError)):
+                self.assertRaisesRegex(m.Rejected, r'^REJECT:CM3-OS-LTO-FINAL-CONTROLS:intended transport rejection/Native/machine-nonrelocation-byte/REJECT:UNRELATED:') as caught:
             Model().run()
-        self.assertGreaterEqual(len(calls), 2)
+        self.assertIs(type(caught.exception), m.Rejected)
+        self.assertEqual(len(calls), 2)
 
     def test_first_seen_buffers_and_input_objects_are_not_overwritten(self):
         self.assertEqual((self.model.batch, self.model.port, self.model.original, self.model.final), self.before)

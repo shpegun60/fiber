@@ -11586,3 +11586,122 @@ No combined CLI, compiler/tool, required-cell, hardware or global-freeze claim
 is granted here. Actual execution awaits the pure suite and strengthening of
 three existing tests so token-content and wrong-family negatives cannot pass
 through an incidental type mismatch or a later unrelated failure.
+
+### Final Negative-Control Terminal Replay
+
+The parent and independent pure suites both pass 30/30 with the unchanged
+`C507CBCF...` leaf and historical `2D8B122D...` test source. Their receipts are
+byte-identical. Both source/fixture closures pass at termination. This closes
+the earlier source-checkpoint full-suite obligation for that exact cut.
+
+Three test-only false-positive gaps are then closed. Baseline and canonical
+token mutations use JSON lists, not tuples which could fail only on type;
+they require the exact token-value mismatch. The unrelated rejection is
+injected only at constructor call two and must fail with its exact intended
+transport diagnostic at that call, not a later canonical failure. No leaf
+acceptance defect is demonstrated by these test changes. An external focused
+runner verifies that exactly those three bodies change, the remaining 27
+methods and module AST stay unchanged, and all six selected current methods
+pass. It explicitly grants no full-current-30-suite claim. Updating only the
+frontend's fixture pin is followed by another 28/28 frontend run. Parent
+post-terminal rehashes close all 80/41 focused and 152/49 frontend source/fixture
+bindings. Actual byte predicates, pinned earlier port metadata, synthetic
+retention records and lifecycle doubles keep their distinct test scopes.
+
+Actual E1 fails before output creation because the external parser tree lacks
+four empty `__init__.py` markers under `common`, `dwarf`, `ehabi` and `elf`.
+Their absence cause is unknown. After verifying the old sealed manifest and
+source-copy hashes, only missing files are restored, without overwrite, with
+the exact empty-buffer SHA-256. E2 still fails before output creation because
+the old batch's physical identity for a restored marker no longer matches.
+Both failures are retained as manual failure summaries, not producer receipts.
+No stored receipt/identity, admission rule or guard is modified. Prior
+historical closures are not requalified against today's changed identities.
+
+The published batch producer is therefore rerun at a fresh path. It terminates
+exit zero/`BUILT-PENDING-READER`, with 134 tool invocations, 72 compiler-invocation
+records, 6,120 closed inputs and a sealed output. The fresh normal handoff
+then terminates exit zero/`ORIGINAL-CENSUS-REPLAYED-NOT-QUALIFIED`, with two
+inspection commands and no compiler invocations. These new producer commands
+must not be confused with the later replay's zero new tool/compile calls.
+
+The unchanged published eight-component frontend next creates the fresh
+`C:/fzosfinal-current-baseline-20261109-e1` baseline. The nine-component
+frontend creates `C:/fzosfinalcontrols-census-20261109-e3` against exactly the
+same batch, normal, native, reference and inventory authorities. Both exit
+zero with closed common attribution. E3 has all thirteen bounded completion
+facts true, all 41 stronger nonclaims false and exact equality of all eight
+prior component records with the fresh baseline, without normalization.
+It executes 32 transport and two canonical byte-buffer controls, with fourteen
+distinct positive inputs and 172 derived role-buffer records. It closes 7,991
+input hash/physical-identity pairs, retains 649 source pairs / 87 bootstrap
+sources / 107 executed-source records, and records 3,023 reader paths / 1,083
+distinct reads. Recorded 2/41/12/45/36 credits and zero required-cell credit are
+unchanged; the new 32/2 counters are not compiler, link or qualification credit.
+
+Independent bounded byte accounting exits zero/PASS: all eight component
+records exactly equal the fresh baseline, all fourteen inputs and 172 role
+records reconstruct correctly, and 42 net edits / 32 transport / two canonical
+cases join their recorded bytes. It checks all thirteen success facts and 41
+false nonclaims, the 652-artifact / 653-file exact output, 649 source pairs and
+1,318 actually read-and-closed files. It does not recheck the full input or
+physical-identity tables and does not rerun predicates or admission.
+
+The separately authored full raw checker initially exposes three checker-only
+assumption defects, not producer failures: Windows lstat/fstat ctime semantics,
+an incorrect expectation that the two protocol-witness documents execute, and
+raw slash spelling in producer-versus-reader inventory descriptors. Separate
+successors retain every old checker and FAIL report. Cross-API comparison
+excludes ctime only between APIs; full same-API before/after ctime checks stay.
+Both witness authorities retain bootstrap/captured/hash enrollment and zero
+recorded reader executions, while the three new leaf/mutation paths execute.
+Only producer inventory Build comparison uses Windows path semantics, with
+closed three-key descriptors and exact receipt/manifest digests. Fresh-eight
+component and shared-authority comparisons remain exact and unnormalized.
+
+Parent execution of the corrected independently authored stdlib checker exits
+zero/PASS. It verifies all 7,991 E3 and 7,985 baseline input hash/physical triples,
+all source pairs and reader/bootstrap/executed joins, seven dependency trees /
+7,041 dependency bindings, exact output trees and all eight component plus
+fifteen shared-authority equalities. It then rehashes 8,646 unique first-seen
+files and rechecks file/directory membership without drift. Its 19,896 hash
+read passes / 1,945,961,792 bytes include repeat reads, not test counts. The
+recorded reader invocation history is not independently observed; historical
+native/reference physical tables are not requalified. These complementary
+post-terminal reviews grant no additional predicate, qualification or cell
+credit. External reports and generated captures are local evidence, not files
+published in this repository.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| Current `test_final_controls_replay.py` | `428C43F7DC99F90E652DB6CC74CC59CED67A7D2C9286E1EC7970474961510E71` |
+| Current `test_final_controls_census_attempt.py` | `476B85C93B5FC76C80E3E9A30FBDBF55CF6CD37E8AC5B5026B4BFFD2708A0002` |
+| Parent and independent full-30 E2 `results.json` | `9FCB65D16354BC92A12446796E2F05FF9E823277FC24EAB7F3B4B9D505EC3BED` |
+| `%TEMP%/cm3-final-controls-focused-20261109.py` | `6151D62635425D7AA3C7D0B59E638F8B5D05E6C9C7168D8A5452D35B56BB0E92` |
+| `%TEMP%/os-final-controls-focused-parent-20261109-e1/results.json` (six current methods) | `2890843E1D641D8BAD197003EB4BF8162D76037619FE0D34C099DE625C46B10A` |
+| `%TEMP%/os-final-controls-census-parent-20261109-e3/results.json` (28 methods) | `E4EC851CA776B84938C907D34073A49B504D3A9E0BE866291D3E8C48CE98CF37` |
+| `%TEMP%/os-final-controls-actual-bootstrap-20261109-e1/failure.json` (manual summary) | `B8109574FEC1410CADDB2D3FF4AA881FE680C31868AD65BCF5CC06CE3174D092` |
+| `%TEMP%/os-final-controls-actual-bootstrap-20261109-e2/failure.json` (manual summary) | `9CAE0CD4F79B0EEA50630690033C8D83F65EAE060A58CF6B06AEC9E91C982B05` |
+| Fresh batch E1 `results.json` | `A6441801910C880B6E193AC2252D9C2893969D025AF421CB4572A59E89B0D855` |
+| Fresh batch E1 `artifacts.json` | `B79A8C78D4477AC88BA134A9505140EEC3F83C7F2D9D11AA394DF5A75CAF2750` |
+| Fresh normal E1 `results.json` | `FF48D22F41E9114B934D45CDB09CA100563A4C855CF2AB28C535492891C082B2` |
+| Fresh normal E1 `artifacts.json` | `4AC5930316CC88A3FAFD9DD8DF45A1899634041048CE2AA8353E128A8A98F498` |
+| Fresh eight-component baseline E1 `results.json` | `6B5DBDC68A9C6630118E91B91F5B8F81B3EAC81D4B24C4C26AF526AF1E92F4DC` |
+| Fresh eight-component baseline E1 `artifacts.json` | `1F59A28D30A96935DDD0839A55EC1D4E53A7C353BA4C09128D1C865604F11296` |
+| Actual nine-component E3 `results.json` | `A81B23B024B5DD770B061BC6BD9BAF21B3922EADA6452CA49DA45FBF023E9621` |
+| Actual nine-component E3 `artifacts.json` | `E3EDA80F1976C653D47C3D5CF89F6FDAB563C49886F0753191605F4E1F16DA15` |
+| `%TEMP%/cm3-os-final-controls-independent-accounting-20261109.py` | `059D8EEB0E3682738FD31185251AF25FB8C62BDC21D4E209CB650BF38C933AF1` |
+| `%TEMP%/os-final-controls-independent-accounting-20261109-15850bcc20334984a412e35f4a2ac9c3/results.json` | `CA1B3581ED169980A0B38C8ABFE6B72AC552E41F5B37E2CFF36B86A1D2242A62` |
+| `%TEMP%/cm3-finalcontrols-raw-audit-20261109-bq7o_u5m/report.json` (checker-only FAIL) | `EAAEF2813374D428526156CD19AE6CE72121472CEF9AD07048190B9E5FE966FB` |
+| `%TEMP%/cm3-finalcontrols-raw-audit-20261109-e2-vam4_ndi/report.json` (checker-only FAIL) | `992598C66BFBE020555B87205E04522CF90507CCB86C2204C10210D34151624C` |
+| `%TEMP%/cm3-finalcontrols-raw-audit-20261109-e3-g_coywk7/report.json` (checker-only FAIL) | `736239AAD7A1382B613DC51597D1B7B30C670D33425627A66BCF3DB5E6BCC12E` |
+| `%TEMP%/cm3-finalcontrols-raw-accounting-20261109-e4.py` | `20120E05A4229623C6FCABDA3ED21C3EBF227056E1F2316CA8731624B97D367B` |
+| `%TEMP%/cm3-finalcontrols-raw-audit-20261109-e4-parent/report.json` (PASS) | `210F30CF294C3678201DB8AA3916CEEB726730B49895376D633BED0BE35A55E3` |
+
+Runtime C/ASM, context layouts, public5/port8 and the pinned FreeRTOS checkout
+remain unchanged. This is bounded component execution, not whole-cell, full
+ABI/IR/instruction/policy semantics, arbitrary-callback safety, archive,
+hosted-CI, hardware or global-freeze qualification. The next distinct slice is
+an Os-LTO whole-cell qualifier/model at the existing O2-LTO bounded standard,
+with detailed obligation joins and revocable coverage, not another inherited
+verdict or an automatic reduction of the 2,774-key plan / 26-entry backlog.

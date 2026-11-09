@@ -4047,3 +4047,51 @@ closed again after termination. The fixture explicitly discloses pinned port
 metadata, synthetic reader-retention records and lifecycle doubles; this is not
 a combined CLI admission. The long pure suite and three test-coverage
 strengthenings remain distinct from this tested frontend checkpoint.
+
+## Current CM3 Os-LTO Final Negative-Control Replay
+
+The pure control suite now has two independent 30/30 passing runs at the
+`2D8B122D...` test cut, with the unchanged `C507CBCF...` leaf. Review then
+strengthens only three existing test bodies: JSON token-content mutations
+must reach the exact value-mismatch diagnostic, and an unrelated transport
+failure must reject at its intended case rather than a later constructor.
+The other 27 methods and the rest of the module have identical ASTs. Six
+current focused methods pass, including actual 34-control execution and
+detached validation; this is not a new full-current-30-suite claim. The
+pin-updated frontend suite separately passes 28/28. Source/fixture closures
+are checked again after both current runs terminate.
+
+Actual attempts E1 and E2 fail before output creation. Four empty package
+markers are missing from the external TEMP parser tree; their cause of
+absence is not established. Exact empty bytes are restored from hash-bound
+sealed copies without overwriting existing files. The old batch then rejects
+the changed physical identities, as required. No guard, old receipt or
+recorded identity is rewritten. Historical old closures are not presented
+as current physical-identity closure after this restoration.
+
+Fresh published producers create `C:/fzosbatch-20261109-e1` with all 134
+commands and `C:/fzosnormal-20261109-e1` with two inspection commands. The
+fresh eight-component baseline and nine-component E3 then replay the same
+authorities without new compiler or inspection commands. E3 terminates exit
+zero as `CENSUS-ABI-ISOLATION-COMMON-PORT-ORIGINAL-FINAL-AND-CONTROLS-REPLAYED-NOT-QUALIFIED`.
+All thirteen bounded completion facts are true; all 41 stronger nonclaims
+remain false. The prior eight component records exactly equal the fresh
+eight-component baseline, not the historical differently rooted baseline.
+The new control component has fourteen distinct inputs, 32 transport plus
+two canonical cases and 172 derived role-buffer records.
+
+E3 closes 7,991 input hash/physical-identity bindings and retains 649 source
+pairs, including 87 bootstrap sources and 107 executed-source records. The
+recorded reader has 3,023 input paths and 1,083 distinct reads. These are
+overlapping provenance counts, not independent test cases. The fresh producer
+work is distinct from replay's zero tool calls and unchanged recorded credits
+2/41/12/45/36. Required-cell credit remains zero. Exact evidence and independent
+post-terminal audit disposition are recorded in
+`PORT_ARCHITECTURE_AUDIT.md#final-negative-control-terminal-replay`.
+
+No runtime C/ASM, context layout, public5/port8 or FreeRTOS pin changes.
+The next bounded step is a separate Os-LTO whole-cell qualifier/accounting
+model at the published O2-LTO bounded-static-cell standard, not promotion of
+these component flags alone. Stronger IR/instruction semantics, arbitrary
+callback safety, archive, hosted CI, CPU/board and global-freeze claims remain
+outside this replay.
