@@ -11664,7 +11664,9 @@ zero/PASS. It verifies all 7,991 E3 and 7,985 baseline input hash/physical tripl
 all source pairs and reader/bootstrap/executed joins, seven dependency trees /
 7,041 dependency bindings, exact output trees and all eight component plus
 fifteen shared-authority equalities. It then rehashes 8,646 unique first-seen
-files and rechecks file/directory membership without drift. Its 19,896 hash
+files (8,645 evidence paths plus the external checker) and rechecks file/
+directory membership without drift. The 107 E3 execution records cover 101
+distinct source paths; the baseline's 103 cover 97. Its 19,896 hash
 read passes / 1,945,961,792 bytes include repeat reads, not test counts. The
 recorded reader invocation history is not independently observed; historical
 native/reference physical tables are not requalified. These complementary
@@ -11705,3 +11707,30 @@ hosted-CI, hardware or global-freeze qualification. The next distinct slice is
 an Os-LTO whole-cell qualifier/model at the existing O2-LTO bounded standard,
 with detailed obligation joins and revocable coverage, not another inherited
 verdict or an automatic reduction of the 2,774-key plan / 26-entry backlog.
+
+### CM3 Os-LTO Cell Qualifier Contract
+
+`tools/fixtures/cm3_os_lto_final_cell/CELL_QUALIFIER_CONTRACT.md` fixes the next
+bounded implementation boundary. Its SHA-256 is
+`2DC6DA23F50A9E7ADB2D71CB1B94B8B492069A5EB8F9C8A0C820FBD76726B04A`.
+It selects only the exact CM3/runtime/final/Os-lto/direct key, with distinct
+cohort and source-inventory fingerprints, at the existing O2-LTO bounded
+static-cell standard. COMMON3 and RUNTIME8 map to detailed fresh proof records,
+134 recipes, 23 slim objects, original/replacement roots and fresh controls;
+thirteen completion flags or command counts alone do not qualify a cell.
+
+Independent metadata reviews find no missing raw-evidence family at that
+bounded standard. Review closes two wording gaps before implementation:
+historical native/reference identity tables are not requalified beyond the
+published admission rules, while current-watch and enforced batch/normal
+identity checks remain mandatory; late errors revoke all thirteen composed
+facts, all eleven obligations, attribution, recorded/control counters and
+coverage, including an embedded aggregate. Detailed zero-credit proof records
+can remain only as diagnostics. Recovery never acquires ownership of a foreign
+output or turns unrecoverable positive bytes into an eligible current PASS.
+
+The complete 2,774-row plan and 26-entry backlog must survive accounting; only
+the fixed key can receive one revocable per-cell credit. Stronger IR/semantic,
+archive, hosted-CI and hardware claims remain outside this bounded contract.
+No qualifier implementation, qualifying run, new coverage credit or runtime
+change is claimed by this docs-only checkpoint.

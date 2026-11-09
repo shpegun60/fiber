@@ -4095,3 +4095,10 @@ model at the published O2-LTO bounded-static-cell standard, not promotion of
 these component flags alone. Stronger IR/instruction semantics, arbitrary
 callback safety, archive, hosted CI, CPU/board and global-freeze claims remain
 outside this replay.
+
+The next qualifier is specified separately in
+`tools/fixtures/cm3_os_lto_final_cell/CELL_QUALIFIER_CONTRACT.md`: exactly
+COMMON3/RUNTIME8, one fresh nine-component replay, full authenticated E9
+accounting and revocable credit for only `CM3/Os-lto/direct`. It preserves
+current admission identity semantics and every nested zero-credit nonclaim.
+This document is a design gate, not qualifier implementation or a new cell.
