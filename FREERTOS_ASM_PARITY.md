@@ -4111,3 +4111,13 @@ fixture files. The tests use hash-bound E9 plan/backlog metadata plus synthetic
 corruptions, not complete inventory admission or an ELF qualifying run. The
 model never authenticates inputs or executes obligations; the later enclosing
 qualifier must do so before its caller-supplied key can receive actual credit.
+
+The enclosing `cell_qualifier.py` is now implemented at source SHA-256
+`D950845973F801F13C154BFBB8FF11338C1716C4F893E4D958559C5F3FCFD9C8`.
+It adds pre-witness authority enrollment, explicit eleven-obligation evidence
+mapping, one frozen nine-component replay, full-plan accounting and owned
+late-failure revocation. Independent static review and a parent real-bootstrap /
+real-nine-projection smoke pass, with only Witness construction doubled and
+all 91 bootstrap buffers closed. This source checkpoint does not execute the
+qualifier CLI, authenticate a new attempt or grant cell credit. Full boundary
+tests and a fresh qualifying run with post-terminal auditing remain pending.

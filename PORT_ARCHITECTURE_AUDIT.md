@@ -11780,3 +11780,36 @@ whole-cell qualifier, qualifying run, new compiler/tool command, runtime/ASM,
 public5/port8, reference-pin, CI or hardware change follows from this slice.
 Next is the enclosing authenticated qualifier, its detailed eleven-obligation
 mapping, owned late-failure coverage recovery and fresh terminal execution.
+
+### CM3 Os-LTO Enclosing Qualifier Source Checkpoint
+
+`cell_qualifier.py` implements the frozen bounded contract without changing
+the nine-component frontend, model, helpers, runtime C/ASM or public5/port8.
+Its source SHA-256 is
+`D950845973F801F13C154BFBB8FF11338C1716C4F893E4D958559C5F3FCFD9C8`.
+The old 35-source opening cohort remains separate from the enlarged 91-buffer
+pre-witness registry. The sole replay uses the frozen nine-component path;
+the post-seal projection changes only the explicitly permitted aggregate
+scope/disposition and zero-credit fields, not detailed component evidence.
+COMMON3/RUNTIME8 evidence paths resolve to detailed records, with full typed
+validation before final acceptance. Raw E9 authorities bind complete-plan
+accounting, not a relabeled O2 verdict.
+
+Review catches and fixes draft-only gaps before CLI execution: missing Output
+schema membership, manifest ownership after seal, destination replacement
+during prior-byte reads, and accounting regeneration aborting FAIL persistence.
+Receipt/manifest writes now retain a separate manifest identity/hash without
+adding a manifest self-entry. Immediate pre-write and post-write guards reject
+replaced roots/destinations. Recovery cannot acquire an unrecorded foreign file.
+If plan accounting becomes unavailable, null accounting artifacts invalidate
+positive credit without claiming a valid regenerated plan. The original cause
+survives recovery errors. These checks are not atomic filesystem transactions.
+
+Independent final-source static review reports no remaining confirmed blocker.
+Parent smoke uses real prepare(), returned helpers and the real frozen nine
+projection validator, with only Witness construction doubled. It retains the
+35-source opening cohort and closes all 91 first-seen bootstrap buffers again.
+AST, ASCII, raw-LF, single-EOF and whitespace checks pass. This is source and
+smoke evidence only: no actual admission, qualifying CLI, new cell credit,
+compiler/tool command, target execution, hosted CI or hardware claim. Independent
+boundary/failure tests and fresh terminal execution remain required.
