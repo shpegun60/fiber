@@ -11891,3 +11891,14 @@ checkout are unchanged. Stronger IR/import/source/instruction semantics,
 arbitrary callback/callee safety, archive/other profiles, hosted CI, CPU/board
 execution and global freeze remain unclaimed. Software credit is bounded to
 this one cell; the other required keys and backlog remain explicit work.
+
+### d005a36 Evidence Preservation
+
+The existing bounded-cell, 33-method and raw-accounting receipts are now copied
+into the autonomous offline package described in
+`SOFTWARE_CHECKPOINT_D005A36.md`. It includes the actual hash-bound payloads,
+command journals/toolchain, original receipts, tracked checkpoint source and a
+relative SHA-256 manifest. Archive integrity is separate from qualification.
+No Runtime C/ASM, compiler/producer/admission rerun, board or CI claim is added.
+Missing historical Git-status and standalone --version capture are not invented;
+the separately preserved seed -dumpfullversion bytes remain historical evidence.
