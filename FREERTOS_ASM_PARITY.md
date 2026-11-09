@@ -4102,3 +4102,12 @@ COMMON3/RUNTIME8, one fresh nine-component replay, full authenticated E9
 accounting and revocable credit for only `CM3/Os-lto/direct`. It preserves
 current admission identity semantics and every nested zero-credit nonclaim.
 This document is a design gate, not qualifier implementation or a new cell.
+
+The first implementation slice adds pure `cell_model.py` accounting only.
+It delegates full-plan shape validation to the frozen coverage helper, even
+when revoking credit, and accepts only `[]` or the exact Os key. Independent
+and parent suites pass 25/25 with identical receipts and seven closed source/
+fixture files. The tests use hash-bound E9 plan/backlog metadata plus synthetic
+corruptions, not complete inventory admission or an ELF qualifying run. The
+model never authenticates inputs or executes obligations; the later enclosing
+qualifier must do so before its caller-supplied key can receive actual credit.

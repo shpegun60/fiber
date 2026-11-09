@@ -11734,3 +11734,49 @@ the fixed key can receive one revocable per-cell credit. Stronger IR/semantic,
 archive, hosted-CI and hardware claims remain outside this bounded contract.
 No qualifier implementation, qualifying run, new coverage credit or runtime
 change is claimed by this docs-only checkpoint.
+
+### CM3 Os-LTO Pure Cell Accounting Model
+
+`cell_model.py` implements only fixed metadata and revocable accounting, with
+`contract()` and `coverage(required, backlog, verified_keys, coverage_module=...)`.
+It does no I/O, inspection, helper loading, admission or obligation execution.
+The caller authenticates exact E9 bytes and the helper; the frozen `_plan`
+validates shape/catalogs, not canonical inventory authority. The selected row
+must have the exact CM3 group and cohort fingerprint. Only literal `[]` or
+`[KEY]` with the fixed five-string Os tuple is accepted; O2/archive/foreign keys
+and bool/type aliases cannot supply credit. Revocation still validates the
+complete plan. Outputs preserve all 2,774 rows, role-specific missing obligations
+and 26 backlog rows/statuses, without input, sibling-output or later-call aliases.
+Every authentication, proof-execution and qualification nonclaim stays false.
+
+Independent source review finds no confirmed defect in this metadata scope.
+Parent smoke checks actual hash-bound E9 plan/backlog buffers with file I/O
+disabled during model calls. The independent suite then exercises strict keys,
+selected identities, malformed plan/backlog/catalogs, inherited flags, zero
+credit, deep-copy isolation, explicit helper-API rejection and no-I/O/process/
+dynamic-loading fences. These are metadata tests, not ELF/capture admission.
+
+Owner E1 remains FAIL: its fence setup blocks unittest.mock before the model
+calls. E2 passes 24 methods after setup repair, before harness hardening. Parent
+review then requires an exact method catalog/count, zero skips/expected failures
+and complete seven-file closing. The final fixture adds that harness regression
+and diagnostic tracebacks. Owner E3 and an independent parent run both pass
+25/25 with byte-identical receipts, zero failures/errors/skips/expected failures,
+and three source plus four fixture files closed again after termination.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `cell_model.py` | `E9CA01CA5DF0E459E2F8FCDF0FA3C4C2CFF725E0330EA03571F336664D5EEA53` |
+| `test_cell_model.py` | `EA020235215CB03A81A59D027D4989F85C874FDB0A2EBE8A22CF594D7ADC019D` |
+| Frozen `ordinary_final_cell/coverage.py` | `D513BEA4622DB4C0CD4FC7DED6D341BF940233E4FA3B219F9723EA84E6B31DC9` |
+| Owner E1 `results.json` (FAIL, historical test cut `78A808AE...`) | `3D2EF7784D7425A754C23E861DFED01E405B5AFD63791BF27109A54C783CF5F0` |
+| Owner E2 `results.json` (24 methods, historical test cut `2F3CC380...`) | `C59B4D1360E954A31338542686DD94F69F8CC8AB528B1C327679CEDF9B49A74D` |
+| `%TEMP%/os-cell-model-owner-20261109-e3/results.json` (25 methods) | `377D5EA2103E01A6865902E35390CEBF70FFCE29D5F71FCF4E6075966F7E1AD7` |
+| `%TEMP%/os-cell-model-parent-20261109-e1/results.json` (25 methods) | `377D5EA2103E01A6865902E35390CEBF70FFCE29D5F71FCF4E6075966F7E1AD7` |
+
+Synthetic `[KEY]` accounting is the caller's assertion, not a completed proof.
+The actual nine-component replay still grants zero required-cell credit. No
+whole-cell qualifier, qualifying run, new compiler/tool command, runtime/ASM,
+public5/port8, reference-pin, CI or hardware change follows from this slice.
+Next is the enclosing authenticated qualifier, its detailed eleven-obligation
+mapping, owned late-failure coverage recovery and fresh terminal execution.
