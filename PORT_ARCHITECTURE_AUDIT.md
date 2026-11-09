@@ -11453,6 +11453,15 @@ confirms all seven preceding component joins and current entry/leaf archived
 bindings. That review reruns no binary predicates or admission and does not
 claim to rehash the complete 7,985-input closure; parent accounting above does.
 
+A second independent closure audit subsequently rehashes all 7,985 current
+input hashes/physical identities (861,904,936 bytes), all 646 byte-equal source
+pairs, 80 bootstrap and 103 executed-source records. Exact output membership
+is 649 mapped artifacts plus manifest. All seven upstream trees close against
+their authorities and exact membership: 7,034 mapped members and 7,041 files.
+Current leaf/driver/contract hashes and both terminal hashes stay stable.
+The 1,083 observed reader paths reconcile; 3,020 snapshot paths remain the
+recorded scope count. No new admission, predicates or toolchain run is claimed.
+
 | Source Or Local Evidence | SHA-256 |
 | --- | --- |
 | `FINAL_REPLACEMENT_REPLAY_CONTRACT.md` | `89404FDD9D2B9461B4D91123C73277CBFFA8E1CAD9E10A6837C4D60EF2744001` |
@@ -11477,3 +11486,25 @@ Fresh negative controls, isolation IR imports, ordinary-root preservation,
 complete handler routing, whole-cell/archive, hosted CI, hardware and global
 software freeze remain separate. The next bounded slice is fresh transport
 and canonical negative-control composition over the same final/reference bytes.
+
+### Final Negative-Control Contract
+
+`tools/fixtures/cm3_os_lto_final_cell/FINAL_CONTROL_REPLAY_CONTRACT.md` fixes
+the next ninth-component boundary: fourteen positive input roles, exactly
+32 transport and two canonical controls, and 172 derived role-buffer instances.
+Existing filesystem mutation/witness runners are neither invoked nor mocked;
+adapted buffer recipes retain unchanged binary/token predicates. In particular
+reference _physical checks must not be replaced with fabricated success.
+
+Independent review closes a contract-level coherence gap: canonical tokens
+must differ from baseline only at the specified SVC operand, changed transport
+records join their actual output hashes/body bytes, and slot/callee evidence
+joins baseline definitions and reconstructed bytes. Coordinated mutations must
+be negative tests. Bounded structured field/slice checks do not authorize new
+ELF/decoder/transport constructors during detached validation.
+
+Contract SHA-256 is
+`0F58C38B4962B1AB4B2DD6D5797013205DBB86DCE12D99F82CD4A1396D251C00`.
+The four frozen recipe-source hashes were independently rechecked. No new
+control implementation, test run, admission, tool execution or qualification
+is claimed by this docs-only contract checkpoint.

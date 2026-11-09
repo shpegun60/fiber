@@ -4008,3 +4008,10 @@ Exact source and receipt evidence is recorded in
 Runtime C/ASM, layouts, public5/port8 and pinned FreeRTOS remain unchanged.
 Fresh mutant controls, isolation IR imports, whole-cell/archive qualification,
 hosted CI, hardware and global freeze remain separate obligations.
+
+The next control contract is
+`tools/fixtures/cm3_os_lto_final_cell/FINAL_CONTROL_REPLAY_CONTRACT.md`:
+fourteen positive inputs, 32 transport and two canonical cases, and 172 derived
+role-buffer instances. Exact diagnostics, baseline-token changes and actual
+case-byte/coherence joins are required. This contract is not implementation or
+execution evidence; fresh authenticated code/tests/composition remain pending.
