@@ -4014,4 +4014,20 @@ The next control contract is
 fourteen positive inputs, 32 transport and two canonical cases, and 172 derived
 role-buffer instances. Exact diagnostics, baseline-token changes and actual
 case-byte/coherence joins are required. This contract is not implementation or
-execution evidence; fresh authenticated code/tests/composition remain pending.
+execution evidence; fresh authenticated code/tests/composition remain separate.
+
+The pure `final_controls_replay.py` implementation and its independent fixture
+now exist. A bounded diagnostic executes all 32 transport and two canonical
+recipes on actual final/reference buffers, producing 172 derived role records.
+Detached validation reconstructs their complete bytes and exact net edits;
+it does not reopen files or construct binary inspectors. Source review finds
+no confirmed byte/coherence defect in this scope.
+
+A focused regression identifies missing helper-API preconditions: invalid
+helpers failed through incidental AttributeError rather than explicit rejection.
+Published helper interfaces and catalogs are now checked before use. Four
+focused tests pass, including all seventeen wrong/missing helper substitutions,
+detached validation, retained inputs and SVC token/byte disagreement. Initial
+full runs are explicitly aborted, not counted as passes. The full 30-method
+suite and fresh nine-component CLI remain separate completion obligations.
+This source checkpoint grants no required cell or broader parity claim.

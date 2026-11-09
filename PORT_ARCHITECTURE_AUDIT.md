@@ -11508,3 +11508,40 @@ Contract SHA-256 is
 The four frozen recipe-source hashes were independently rechecked. No new
 control implementation, test run, admission, tool execution or qualification
 is claimed by this docs-only contract checkpoint.
+
+### Final Negative-Control Source Checkpoint
+
+The pure `final_controls_replay.py` adapts all frozen native/reference buffer
+recipes without invoking, mutating or faking their filesystem runners. Its
+fourteen explicitly supplied immutable inputs bind the preceding final proof.
+A bounded diagnostic executes 32 intended transport rejections and two coherent
+SVC-token negatives, producing 172 complete derived role-buffer records.
+Detached validation reconstructs positive and changed bytes, exact recipe
+outputs, unique net edits and actual ELF32 slot/callee/SVC field joins. It
+performs no filesystem access or binary-constructor replay. Independent source
+reviews find no confirmed defect in the byte/coherence implementation.
+
+Parent review then reproduces an interface precondition gap: an object replacing
+the original helper triggers AttributeError before an explicit API check. A
+targeted test also exposes the same issue for both mutation helpers. The leaf
+now validates the published helper interfaces and catalogs before using them;
+all seventeen wrong/missing helper substitutions reject explicitly. Four focused
+regression methods pass, covering this surface, detached positive validation,
+first-seen inputs and canonical tokens inconsistent with the specified SVC byte.
+
+The initial parent full run is deliberately aborted after this reproducer;
+`%TEMP%/os-final-controls-parent-20261109-e1/abort.json` records no full-suite
+pass or closure. Its leaf cut is `5110BADE21AF80352D3C0AD58D8A8CB1C70174E59BB556FFEE9C0655193A1CF7`.
+The independent test source remains unchanged. At this source-only checkpoint,
+the complete 30-method suite and fresh ninth-component composition are still
+separate obligations, not inferred from the diagnostic or focused regressions.
+
+| Source | SHA-256 |
+| --- | --- |
+| `final_controls_replay.py` | `C507CBCFBB593E78C5E6F5CC6710DF0C7436FEDACF119375429080A40CEEAD11` |
+| `test_final_controls_replay.py` | `2D8B122D4FDAF4C05836425FDC98C11D220B28AA14730A00D34E05702E5B9F1B` |
+
+No runtime C/ASM, layout, public5/port8, reference pin, compiler/tool command or
+required-cell credit changes. These bounded control recipes are not every
+producer's mutant catalog and do not establish whole-cell, hosted-CI, hardware
+or global-freeze qualification.
