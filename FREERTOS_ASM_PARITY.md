@@ -4031,3 +4031,19 @@ detached validation, retained inputs and SVC token/byte disagreement. Initial
 full runs are explicitly aborted, not counted as passes. The full 30-method
 suite and fresh nine-component CLI remain separate completion obligations.
 This source checkpoint grants no required cell or broader parity claim.
+
+The additive `final_controls_census_attempt.py` now provides the nine-component
+frontend. It enrolls the exact contract and four recipe authorities before
+witness construction, then wires all nine inspectors inside one immutable
+reader. It adds only the bounded control fact and separate 32/2 counters;
+the earlier evidence, command credits and stronger false nonclaims stay intact.
+Every failure path revokes all thirteen completion facts and recorded credits.
+
+Independent review catches missing protocol-witness membership enforcement and
+a wrong registry lookup for the port replay pin. Both are fixed. The first
+28-method driver run records two positive-validation KeyErrors and remains FAIL.
+The corrected second run passes 28/28, with 152 source and 49 fixture hashes
+closed again after termination. The fixture explicitly discloses pinned port
+metadata, synthetic reader-retention records and lifecycle doubles; this is not
+a combined CLI admission. The long pure suite and three test-coverage
+strengthenings remain distinct from this tested frontend checkpoint.

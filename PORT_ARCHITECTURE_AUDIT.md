@@ -11545,3 +11545,44 @@ No runtime C/ASM, layout, public5/port8, reference pin, compiler/tool command or
 required-cell credit changes. These bounded control recipes are not every
 producer's mutant catalog and do not establish whole-cell, hosted-CI, hardware
 or global-freeze qualification.
+
+### Final Negative-Control Frontend Checkpoint
+
+`final_controls_census_attempt.py` is an additive ninth-component frontend.
+The prior eight components are freshly computed and validated inside the same
+immutable reader before the final fourteen-input control replay. The final
+result retains the full eight-component projection and its authority joins,
+then adds `FinalControlComponentReplayed` and separate 32/2 control counters.
+Recorded credits remain 2/41/12/45/36, required-cell count 2,774 and granted
+required-cell credit zero. All thirteen completion facts and all recorded
+credits are revoked on replay, closing, sealing, post-seal, stdout or recovery
+failure. Source retention is independently joined at the result boundary.
+
+Independent review identifies two frontend defects before actual execution:
+removing a protocol-witness document was not rejected before witness creation,
+and the port replay pin was looked up in the parent's own registry instead of
+the published port-composition registry. Exact three-document membership and
+the correct retained pin lookup now close these gaps. A fixture sorting bug
+also changes string ordering to Windows-path ordering; production checks are
+not weakened for the fixture.
+
+Parent first full driver run records 28 methods, zero failures and two errors
+from the positive-validation KeyError. Both source/fixture closures are true;
+that attempt remains FAIL. The corrected second run passes 28/28 with zero
+errors, failures or skips, and 152 source plus 49 fixture hashes. Parent
+post-terminal rehashing closes all those bindings again.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `final_controls_census_attempt.py` | `6C56480F99198EB4A52B777C13CAEABA8B262F73B0350A0171F780EFC8902394` |
+| `test_final_controls_census_attempt.py` | `413F0CD65DD4C6DF768FCE8CF6FAE581B6EF407F61EDD777EBCFC559EFEA7B9D` |
+| `%TEMP%/os-final-controls-census-parent-20261109-e1/results.json` (FAIL, 28 methods/two errors) | `5FDDEE31510CE2392BAE24FC54785866D5F8867C34E2EB6A6236F0B67E4EB5EA` |
+| `%TEMP%/os-final-controls-census-parent-20261109-e2/results.json` (PASS, 28 methods) | `ECE743267763F1AFEBA7D81E649C4926220F104A8EBF54BDF454DF262C2B0EF1` |
+
+The driver fixture runs actual original/final/control byte predicates but
+discloses earlier pinned port metadata, synthetic reader-retention records and
+lifecycle doubles. Reader wiring is a structural test, not actual admission.
+No combined CLI, compiler/tool, required-cell, hardware or global-freeze claim
+is granted here. Actual execution awaits the pure suite and strengthening of
+three existing tests so token-content and wrong-family negatives cannot pass
+through an incidental type mismatch or a later unrelated failure.
