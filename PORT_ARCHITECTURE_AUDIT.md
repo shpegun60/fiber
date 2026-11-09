@@ -11381,3 +11381,99 @@ The next slice must bind that final image and its own machine/map/startup to
 the reference canonical roots explicitly. Fresh negative controls, isolation
 IR import closure, whole-cell, archive, hosted CI, hardware and global software
 freeze remain separate obligations; this checkpoint grants none of them.
+
+## Current CM3 Os-LTO Final Replacement Replay
+
+The eighth bounded component consumes exactly 23 distinct files: six own
+final-supported roles, six original reference roles, three original native
+roles, two ledgers and six receipt/manifest authorities. Equal file hashes do
+not alias paths. Batch controls authenticate five final-supported files;
+native startup provider eight joins both original native twins and the final
+nine-object recipe. The genuine batch descriptor is not an invented capture.
+
+Actual whole-buffer comparisons establish this cohort's final ELF equality
+(20,016 bytes) and generated-machine equality (12,608 bytes) with original
+emitted images. Fresh adapters still consume the selected final's own map,
+startup and dumps and the reference's own six roles. All six canonical roots,
+both ledger rationale sets and final-versus-ordinary load comparison are
+recomputed. No missing final readelf command/output is fabricated or borrowed.
+These bounded facts do not imply complete final instruction equivalence.
+
+The additive driver authenticates its leaf, frozen original composition and
+contract before witness construction. All previous seven components are
+recomputed in the same reader; original shared authority joins remain active.
+The result boundary repeats detailed port validation, full original/port proof
+hashes, batch authority and own final role joins. All twelve completion facts
+and four recorded command credits are revoked on replay, closing, output,
+post-seal validation, stdout or recovery failures. Stronger nonclaims stay false.
+
+Parent initial suites pass 22/22 methods. The driver regression preserves the
+first executed source snapshot and rejects later conflicting reads before an
+overwrite. Independent review then identifies one final-leaf gap: detached
+ReadInputs sizes could be changed independently of preceding inventories.
+Eight accepted mutations reproduce it, including both coordinated comparison
+sizes and standalone reference, original, map, startup and dump sizes.
+
+The fix joins exact typed Path/Sha256/Bytes rows to original.ReadInputs and
+port.LoweredProofs.ReadInputs; all control lengths join their actual decoded
+bytes. All 23 paths require independent size coverage, including both sources
+for shared startup. Conflicting sizes reject. Three added methods cover the
+eight regressions. Independent review finds no remaining issue in this scope.
+Final parent suites pass 25 leaf and 22 driver methods, with 72/143 source and
+40/43 fixture hashes. Actual-byte predicates and real returned bootstrap
+validators are exercised; lifecycle doubles and pinned port metadata in leaf
+fixtures are explicitly not another capture admission or combined CLI run.
+
+Pre-fix actual `C:/fzosfinal-census-20261109-e1` exits zero with the bounded
+eight-component nonqualification status. Its pre-edit parent accounting closes
+7,985 hash/physical-identity pairs, 649 mapped artifacts, 646 source pairs and
+80 bootstrap records. This historical source cut does not contain the size fix;
+it is retained but is not promoted to the final source checkpoint. Its source
+closure must not be claimed current after the corrective edits.
+
+Post-fix actual `C:/fzosfinal-census-20261109-e2` exits zero as
+`CENSUS-ABI-ISOLATION-COMMON-PORT-ORIGINAL-AND-FINAL-REPLAYED-NOT-QUALIFIED`.
+All twelve bounded facts are true, all 41 stronger nonclaims false, and common
+attribution is closed. Errors are null/null/empty. Recorded command credits
+stay 41 ABI, 12 isolation, 45 common and 36 port, plus two original inspections;
+new compiler/tool invocations and required-cell credit stay zero.
+
+Parent post-terminal accounting rehashes all 7,985 input/physical-identity pairs,
+649 mapped artifacts (650 output files), 646 original/captured source pairs and
+80 bootstrap records. The reader retains 3,020 snapshots, 1,083 distinct reads
+and 103 executed source buffers. Every one of the 23 final-component sizes and
+hashes matches current physical bytes. All seven preceding nested records equal
+the prior original-component checkpoint only after fresh recomputation.
+Both final test receipts close again against current source and fixture bytes.
+
+Independent bounded raw accounting also passes all 23 current path/hash/size/
+physical bindings, both whole-buffer comparisons, twelve root-body hashes,
+six token hashes and fourteen bootstrap/archive/executed-helper joins. It
+confirms all seven preceding component joins and current entry/leaf archived
+bindings. That review reruns no binary predicates or admission and does not
+claim to rehash the complete 7,985-input closure; parent accounting above does.
+
+| Source Or Local Evidence | SHA-256 |
+| --- | --- |
+| `FINAL_REPLACEMENT_REPLAY_CONTRACT.md` | `89404FDD9D2B9461B4D91123C73277CBFFA8E1CAD9E10A6837C4D60EF2744001` |
+| `final_replacement_replay.py` | `A3333BF83305179DECB4AB77AED2FA36840100EF69E886E243A6F6D7734A8F3D` |
+| `test_final_replacement_replay.py` | `E28820C84F32FC86FA6317D4BB06C9B0313F0C43D76238B9522E0B366CC69694` |
+| `final_replacement_census_attempt.py` | `4BE4817EFE4C98DC998A8E9EA89A00CD38EC2E5D495C41CB25E84E23795E98B0` |
+| `test_final_replacement_census_attempt.py` | `1628377C5929A26B799657F168FD33AA0B694711E2C51B494100EB06B8226695` |
+| `%TEMP%/os-final-replacement-replay-parent-20261109-e1/results.json` (pre-fix, 22 methods) | `6B16DF6E114E5BD2A4101A5CBE6C5A391FB839EED834908A33CAF2B2AB5CC909` |
+| `%TEMP%/os-final-replacement-census-parent-20261109-e1/results.json` (pre-fix, 22 methods) | `DA533245B935FA3F6D425580C25EED6640FC1715C7FD7DF71A4D3A9C946C0895` |
+| `%TEMP%/os-final-replacement-replay-parent-20261109-e2/results.json` (25 methods) | `5593E76C59449BC5AE898F45F9E28FE560C5BD71122F470945A6421852F72D2C` |
+| `%TEMP%/os-final-replacement-census-parent-20261109-e2/results.json` (22 methods) | `998EC163A31CC3C416BE2749527617623AD94A0CBF196431E7BAEC2D7C1CB9F1` |
+| Pre-fix actual E1 `results.json` | `1D5367C73257C4F9369EBE2629C98C3C4DBFBE30386445975E0BD908B787A117` |
+| Pre-fix actual E1 `artifacts.json` | `E81E459AA56386E9DA68D14890923F089BBA466D95018B23D59183AD276999BF` |
+| `%TEMP%/os-final-replacement-audit-20261109/results.json` (pre-edit E1 accounting) | `5677B5035A408CB4366B903A2CA222303B29B5752785C74E3C5C294668ADE637` |
+| Post-fix actual E2 `results.json` | `59CBA93CFC11E78004E6E3E29C79A2BF1FAB102EA5EE3C062200C27C65B758A5` |
+| Post-fix actual E2 `artifacts.json` | `24A31CD01334582A5F8325431CCC2038797C7E2F1BC98A6407BBFD0DA0309AFE` |
+| `%TEMP%/os-final-replacement-audit-20261109-e2/results.json` | `98A90F23F554DD7BFBAD3DC641BED5497563BE049C5D84498EE64888721A9C81` |
+
+The runtime, assembly, context layouts, public5/port8 and FreeRTOS pin do not
+change. No new compiler/tool commands or required-cell credit are granted.
+Fresh negative controls, isolation IR imports, ordinary-root preservation,
+complete handler routing, whole-cell/archive, hosted CI, hardware and global
+software freeze remain separate. The next bounded slice is fresh transport
+and canonical negative-control composition over the same final/reference bytes.

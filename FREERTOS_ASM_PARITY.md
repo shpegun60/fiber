@@ -3972,3 +3972,39 @@ hardware or global software qualification. The next bounded slice must join
 the selected-port final image, its own machine/map/startup and reference roots
 explicitly. Runtime C/ASM, layouts, public5/port8 and the reference pin are
 unchanged.
+
+## Current CM3 Os-LTO Final Replacement Component
+
+The additive `final_replacement_replay.py` binds the selected-port final-supported
+image to its own machine, map, startup and two disassemblies. It independently
+reads 23 distinct input files, recomputes all six native/reference roots with
+the unchanged Os predicates and repeats the final-versus-ordinary load-image
+comparison. Whole ELF and whole generated-machine equality with the original
+emitted image are checked from actual buffers, not substituted receipt hashes.
+Those two bounded equalities do not establish universal body identity.
+
+`final_replacement_census_attempt.py` composes all eight freshly computed
+components in one immutable reader. The prior seven authority joins and the
+detailed selected-port validator remain mandatory at the result boundary.
+Detached final validation uses retained controls and pure token/ledger checks,
+without reopening files or constructing binary inspectors.
+
+Independent review found that detached read sizes were only internally
+consistent, not joined to preceding evidence. Eight pre-fix mutations reproduce
+the gap. Every size now joins decoded control bytes, the original inventory or
+the port-lowered inventory, with complete 23-path coverage and conflict rejection.
+The new parent suites pass 25 leaf and 22 driver methods with zero errors/skips.
+Driver tests also preserve first-seen source bytes instead of overwriting them.
+
+The pre-fix actual E1 remains retained, not the final source checkpoint. Fresh
+post-fix `C:/fzosfinal-census-20261109-e2` exits zero as
+`CENSUS-ABI-ISOLATION-COMMON-PORT-ORIGINAL-AND-FINAL-REPLAYED-NOT-QUALIFIED`.
+All twelve bounded completion facts are true; all 41 stronger nonclaims stay
+false. Parent post-terminal accounting checks 7,985 hash/physical-identity pairs,
+649 mapped artifacts and 646 source pairs. Recorded credits stay 41/12/45/36,
+with zero new compiler/tool calls and zero required-cell credit.
+Exact source and receipt evidence is recorded in
+`PORT_ARCHITECTURE_AUDIT.md#current-cm3-os-lto-final-replacement-replay`.
+Runtime C/ASM, layouts, public5/port8 and pinned FreeRTOS remain unchanged.
+Fresh mutant controls, isolation IR imports, whole-cell/archive qualification,
+hosted CI, hardware and global freeze remain separate obligations.
