@@ -11346,6 +11346,22 @@ validation with binary inspectors, I/O and processes blocked. The permitted
 token-only checker runs once; all 26 missing-helper controls reject. This
 bounded review is not another capture admission or full-input rehash.
 
+Two further independent read-only reviews complete after that composition
+review. Full closure rechecks all 7,979 input hashes/physical identities,
+646 mapped outputs, seven upstream trees, 4,874 upstream captured-input pairs
+and all 643 current source pairs. Bootstrap has 77 buffers, 76 pinned paths,
+60 helper plans and the unchanged original35; 2,387 explicit reader roles
+bind the 3,017 snapshots. No closure anomaly is found.
+
+Original-byte accounting independently checks 2,648,568 bytes across all
+29 inputs, eight exact control buffers, both ABI records (60 mandatory
+definitions, six additional consumers, ten reverse references, four cold-read
+bodies, six vector rows and fourteen pointer rows), both load-image records
+and all six preceding-component joins. All six roots match their actual
+machine/final bytes: twelve body hashes, 209 instructions and sixteen
+references, with canonical-token hash joins. These are byte/accounting audits,
+not new predicate executions, capture admissions, compiler or board runs.
+
 | Source Or Local Evidence | SHA-256 |
 | --- | --- |
 | `ORIGINAL_REPLAY_CONTRACT.md` | `4A25542898F48287A30BF63C07B0800598EAD2433D3EFEE0E333714A30F97686` |
